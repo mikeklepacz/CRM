@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
  * - has business_hours (required for eligibility checking)
  */
 export async function getEligibleRecipientsForAssignment() {
+  console.log('[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...');
   
   const result = await db.execute(sql`
     SELECT
@@ -42,6 +43,7 @@ export async function getEligibleRecipientsForAssignment() {
   
   const rows = (result as any).rows || [];
   
+  console.log('[RecipientDb.getEligibleRecipientsForAssignment] Raw results:', {
     count: rows.length,
     sample: rows.slice(0, 3).map((r: any) => ({
       email: r.email,
@@ -81,6 +83,7 @@ export async function markRecipientScheduled(recipientId: string, scheduledTime:
  * Returns them in chronological order (by their slot time)
  */
 export async function getScheduledRecipientsFromDate(dateIso: string) {
+  console.log('[RecipientDb.getScheduledRecipientsFromDate] Fetching recipients from:', dateIso);
   
   const result = await db.execute(sql`
     SELECT 
@@ -107,6 +110,7 @@ export async function getScheduledRecipientsFromDate(dateIso: string) {
   
   const rows = (result as any).rows || [];
   
+  console.log('[RecipientDb.getScheduledRecipientsFromDate] Found:', {
     count: rows.length,
     fromDate: dateIso,
     sample: rows.slice(0, 3).map((r: any) => ({

@@ -61,6 +61,7 @@ export function useWebhookStatus() {
       if (previousState === 'active' && 
           (currentState === 'expired' || currentState === 'missing')) {
         // Trigger will be handled by component
+        console.log('[Webhook Status] State degraded:', previousState, '->', currentState);
       }
     }
   }, [query.data?.state]);

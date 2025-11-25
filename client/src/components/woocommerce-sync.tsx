@@ -340,6 +340,7 @@ export function WooCommerceSync() {
             return newSet;
           });
         } catch (error: any) {
+          console.error('Failed to save commission settings:', error);
           toast({
             title: "Save failed",
             description: "Failed to save commission settings. The match will still proceed.",

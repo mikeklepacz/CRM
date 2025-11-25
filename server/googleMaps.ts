@@ -3,6 +3,7 @@ import fetch from 'node-fetch';
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 if (!GOOGLE_MAPS_API_KEY) {
+  console.warn('GOOGLE_MAPS_API_KEY not configured - Map Search will not work');
 }
 
 // US State abbreviation to full name mapping
@@ -132,6 +133,7 @@ export async function searchPlaces(
       nextPageToken: data.nextPageToken
     };
   } catch (error: any) {
+    console.error('Error searching places:', error);
     throw error;
   }
 }
@@ -182,6 +184,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       types: data.types || []
     };
   } catch (error: any) {
+    console.error('Error fetching place details:', error);
     throw error;
   }
 }
@@ -287,6 +290,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseG
       lng
     };
   } catch (error: any) {
+    console.error('Error reverse geocoding:', error);
     throw error;
   }
 }

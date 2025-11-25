@@ -98,6 +98,7 @@ export function EmailPreview({ subject, to, body, clientLink }: EmailPreviewProp
           clientLink: clientLink || null,
         });
       } catch (error) {
+        console.error('Failed to enroll in Manual Follow-Ups:', error);
       }
       
       // Check if labels were applied successfully
@@ -114,6 +115,7 @@ export function EmailPreview({ subject, to, body, clientLink }: EmailPreviewProp
         });
       }
     } catch (error: any) {
+      console.error("Failed to create Gmail draft:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to create Gmail draft. Make sure Gmail is connected in Settings.",
@@ -137,6 +139,7 @@ export function EmailPreview({ subject, to, body, clientLink }: EmailPreviewProp
         clientLink: clientLink || null,
       });
     } catch (error) {
+      console.error('Failed to enroll in Manual Follow-Ups:', error);
     }
   };
 

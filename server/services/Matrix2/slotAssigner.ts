@@ -57,6 +57,7 @@ import { eventGateway } from "../events/gateway";
 export async function assignSingleRecipient(recipientId: string) {
   const settings = await storage.getEhubSettings();
   if (!settings) {
+    console.log('[Matrix2 Assigner] No E-Hub settings found');
     return;
   }
 
@@ -65,6 +66,7 @@ export async function assignSingleRecipient(recipientId: string) {
   const slots = await getEmptySlots(dateIso);
   
   if (slots.length === 0) {
+    console.log(`[Matrix2 Assigner] No empty slots available for ${recipientId}`);
     return;
   }
 
@@ -73,6 +75,7 @@ export async function assignSingleRecipient(recipientId: string) {
   const recipient = recipients.find(r => r.id === recipientId);
   
   if (!recipient) {
+    console.log(`[Matrix2 Assigner] Recipient ${recipientId} not eligible for assignment`);
     return;
   }
 
@@ -83,11 +86,13 @@ export async function assignSingleRecipient(recipientId: string) {
 
     // CRITICAL: Don't assign slots in the past (prevents flash-disappear on pause/resume)
     if (slotUtc < now) {
+      console.log(`[Matrix2 Assigner] Skipping past slot for ${recipient.email}: ${slotUtc.toISOString()} < ${now.toISOString()}`);
       continue;
     }
 
     if (isRecipientEligible(recipient, slotUtc, settings)) {
       await fillSlot(slot.id, recipient.id);
+      console.log(`[Matrix2 Assigner] ✅ Assigned recipient ${recipient.email} to future slot ${slot.id} at ${slotUtc.toISOString()}`);
       
       // Emit WebSocket event for real-time UI updates
       eventGateway.emit('matrix:assigned', {
@@ -100,6 +105,7 @@ export async function assignSingleRecipient(recipientId: string) {
     }
   }
 
+  console.log(`[Matrix2 Assigner] ⚠️ No eligible future slots found for recipient ${recipient.email} (checked ${slots.length} slots)`);
 }
 
 /**
@@ -130,15 +136,18 @@ function getPriorityTier(recipient: any): number {
 export async function assignRecipientsToSlots() {
   const settings = await storage.getEhubSettings();
   if (!settings) {
+    console.log('[Matrix2 Assigner] No E-Hub settings found, skipping assignment');
     return;
   }
 
   // SHORT-CIRCUIT: Check recipients FIRST before fetching slots
   const recipients = await getEligibleRecipientsForAssignment();
   if (recipients.length === 0) {
+    console.log('[Matrix2 Assigner] No eligible recipients, skipping slot fetch');
     return;
   }
 
+  console.log(`[Matrix2 Assigner] Found ${recipients.length} eligible recipients, fetching slots...`);
 
   // Get all empty slots across the next 3 days (matching slot generator window)
   const today = new Date();
@@ -154,9 +163,11 @@ export async function assignRecipientsToSlots() {
   }
   
   if (allSlots.length === 0) {
+    console.log(`[Matrix2 Assigner] No empty slots available in 3-day window`);
     return;
   }
 
+  console.log(`[Matrix2 Assigner] ${allSlots.length} slots available, assigning ${recipients.length} recipients...`);
 
   // Apply three-tier priority sorting
   // Tier 1: Manual Follow-Ups at step 1+ (human handoffs getting AI follow-ups)
@@ -175,11 +186,13 @@ export async function assignRecipientsToSlots() {
     return 0;
   });
 
+  console.log('[Matrix2 Assigner] Priority distribution:', {
     tier1: sortedRecipients.filter(r => getPriorityTier(r) === 1).length,
     tier2: sortedRecipients.filter(r => getPriorityTier(r) === 2).length,
     tier3: sortedRecipients.filter(r => getPriorityTier(r) === 3).length,
   });
 
+  console.log(`[Matrix2 Assigner] Assigning ${sortedRecipients.length} recipients to ${allSlots.length} slots across 3 days`);
 
   let assignedCount = 0;
   let skippedPastSlots = 0;
@@ -206,6 +219,7 @@ export async function assignRecipientsToSlots() {
       await fillSlot(slot.id, r.id);
       
       const tier = getPriorityTier(r);
+      console.log(`[Matrix2 Assigner] ✅ Assigned Tier ${tier} recipient ${r.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
       
       // Emit WebSocket event for real-time UI updates
       eventGateway.emit('matrix:assigned', {
@@ -224,7 +238,9 @@ export async function assignRecipientsToSlots() {
   }
 
   if (skippedPastSlots > 0) {
+    console.log(`[Matrix2 Assigner] Skipped ${skippedPastSlots} past slots (current time: ${now.toISOString()})`);
   }
+  console.log(`[Matrix2 Assigner] ✅ Assigned ${assignedCount} recipients to slots`);
 }
 
 function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): boolean {
@@ -239,6 +255,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   try {
     Intl.DateTimeFormat(undefined, { timeZone: recipientTimezone });
   } catch (error) {
+    console.log(`[Matrix2 Assigner] ❌ Invalid timezone "${recipientTimezone}" for ${recipient.email}`);
     return false;
   }
 
@@ -289,6 +306,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
     const earliestNext = new Date(lastSent.getTime() + delayMs);
     
     if (slotUtc < earliestNext) {
+      console.log(`[Matrix2 Assigner] ⏳ Step delay not met for ${recipient.email}: next eligible ${earliestNext.toISOString()}`);
       return false;
     }
   }

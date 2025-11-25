@@ -18,15 +18,18 @@ export async function updateCommissionTrackerStatus(
     const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
     
     if (!trackerSheet) {
+      console.log('[Tracker Status Update] No Commission Tracker configured - skipping');
       return { success: false, message: 'Commission Tracker sheet not configured' };
     }
 
     const { spreadsheetId, sheetName } = trackerSheet;
     const normalizedInputLink = normalizeLink(link.trim());
     
+    console.log(`[Tracker Status Update] Processing link: ${normalizedInputLink}, agent: ${agentName}, status: ${newStatus}`);
 
     // Validate agent name
     if (!agentName || agentName.trim() === '') {
+      console.error('[Tracker Status Update] ❌ Invalid agent name provided');
       return { success: false, message: 'Agent name is required' };
     }
 
@@ -35,6 +38,7 @@ export async function updateCommissionTrackerStatus(
     const trackerRows = await googleSheets.readSheetData(spreadsheetId, trackerRange);
     
     if (trackerRows.length === 0) {
+      console.log('[Tracker Status Update] Empty tracker sheet - cannot proceed');
       return { success: false, message: 'Commission Tracker sheet has no headers' };
     }
 
@@ -45,6 +49,7 @@ export async function updateCommissionTrackerStatus(
     const dateIndex = trackerHeaders.findIndex(h => h?.toString().toLowerCase() === 'date');
 
     if (linkIndex === -1 || statusIndex === -1) {
+      console.log('[Tracker Status Update] Missing Link or Status column');
       return { success: false, message: 'Missing required columns (Link or Status)' };
     }
 
@@ -63,6 +68,7 @@ export async function updateCommissionTrackerStatus(
 
     if (rowIndex === -1) {
       // Row doesn't exist - create it with the new status
+      console.log('[Tracker Status Update] Row not found, creating new row');
       
       const headers = trackerHeaders.filter(h => h && h.trim() !== '');
       const newRow = new Array(headers.length).fill('');
@@ -73,10 +79,12 @@ export async function updateCommissionTrackerStatus(
       if (dateIndex !== -1) newRow[dateIndex] = formattedDate;
       
       await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:ZZ`, [newRow]);
+      console.log(`[Tracker Status Update] ✅ Created new row with Status="${newStatus}"`);
       
       return { success: true, message: 'Commission Tracker row created', created: true };
     } else {
       // Row exists - update the status
+      console.log(`[Tracker Status Update] Updating existing row ${rowIndex}`);
       
       const statusCol = String.fromCharCode(65 + statusIndex);
       await googleSheets.writeSheetData(
@@ -85,11 +93,13 @@ export async function updateCommissionTrackerStatus(
         [[newStatus]]
       );
 
+      console.log(`[Tracker Status Update] ✅ Updated Status to "${newStatus}" for row ${rowIndex}`);
       
       return { success: true, message: 'Commission Tracker status updated', created: false };
     }
 
   } catch (error: any) {
+    console.error(`[Tracker Status Update] ❌ Error: ${error.message}`);
     return { success: false, message: error.message };
   }
 }

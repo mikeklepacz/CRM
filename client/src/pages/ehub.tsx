@@ -723,6 +723,12 @@ function QueueView() {
   const [statusFilter, setStatusFilter] = useState<'active' | 'paused'>('active');
   const [showJitter, setShowJitter] = useState(false);
   
+  console.log('[QueueView] Component mounted/updated', {
+    search: debouncedSearch,
+    timeWindowDays,
+    statusFilter
+  });
+  
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -741,13 +747,20 @@ function QueueView() {
       params.append('statusFilter', 'active');
       
       const url = `/api/ehub/queue?${params.toString()}`;
+      console.log('[QueueView] Fetching active queue:', url);
       const res = await fetch(url, { credentials: 'include' });
       
       if (!res.ok) {
+        console.error('[QueueView] Failed to fetch queue:', res.status, res.statusText);
         throw new Error(`Failed to fetch queue: ${res.statusText}`);
       }
       
       const data = await res.json();
+      console.log('[QueueView] Active queue response:', {
+        count: data.length,
+        sample: data.slice(0, 3),
+        timeWindow: timeWindowDays
+      });
       return data;
     },
     staleTime: 0, // Always refetch
@@ -1862,6 +1875,7 @@ export default function EHub() {
         })
         .catch(error => {
           setCountsError('Failed to fetch counts');
+          console.error('Error fetching nuke counts:', error);
         });
     }
   }, [nukeDialogOpen, nukeEmailPattern]);

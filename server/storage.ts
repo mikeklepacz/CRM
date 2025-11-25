@@ -1066,7 +1066,9 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     if (updated) {
+      console.log(`[updateLastContactDate] Updated client ${clientId} lastContactDate to ${newContactDate}`);
     } else {
+      console.log(`[updateLastContactDate] Skipped client ${clientId} - existing date is newer or client not found`);
     }
 
     return updated;
@@ -3170,6 +3172,7 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
 
+    console.log('✅ [System] Created "Manual Follow-Ups" system sequence:', created.id);
     return created;
   }
 
@@ -3728,6 +3731,7 @@ export class DatabaseStorage implements IStorage {
 
     // Matrix2 Note: Set status to 'in_sequence' and clear nextSendAt
     // The Matrix2 slotAssigner will handle scheduling on next cycle
+    console.log(`[resumeRecipient] ${recipient.email} resumed - Matrix2 slotAssigner will reschedule`);
 
     const [updated] = await db
       .update(sequenceRecipients)
@@ -3770,6 +3774,7 @@ export class DatabaseStorage implements IStorage {
 
       return result?.maxSendAt || null;
     } catch (error) {
+      console.error('[getQueueTail] Error querying queue tail:', error);
       return null;
     }
   }
@@ -3799,6 +3804,7 @@ export class DatabaseStorage implements IStorage {
 
       return Number(result?.count || 0);
     } catch (error) {
+      console.error('[getDailyScheduledCount] Error counting scheduled sends:', error);
       return 0;
     }
   }
@@ -3842,6 +3848,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async sendRecipientNow(id: string): Promise<SequenceRecipient> {
+    console.log(`[Storage] sendRecipientNow called for recipient ${id}`);
     
     // Get current recipient to validate
     const [recipient] = await db
@@ -3851,30 +3858,39 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     if (!recipient) {
+      console.error(`[Storage] Recipient ${id} not found`);
       throw new Error(`Recipient ${id} not found`);
     }
 
+    console.log(`[Storage] Recipient found: ${recipient.email}, status: ${recipient.status}`);
 
     // Only allow sending for pending/in_sequence recipients
     if (recipient.status !== 'pending' && recipient.status !== 'in_sequence') {
+      console.error(`[Storage] Cannot send: recipient status is ${recipient.status}`);
       throw new Error(`Cannot send: recipient status is ${recipient.status}`);
     }
 
     // Matrix2: Get the recipient's current slot
+    console.log(`[Storage] Fetching Matrix2 helper...`);
     const { getRecipientSlot, forceSendNow } = await import('./services/Matrix2/matrix2Helper');
     const slot = await getRecipientSlot(id);
 
     if (!slot) {
+      console.error(`[Storage] No slot assigned for recipient ${id}`);
       throw new Error('No slot assigned for this recipient');
     }
 
+    console.log(`[Storage] Slot found: ${slot.id}, current time: ${slot.slotTimeUtc}`);
 
     // Force immediate send by setting slot_time_utc to 1 second ago
+    console.log(`[Storage] Calling forceSendNow for slot ${slot.id}`);
     await forceSendNow(slot.id);
 
     // Trigger immediate queue processing instead of waiting 60 seconds
+    console.log(`[Storage] Triggering immediate queue processing...`);
     const { triggerImmediateQueueProcess } = await import('./services/emailQueue');
     triggerImmediateQueueProcess().catch(err => {
+      console.error('[Storage] Error triggering immediate queue process:', err);
     });
 
     // Return updated recipient
@@ -3884,6 +3900,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(sequenceRecipients.id, id))
       .limit(1);
 
+    console.log(`[Storage] sendRecipientNow complete for ${id}`);
     return updated!;
   }
 
@@ -4157,6 +4174,7 @@ export class DatabaseStorage implements IStorage {
   }>> {
     const { search, statusFilter = 'active', limit, timeWindowDays = 3 } = options;
 
+    console.log('[Storage.getScheduledSendsQueue] Called with:', {
       search,
       statusFilter,
       limit,
@@ -4234,6 +4252,7 @@ export class DatabaseStorage implements IStorage {
 
     const results = await db.execute(query);
 
+    console.log('[Storage.getScheduledSendsQueue] Query results:', {
       count: results.length,
       timeWindow: `${nowUtc} to ${endTime.toISOString()}`,
       statusFilter,
@@ -4694,6 +4713,7 @@ export class DatabaseStorage implements IStorage {
       `);
       return (result as any).rows?.[0] || null;
     } catch (error) {
+      console.error(`[Storage] Error fetching recipient ${recipientId}:`, error);
       return null;
     }
   }
@@ -4718,6 +4738,7 @@ export class DatabaseStorage implements IStorage {
       `);
       return (result as any).rows?.[0] || null;
     } catch (error) {
+      console.error(`[Storage] Error fetching sequence ${sequenceId}:`, error);
       return null;
     }
   }
@@ -4726,6 +4747,7 @@ export class DatabaseStorage implements IStorage {
   async getAdminUser(): Promise<any | null> {
     try {
       const { sql } = await import('drizzle-orm');
+      console.log('[Storage.getAdminUser] EXECUTING QUERY...');
       const result = await db.execute(sql`
         SELECT 
           id,
@@ -4737,11 +4759,13 @@ export class DatabaseStorage implements IStorage {
         ORDER BY created_at ASC
         LIMIT 1
       `);
+      console.log('[Storage.getAdminUser] RAW RESULT:', {
         hasRows: !!(result as any).rows,
         rowCount: (result as any).rows?.length,
         firstRow: (result as any).rows?.[0]
       });
       const adminUser = (result as any).rows?.[0] || null;
+      console.log('[Storage.getAdminUser] Query result:', {
         found: !!adminUser,
         userId: adminUser?.id,
         userEmail: adminUser?.email,
@@ -4749,6 +4773,7 @@ export class DatabaseStorage implements IStorage {
       });
       return adminUser;
     } catch (error) {
+      console.error(`[Storage] Error fetching admin user:`, error);
       return null;
     }
   }
@@ -4770,6 +4795,7 @@ export class DatabaseStorage implements IStorage {
       `);
       return (result as any).rows?.[0] || null;
     } catch (error) {
+      console.error(`[Storage] Error updating recipient ${recipientId}:`, error);
       return null;
     }
   }
@@ -4805,6 +4831,7 @@ export class DatabaseStorage implements IStorage {
       `);
       return (result as any).rows?.[0] || null;
     } catch (error) {
+      console.error(`[Storage] Error inserting recipient message:`, error);
       return null;
     }
   }

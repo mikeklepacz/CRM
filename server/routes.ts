@@ -66,6 +66,7 @@ async function addCallsToThreadInMicroBatches(
     batches.push(calls.slice(i, i + callsPerBatch));
   }
 
+  console.log(`[Micro-Batch] Drip-feeding ${calls.length} calls in ${batches.length} batches of ${callsPerBatch}`);
 
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
@@ -83,6 +84,7 @@ async function addCallsToThreadInMicroBatches(
       })
       .join('\n');
 
+    console.log(`[Micro-Batch] Adding ${batchLabel} (${batch.length} calls) to thread`);
 
     await openai.beta.threads.messages.create(threadId, {
       role: 'user',
@@ -95,6 +97,7 @@ async function addCallsToThreadInMicroBatches(
     }
   }
 
+  console.log(`[Micro-Batch] All ${batches.length} batches added to thread ${threadId}`);
 }
 
 // ============================================================================
@@ -460,6 +463,7 @@ function checkIfStoreOpen(hoursStr: string, state: string): boolean {
     // If we couldn't find specific hours for today, default to open
     return true;
   } catch (error) {
+    console.error('Error checking business hours:', error);
     return true; // Default to open if parsing fails
   }
 }
@@ -565,9 +569,11 @@ async function syncKbFileToAlignerVectorStore(
       file_id: uploadedFile.id,
     });
 
+    console.log(`[Auto-Sync] Synced ${filename} to Aligner vector store: ${uploadedFile.id}`);
     return { success: true };
 
   } catch (error: any) {
+    console.error(`[Auto-Sync] Failed to sync ${filename}:`, error);
     return { success: false, error: error.message };
   }
 }
@@ -611,18 +617,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create session using passport's login
       req.login({ id: user.id, isPasswordAuth: true }, (err: any) => {
         if (err) {
+          console.error("Session creation error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
 
         // Explicitly save session before responding
         req.session.save((saveErr: any) => {
           if (saveErr) {
+            console.error("Session save error:", saveErr);
             return res.status(500).json({ message: "Session save failed" });
           }
           res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role, hasVoiceAccess: user.hasVoiceAccess ?? false } });
         });
       });
     } catch (error: any) {
+      console.error("Login error:", error);
       res.status(500).json({ message: error.message || "Login failed" });
     }
   });
@@ -651,6 +660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ message: "Registration successful", user: { id: user.id, username: user.username } });
     } catch (error: any) {
+      console.error("Registration error:", error);
       res.status(500).json({ message: error.message || "Registration failed" });
     }
   });
@@ -696,6 +706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return next();
     } catch (error) {
+      console.error("Replit Auth refresh failed:", error);
       return res.status(401).json({ message: "Unauthorized" });
     }
   };
@@ -711,6 +722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.currentUser = user;
       next();
     } catch (error: any) {
+      console.error("Admin middleware error:", error);
       res.status(500).json({ message: error.message || "Authorization check failed" });
     }
   };
@@ -726,6 +738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.currentUser = user;
       next();
     } catch (error: any) {
+      console.error("getCurrentUser middleware error:", error);
       res.status(500).json({ message: error.message || "User fetch failed" });
     }
   };
@@ -739,6 +752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       eventGateway.addClient(clientId, res, userId);
       
     } catch (error: any) {
+      console.error('[SSE] Error setting up event stream:', error);
       res.status(500).json({ message: 'Failed to establish event stream' });
     }
   });
@@ -755,16 +769,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Sync any reminders that don't have calendar events yet
           const syncResult = await syncRemindersToCalendar(userId);
           if (syncResult.created > 0) {
+            console.log(`[LoginSync] Created ${syncResult.created} calendar events for user ${userId}`);
           }
 
           // Renew watch channel if close to expiry
           await renewCalendarWatchIfNeeded(userId);
         } catch (error: any) {
+          console.error('[LoginSync] Background sync failed:', error.message);
         }
       });
 
       res.json(user);
     } catch (error: any) {
+      console.error("Error fetching user:", error);
       res.status(500).json({ message: error.message || "Failed to fetch user" });
     }
   });
@@ -815,6 +832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updated = await storage.updateUser(userId, { firstName, lastName, email, agentName, phone, meetingLink });
       res.json(updated);
     } catch (error: any) {
+      console.error("Error updating profile:", error);
       res.status(500).json({ message: error.message || "Failed to update profile" });
     }
   });
@@ -843,6 +861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateUser(userId, { passwordHash: newPasswordHash });
       res.json({ message: "Password updated successfully" });
     } catch (error: any) {
+      console.error("Error updating password:", error);
       res.status(500).json({ message: error.message || "Failed to update password" });
     }
   });
@@ -860,6 +879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updated = await storage.updateUser(userId, { signature, gmailLabels, emailPreference });
       res.json(updated);
     } catch (error: any) {
+      console.error("Error updating Gmail settings:", error);
       res.status(500).json({ message: error.message || "Failed to update Gmail settings" });
     }
   });
@@ -869,8 +889,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const preferences = await storage.getUserPreferences(userId);
+      console.log('🔴 [GET PREFERENCES] colorRowByStatus value being returned:', preferences?.colorRowByStatus);
       res.json(preferences || null);
     } catch (error: any) {
+      console.error("Error fetching user preferences:", error);
       res.status(500).json({ message: error.message || "Failed to fetch preferences" });
     }
   });
@@ -927,19 +949,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
     try {
+      console.log('🎨 [BACKEND] PUT /api/user/preferences - Request body:', JSON.stringify(req.body, null, 2));
 
       const validation = userPreferencesSchema.safeParse(req.body);
       if (!validation.success) {
+        console.error('🎨 [BACKEND] Validation failed:', validation.error.errors);
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
+      console.log('🎨 [BACKEND] Validation successful, data:', JSON.stringify(validation.data, null, 2));
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('🎨 [BACKEND] User ID:', userId);
+      console.log('🔴 [BACKEND] colorRowByStatus value received:', validation.data.colorRowByStatus);
 
       const preferences = await storage.saveUserPreferences(userId, validation.data);
+      console.log('🎨 [BACKEND] Preferences saved to DB:', JSON.stringify(preferences, null, 2));
+      console.log('🔴 [BACKEND] colorRowByStatus value in saved preferences:', preferences.colorRowByStatus);
 
+      console.log('🎨 [BACKEND] Sending response with status 200');
       res.json(preferences);
     } catch (error: any) {
+      console.error("🎨 [BACKEND] Error saving user preferences:", error);
       res.status(500).json({ message: error.message || "Failed to save preferences" });
     }
   });
@@ -974,6 +1005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         loadingLogoUrl: preferences.loadingLogoUrl 
       });
     } catch (error: any) {
+      console.error("Error uploading loading logo:", error);
       res.status(500).json({ message: error.message || "Failed to upload logo" });
     }
   });
@@ -990,6 +1022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastSyncedAt: integration?.wooLastSyncedAt || null
       });
     } catch (error: any) {
+      console.error("Error fetching WooCommerce settings:", error);
       res.status(500).json({ message: error.message || "Failed to fetch settings" });
     }
   });
@@ -1012,6 +1045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ message: "WooCommerce settings updated successfully" });
     } catch (error: any) {
+      console.error("Error updating WooCommerce settings:", error);
       res.status(500).json({ message: error.message || "Failed to update settings" });
     }
   });
@@ -1035,6 +1069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const config = await storage.getElevenLabsConfig();
       res.json(config || { apiKey: "", twilioNumber: "" });
     } catch (error: any) {
+      console.error("Error fetching ElevenLabs config:", error);
       res.status(500).json({ message: error.message || "Failed to fetch config" });
     }
   });
@@ -1049,6 +1084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateElevenLabsConfig(validation.data);
       res.json({ message: "ElevenLabs configuration updated successfully" });
     } catch (error: any) {
+      console.error("Error updating ElevenLabs config:", error);
       res.status(500).json({ message: error.message || "Failed to update config" });
     }
   });
@@ -1099,6 +1135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         events: response.data?.events || ['conversation_initiation_metadata', 'conversation_end', 'conversation_update']
       });
     } catch (error: any) {
+      console.error("Error registering webhook:", error.response?.data || error);
       res.status(500).json({ 
         message: error.response?.data?.detail?.message || error.message || "Failed to register webhook",
         details: error.response?.data
@@ -1126,6 +1163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hasApiKey: !!config?.apiKey,
       });
     } catch (error: any) {
+      console.error("Error fetching webhook status:", error);
       res.status(500).json({ message: error.message || "Failed to fetch webhook status" });
     }
   });
@@ -1141,6 +1179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const agent = await storage.createElevenLabsAgent(validation.data);
       res.json(agent);
     } catch (error: any) {
+      console.error("Error creating ElevenLabs agent:", error);
       res.status(500).json({ message: error.message || "Failed to create agent" });
     }
   });
@@ -1155,6 +1194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const agent = await storage.updateElevenLabsAgent(req.params.id, validation.data);
       res.json(agent);
     } catch (error: any) {
+      console.error("Error updating ElevenLabs agent:", error);
       res.status(500).json({ message: error.message || "Failed to update agent" });
     }
   });
@@ -1164,6 +1204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteElevenLabsAgent(req.params.id);
       res.json({ message: "Agent deleted successfully" });
     } catch (error: any) {
+      console.error("Error deleting ElevenLabs agent:", error);
       res.status(500).json({ message: error.message || "Failed to delete agent" });
     }
   });
@@ -1173,6 +1214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.setDefaultElevenLabsAgent(req.params.id);
       res.json({ message: "Default agent set successfully" });
     } catch (error: any) {
+      console.error("Error setting default agent:", error);
       res.status(500).json({ message: error.message || "Failed to set default agent" });
     }
   });
@@ -1187,6 +1229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
 
+      console.log(`[Agent Details] Fetching details for agent: ${agentId}`);
       
       const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
         headers: {
@@ -1194,12 +1237,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
+      console.log('[Agent Details] Successfully fetched agent details');
+      console.log('[Agent Details] Full response keys:', Object.keys(response.data));
       
       // Log the full nested structure to find where the prompt lives
       const data = response.data;
       if (data.conversation_config) {
+        console.log('[Agent Details] conversation_config keys:', Object.keys(data.conversation_config));
       }
       if (data.platform_settings) {
+        console.log('[Agent Details] platform_settings keys:', Object.keys(data.platform_settings));
       }
       
       // Extract system prompt from nested structure
@@ -1218,6 +1265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure it's a string
       systemPrompt = String(systemPrompt || '');
       
+      console.log('[Agent Details] Extracted system prompt:', systemPrompt ? systemPrompt.substring(0, 200) + '...' : '(empty)');
       
       // Return the response with the prompt at the top level for easier access
       res.json({
@@ -1225,6 +1273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         prompt: systemPrompt
       });
     } catch (error: any) {
+      console.error('[Agent Details] Error fetching agent details:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch agent details' });
     }
   });
@@ -1245,6 +1294,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
 
+      console.log(`[Agent Prompt] Updating prompt for agent: ${agentId}`);
+      console.log(`[Agent Prompt] New prompt length: ${prompt.length} characters`);
       
       // ElevenLabs requires nested structure: conversation_config.agent.prompt.prompt
       const updatePayload = {
@@ -1257,6 +1308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
       
+      console.log(`[Agent Prompt] Sending payload:`, JSON.stringify(updatePayload, null, 2));
       
       const response = await axios.patch(
         `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
@@ -1269,8 +1321,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       );
 
+      console.log('[Agent Prompt] Successfully updated agent prompt');
+      console.log('[Agent Prompt] ElevenLabs response status:', response.status);
       res.json(response.data);
     } catch (error: any) {
+      console.error('[Agent Prompt] Error updating agent prompt:', error.response?.data || error.message);
       res.status(500).json({ error: error.response?.data?.detail?.message || error.message || 'Failed to update agent prompt' });
     }
   });
@@ -1283,6 +1338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
 
+      console.log('[PhoneSync] Fetching phone numbers from ElevenLabs API...');
       
       // Call ElevenLabs API to get phone numbers
       const response = await axios.get('https://api.elevenlabs.io/v1/convai/phone-numbers/', {
@@ -1293,6 +1349,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // ElevenLabs returns array directly, not wrapped in phone_numbers field
       const phoneNumbers = Array.isArray(response.data) ? response.data : (response.data.phone_numbers ?? []);
+      console.log('[PhoneSync] Received response:', JSON.stringify(response.data, null, 2));
+      console.log('[PhoneSync] Extracted phone numbers:', JSON.stringify(phoneNumbers, null, 2));
 
       if (!phoneNumbers || phoneNumbers.length === 0) {
         return res.json({ message: 'No phone numbers found in ElevenLabs account', phoneNumbers: [] });
@@ -1308,7 +1366,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             label: phone.label || phone.name || null,
           });
           storedCount++;
+          console.log(`[PhoneSync] Stored phone number: ${phone.number || phone.phone_number} (ID: ${phone.phone_number_id})`);
         } catch (err: any) {
+          console.error(`[PhoneSync] Failed to store phone number ${phone.phone_number_id}:`, err.message);
         }
       }
 
@@ -1322,6 +1382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateElevenLabsAgent(agent.id, {
             phoneNumberId: phoneNumbers[0].phone_number_id,
           });
+          console.log(`[PhoneSync] Assigned phone ${phoneNumbers[0].phone_number_id} to agent ${agent.name}`);
           updatedCount++;
         }
       }
@@ -1337,6 +1398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedAgents: updatedCount,
       });
     } catch (error: any) {
+      console.error('[PhoneSync] Error syncing phone numbers:', error.response?.data || error.message);
       res.status(500).json({ 
         error: error.message || 'Failed to sync phone numbers',
         details: error.response?.data,
@@ -1354,6 +1416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/elevenlabs/webhook', async (req: any, res) => {
     try {
       const payload = req.body;
+      console.log('Received ElevenLabs webhook:', JSON.stringify(payload, null, 2));
 
       // SECURITY: Validate webhook signature
       const config = await storage.getElevenLabsConfig();
@@ -1362,14 +1425,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const rawBody = (req as any).rawBody;
         
         if (!rawBody) {
+          console.error('Raw body not available for signature validation');
           return res.status(500).json({ error: 'Server configuration error' });
         }
         
         const isValid = validateElevenLabsSignature(signature, rawBody, config.webhookSecret);
         if (!isValid) {
+          console.error('Invalid webhook signature - rejecting request');
           return res.status(401).json({ error: 'Invalid signature' });
         }
+        console.log('✅ Webhook signature validated');
       } else {
+        console.warn('⚠️  No webhook secret configured - skipping signature validation');
       }
 
       // Handle different webhook types
@@ -1378,6 +1445,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (webhookType === 'call_initiation_failure') {
         // Handle call initiation failure (e.g., invalid phone number, network error)
+        console.log('[Webhook] Call initiation failure detected');
         const data = payload.data;
         const conversationId = data.conversation_id;
         const clientData = data.conversation_initiation_client_data || {};
@@ -1399,6 +1467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               targetStatus: 'failed',
             });
             await storage.incrementCampaignCalls(target.campaignId, 'failed');
+            console.log(`[Webhook] Campaign target ${clientData.campaignTargetId} marked as failed due to initiation failure`);
           }
         }
         
@@ -1408,6 +1477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (webhookType === 'post_call_audio') {
         // Early notification that call ended (before transcription)
         // We can update status but won't have transcript/analysis yet
+        console.log('[Webhook] Post-call audio received (early notification)');
         const data = payload.data;
         const conversationId = data.conversation_id;
         const metadata = data.metadata || {};
@@ -1424,12 +1494,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             costCredits: metadata.cost || null,
             endedAt,
           });
+          console.log(`[Webhook] Call ${conversationId} marked as processing (waiting for transcription)`);
         }
         
         return res.status(200).json({ status: 'processed', type: 'post_call_audio' });
       }
       
       if (webhookType !== 'post_call_transcription') {
+        console.log(`[Webhook] Ignoring unknown webhook type: ${webhookType}`);
         return res.status(200).json({ status: 'ignored', reason: `Unknown webhook type: ${webhookType}` });
       }
       
@@ -1439,6 +1511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const conversationId = data.conversation_id;
 
       if (!conversationId) {
+        console.error('Missing conversation_id in webhook payload');
         return res.status(400).json({ error: 'Missing conversation_id' });
       }
 
@@ -1468,6 +1541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!session) {
         // Create new call session (this means webhook arrived before our initiate-call response)
+        console.log('Creating new session from webhook for conversation:', conversationId);
 
         session = await storage.createCallSession({
           conversationId,
@@ -1511,6 +1585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             await storage.incrementCampaignCalls(target.campaignId, callSuccessful ? 'successful' : 'failed');
             
+            console.log(`Updated campaign target ${targetId} status to ${newStatus}`);
           }
         }
       }
@@ -1531,7 +1606,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }));
 
           await storage.bulkCreateCallTranscripts(transcripts);
+          console.log(`Stored ${transcripts.length} transcript messages`);
         } else {
+          console.log(`Transcripts already exist for conversation ${conversationId} - skipping duplicate insert`);
         }
       }
 
@@ -1559,8 +1636,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 
                 if (tool.name === 'play_keypad_touch_tone') {
                   detectionMethod = 'DTMF keypad tone detected in call transcript';
+                  console.log(`[IVR Detection] DTMF tone detected in conversation ${conversationId}`);
                 } else {
                   detectionMethod = `Voicemail/IVR detection tool triggered: ${tool.name}`;
+                  console.log(`[IVR Detection] Voicemail/IVR detected in conversation ${conversationId} (tool: ${tool.name})`);
                 }
                 break;
               }
@@ -1594,13 +1673,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   // Update the cell to TRUE
                   await googleSheets.writeSheetData(spreadsheetId, cellRange, [['TRUE']]);
                   
+                  console.log(`[IVR Detection] ✅ Updated store ${clientData.clientId} Automated Line to TRUE`);
+                  console.log(`[IVR Detection] Method: ${detectionMethod}`);
                 } else {
+                  console.warn(`[IVR Detection] "Automated Line" column not found in sheet ${sheetName}`);
                 }
               } else {
+                console.warn(`[IVR Detection] Sheet not found with ID ${storeSnapshot.sheetId}`);
               }
             } else {
+              console.warn(`[IVR Detection] Missing rowIndex or sheetId in storeSnapshot for clientId ${clientData.clientId}`);
             }
           } catch (ivrError: any) {
+            console.error(`[IVR Detection] Error updating Automated Line:`, ivrError.message);
             // Don't fail the webhook - this is a non-critical feature
           }
         }
@@ -1610,6 +1695,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.status === 'done' && data.analysis && data.analysis.extracted_data) {
         try {
           const extractedData = data.analysis.extracted_data;
+          console.log('[Data Extraction] Processing extracted data:', extractedData);
           
           // Prepare update object with all extracted fields
           const extractedUpdate: any = {};
@@ -1678,6 +1764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update call_sessions with extracted data
           if (Object.keys(extractedUpdate).length > 0) {
             await storage.updateCallSessionByConversationId(conversationId, extractedUpdate);
+            console.log(`[Data Extraction] ✅ Saved ${Object.keys(extractedUpdate).length} extracted fields to call_sessions`);
           }
           
           // UPDATE POC DATA TO GOOGLE SHEETS
@@ -1713,7 +1800,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       const columnLetter = columnIndexToLetter(columnIndex);
                       const cellRange = `${sheetName}!${columnLetter}${clientData.storeSnapshot.rowIndex}`;
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[update.value]]);
+                      console.log(`[Data Extraction] ✅ Updated ${update.columnName} in Store Database: ${update.value}`);
                     } else {
+                      console.warn(`[Data Extraction] Column "${update.columnName}" not found in Store Database`);
                     }
                   }
                 }
@@ -1760,6 +1849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       const columnLetter = columnIndexToLetter(pocTitleIndex);
                       const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[extractedData.poc_title]]);
+                      console.log(`[Data Extraction] ✅ Updated POC Title in Commission Tracker Column T: ${extractedData.poc_title}`);
                     }
                     
                     // Update Follow-up Date (Column I)
@@ -1767,6 +1857,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       const columnLetter = columnIndexToLetter(followUpDateIndex);
                       const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[extractedData.follow_up_date]]);
+                      console.log(`[Data Extraction] ✅ Updated Follow-up Date in Commission Tracker Column I: ${extractedData.follow_up_date}`);
                     }
                     
                     // Build and append call notes (Column K)
@@ -1813,18 +1904,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         : newNote;
                       
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[updatedNotes]]);
+                      console.log(`[Data Extraction] ✅ Appended call notes to Commission Tracker Column K`);
                     } else {
+                      console.warn(`[Data Extraction] Notes column not found in Commission Tracker (should be Column K)`);
                     }
                   } else {
+                    console.warn(`[Data Extraction] Could not find matching row in Commission Tracker for link: ${storeLink}`);
                   }
                 } else {
+                  console.warn(`[Data Extraction] Link column not found in Commission Tracker headers`);
                 }
               }
             } catch (sheetsError: any) {
+              console.error(`[Data Extraction] Error updating POC data in Google Sheets:`, sheetsError.message);
               // Don't fail webhook - this is non-critical
             }
           }
         } catch (extractionError: any) {
+          console.error(`[Data Extraction] Error processing extracted data:`, extractionError.message);
           // Don't fail the webhook - this is a non-critical feature
         }
       }
@@ -1833,6 +1930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.status === 'done' && data.transcript && data.transcript.length > 0) {
         // Fire and forget - run async without blocking the webhook response
         analyzeCallTranscript(conversationId).catch(err => {
+          console.error('Async error in OpenAI reflection:', err);
         });
         
         // AUTO-TRIGGER KB ANALYSIS: Check if threshold is met for this agent
@@ -1846,12 +1944,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const adminUser = allUsers.find((u: any) => u.role === 'admin');
             
             if (!adminUser) {
+              console.log('[Auto-Trigger] No admin user found, skipping auto-trigger check');
               return;
             }
             
             const preferences = await storage.getUserPreferences(adminUser.id);
             
             if (!preferences?.autoKbAnalysis) {
+              console.log('[Auto-Trigger] Auto KB analysis is disabled');
               return;
             }
             
@@ -1865,8 +1965,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             const unanalyzedCount = unanalyzedCalls.length;
+            console.log(`[Auto-Trigger] Agent ${agentId} has ${unanalyzedCount} unanalyzed calls (threshold: ${threshold})`);
             
             if (unanalyzedCount >= threshold) {
+              console.log(`[Auto-Trigger] Threshold met! Triggering full analysis chain for agent ${agentId}...`);
               
               // Trigger the analysis endpoint (which chains WIC Coach → Aligner)
               const analysisResponse = await axios.post(`http://localhost:${process.env.PORT || 5000}/api/elevenlabs/analyze-calls`, {
@@ -1876,8 +1978,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 timeout: 300000, // 5 minute timeout for long-running analysis
               });
               
+              console.log('[Auto-Trigger] Analysis chain completed successfully');
             }
           } catch (autoTriggerError: any) {
+            console.error('[Auto-Trigger] Error during auto-triggered analysis:', autoTriggerError.message);
             // Don't fail the webhook - this is a background job
           }
         })();
@@ -1885,6 +1989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(200).json({ status: 'received', conversationId });
     } catch (error: any) {
+      console.error('Error processing ElevenLabs webhook:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -1892,6 +1997,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Twilio call status webhook - receives call progress updates
   app.post('/api/twilio/call-status', async (req, res) => {
     try {
+      console.log('[Twilio] Received call status webhook:', req.body);
       
       // Validate Twilio signature for security
       const signature = req.headers['x-twilio-signature'] as string | undefined;
@@ -1901,12 +2007,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const isValid = validateTwilioSignature(signature, url, req.body);
       if (!isValid) {
+        console.error('[Twilio] Invalid webhook signature - rejecting request');
         return res.status(401).send('Unauthorized');
       }
       
       await handleTwilioCallStatus(req.body);
       res.status(200).send('OK');
     } catch (error: any) {
+      console.error('[Twilio] Error processing call status webhook:', error);
       res.status(500).send('Error');
     }
   });
@@ -1945,6 +2053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       };
 
+      console.log('Initiating call to ElevenLabs:', JSON.stringify(requestBody, null, 2));
 
       // Call ElevenLabs API
       const response = await fetch(elevenlabsApiUrl, {
@@ -1958,6 +2067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('ElevenLabs API error:', response.status, errorText);
         return res.status(response.status).json({ 
           error: `ElevenLabs API error: ${response.statusText}`,
           details: errorText 
@@ -1969,12 +2079,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const conversationId = data.conversationId ?? data.conversation_id;
 
       if (!conversationId) {
+        console.error('ElevenLabs API returned no conversation ID:', data);
         return res.status(502).json({ 
           error: 'Invalid response from ElevenLabs API',
           details: 'No conversation ID returned' 
         });
       }
 
+      console.log('Call initiated successfully:', conversationId);
 
       // Create initial call session in database
       const session = await storage.createCallSession({
@@ -2001,6 +2113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'initiated',
       });
     } catch (error: any) {
+      console.error('Error initiating call:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2012,6 +2125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers();
       res.json(phoneNumbers);
     } catch (error: any) {
+      console.error('Error fetching phone numbers:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2047,8 +2161,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
       
+      console.log('[API] Returning agents:', transformedAgents.map(a => ({ 
+        name: a.name, 
+        agent_id: a.agent_id, 
+        phone_number_id: a.phone_number_id,
+        phone_number: a.phone_number 
+      })));
+      
       res.json(transformedAgents);
     } catch (error: any) {
+      console.error('Error fetching agents:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2084,6 +2206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(sessions);
     } catch (error: any) {
+      console.error('Error fetching call sessions:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2112,6 +2235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         transcripts,
       });
     } catch (error: any) {
+      console.error('Error fetching call session:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2173,6 +2297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             client = await storage.getClient(session.clientId);
           } catch (e) {
+            console.warn(`Could not fetch client ${session.clientId}:`, e);
           }
         }
 
@@ -2187,6 +2312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         } catch (e) {
+          console.warn(`Could not fetch campaign for session ${session.conversationId}:`, e);
         }
 
         // Get agent name
@@ -2196,6 +2322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const agent = await storage.getElevenLabsAgent(session.agentId);
             agentName = agent?.name || 'Unknown';
           } catch (e) {
+            console.warn(`Could not fetch agent ${session.agentId}:`, e);
           }
         }
 
@@ -2228,6 +2355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total: filteredSessions.length,
       });
     } catch (error: any) {
+      console.error('Error fetching enriched call history:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2250,6 +2378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filePath: null,
       });
     } catch (error: any) {
+      console.error('Error fetching background audio settings:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2272,6 +2401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(settings);
     } catch (error: any) {
+      console.error('Error updating background audio volume:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2301,6 +2431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(settings);
     } catch (error: any) {
+      console.error('Error uploading background audio:', error);
       res.status(500).json({ error: error.message || 'Failed to upload audio file' });
     }
   });
@@ -2321,6 +2452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Content-Disposition', `inline; filename="${settings.fileName || 'background-audio.wav'}"`);
       res.send(audioBuffer);
     } catch (error: any) {
+      console.error('Error streaming background audio:', error);
       res.status(500).json({ error: error.message || 'Failed to load audio file' });
     }
   });
@@ -2331,6 +2463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessions = await storage.getActiveVoiceProxySessions();
       res.json(sessions);
     } catch (error: any) {
+      console.error('Error fetching active voice proxy sessions:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2403,6 +2536,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
+      console.log(`[EligibleStores] Loaded ${commissionData.length} commission records and ${storeData.length} store records`);
+      console.log(`[EligibleStores] Commission headers:`, commissionHeaders);
+      console.log(`[EligibleStores] Store headers:`, storeHeaders);
 
       // Join commission data with store data on Link column
       const stores = commissionData.map((commission: any) => {
@@ -2416,6 +2552,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }).filter((store: any) => store.Link);
       
+      console.log(`[EligibleStores] Sample joined store:`, stores[0]);
       
       // Apply scenario-based filtering
       let eligibleStores = stores;
@@ -2510,6 +2647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(storesWithHours);
     } catch (error: any) {
+      console.error('Error fetching eligible stores:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2527,25 +2665,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { agent_record_id, agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule, ivr_behavior } = req.body;
       
+      console.log('[BatchCall] Request received:', {
+        agent_record_id,
+        agent_id,
+        phone_number_id,
+        stores_count: stores?.length,
+        store_data_count: store_data?.length,
+        scenario,
+        scheduled_for,
+        auto_schedule,
+        ivr_behavior,
+      });
+      
       if (!agent_record_id || !agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
+        console.error('[BatchCall] Validation failed: missing agent_record_id, agent_id, or stores');
         return res.status(400).json({ error: 'Agent record ID, agent ID, and stores array required' });
       }
 
       // Verify agent exists and has required fields using the database record ID
       const agent = await storage.getElevenLabsAgent(agent_record_id);
       if (!agent) {
+        console.error('[BatchCall] Agent not found:', agent_record_id);
         return res.status(404).json({ error: 'Agent not found' });
       }
       
       if (!agent.agentId || !agent.phoneNumberId) {
+        console.error('[BatchCall] Agent missing required fields:', agent);
         return res.status(400).json({ error: 'Agent configuration incomplete - missing agentId or phoneNumberId' });
       }
       
       // Validate phone_number_id - use from request if provided, otherwise use agent's configured value
       const effectivePhoneNumberId = phone_number_id || agent.phoneNumberId;
       if (!effectivePhoneNumberId) {
+        console.error('[BatchCall] No phone_number_id available');
         return res.status(400).json({ error: 'Phone number ID required for outbound calling' });
       }
+      
+      console.log('[BatchCall] Agent validated:', { 
+        name: agent.name, 
+        agentId: agent.agentId, 
+        phoneNumberId: effectivePhoneNumberId,
+        requestedPhoneNumberId: phone_number_id,
+        agentPhoneNumberId: agent.phoneNumberId
+      });
 
       // Create campaign with appropriate scheduling - use database record ID
       let scheduledStart = new Date();
@@ -2565,6 +2727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ivrBehavior: ivr_behavior || 'flag_and_end',
       });
       
+      console.log('[BatchCall] Campaign created:', { id: campaign.id, name: campaign.name, totalStores: stores.length });
 
       // Create map of store link to store data for efficient lookup
       const storeDataMap = new Map();
@@ -2574,6 +2737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storeDataMap.set(store.link, store);
           }
         }
+        console.log('[BatchCall] Store data map created with', storeDataMap.size, 'entries');
       }
 
       // Create campaign targets for each store
@@ -2590,6 +2754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const phone = storeInfo.phone || storeInfo.Phone;
           
           if (!phone) {
+            console.warn(`[BatchCall] Skipping store ${storeLink} - no phone number in store_data`);
             skippedStores++;
             continue;
           }
@@ -2600,6 +2765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             data: storeInfo,
             status: storeInfo.status || 'unassigned',
           });
+          console.log(`[BatchCall] Created new client for store ${storeLink}`);
         }
         
         // Create campaign target if we have a client
@@ -2608,6 +2774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const phoneNumber = clientData?.Phone || clientData?.phone;
           
           if (!phoneNumber) {
+            console.warn(`[BatchCall] Skipping store ${storeLink} - no phone number in client data`);
             skippedStores++;
             continue;
           }
@@ -2630,26 +2797,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (optimalTime) {
                 targetData.scheduledFor = optimalTime;
                 targetData.nextAttemptAt = optimalTime;
+                console.log(`[BatchCall] Auto-scheduled call for ${storeLink} at ${optimalTime.toISOString()} (hours: ${hours}, state: ${state})`);
               } else {
                 targetData.nextAttemptAt = new Date();
+                console.log(`[BatchCall] Could not calculate optimal time for ${storeLink}, scheduling immediately`);
               }
             } else {
               targetData.nextAttemptAt = new Date();
+              console.log(`[BatchCall] Missing hours/state for ${storeLink}, scheduling immediately`);
             }
           } else if (scheduled_for) {
             targetData.scheduledFor = scheduledStart;
             targetData.nextAttemptAt = scheduledStart;
+            console.log(`[BatchCall] Scheduled call for ${storeLink} at ${scheduledStart.toISOString()}`);
           } else {
             targetData.nextAttemptAt = new Date();
+            console.log(`[BatchCall] Immediate call queued for ${storeLink}`);
           }
 
           await storage.createCallCampaignTarget(targetData);
           createdTargets++;
         } else {
+          console.warn(`[BatchCall] Skipping store ${storeLink} - client not found and no store_data provided`);
           skippedStores++;
         }
       }
       
+      console.log('[BatchCall] ====== BATCH CALL SUMMARY ======');
+      console.log('[BatchCall] Campaign:', { id: campaign.id, name: campaign.name });
+      console.log('[BatchCall] Targets created:', createdTargets, '/', stores.length);
+      console.log('[BatchCall] Targets skipped:', skippedStores);
+      console.log('[BatchCall] Scheduling:', auto_schedule ? 'Auto (Smart Hours)' : scheduled_for ? 'Scheduled' : 'Immediate');
+      console.log('[BatchCall] ================================');
 
       res.json({
         campaignId: campaign.id,
@@ -2660,6 +2839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         autoScheduled: !!auto_schedule,
       });
     } catch (error: any) {
+      console.error('Error creating batch call campaign:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2718,6 +2898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(queueStats);
     } catch (error: any) {
+      console.error('Error fetching call queue:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2819,6 +3000,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metrics,
       });
     } catch (error: any) {
+      console.error('Error fetching call analytics:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2892,6 +3074,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error: any) {
+      console.error('Error fetching store by link:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -2941,13 +3124,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
           );
+          console.log(`[DeleteCall] Deleted conversation ${conversationId} from ElevenLabs`);
           elevenLabsDeleted = true;
         } catch (elevenLabsError: any) {
           // If 404, conversation already gone - treat as success
           if (elevenLabsError.response?.status === 404) {
+            console.log(`[DeleteCall] Conversation ${conversationId} not found in ElevenLabs (already deleted)`);
             elevenLabsDeleted = true;
           } else {
             // Other errors - abort the entire operation
+            console.error('[DeleteCall] Failed to delete from ElevenLabs:', elevenLabsError.response?.data || elevenLabsError.message);
             return res.status(500).json({ 
               error: 'Failed to delete call from ElevenLabs. Local deletion aborted to prevent orphaned conversations.',
               details: elevenLabsError.response?.data || elevenLabsError.message
@@ -2962,12 +3148,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .delete(callCampaignTargets)
         .where(eq(callCampaignTargets.callSessionId, id));
       
+      console.log(`[DeleteCall] Deleted call_campaign_targets for call session ${id}`);
 
       // Then delete the call session itself
       await db
         .delete(callSessions)
         .where(eq(callSessions.id, id));
 
+      console.log(`[DeleteCall] Deleted call session ${id} from database`);
 
       res.json({ 
         success: true, 
@@ -2977,6 +3165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deletedFromElevenLabs: elevenLabsDeleted 
       });
     } catch (error: any) {
+      console.error('[DeleteCall] Error:', error);
       res.status(500).json({ error: error.message || 'Failed to delete call' });
     }
   });
@@ -2997,6 +3186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ transcripts });
     } catch (error: any) {
+      console.error('Error fetching call transcript:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
@@ -3017,6 +3207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all configured agents to validate against
       const configuredAgents = await storage.getAllElevenLabsAgents();
       const validAgentIds = new Set(configuredAgents.map(a => a.agentId));
+      console.log(`[Sync] Configured agents:`, Array.from(validAgentIds));
 
       // Fetch all conversations from ElevenLabs
       const listResponse = await axios.get('https://api.elevenlabs.io/v1/convai/conversations', {
@@ -3029,6 +3220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const conversations = listResponse.data?.conversations || [];
+      console.log(`[Sync] Found ${conversations.length} conversations from ElevenLabs`);
 
       // Process each conversation
       for (const conv of conversations) {
@@ -3037,6 +3229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Skip conversations from unknown/test agents early (before fetching details)
           if (conv.agent_id && !validAgentIds.has(conv.agent_id)) {
+            console.log(`[Sync] Skipping conversation ${conversationId} - unknown agent: ${conv.agent_id}`);
             skippedCount++;
             continue;
           }
@@ -3058,6 +3251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Double-check agent_id from full details (in case list view didn't have it)
           if (!details.agent_id || !validAgentIds.has(details.agent_id)) {
+            console.log(`[Sync] Skipping conversation ${conversationId} - unknown agent in details: ${details.agent_id || 'none'}`);
             skippedCount++;
             continue;
           }
@@ -3126,6 +3320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               aiAnalysis,
             });
             
+            console.log(`[Sync] Updated conversation ${conversationId}`);
           } else {
             // Create new call session
             await storage.createCallSession({
@@ -3144,6 +3339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               storeSnapshot: details.conversation_initiation_client_data,
             });
             
+            console.log(`[Sync] Created conversation ${conversationId}`);
           }
 
           // Store transcripts
@@ -3163,6 +3359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           importedCount++;
 
         } catch (convError: any) {
+          console.error(`[Sync] Error processing conversation:`, convError);
           errorCount++;
           errors.push(convError.message || 'Unknown error');
         }
@@ -3177,6 +3374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total: conversations.length,
       });
     } catch (error: any) {
+      console.error('[Sync] Error syncing calls:', error);
       res.status(500).json({ 
         error: error.message || 'Failed to sync calls',
         details: error.response?.data,
@@ -3236,12 +3434,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       }));
 
+      console.log(`[Wick Coach] Analyzing ${redactedCalls.length} calls using Assistants API with micro-batching`);
 
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
       // Create a thread for this analysis
       const thread = await openai.beta.threads.create();
+      console.log('[Wick Coach] Thread created:', thread.id);
 
       // Add initial instructions
       const initialPrompt = `You are an expert sales coach analyzing AI voice call performance data. I will drip-feed you call transcripts in small batches (1-2 calls at a time) so you can analyze each one carefully.
@@ -3294,6 +3494,7 @@ Ready to receive calls?`;
         assistant_id: wickCoachAssistant.assistantId,
         response_format: { type: "json_object" }
       });
+      console.log('[Wick Coach] Run started with JSON mode:', run.id);
 
       // Poll for completion
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
@@ -3307,9 +3508,11 @@ Ready to receive calls?`;
       }
 
       if (runStatus.status !== 'completed') {
+        console.error('[Wick Coach] Run did not complete:', runStatus.status);
         return res.status(500).json({ error: `Analysis failed: ${runStatus.status}` });
       }
 
+      console.log('[Wick Coach] Run completed successfully');
 
       // Get the assistant's response
       const messages = await openai.beta.threads.messages.list(thread.id);
@@ -3320,6 +3523,7 @@ Ready to receive calls?`;
       }
 
       const responseText = assistantMessage.content[0].text.value;
+      console.log('[Wick Coach] Response received, parsing JSON...');
 
       // Parse the JSON response
       let insights;
@@ -3328,6 +3532,8 @@ Ready to receive calls?`;
         const jsonText = jsonMatch ? jsonMatch[1] : responseText;
         insights = JSON.parse(jsonText);
       } catch (error) {
+        console.error('[Wick Coach] Failed to parse JSON response:', error);
+        console.error('[Wick Coach] Raw response:', responseText);
         return res.status(500).json({ error: 'Failed to parse Wick Coach response. Response was not valid JSON.' });
       }
 
@@ -3342,6 +3548,9 @@ Ready to receive calls?`;
 
         // Validate that OpenAI returned integers, not percentages
         if (!Number.isInteger(positiveCount) || !Number.isInteger(neutralCount) || !Number.isInteger(negativeCount)) {
+          console.error('[Wick Coach] ERROR: OpenAI returned non-integer sentiment counts:', {
+            positiveCount, neutralCount, negativeCount
+          });
           throw new Error('OpenAI returned invalid sentiment data - expected integer counts');
         }
 
@@ -3349,6 +3558,13 @@ Ready to receive calls?`;
         insights.sentimentAnalysis.positive = totalCalls > 0 ? Math.round((positiveCount / totalCalls) * 100) : 0;
         insights.sentimentAnalysis.neutral = totalCalls > 0 ? Math.round((neutralCount / totalCalls) * 100) : 0;
         insights.sentimentAnalysis.negative = totalCalls > 0 ? Math.round((negativeCount / totalCalls) * 100) : 0;
+
+        console.log('[Wick Coach] Sentiment counts from OpenAI:', { positiveCount, neutralCount, negativeCount, totalCalls });
+        console.log('[Wick Coach] Calculated percentages:', { 
+          positive: insights.sentimentAnalysis.positive, 
+          neutral: insights.sentimentAnalysis.neutral, 
+          negative: insights.sentimentAnalysis.negative 
+        });
       }
 
       // Create a map of call indices (1, 2, 3...) to enriched metadata
@@ -3425,19 +3641,23 @@ Ready to receive calls?`;
         // This prevents re-analysis even if Aligner fails
         const conversationIds = callsData.map(call => call.session.conversationId).filter(Boolean) as string[];
         await storage.markCallsAsAnalyzed(conversationIds);
+        console.log(`[Wick Coach] Marked ${conversationIds.length} calls as analyzed`);
         
         // CHAIN TO ALIGNER: After Wick Coach completes, automatically trigger KB analysis
+        console.log('[AI Insights → Aligner] Wick Coach analysis complete, now chaining to Aligner...');
         
         try {
           // Get Aligner assistant
           const alignerAssistant = await storage.getAssistantBySlug('aligner');
           
           if (!alignerAssistant || !alignerAssistant.assistantId) {
+            console.log('[AI Insights → Aligner] Aligner assistant not configured, skipping KB analysis');
             alignerStatus.error = 'Aligner assistant not configured';
           } else {
             // Trigger KB analysis by making an internal request to the existing endpoint
             const normalizedAgentId = agentId || 'all'; // Default to 'all' if undefined/null
             const agentLabel = normalizedAgentId === 'all' ? 'all agents' : `agent ${normalizedAgentId}`;
+            console.log(`[AI Insights → Aligner] Triggering KB analysis for ${agentLabel} with insight ${savedInsight.id}`);
             
             // Make internal API call to the KB analysis endpoint
             // Pass the conversation IDs so Aligner analyzes the SAME calls Wick Coach just processed
@@ -3453,16 +3673,19 @@ Ready to receive calls?`;
               },
             });
             
+            console.log('[AI Insights → Aligner] KB analysis completed successfully');
             alignerStatus.success = true;
             alignerStatus.proposalCount = alignerResponse.data?.proposalCount || 0;
             alignerStatus.kbFileCount = alignerResponse.data?.kbFileCount || 0;
           }
         } catch (alignerError: any) {
+          console.error('[AI Insights → Aligner] Error during chained KB analysis:', alignerError.message);
           alignerStatus.error = alignerError.response?.data?.error || alignerError.message || 'Aligner failed';
           // Don't fail the whole request if Aligner fails
         }
         
       } catch (dbError) {
+        console.error('[AI Insights] Failed to save insights to database:', dbError);
         // Don't fail the request if database save fails
       }
 
@@ -3479,6 +3702,7 @@ Ready to receive calls?`;
       });
 
     } catch (error: any) {
+      console.error('[AI Insights] Error analyzing calls:', error);
       
       if (error.response?.status === 401) {
         return res.status(401).json({ error: 'Invalid OpenAI API key' });
@@ -3514,6 +3738,7 @@ Ready to receive calls?`;
         },
       });
     } catch (error: any) {
+      console.error('[Job Status] Error fetching job status:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch job status' });
     }
   });
@@ -3561,6 +3786,7 @@ Ready to receive calls?`;
       
       res.json({ history: transformedHistory });
     } catch (error: any) {
+      console.error('[AI Insights] Error retrieving insights history:', error);
       res.status(500).json({ 
         error: error.message || 'Failed to retrieve insights history'
       });
@@ -3570,9 +3796,11 @@ Ready to receive calls?`;
   // AI Insights - NUKE all analysis data (for testing)
   app.post('/api/elevenlabs/nuke-analysis', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      console.log('[NUKE] Clearing all analysis data...');
       
       const result = await storage.nukeAllAnalysis();
       
+      console.log('[NUKE] Analysis data cleared successfully:', result);
       
       res.json({
         success: true,
@@ -3580,6 +3808,7 @@ Ready to receive calls?`;
         ...result,
       });
     } catch (error: any) {
+      console.error('[NUKE] Error clearing analysis data:', error);
       res.status(500).json({ 
         error: error.message || 'Failed to clear analysis data'
       });
@@ -3608,6 +3837,7 @@ Ready to receive calls?`;
           projectId: null,
         });
         activeConversationId = newConversation.id;
+        console.log('[Aligner Chat] New conversation created:', activeConversationId);
       }
 
       // Get OpenAI settings
@@ -3686,6 +3916,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
         const thread = await openai.beta.threads.create();
         threadId = thread.id;
         await storage.updateConversation(activeConversationId, { threadId });
+        console.log('[Aligner Chat] New thread created:', threadId);
       }
 
       // Save user message
@@ -3762,6 +3993,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       });
 
     } catch (error: any) {
+      console.error('[Aligner Chat] Error:', error);
       res.status(500).json({
         error: error.message || 'Failed to get Aligner response'
       });
@@ -3953,6 +4185,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         );
 
         if (!matchedFile) {
+          console.warn(`[Aligner Agree] No KB file found matching "${filename}", skipping edits`);
           continue;
         }
 
@@ -3960,6 +4193,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         const versions = await storage.getKbFileVersions(matchedFile.id);
         const currentVersion = versions[0];
         if (!currentVersion) {
+          console.warn(`[Aligner Agree] No version found for file ${matchedFile.id}, skipping`);
           continue;
         }
 
@@ -3986,6 +4220,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       });
 
     } catch (error: any) {
+      console.error('[Aligner Agree] Error:', error);
       res.status(500).json({
         error: error.message || 'Failed to create proposals'
       });
@@ -4025,6 +4260,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         return res.status(400).json({ error: 'No JSON proposals found in the latest assistant message. Ask the Aligner to create specific proposals first.' });
       }
 
+      console.log('[Aligner Create Proposals] Parsing JSON from latest assistant message...');
       
       const jsonText = jsonMatch[1];
       const parsedResponse = JSON.parse(jsonText);
@@ -4055,6 +4291,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         editsByFile.get(edit.file)!.push(edit);
       }
 
+      console.log(`[Aligner Create Proposals] Processing ${parsedResponse.edits.length} edits across ${editsByFile.size} file(s)`);
 
       // Create proposals in database
       const proposalsCreated = [];
@@ -4062,6 +4299,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         // Use fuzzy matching to handle filename variations
         const file = await findKbFileByFuzzyFilename(filename, allKbFiles);
         if (!file) {
+          console.warn(`[Aligner Create Proposals] File not found: ${filename}, skipping ${fileEdits.length} edits`);
           continue;
         }
 
@@ -4070,6 +4308,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         const latestVersion = versions[0];
 
         if (!latestVersion) {
+          console.warn(`[Aligner Create Proposals] No versions found for ${filename}, skipping`);
           continue;
         }
 
@@ -4091,8 +4330,10 @@ The user has agreed to create proposals. Please output your recommended changes 
         });
 
         proposalsCreated.push(created);
+        console.log(`[Aligner Create Proposals] Created proposal for ${filename} with ${fileEdits.length} edits`);
       }
 
+      console.log(`[Aligner Create Proposals] Successfully created ${proposalsCreated.length} proposals from chat`);
 
       res.json({
         success: true,
@@ -4101,6 +4342,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       });
 
     } catch (error: any) {
+      console.error('[Aligner Create Proposals] Error:', error);
       res.status(500).json({
         error: error.message || 'Failed to create proposals from chat'
       });
@@ -4123,6 +4365,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       res.json(alignerConversations);
     } catch (error: any) {
+      console.error('[Aligner Chat] Error fetching conversations:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch conversations' });
     }
   });
@@ -4150,6 +4393,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       res.json(messages);
     } catch (error: any) {
+      console.error('[Aligner Chat] Error fetching messages:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch messages' });
     }
   });
@@ -4174,6 +4418,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       res.json({ success: true });
     } catch (error: any) {
+      console.error('[Conversation] Error deleting conversation:', error);
       res.status(500).json({ error: error.message || 'Failed to delete conversation' });
     }
   });
@@ -4194,6 +4439,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       res.json({ success: true, deletedCount: alignerConversations.length });
     } catch (error: any) {
+      console.error('[Aligner Chat] Error clearing history:', error);
       res.status(500).json({ error: error.message || 'Failed to clear chat history' });
     }
   });
@@ -4216,6 +4462,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
 
+      console.log('[KB Sync] ========== Starting Bidirectional Sync ==========');
 
       // Fetch all ElevenLabs agents to create agent name → agentId mapping
       const agents = await storage.getAllElevenLabsAgents();
@@ -4223,6 +4470,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       for (const agent of agents) {
         agentNameMap.set(agent.name.toLowerCase(), agent.agentId);
       }
+      console.log('[KB Sync] Agent mapping:', Object.fromEntries(agentNameMap));
 
       // Helper function to detect agent assignment from filename
       const detectAgentId = (filename: string): string | null => {
@@ -4232,6 +4480,7 @@ The user has agreed to create proposals. Please output your recommended changes 
           const agentName = match[1].trim().toLowerCase();
           const agentId = agentNameMap.get(agentName);
           if (agentId) {
+            console.log(`[KB Sync] Detected agent "${match[1].trim()}" for file "${filename}" → ${agentId}`);
             return agentId;
           }
         }
@@ -4239,6 +4488,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       };
 
       // ========== PHASE 1: DISCOVER CHANGES ==========
+      console.log('[KB Sync] Phase 1: Discovering changes...');
 
       // Fetch KB documents from ElevenLabs
       const response = await fetch('https://api.elevenlabs.io/v1/convai/knowledge-base?page_size=100', {
@@ -4253,6 +4503,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       const data = await response.json();
       const documents = data.documents || [];
+      console.log(`[KB Sync] Found ${documents.length} documents in ElevenLabs`);
 
       // Fetch full content for all remote documents
       const remoteFiles = new Map<string, any>(); // docId → { name, content, modifiedAt, agentId }
@@ -4264,6 +4515,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         });
         
         if (!docResponse.ok) {
+          console.error(`[KB Sync] Failed to fetch content for ${doc.name}: ${docResponse.statusText}`);
           continue;
         }
         
@@ -4284,6 +4536,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       // Get all local KB files
       const localFiles = await storage.getAllKbFiles();
+      console.log(`[KB Sync] Found ${localFiles.length} files in local database`);
 
       // Build sync operation lists
       const filesToPush: Array<{ localFile: any; remoteDocId?: string }> = [];
@@ -4292,6 +4545,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       const warnings: string[] = [];
 
       // ========== PHASE 2: CRM-WINS SYNC STRATEGY ==========
+      console.log('[KB Sync] Phase 2: CRM always wins for existing files...');
 
       // Create lookup maps
       const localByDocId = new Map(localFiles.map(f => [f.elevenlabsDocId, f]).filter(([id]) => id));
@@ -4311,12 +4565,15 @@ The user has agreed to create proposals. Please output your recommended changes 
           // File exists in both places - CRM ALWAYS WINS
           // Only check if content actually differs to avoid redundant pushes
           if (localFile.currentContent !== remoteData.content) {
+            console.log(`[KB Sync] File "${localFile.filename}" exists locally - pushing CRM version (CRM wins)`);
             filesToPush.push({ localFile, remoteDocId });
           } else {
+            console.log(`[KB Sync] File "${localFile.filename}" already in sync - skipping`);
             filesToSkip.push({ filename: remoteData.name, reason: 'content identical' });
           }
         } else {
           // File only exists in ElevenLabs (new filename we don't have) → PULL
+          console.log(`[KB Sync] New file in ElevenLabs: "${remoteData.name}" → PULL`);
           filesToPull.push({ remoteDocId, remoteName: remoteData.name });
         }
       }
@@ -4328,15 +4585,19 @@ The user has agreed to create proposals. Please output your recommended changes 
             // File was deleted from ElevenLabs but exists locally
             const localUpdatedAt = localFile.localUpdatedAt || localFile.createdAt;
             warnings.push(`File "${localFile.filename}" was deleted from ElevenLabs but exists locally (last local update: ${localUpdatedAt.toISOString()}). Not auto-deleting. Consider manual review.`);
+            console.log(`[KB Sync] WARNING: ${warnings[warnings.length - 1]}`);
           } else {
             // New local file never synced to ElevenLabs → PUSH
+            console.log(`[KB Sync] File only local: "${localFile.filename}" → PUSH`);
             filesToPush.push({ localFile });
           }
         }
       }
 
+      console.log(`[KB Sync] Sync plan: ${filesToPush.length} to push, ${filesToPull.length} to pull, ${filesToSkip.length} to skip`);
 
       // ========== PHASE 3: EXECUTE SYNC OPERATIONS ==========
+      console.log('[KB Sync] Phase 3: Executing sync operations...');
 
       let pushedCount = 0;
       let pulledCount = 0;
@@ -4350,6 +4611,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         try {
           if (remoteDocId) {
             // Update existing file in ElevenLabs using zero-downtime engine swap
+            console.log(`[KB Sync] PUSH: Updating "${localFile.filename}" in ElevenLabs (engine swap, docId: ${remoteDocId})`);
             
             const syncResult = await syncKbDocumentToElevenLabs(
               localFile.id,
@@ -4367,11 +4629,14 @@ The user has agreed to create proposals. Please output your recommended changes 
 
               pushedCount++;
               updatedRemote++;
+              console.log(`[KB Sync] PUSH SUCCESS: Updated "${localFile.filename}" in ElevenLabs (new docId: ${syncResult.newDocId}, agents updated: ${syncResult.agentsUpdated})`);
             } else {
+              console.error(`[KB Sync] Failed to update "${localFile.filename}" in ElevenLabs: ${syncResult.error}`);
               warnings.push(`Failed to update "${localFile.filename}": ${syncResult.error}`);
             }
           } else {
             // Create new file in ElevenLabs
+            console.log(`[KB Sync] PUSH: Creating "${localFile.filename}" in ElevenLabs`);
             const createResponse = await fetch('https://api.elevenlabs.io/v1/convai/knowledge-base', {
               method: 'POST',
               headers: {
@@ -4386,6 +4651,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
             if (!createResponse.ok) {
               const errorText = await createResponse.text();
+              console.error(`[KB Sync] Failed to create "${localFile.filename}" in ElevenLabs: ${errorText}`);
               warnings.push(`Failed to push new file "${localFile.filename}": ${errorText}`);
               continue;
             }
@@ -4402,8 +4668,10 @@ The user has agreed to create proposals. Please output your recommended changes 
 
             pushedCount++;
             createdRemote++;
+            console.log(`[KB Sync] PUSH SUCCESS: Created "${localFile.filename}" in ElevenLabs (docId: ${newDoc.id})`);
           }
         } catch (error: any) {
+          console.error(`[KB Sync] Error pushing "${localFile.filename}":`, error);
           warnings.push(`Failed to push "${localFile.filename}": ${error.message}`);
         }
       }
@@ -4422,9 +4690,11 @@ The user has agreed to create proposals. Please output your recommended changes 
 
           if (localFile) {
             // Update existing local file
+            console.log(`[KB Sync] PULL: Updating local file "${localFile.filename}" from ElevenLabs`);
 
             // Handle filename changes
             if (localFile.filename !== remoteName) {
+              console.log(`[KB Sync] Renaming local file: "${localFile.filename}" → "${remoteName}"`);
               await db.execute(sql`ALTER TABLE kb_files DISABLE TRIGGER enforce_filename_immutability`);
               try {
                 await db.update(kbFiles)
@@ -4468,8 +4738,10 @@ The user has agreed to create proposals. Please output your recommended changes 
 
             pulledCount++;
             updatedLocal++;
+            console.log(`[KB Sync] PULL SUCCESS: Updated local file "${remoteName}" (version ${newVersionNumber})`);
           } else {
             // Create new local file
+            console.log(`[KB Sync] PULL: Creating new local file "${remoteName}"`);
 
             const newFile = await storage.createKbFile({
               filename: remoteName,
@@ -4505,12 +4777,19 @@ The user has agreed to create proposals. Please output your recommended changes 
 
             pulledCount++;
             createdLocal++;
+            console.log(`[KB Sync] PULL SUCCESS: Created new local file "${remoteName}"`);
           }
         } catch (error: any) {
+          console.error(`[KB Sync] Error pulling "${remoteName}":`, error);
           warnings.push(`Failed to pull "${remoteName}": ${error.message}`);
         }
       }
 
+      console.log('[KB Sync] ========== Sync Complete ==========');
+      console.log(`[KB Sync] Pushed: ${pushedCount} (${createdRemote} created, ${updatedRemote} updated)`);
+      console.log(`[KB Sync] Pulled: ${pulledCount} (${createdLocal} created, ${updatedLocal} updated)`);
+      console.log(`[KB Sync] Skipped: ${filesToSkip.length}`);
+      console.log(`[KB Sync] Warnings: ${warnings.length}`);
 
       res.json({
         success: true,
@@ -4527,6 +4806,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         totalLocal: localFiles.length,
       });
     } catch (error: any) {
+      console.error('[KB Sync] Error during bidirectional sync:', error);
       res.status(500).json({ error: error.message || 'Failed to sync KB files' });
     }
   });
@@ -4541,6 +4821,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         return res.status(400).json({ error: 'No files uploaded' });
       }
 
+      console.log(`[KB Upload] Starting batch upload of ${files.length} files`);
       
       let imported = 0;
       let updated = 0;
@@ -4586,6 +4867,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
             updated++;
             results.push({ filename, status: 'updated', version: newVersionNumber });
+            console.log(`[KB Upload] Updated ${filename} to version ${newVersionNumber}`);
           } else {
             // Create new KB file
             const newFile = await storage.createKbFile({
@@ -4618,13 +4900,16 @@ The user has agreed to create proposals. Please output your recommended changes 
 
             imported++;
             results.push({ filename, status: 'imported', version: 1 });
+            console.log(`[KB Upload] Imported new file ${filename}`);
           }
         } catch (error: any) {
+          console.error(`[KB Upload] Error processing ${file.originalname}:`, error);
           skipped++;
           results.push({ filename: file.originalname, status: 'error', error: error.message });
         }
       }
 
+      console.log(`[KB Upload] Batch upload complete: ${imported} imported, ${updated} updated, ${skipped} skipped`);
 
       res.json({
         success: true,
@@ -4635,6 +4920,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         results,
       });
     } catch (error: any) {
+      console.error('[KB Upload] Error in batch upload:', error);
       res.status(500).json({ error: error.message || 'Failed to upload files' });
     }
   });
@@ -4650,6 +4936,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       const agents = await storage.getAllElevenLabsAgents();
       const agentIds: string[] = [];
       
+      console.log(`[KB Sync] Checking ${agents.length} agents for document ${docId}`);
       
       // For each agent, fetch its config from ElevenLabs and check if it uses this document
       for (const agent of agents) {
@@ -4670,15 +4957,18 @@ The user has agreed to create proposals. Please output your recommended changes 
           const usesDocument = knowledgeBase.some((kb: any) => kb.id === docId);
           
           if (usesDocument) {
+            console.log(`[KB Sync] Agent ${agent.name} (${agent.agentId}) uses document ${docId}`);
             agentIds.push(agent.agentId);
           }
         } catch (error: any) {
+          console.error(`[KB Sync] Error fetching agent ${agent.agentId}:`, error.message);
           // Continue checking other agents
         }
       }
       
       return agentIds;
     } catch (error: any) {
+      console.error('[KB Sync] Error in getAgentsUsingDocument:', error);
       throw error;
     }
   }
@@ -4729,7 +5019,9 @@ The user has agreed to create proposals. Please output your recommended changes 
         }
       );
       
+      console.log(`[KB Sync] Successfully swapped document in agent ${agentId}: ${oldDocId} → ${newDocId}`);
     } catch (error: any) {
+      console.error(`[KB Sync] Error swapping document in agent ${agentId}:`, error.response?.data || error.message);
       throw error;
     }
   }
@@ -4751,8 +5043,10 @@ The user has agreed to create proposals. Please output your recommended changes 
     const swappedAgents: string[] = []; // Track agents we've successfully swapped for rollback
     
     try {
+      console.log(`[KB Sync] Starting zero-downtime sync for ${filename}`);
       
       // Step 1: Create new document with updated content using correct /text endpoint
+      console.log(`[KB Sync] Creating new document...`);
       const createResponse = await axios.post(
         'https://api.elevenlabs.io/v1/convai/knowledge-base/text',
         {
@@ -4768,9 +5062,11 @@ The user has agreed to create proposals. Please output your recommended changes 
       );
       
       newDocId = createResponse.data.id;
+      console.log(`[KB Sync] Created new document: ${newDocId}`);
       
       // Step 2: Find all agents using the old document
       const agentIds = await getAgentsUsingDocument(apiKey, oldDocId);
+      console.log(`[KB Sync] Found ${agentIds.length} agents using old document`);
       
       // Step 3: Swap each agent to use new document (track for rollback)
       const swapErrors: string[] = [];
@@ -4779,17 +5075,21 @@ The user has agreed to create proposals. Please output your recommended changes 
         try {
           await swapAgentKbDocument(apiKey, agentId, oldDocId, newDocId);
           swappedAgents.push(agentId); // Track successful swap
+          console.log(`[KB Sync] Successfully swapped agent ${agentId} (${swappedAgents.length}/${agentIds.length})`);
         } catch (error: any) {
           const errorMsg = `Agent ${agentId}: ${error.message}`;
           swapErrors.push(errorMsg);
+          console.error(`[KB Sync] Failed to swap agent ${agentId}:`, error);
           // CRITICAL: Stop swapping on first error to prevent inconsistent state
           break;
         }
       }
       
+      console.log(`[KB Sync] Agent swaps complete: ${swappedAgents.length}/${agentIds.length} successful`);
       
       // If ANY swaps failed, rollback everything
       if (swapErrors.length > 0) {
+        console.error(`[KB Sync] Swap failed for ${swapErrors.length} agent(s), rolling back ${swappedAgents.length} successfully swapped agents...`);
         
         // Rollback: reverse-swap all successfully swapped agents back to old doc
         const rollbackErrors: string[] = [];
@@ -4799,8 +5099,10 @@ The user has agreed to create proposals. Please output your recommended changes 
           try {
             await swapAgentKbDocument(apiKey, agentId, newDocId, oldDocId);
             rolledBackAgents.push(agentId);
+            console.log(`[KB Sync] Rolled back agent ${agentId} to old document`);
           } catch (rollbackError: any) {
             rollbackErrors.push(agentId);
+            console.error(`[KB Sync] CRITICAL - Failed to rollback agent ${agentId}:`, rollbackError);
           }
         }
         
@@ -4816,7 +5118,9 @@ The user has agreed to create proposals. Please output your recommended changes 
                 },
               }
             );
+            console.log(`[KB Sync] Deleted new document ${newDocId} (rollback complete)`);
           } catch (deleteError) {
+            console.error(`[KB Sync] Warning: Failed to delete new document during rollback:`, deleteError);
             // Non-fatal - agents are safe, just have orphaned doc
           }
           
@@ -4826,6 +5130,7 @@ The user has agreed to create proposals. Please output your recommended changes 
           };
         } else {
           // CRITICAL: Do NOT delete new doc - some agents still reference it
+          console.error(`[KB Sync] CRITICAL: Cannot delete new document - ${rollbackErrors.length} agents still reference it: ${rollbackErrors.join(', ')}`);
           
           return {
             success: false,
@@ -4836,6 +5141,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       // Step 4: Delete old document (now safe because ALL agents are using new one)
       try {
+        console.log(`[KB Sync] Deleting old document ${oldDocId}...`);
         await axios.delete(
           `https://api.elevenlabs.io/v1/convai/knowledge-base/${oldDocId}`,
           {
@@ -4844,8 +5150,10 @@ The user has agreed to create proposals. Please output your recommended changes 
             },
           }
         );
+        console.log(`[KB Sync] Successfully deleted old document ${oldDocId}`);
       } catch (deleteError: any) {
         // Non-fatal - the sync succeeded even if old doc wasn't deleted
+        console.error(`[KB Sync] Warning: Failed to delete old document ${oldDocId}:`, deleteError.message);
       }
       
       return {
@@ -4855,9 +5163,11 @@ The user has agreed to create proposals. Please output your recommended changes 
       };
       
     } catch (error: any) {
+      console.error('[KB Sync] Critical error in syncKbDocumentToElevenLabs:', error);
       
       // CRITICAL ROLLBACK: If we created a new document and swapped any agents, reverse it
       if (newDocId && swappedAgents.length > 0) {
+        console.error(`[KB Sync] CRITICAL - Mid-flight failure, rolling back ${swappedAgents.length} swapped agents...`);
         
         const rollbackErrors: string[] = [];
         const rolledBackAgents: string[] = [];
@@ -4866,8 +5176,10 @@ The user has agreed to create proposals. Please output your recommended changes 
           try {
             await swapAgentKbDocument(apiKey, agentId, newDocId, oldDocId);
             rolledBackAgents.push(agentId);
+            console.log(`[KB Sync] Emergency rollback: restored agent ${agentId} to old document`);
           } catch (rollbackError: any) {
             rollbackErrors.push(agentId);
+            console.error(`[KB Sync] EMERGENCY ROLLBACK FAILED for agent ${agentId}:`, rollbackError);
           }
         }
         
@@ -4884,7 +5196,9 @@ The user has agreed to create proposals. Please output your recommended changes 
                   },
                 }
               );
+              console.log(`[KB Sync] Cleaned up new document ${newDocId} after error (rollback successful)`);
             } catch (cleanupError) {
+              console.error(`[KB Sync] Warning: Failed to delete new document:`, cleanupError);
               // Non-fatal - agents are safe, just have orphaned doc
             }
           }
@@ -4895,6 +5209,7 @@ The user has agreed to create proposals. Please output your recommended changes 
           };
         } else {
           // CRITICAL: Do NOT delete new doc - some agents still reference it
+          console.error(`[KB Sync] CRITICAL: ${rollbackErrors.length} agents still reference new doc after emergency rollback: ${rollbackErrors.join(', ')}`);
           
           return {
             success: false,
@@ -4914,7 +5229,9 @@ The user has agreed to create proposals. Please output your recommended changes 
               },
             }
           );
+          console.log(`[KB Sync] Cleaned up new document ${newDocId} after error (no agents affected)`);
         } catch (cleanupError) {
+          console.error(`[KB Sync] Failed to clean up new document:`, cleanupError);
         }
       }
       
@@ -4931,6 +5248,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       const files = await storage.getAllKbFiles();
       res.json({ files });
     } catch (error: any) {
+      console.error('[KB] Error fetching files:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch KB files' });
     }
   });
@@ -4945,6 +5263,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
       res.json(file);
     } catch (error: any) {
+      console.error('[KB] Error fetching file:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch KB file' });
     }
   });
@@ -4965,6 +5284,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         return res.status(404).json({ error: 'File not found' });
       }
 
+      console.log(`[KB Update] Updating file: ${file.filename}`);
 
       // Get existing versions to determine new version number
       const versions = await storage.getKbFileVersions(id);
@@ -4994,6 +5314,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         localUpdatedAt: new Date(),
       });
 
+      console.log(`[KB Update] File updated to version ${newVersionNumber}, syncing to ElevenLabs...`);
 
       // Trigger zero-downtime sync to ElevenLabs
       const elevenLabsConfig = await storage.getElevenLabsConfig();
@@ -5006,6 +5327,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         );
         
         if (syncResult.success && syncResult.newDocId) {
+          console.log(`[KB Update] Successfully synced to ElevenLabs (new docId: ${syncResult.newDocId}, agents updated: ${syncResult.agentsUpdated})`);
           
           // Update with new docId and lastSyncedAt
           await storage.updateKbFile(id, {
@@ -5013,16 +5335,19 @@ The user has agreed to create proposals. Please output your recommended changes 
             lastSyncedAt: new Date(),
           });
         } else {
+          console.error(`[KB Update] Sync failed: ${syncResult.error}`);
         }
       }
 
       // Auto-sync to Aligner's vector store
       const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, content, file.filename);
       if (!alignerSyncResult.success) {
+        console.warn(`[KB Update] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
       }
 
       res.json(updatedFile);
     } catch (error: any) {
+      console.error('[KB Update] Error updating file:', error);
       res.status(500).json({ error: error.message || 'Failed to update KB file' });
     }
   });
@@ -5034,6 +5359,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       const versions = await storage.getKbFileVersions(id);
       res.json({ versions });
     } catch (error: any) {
+      console.error('[KB] Error fetching versions:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch versions' });
     }
   });
@@ -5048,6 +5374,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       });
       res.json({ proposals });
     } catch (error: any) {
+      console.error('[KB] Error fetching proposals:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch proposals' });
     }
   });
@@ -5056,8 +5383,10 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.delete('/api/kb/proposals', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const deletedCount = await storage.deleteAllKbProposals();
+      console.log(`[KB] Deleted ${deletedCount} proposals`);
       res.json({ deletedCount });
     } catch (error: any) {
+      console.error('[KB] Error deleting proposals:', error);
       res.status(500).json({ error: error.message || 'Failed to delete proposals' });
     }
   });
@@ -5070,8 +5399,10 @@ The user has agreed to create proposals. Please output your recommended changes 
       if (!deleted) {
         return res.status(404).json({ error: 'Proposal not found' });
       }
+      console.log(`[KB] Deleted proposal ${id}`);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('[KB] Error deleting proposal:', error);
       res.status(500).json({ error: error.message || 'Failed to delete proposal' });
     }
   });
@@ -5111,6 +5442,7 @@ The user has agreed to create proposals. Please output your recommended changes 
   // Analyze AI insights and generate KB improvement proposals using Aligner assistant
   app.post('/api/kb/analyze-and-propose', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      console.log('[KB Analyze] Starting agent-isolated analysis and proposal generation...');
       
       const { agentId, insightId, startDate, endDate, conversationIds } = req.body;
 
@@ -5122,6 +5454,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       const isAllAgents = agentId === 'all';
       const agentLabel = isAllAgents ? 'all agents' : `agent ${agentId}`;
       const isChainedFromWickCoach = conversationIds && conversationIds.length > 0;
+      console.log(`[KB Analyze] Analyzing for ${agentLabel}${isChainedFromWickCoach ? ' (chained from Wick Coach)' : ''}`);
 
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner');
@@ -5134,15 +5467,19 @@ The user has agreed to create proposals. Please output your recommended changes 
       if (insightId) {
         insight = await storage.getAiInsightById(insightId);
         if (!insight) {
+          console.warn(`[KB Analyze] Insight ${insightId} not found, proceeding without Wick Coach analysis`);
         }
       } else if (!isAllAgents) {
         // Try to get latest insight for this specific agent
         const insights = await storage.getAiInsightsHistory({ agentId, limit: 1 });
         if (insights.length > 0) {
           insight = insights[0];
+          console.log(`[KB Analyze] Using latest Wick Coach insight from ${insight.dateRangeStart}`);
         } else {
+          console.log('[KB Analyze] No Wick Coach insights available, will analyze raw transcripts only');
         }
       } else {
+        console.log('[KB Analyze] Analyzing for all agents - will use raw transcripts only (no agent-specific insights)');
       }
 
       // Get KB files based on agent selection
@@ -5160,9 +5497,11 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
 
       if (isAllAgents) {
+        console.log(`[KB Analyze] Found ${kbFiles.length} general KB files (shared across all agents)`);
       } else {
         const agentSpecificCount = kbFiles.filter(f => f.agentId === agentId).length;
         const generalCount = kbFiles.filter(f => f.agentId == null).length;
+        console.log(`[KB Analyze] Found ${kbFiles.length} KB files for ${agentLabel} (${agentSpecificCount} agent-specific, ${generalCount} general)`);
       }
 
       // Fetch call transcripts (no truncation!)
@@ -5182,6 +5521,7 @@ The user has agreed to create proposals. Please output your recommended changes 
             limit: 1000,
           });
 
+      console.log(`[KB Analyze] Found ${callsData.length} ${isChainedFromWickCoach ? 'calls (from Wick Coach)' : 'unanalyzed calls'} for ${agentLabel}`);
 
       if (callsData.length === 0) {
         return res.status(404).json({ 
@@ -5193,6 +5533,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         });
       }
 
+      console.log(`[KB Analyze] Processing ${callsData.length} calls with micro-batching (2 calls at a time)`);
 
       // Redact PII (phone numbers) from transcripts
       const redactedCalls = callsData.map(call => ({
@@ -5242,6 +5583,7 @@ ${patterns || '(none)'}
 ${recommendations || '(none)'}`;
       }
 
+      console.log('[KB Analyze] Calling Aligner assistant with micro-batching...');
 
       // Get OpenAI settings (use Sales Assistant's API key)
       const openaiSettings = await storage.getOpenaiSettings();
@@ -5254,6 +5596,7 @@ ${recommendations || '(none)'}`;
 
       // Create a thread for this analysis
       const thread = await openai.beta.threads.create();
+      console.log('[KB Analyze] Thread created:', thread.id);
 
       // Add initial instructions with KB context
       const initialPrompt = `You are the Aligner assistant analyzing call performance data to improve the sales knowledge base.${insight ? ' You have TWO sources of information:' : ' You have access to:'}
@@ -5331,6 +5674,7 @@ IMPORTANT:
         assistant_id: alignerAssistant.assistantId,
         response_format: { type: "json_object" }
       });
+      console.log('[KB Analyze] Run started with JSON mode:', run.id);
 
       // Poll for completion
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
@@ -5344,9 +5688,11 @@ IMPORTANT:
       }
 
       if (runStatus.status !== 'completed') {
+        console.error('[KB Analyze] Run did not complete:', runStatus.status);
         return res.status(500).json({ error: `Analysis failed: ${runStatus.status}` });
       }
 
+      console.log('[KB Analyze] Run completed successfully');
 
       // Get the assistant's response
       const messages = await openai.beta.threads.messages.list(thread.id);
@@ -5357,6 +5703,7 @@ IMPORTANT:
       }
 
       const responseText = assistantMessage.content[0].text.value;
+      console.log('[KB Analyze] Response received, parsing JSON...');
 
       // Parse the JSON response
       let parsedResponse;
@@ -5366,6 +5713,8 @@ IMPORTANT:
         const jsonText = jsonMatch ? jsonMatch[1] : responseText;
         parsedResponse = JSON.parse(jsonText);
       } catch (error) {
+        console.error('[KB Analyze] Failed to parse JSON response:', error);
+        console.error('[KB Analyze] Raw response:', responseText);
         return res.status(500).json({ error: 'Failed to parse Aligner response. Response was not valid JSON.' });
       }
 
@@ -5373,6 +5722,7 @@ IMPORTANT:
         return res.status(500).json({ error: 'Invalid response format from Aligner assistant - expected "edits" array' });
       }
 
+      console.log(`[KB Analyze] Processing ${parsedResponse.edits.length} targeted edits...`);
 
       // Group edits by file
       const editsByFile = new Map<string, any[]>();
@@ -5383,6 +5733,7 @@ IMPORTANT:
         editsByFile.get(edit.file)!.push(edit);
       }
 
+      console.log(`[KB Analyze] Edits grouped into ${editsByFile.size} file(s)`);
 
       // Create proposals in database (one per file with all its edits)
       const createdProposals = [];
@@ -5390,10 +5741,12 @@ IMPORTANT:
         // Use fuzzy matching to handle filename variations (underscores vs spaces, etc)
         const file = await findKbFileByFuzzyFilename(filename, allKbFiles);
         if (!file) {
+          console.warn(`[KB Analyze] File not found (even with fuzzy matching): ${filename}, skipping ${fileEdits.length} edits`);
           continue;
         }
         
         if (file.filename !== filename) {
+          console.log(`[KB Analyze] Fuzzy matched "${filename}" → "${file.filename}"`);
         }
 
         // Get latest version to use as base
@@ -5401,6 +5754,7 @@ IMPORTANT:
         const latestVersion = versions[0];
 
         if (!latestVersion) {
+          console.warn(`[KB Analyze] No versions found for ${filename}, skipping`);
           continue;
         }
 
@@ -5422,6 +5776,7 @@ IMPORTANT:
         createdProposals.push(created);
       }
 
+      console.log(`[KB Analyze] Successfully created ${createdProposals.length} proposals`);
 
       // Mark all calls as analyzed to prevent re-analysis
       // Skip if chained from Wick Coach (already marked there)
@@ -5431,7 +5786,9 @@ IMPORTANT:
           .filter(Boolean) as string[];
         
         await storage.markCallsAsAnalyzed(conversationIdsToMark);
+        console.log(`[KB Analyze] Marked ${conversationIdsToMark.length} calls as analyzed`);
       } else {
+        console.log(`[KB Analyze] Skipping call marking (already done by Wick Coach)`);
       }
 
       res.json({
@@ -5446,6 +5803,7 @@ IMPORTANT:
         message: `Analyzed ${redactedCalls.length} calls using micro-batching for deep analysis`,
       });
     } catch (error: any) {
+      console.error('[KB Analyze] Error:', error);
       res.status(500).json({ error: error.message || 'Failed to analyze and generate proposals' });
     }
   });
@@ -5477,6 +5835,7 @@ IMPORTANT:
 
       res.json({ success: true });
     } catch (error: any) {
+      console.error('[KB] Error editing proposal:', error);
       res.status(500).json({ error: error.message || 'Failed to edit proposal' });
     }
   });
@@ -5505,6 +5864,7 @@ IMPORTANT:
 
       res.json({ success: true });
     } catch (error: any) {
+      console.error('[KB] Error rejecting proposal:', error);
       res.status(500).json({ error: error.message || 'Failed to reject proposal' });
     }
   });
@@ -5604,6 +5964,7 @@ IMPORTANT:
           return b.position - a.position; // Descending order
         });
         
+        console.log(`[KB Approve] Applying ${editsWithPosition.length} edits in reverse position order to prevent text shifting`);
         
         // STEP 3: Apply each edit in sorted order
         for (let idx = 0; idx < editsWithPosition.length; idx++) {
@@ -5612,6 +5973,7 @@ IMPORTANT:
           
           // For new content additions (empty 'old' field), just append
           if ('old' in edit && edit.old === '' && edit.new) {
+            console.log(`[KB Approve] Adding new content (edit ${i + 1}/${editArray.length})`);
             finalContent = finalContent + '\n\n' + edit.new;
             continue;
           }
@@ -5652,14 +6014,17 @@ IMPORTANT:
               }
               
               index = actualIndex;
+              console.log(`[KB Approve] Fuzzy match found for edit ${i + 1} at position ${index}`);
             }
           }
           
           if (index !== -1) {
             // Replace text
             finalContent = finalContent.substring(0, index) + edit.new + finalContent.substring(index + edit.old.length);
+            console.log(`[KB Approve] Edit ${i + 1}/${editArray.length} applied successfully (original position: ${position})`);
           } else {
             const preview = edit.old.length > 100 ? edit.old.substring(0, 100) + '...' : edit.old;
+            console.error(`[KB Approve] Edit ${i + 1} FAILED - text not found: "${preview}"`);
             failedEdits.push({
               edit,
               reason: `Original text not found in current file content`,
@@ -5670,6 +6035,7 @@ IMPORTANT:
         
         // If ANY edits failed, abort the entire approval
         if (failedEdits.length > 0) {
+          console.error(`[KB Approve] Approval FAILED: ${failedEdits.length}/${editArray.length} edits could not be applied`);
           return res.status(422).json({
             error: 'One or more edits could not be applied',
             failedEdits: failedEdits.map(f => ({
@@ -5683,8 +6049,10 @@ IMPORTANT:
           });
         }
         
+        console.log(`[KB Approve] All ${editArray.length} edits applied successfully`);
         
       } catch (error) {
+        console.error('[KB Approve] Failed to parse/apply edits:', error);
         return res.status(400).json({
           error: 'Failed to parse proposal edits',
           details: error instanceof Error ? error.message : 'Unknown error'
@@ -5731,6 +6099,7 @@ IMPORTANT:
       
       if (file.syncState === 'synced' && elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
         // File is marked as synced, attempt ElevenLabs sync
+        console.log(`[KB Approve] Syncing to ElevenLabs (file is in 'synced' state)`);
         const syncResult = await syncKbDocumentToElevenLabs(
           elevenLabsConfig.apiKey,
           file.elevenlabsDocId,
@@ -5739,6 +6108,7 @@ IMPORTANT:
         );
         
         if (syncResult.success && syncResult.newDocId) {
+          console.log(`[KB Approve] Successfully synced to ElevenLabs (new docId: ${syncResult.newDocId}, agents updated: ${syncResult.agentsUpdated})`);
           
           // Update with new docId and lastSyncedAt
           await storage.updateKbFile(file.id, {
@@ -5749,14 +6119,17 @@ IMPORTANT:
           syncSuccess = true;
           agentsUpdated = syncResult.agentsUpdated || 0;
         } else {
+          console.error(`[KB Approve] Sync failed: ${syncResult.error}`);
           syncError = syncResult.error;
         }
       } else if (file.syncState === 'local_only') {
+        console.log(`[KB Approve] Skipping ElevenLabs sync (file is local-only)`);
       }
 
       // Auto-sync to Aligner's vector store (keeps analysis up-to-date)
       const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, finalContent, file.filename);
       if (!alignerSyncResult.success) {
+        console.warn(`[KB Approve] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
       }
 
       res.json({
@@ -5768,6 +6141,7 @@ IMPORTANT:
         agentsUpdated: agentsUpdated,
       });
     } catch (error: any) {
+      console.error('[KB] Error approving proposal:', error);
       res.status(500).json({ error: error.message || 'Failed to approve proposal' });
     }
   });
@@ -5818,6 +6192,7 @@ IMPORTANT:
       // Auto-sync to Aligner's vector store
       const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, targetVersion.content, file.filename);
       if (!alignerSyncResult.success) {
+        console.warn(`[KB Rollback] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
       }
 
       res.json({
@@ -5825,6 +6200,7 @@ IMPORTANT:
         version: newVersion,
       });
     } catch (error: any) {
+      console.error('[KB] Error rolling back file:', error);
       res.status(500).json({ error: error.message || 'Failed to rollback file' });
     }
   });
@@ -5836,6 +6212,7 @@ IMPORTANT:
       const assistants = await storage.getAllAssistants();
       res.json({ assistants });
     } catch (error: any) {
+      console.error('[Assistants] Error fetching assistants:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch assistants' });
     }
   });
@@ -5860,6 +6237,7 @@ IMPORTANT:
         }
       });
     } catch (error: any) {
+      console.error('[Assistants] Error fetching assistant:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch assistant' });
     }
   });
@@ -5873,6 +6251,7 @@ IMPORTANT:
       const assistant = await storage.updateAssistant(id, updates);
       res.json({ assistant });
     } catch (error: any) {
+      console.error('[Assistants] Error updating assistant:', error);
       res.status(500).json({ error: error.message || 'Failed to update assistant' });
     }
   });
@@ -5895,6 +6274,7 @@ IMPORTANT:
 
       res.json({ file });
     } catch (error: any) {
+      console.error('[Assistants] Error uploading file:', error);
       res.status(500).json({ error: error.message || 'Failed to upload file' });
     }
   });
@@ -5913,6 +6293,7 @@ IMPORTANT:
       
       res.json({ success: true });
     } catch (error: any) {
+      console.error('[Assistants] Error deleting file:', error);
       res.status(500).json({ error: error.message || 'Failed to delete file' });
     }
   });
@@ -5936,6 +6317,7 @@ IMPORTANT:
         }
       });
     } catch (error: any) {
+      console.error('[Aligner] Error fetching Aligner:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch Aligner' });
     }
   });
@@ -5961,15 +6343,18 @@ IMPORTANT:
       }
 
       // Update on OpenAI
+      console.log('[Aligner] Syncing instructions to OpenAI assistant:', assistant.assistantId);
       const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
       await openai.beta.assistants.update(assistant.assistantId, {
         instructions: instructions,
       });
+      console.log('[Aligner] Instructions synced to OpenAI successfully');
 
       // Update in local database
       const updated = await storage.updateAssistant(assistant.id, { instructions });
       res.json({ assistant: updated });
     } catch (error: any) {
+      console.error('[Aligner] Error updating instructions:', error);
       res.status(500).json({ error: error.message || 'Failed to update instructions' });
     }
   });
@@ -5987,9 +6372,11 @@ IMPORTANT:
       // Task prompt template is only used internally (not synced to OpenAI)
       // It's used by the analysis processor to build dynamic prompts
       const updated = await storage.updateAssistant(assistant.id, { taskPromptTemplate });
+      console.log('[Aligner] Task prompt template updated successfully');
       
       res.json({ assistant: updated });
     } catch (error: any) {
+      console.error('[Aligner] Error updating task prompt template:', error);
       res.status(500).json({ error: error.message || 'Failed to update task prompt template' });
     }
   });
@@ -6016,6 +6403,7 @@ IMPORTANT:
 
       res.json({ file });
     } catch (error: any) {
+      console.error('[Aligner] Error uploading file:', error);
       res.status(500).json({ error: error.message || 'Failed to upload file' });
     }
   });
@@ -6040,6 +6428,7 @@ IMPORTANT:
       
       res.json({ success: true });
     } catch (error: any) {
+      console.error('[Aligner] Error deleting file:', error);
       res.status(500).json({ error: error.message || 'Failed to delete file' });
     }
   });
@@ -6047,6 +6436,7 @@ IMPORTANT:
   // Sync KB files to Aligner assistant's vector store on OpenAI
   app.post('/api/aligner/sync-kb', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      console.log('[Aligner Sync] Starting KB files sync to OpenAI vector store...');
       
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner');
@@ -6069,6 +6459,7 @@ IMPORTANT:
       // Create vector store if doesn't exist
       let vectorStoreId = alignerAssistant.vectorStoreId;
       if (!vectorStoreId) {
+        console.log('[Aligner Sync] Creating new vector store for Aligner...');
         const vectorStore = await openai.beta.vectorStores.create({
           name: 'Aligner KB Files',
         });
@@ -6087,11 +6478,14 @@ IMPORTANT:
           }
         });
         
+        console.log('[Aligner Sync] Vector store created and linked:', vectorStoreId);
       } else {
+        console.log('[Aligner Sync] Using existing vector store:', vectorStoreId);
       }
 
       // Get all KB files
       const kbFiles = await storage.getAllKbFiles();
+      console.log(`[Aligner Sync] Found ${kbFiles.length} KB files to sync`);
 
       const syncResults = [];
       const errors = [];
@@ -6099,10 +6493,12 @@ IMPORTANT:
       // Upload each KB file to vector store
       for (const kbFile of kbFiles) {
         try {
+          console.log(`[Aligner Sync] Processing file: ${kbFile.filename}`);
           
           // Get latest version content
           const versions = await storage.getKbFileVersions(kbFile.id);
           if (versions.length === 0) {
+            console.warn(`[Aligner Sync] No versions found for ${kbFile.filename}, skipping`);
             continue;
           }
 
@@ -6117,6 +6513,7 @@ IMPORTANT:
           const tmpFilePath = path.join(tmpDir, `aligner-${Date.now()}-${kbFile.filename}`);
           
           await fs.writeFile(tmpFilePath, latestVersion.content, 'utf-8');
+          console.log(`[Aligner Sync] Temp file created: ${tmpFilePath}`);
 
           // Upload to OpenAI
           const fileStream = await fs.open(tmpFilePath, 'r');
@@ -6128,12 +6525,14 @@ IMPORTANT:
           await fileStream.close();
           await fs.unlink(tmpFilePath);
           
+          console.log(`[Aligner Sync] Uploaded ${kbFile.filename} to OpenAI: ${uploadedFile.id}`);
 
           // Add file to vector store
           await openai.beta.vectorStores.files.create(vectorStoreId, {
             file_id: uploadedFile.id,
           });
           
+          console.log(`[Aligner Sync] Added ${kbFile.filename} to vector store`);
 
           syncResults.push({
             filename: kbFile.filename,
@@ -6142,6 +6541,7 @@ IMPORTANT:
           });
 
         } catch (error: any) {
+          console.error(`[Aligner Sync] Error syncing ${kbFile.filename}:`, error);
           errors.push({
             filename: kbFile.filename,
             error: error.message,
@@ -6149,6 +6549,7 @@ IMPORTANT:
         }
       }
 
+      console.log(`[Aligner Sync] Sync complete: ${syncResults.length} succeeded, ${errors.length} failed`);
 
       res.json({
         success: true,
@@ -6160,6 +6561,7 @@ IMPORTANT:
       });
 
     } catch (error: any) {
+      console.error('[Aligner Sync] Error syncing KB files:', error);
       res.status(500).json({ error: error.message || 'Failed to sync KB files' });
     }
   });
@@ -6179,6 +6581,7 @@ IMPORTANT:
         connectedAt: integration?.createdAt || null
       });
     } catch (error: any) {
+      console.error("❌ Error fetching Google Sheets settings:", error);
       res.status(500).json({ message: error.message || "Failed to fetch settings" });
     }
   });
@@ -6199,6 +6602,7 @@ IMPORTANT:
 
       res.json({ message: "Google Sheets OAuth settings updated successfully" });
     } catch (error: any) {
+      console.error("❌ Error updating Google Sheets OAuth settings:", error);
       res.status(500).json({ message: error.message || "Failed to update settings" });
     }
   });
@@ -6228,6 +6632,7 @@ IMPORTANT:
 
       return res.json({ url: oauthUrl.toString() });
     } catch (error: any) {
+      console.error("❌ Error generating Google Sheets OAuth URL:", error);
       return res.status(500).json({ message: error.message || "Failed to generate OAuth URL" });
     }
   });
@@ -6263,6 +6668,7 @@ IMPORTANT:
 
       if (!tokenResponse.ok) {
         const error = await tokenResponse.text();
+        console.error('❌ Google Sheets token exchange failed:', error);
         return res.send('<script>alert("Authentication failed"); window.close();</script>');
       }
 
@@ -6285,8 +6691,10 @@ IMPORTANT:
         connectedAt: new Date()
       });
 
+      console.log('✅ Google Sheets connected successfully (system-wide)');
       res.send('<script>alert("Google Sheets connected successfully! All agents can now access client data."); window.close();</script>');
     } catch (error: any) {
+      console.error("❌ Google Sheets OAuth callback error:", error);
       res.send('<script>alert("Connection failed"); window.close();</script>');
     }
   });
@@ -6294,8 +6702,10 @@ IMPORTANT:
   app.delete('/api/auth/google/sheets/disconnect', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       await storage.deleteSystemIntegration('google_sheets');
+      console.log('✅ Google Sheets disconnected successfully');
       res.json({ message: "Google Sheets disconnected successfully" });
     } catch (error: any) {
+      console.error("❌ Error disconnecting Google Sheets:", error);
       res.status(500).json({ message: error.message || "Failed to disconnect" });
     }
   });
@@ -6325,6 +6735,7 @@ IMPORTANT:
 
       res.json({ url: oauthUrl.toString() });
     } catch (error: any) {
+      console.error("❌ Error generating Gmail OAuth URL:", error);
       res.status(500).json({ message: error.message || "Failed to generate OAuth URL" });
     }
   });
@@ -6360,6 +6771,7 @@ IMPORTANT:
 
       if (!tokenResponse.ok) {
         const error = await tokenResponse.text();
+        console.error('❌ Gmail token exchange failed:', error);
         return res.send('<script>alert("Authentication failed"); window.close();</script>');
       }
 
@@ -6394,26 +6806,32 @@ IMPORTANT:
         try {
           const success = await setupCalendarWatch(userId as string);
           if (success) {
+            console.log(`[CalendarWatch] Successfully set up watch channel for user ${userId}`);
           }
         } catch (error: any) {
+          console.error('[CalendarWatch] Failed to setup watch:', error.message);
         }
       });
 
       res.send('<script>alert("Gmail and Calendar connected successfully!"); window.close();</script>');
     } catch (error: any) {
+      console.error("Gmail OAuth callback error:", error);
       res.send('<script>alert("Connection failed"); window.close();</script>');
     }
   });
 
   // Helper function to get or create Gmail labels
   async function getOrCreateGmailLabels(accessToken: string, labelNames: string[]): Promise<string[]> {
+    console.log('📧 [GMAIL LABELS] Starting label resolution for:', labelNames);
 
     if (!labelNames || labelNames.length === 0) {
+      console.log('📧 [GMAIL LABELS] No labels requested, returning empty array');
       return [];
     }
 
     try {
       // List all existing labels
+      console.log('📧 [GMAIL LABELS] Fetching existing labels from Gmail API...');
       const listResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
         headers: {
           'Authorization': `Bearer ${accessToken}`
@@ -6422,10 +6840,13 @@ IMPORTANT:
 
       if (!listResponse.ok) {
         const errorText = await listResponse.text();
+        console.error('📧 [GMAIL LABELS] ❌ Failed to list Gmail labels. Status:', listResponse.status);
+        console.error('📧 [GMAIL LABELS] Error details:', errorText);
         return [];
       }
 
       const { labels } = await listResponse.json();
+      console.log(`📧 [GMAIL LABELS] ✅ Fetched ${labels.length} existing labels from Gmail`);
 
       const existingLabels = new Map(labels.map((l: any) => [l.name, l.id]));
       const labelIds: string[] = [];
@@ -6436,8 +6857,10 @@ IMPORTANT:
           // Label exists, use its ID
           const labelId = existingLabels.get(labelName)!;
           labelIds.push(labelId);
+          console.log(`📧 [GMAIL LABELS] ✅ Label "${labelName}" already exists (ID: ${labelId})`);
         } else {
           // Create new label
+          console.log(`📧 [GMAIL LABELS] 🔨 Creating new label: "${labelName}"`);
           const createResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
             method: 'POST',
             headers: {
@@ -6454,14 +6877,19 @@ IMPORTANT:
           if (createResponse.ok) {
             const newLabel = await createResponse.json();
             labelIds.push(newLabel.id);
+            console.log(`📧 [GMAIL LABELS] ✅ Successfully created label "${labelName}" (ID: ${newLabel.id})`);
           } else {
             const errorText = await createResponse.text();
+            console.error(`📧 [GMAIL LABELS] ❌ Failed to create label "${labelName}". Status: ${createResponse.status}`);
+            console.error(`📧 [GMAIL LABELS] Error details:`, errorText);
           }
         }
       }
 
+      console.log(`📧 [GMAIL LABELS] ✅ Resolution complete. Returning ${labelIds.length} label IDs:`, labelIds);
       return labelIds;
     } catch (error) {
+      console.error('📧 [GMAIL LABELS] ❌ Unexpected error in getOrCreateGmailLabels:', error);
       return [];
     }
   }
@@ -6522,6 +6950,11 @@ IMPORTANT:
         });
 
         if (!refreshResponse.ok) {
+          const errorText = await refreshResponse.text();
+          console.error('[Gmail] Token refresh failed:', {
+            status: refreshResponse.status,
+            error: errorText
+          });
           return res.status(400).json({ message: "Failed to refresh Gmail token. Please reconnect Gmail in Settings." });
         }
 
@@ -6567,25 +7000,31 @@ IMPORTANT:
 
       if (!draftResponse.ok) {
         const error = await draftResponse.text();
+        console.error('Gmail API error:', error);
         return res.status(500).json({ message: "Failed to create Gmail draft" });
       }
 
       const draft = await draftResponse.json();
+      console.log('📧 [GMAIL] ✅ Draft created successfully. Draft ID:', draft.id, 'Message ID:', draft.message.id);
 
       // Update Commission Tracker status to "Emailed" if clientLink is provided
       if (clientLink) {
+        console.log('📧 [GMAIL] Updating Commission Tracker status to "Emailed" for link:', clientLink);
         const currentUser = await storage.getUser(userId);
         const agentName = currentUser.agentName;
         
         const trackerResult = await updateCommissionTrackerStatus(clientLink, agentName, 'Emailed');
         
         if (trackerResult.success) {
+          console.log(`📧 [GMAIL] ✅ Commission Tracker updated: ${trackerResult.message}${trackerResult.created ? ' (new row created)' : ''}`);
         } else {
+          console.warn(`📧 [GMAIL] ⚠️ Commission Tracker update failed: ${trackerResult.message}`);
         }
       }
 
       // Auto-enroll recipient in "Manual Follow-Ups" system sequence
       try {
+        console.log('📧 [MANUAL FOLLOW-UPS] Auto-enrolling recipient in system sequence...');
         
         // Get or create the Manual Follow-Ups system sequence
         const systemSequence = await storage.getOrCreateManualFollowUpsSequence();
@@ -6639,25 +7078,32 @@ IMPORTANT:
             })
             .where(eq(sequences.id, systemSequence.id));
           
+          console.log(`📧 [MANUAL FOLLOW-UPS] ✅ Enrolled ${to} at currentStep=1 (awaiting_reply). Original email saved as Step 1. Message ID: ${draft.message.id}`);
         } else {
+          console.log(`📧 [MANUAL FOLLOW-UPS] ℹ️ Recipient ${to} already enrolled. Skipping auto-enrollment.`);
         }
       } catch (enrollError: any) {
+        console.error('📧 [MANUAL FOLLOW-UPS] ❌ Auto-enrollment failed:', enrollError);
         // Don't fail the entire request if auto-enrollment fails
       }
 
       // Apply labels if user has configured them
+      console.log('📧 [GMAIL] Fetching user settings to check for Gmail labels...');
       const user = await storage.getUser(userId);
 
       let labelsApplied = false;
       let labelWarning = null;
 
       if (user?.gmailLabels && user.gmailLabels.length > 0) {
+        console.log('📧 [GMAIL] 🏷️  User has configured labels:', user.gmailLabels);
+        console.log('📧 [GMAIL] Starting label application process...');
 
         try {
           // Get or create label IDs
           const labelIds = await getOrCreateGmailLabels(accessToken, user.gmailLabels);
 
           if (labelIds.length > 0) {
+            console.log(`📧 [GMAIL] Attempting to apply ${labelIds.length} labels to draft message...`);
             // Modify the draft's message to add labels
             const modifyResponse = await fetch(
               `https://gmail.googleapis.com/gmail/v1/users/me/messages/${draft.message.id}/modify`,
@@ -6675,9 +7121,13 @@ IMPORTANT:
 
             if (modifyResponse.ok) {
               const result = await modifyResponse.json();
+              console.log(`📧 [GMAIL] ✅ Successfully applied ${labelIds.length} labels to draft`);
+              console.log(`📧 [GMAIL] Modified message now has labels:`, result.labelIds);
               labelsApplied = true;
             } else {
               const errorText = await modifyResponse.text();
+              console.error('📧 [GMAIL] ❌ Failed to apply labels to draft. Status:', modifyResponse.status);
+              console.error('📧 [GMAIL] Error details:', errorText);
 
               // Check if it's a permission error
               if (modifyResponse.status === 403 || errorText.includes('insufficient') || errorText.includes('permission')) {
@@ -6687,12 +7137,15 @@ IMPORTANT:
               }
             }
           } else {
+            console.log('📧 [GMAIL] ⚠️  No label IDs returned from getOrCreateGmailLabels. Labels will not be applied.');
             labelWarning = "Draft created but configured labels could not be found or created.";
           }
         } catch (error: any) {
+          console.error('📧 [GMAIL] ❌ Error during label application:', error);
           labelWarning = `Draft created but labels could not be applied: ${error.message}`;
         }
       } else {
+        console.log('📧 [GMAIL] ℹ️  No Gmail labels configured for this user. Skipping label application.');
       }
 
       res.json({
@@ -6707,6 +7160,7 @@ IMPORTANT:
         labelWarning
       });
     } catch (error: any) {
+      console.error("Error creating Gmail draft:", error);
       res.status(500).json({ message: error.message || "Failed to create Gmail draft" });
     }
   });
@@ -6740,7 +7194,9 @@ IMPORTANT:
               resourceId: integration.googleCalendarWebhookResourceId,
             },
           });
+          console.log('[Calendar Webhook] Stopped webhook on disconnect:', integration.googleCalendarWebhookChannelId);
         } catch (stopError: any) {
+          console.error('[Calendar Webhook] Failed to stop webhook on disconnect:', stopError.message);
         }
       }
 
@@ -6757,6 +7213,7 @@ IMPORTANT:
 
       res.json({ message: "Gmail disconnected successfully" });
     } catch (error: any) {
+      console.error("Error disconnecting Gmail:", error);
       res.status(500).json({ message: error.message || "Failed to disconnect Gmail" });
     }
   });
@@ -6777,16 +7234,19 @@ IMPORTANT:
       // Decode Pub/Sub message
       const pubsubMessage = req.body?.message;
       if (!pubsubMessage?.data) {
+        console.log('[GmailPush] Received push without data, ignoring');
         return;
       }
 
       const data = Buffer.from(pubsubMessage.data, 'base64').toString('utf-8');
       const notification = JSON.parse(data);
 
+      console.log(`[GmailPush] 📬 Push received: email=${notification.emailAddress}, historyId=${notification.historyId}`);
 
       // Process history asynchronously (don't await - we already responded 200)
       processGmailHistory(notification.historyId).then(result => {
         if (result.repliesDetected > 0) {
+          console.log(`[GmailPush] ✅ Processed: ${result.repliesDetected} replies detected, recipients updated: ${result.recipientsUpdated.join(', ')}`);
           
           // Emit WebSocket event for real-time UI updates
           eventGateway.emit('gmail:newMessage', {
@@ -6796,9 +7256,11 @@ IMPORTANT:
           });
         }
       }).catch(err => {
+        console.error('[GmailPush] Error processing history:', err);
       });
 
     } catch (error: any) {
+      console.error('[GmailPush] Error handling push notification:', error);
     }
   });
 
@@ -6817,6 +7279,7 @@ IMPORTANT:
       
       res.json(status);
     } catch (error: any) {
+      console.error('[GmailPush] Error getting status:', error);
       res.status(500).json({ message: error.message });
     }
   });
@@ -6841,6 +7304,7 @@ IMPORTANT:
         expiresAt: new Date(result.expiration).toISOString(),
       });
     } catch (error: any) {
+      console.error('[GmailPush] Error starting watch:', error);
       res.status(500).json({ message: error.message });
     }
   });
@@ -6860,6 +7324,7 @@ IMPORTANT:
       
       res.json({ success: true, message: 'Gmail watch stopped' });
     } catch (error: any) {
+      console.error('[GmailPush] Error stopping watch:', error);
       res.status(500).json({ message: error.message });
     }
   });
@@ -6926,6 +7391,7 @@ IMPORTANT:
       });
 
     } catch (error: any) {
+      console.error("Error checking webhook status:", error);
       res.status(500).json({ message: error.message || "Failed to check webhook status" });
     }
   });
@@ -6966,7 +7432,9 @@ IMPORTANT:
               resourceId: integration.googleCalendarWebhookResourceId,
             },
           });
+          console.log('[Webhook Re-register] Stopped old webhook:', integration.googleCalendarWebhookChannelId);
         } catch (stopError: any) {
+          console.log('[Webhook Re-register] Failed to stop old webhook (may already be expired):', stopError.message);
         }
       }
 
@@ -6992,6 +7460,7 @@ IMPORTANT:
       });
 
     } catch (error: any) {
+      console.error("Error re-registering webhook:", error);
       res.status(500).json({ message: error.message || "Failed to re-register webhook" });
     }
   });
@@ -7049,6 +7518,7 @@ IMPORTANT:
         total: rows.length,
       });
     } catch (error: any) {
+      console.error("CSV upload error:", error);
       res.status(500).json({ message: error.message || "Upload failed" });
     }
   });
@@ -7068,6 +7538,7 @@ IMPORTANT:
 
       res.json(filteredClients);
     } catch (error: any) {
+      console.error("Error fetching clients:", error);
       res.status(500).json({ message: error.message || "Failed to fetch clients" });
     }
   });
@@ -7098,6 +7569,7 @@ IMPORTANT:
       // Get Commission Tracker sheet (source of truth)
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
+        console.log('[MY-CLIENTS] ❌ No Commission Tracker sheet found');
         return res.json([]);
       }
 
@@ -7120,11 +7592,14 @@ IMPORTANT:
       // Check if we have valid cached data
       const cached = getCached<any[]>(cacheKey, dataHash);
       if (cached) {
+        console.log(`[MY-CLIENTS] ⚡ Cache HIT - returning ${cached.length} clients (hash: ${dataHash.substring(0, 8)})`);
         return res.json(cached);
       }
       
+      console.log(`[MY-CLIENTS] 🔄 Cache MISS - processing data (hash: ${dataHash.substring(0, 8)})`);
 
       if (trackerRows.length <= 1) {
+        console.log('[MY-CLIENTS] ❌ Commission Tracker is empty or has no data rows');
         return res.json([]);
       }
 
@@ -7184,6 +7659,7 @@ IMPORTANT:
         // SECURITY: Filter by allowed agent names (agents see only their clients)
         if (allowedAgentNames.length > 0) {
           if (agentNameIndex === -1) {
+            console.log(`[MY-CLIENTS] ❌ Agent Name column not found - filtering all rows`);
             continue; // No agent column means agents see nothing
           }
           const rowAgentNormalized = rowAgent ? rowAgent.toLowerCase().trim() : '';
@@ -7318,9 +7794,11 @@ IMPORTANT:
         hash: dataHash.substring(0, 8),
       }, { userId });
       
+      console.log(`[MY-CLIENTS] ✅ Processing complete: ${enrichedClients.length} clients for ${currentUser.agentName || currentUser.email} | Processed: ${rowsProcessed}, Skipped: ${skippedNoLink} no-link, ${skippedChildLocation} child-locations, ${rowsFiltered} filtered-by-agent`);
 
       res.json(enrichedClients);
     } catch (error: any) {
+      console.error("Error fetching agent clients:", error);
       res.status(500).json({ message: error.message || "Failed to fetch clients" });
     }
   });
@@ -7330,6 +7808,16 @@ IMPORTANT:
     try {
       const { search, nameFilter, cityFilter, states, cities, status } = req.body;
       const user = req.currentUser;
+
+      // DEBUG: Log received filters
+      console.log('🔍 [EXPORT FILTERS RECEIVED]:', JSON.stringify({
+        search,
+        nameFilter,
+        cityFilter,
+        states,
+        cities,
+        status
+      }, null, 2));
 
       // Build filters - ONLY visual filters, no category or agent filtering
       const filters: any = {
@@ -7350,8 +7838,13 @@ IMPORTANT:
       }
 
       const clients = await storage.getFilteredClients(filters);
+      console.log(`✅ [EXPORT RESULTS]: Returning ${clients.length} clients`);
+      if (clients.length <= 5) {
+        console.log('📋 [EXPORT CLIENT NAMES]:', clients.map(c => c.data?.Name || c.data?.name || 'Unknown'));
+      }
       res.json(clients);
     } catch (error: any) {
+      console.error("Error fetching filtered clients:", error);
       res.status(500).json({ message: error.message || "Failed to fetch filtered clients" });
     }
   });
@@ -7374,6 +7867,7 @@ IMPORTANT:
       const updated = await storage.claimClient(id, req.currentUser.id);
       res.json(updated);
     } catch (error: any) {
+      console.error("Error claiming client:", error);
       res.status(500).json({ message: error.message || "Failed to claim client" });
     }
   });
@@ -7385,6 +7879,7 @@ IMPORTANT:
       const updated = await storage.unclaimClient(id);
       res.json(updated);
     } catch (error: any) {
+      console.error("Error unclaiming client:", error);
       res.status(500).json({ message: error.message || "Failed to unclaim client" });
     }
   });
@@ -7396,6 +7891,7 @@ IMPORTANT:
       const notes = await storage.getClientNotes(id);
       res.json(notes);
     } catch (error: any) {
+      console.error("Error fetching notes:", error);
       res.status(500).json({ message: error.message || "Failed to fetch notes" });
     }
   });
@@ -7419,6 +7915,7 @@ IMPORTANT:
 
       res.json(note);
     } catch (error: any) {
+      console.error("Error creating note:", error);
       res.status(500).json({ message: error.message || "Failed to create note" });
     }
   });
@@ -7429,6 +7926,7 @@ IMPORTANT:
       const agents = await storage.getAgents();
       res.json(agents);
     } catch (error: any) {
+      console.error("Error fetching agents:", error);
       res.status(500).json({ message: error.message || "Failed to fetch agents" });
     }
   });
@@ -7476,6 +7974,7 @@ IMPORTANT:
 
       res.json({ users: usersWithMetrics });
     } catch (error: any) {
+      console.error("Error fetching users:", error);
       res.status(500).json({ message: error.message || "Failed to fetch users" });
     }
   });
@@ -7519,6 +8018,7 @@ IMPORTANT:
 
       res.json({ user: newUser });
     } catch (error: any) {
+      console.error("Error creating user:", error);
       res.status(500).json({ message: error.message || "Failed to create user" });
     }
   });
@@ -7546,6 +8046,7 @@ IMPORTANT:
 
       res.json({ user: updatedUser });
     } catch (error: any) {
+      console.error("Error updating voice access:", error);
       res.status(500).json({ message: error.message || "Failed to update voice access" });
     }
   });
@@ -7589,6 +8090,7 @@ IMPORTANT:
         }
       });
     } catch (error: any) {
+      console.error("Error resetting password:", error);
       res.status(500).json({ message: error.message || "Failed to reset password" });
     }
   });
@@ -7694,6 +8196,7 @@ IMPORTANT:
         agents: agentSummaries,
       });
     } catch (error: any) {
+      console.error("Error fetching sales report data:", error);
       res.status(500).json({ message: error.message || "Failed to fetch sales report data" });
     }
   });
@@ -7772,9 +8275,12 @@ IMPORTANT:
           .sort((a, b) => b.totalEarnings - a.totalEarnings),
       })).sort((a, b) => b.totalReferralCommission - a.totalReferralCommission);
 
+      console.log('[Referral Commissions API] User:', currentUser.agentName || currentUser.email);
+      console.log('[Referral Commissions API] Returning data:', JSON.stringify(referralData, null, 2));
 
       res.json({ referralCommissions: referralData });
     } catch (error: any) {
+      console.error("Error fetching referral commission data:", error);
       res.status(500).json({ message: error.message || "Failed to fetch referral commission data" });
     }
   });
@@ -7860,6 +8366,7 @@ IMPORTANT:
         releasable,
       });
     } catch (error: any) {
+      console.error("Error analyzing user listings:", error);
       res.status(500).json({ message: error.message || "Failed to analyze listings" });
     }
   });
@@ -7912,8 +8419,10 @@ IMPORTANT:
             googleCalendarWebhookExpiry: undefined,
           });
 
+          console.log(`[Deactivate] Unregistered Google Calendar webhook for user ${userId}`);
         }
       } catch (webhookError: any) {
+        console.error(`[Deactivate] Failed to unregister webhook for user ${userId}:`, webhookError.message);
         // Continue with deactivation even if webhook unregistration fails
       }
 
@@ -7994,6 +8503,7 @@ IMPORTANT:
         protectedCount,
       });
     } catch (error: any) {
+      console.error("Error deactivating user:", error);
       res.status(500).json({ message: error.message || "Failed to deactivate user" });
     }
   });
@@ -8014,6 +8524,7 @@ IMPORTANT:
 
       res.json({ message: "User reactivated successfully" });
     } catch (error: any) {
+      console.error("Error reactivating user:", error);
       res.status(500).json({ message: error.message || "Failed to reactivate user" });
     }
   });
@@ -8035,6 +8546,7 @@ IMPORTANT:
         return res.status(400).json({ message: "You cannot delete your own account" });
       }
 
+      console.log(`[Delete User] Starting permanent deletion of user ${userId} (${user.email})`);
 
       // 1. Unregister Google Calendar webhook if exists
       try {
@@ -8062,8 +8574,10 @@ IMPORTANT:
             },
           });
 
+          console.log(`[Delete User] Unregistered Google Calendar webhook for user ${userId}`);
         }
       } catch (webhookError: any) {
+        console.error(`[Delete User] Failed to unregister webhook:`, webhookError.message);
         // Continue with deletion even if webhook unregistration fails
       }
 
@@ -8083,25 +8597,30 @@ IMPORTANT:
               try {
                 if (file.openaiFileId) {
                   await openai.files.del(file.openaiFileId);
+                  console.log(`[Delete User] Deleted OpenAI file ${file.openaiFileId} (${file.originalName})`);
                 }
               } catch (fileError: any) {
+                console.error(`[Delete User] Failed to delete OpenAI file ${file.openaiFileId}:`, fileError.message);
                 // Continue with other files
               }
             }
           }
         }
       } catch (openaiError: any) {
+        console.error(`[Delete User] Failed to delete OpenAI files:`, openaiError.message);
         // Continue with deletion
       }
 
       // 3. Cascade delete all user data using storage methods
       await storage.deleteUser(userId);
 
+      console.log(`[Delete User] ✅ Successfully deleted user ${userId} (${user.email})`);
 
       res.json({ 
         message: `User ${user.email} has been permanently deleted along with all their data.`
       });
     } catch (error: any) {
+      console.error("Error deleting user:", error);
       res.status(500).json({ message: error.message || "Failed to delete user" });
     }
   });
@@ -8111,19 +8630,25 @@ IMPORTANT:
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const orders = await storage.getAllOrders();
+      console.log('[GET /api/orders] All orders fetched:', orders.length);
 
       // Check Commission Tracker to see which orders have tracker rows
       const sheets = await storage.getAllActiveGoogleSheets();
+      console.log('[GET /api/orders] All sheets:', sheets.map(s => ({ purpose: s.sheetPurpose, name: s.spreadsheetName })));
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      console.log('[GET /api/orders] Tracker sheet found:', trackerSheet ? trackerSheet.spreadsheetName : 'NONE');
 
       if (trackerSheet) {
         try {
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
           const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+          console.log('[GET /api/orders] Tracker rows read:', trackerRows.length);
 
           if (trackerRows.length > 0) {
             const trackerHeaders = trackerRows[0];
+            console.log('[GET /api/orders] Tracker headers:', trackerHeaders);
             const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+            console.log('[GET /api/orders] Transaction ID column index:', transactionIdIndex);
 
             // Build set of order IDs that have tracker rows
             const ordersWithTrackerRows = new Set<string>();
@@ -8133,6 +8658,7 @@ IMPORTANT:
                 ordersWithTrackerRows.add(transactionId);
               }
             }
+            console.log('[GET /api/orders] Orders with tracker rows:', Array.from(ordersWithTrackerRows));
 
             // Add hasTrackerRows field to each order
             const ordersWithStatus = orders.map((order: any) => ({
@@ -8143,6 +8669,7 @@ IMPORTANT:
             return res.json(ordersWithStatus);
           }
         } catch (trackerError) {
+          console.error('Error checking Commission Tracker:', trackerError);
           // Continue without tracker status if error
         }
       }
@@ -8150,6 +8677,7 @@ IMPORTANT:
       // If no tracker sheet or error, return orders without hasTrackerRows field
       res.json(orders);
     } catch (error: any) {
+      console.error("Error fetching orders:", error);
       res.status(500).json({ message: error.message || "Failed to fetch orders" });
     }
   });
@@ -8172,6 +8700,7 @@ IMPORTANT:
 
       res.json(updatedOrder);
     } catch (error: any) {
+      console.error("Error updating order:", error);
       res.status(500).json({ message: error.message || "Failed to update order" });
     }
   });
@@ -8222,6 +8751,7 @@ IMPORTANT:
             }
           }
         } catch (trackerError) {
+          console.error('Error checking Commission Tracker:', trackerError);
           // Continue even if tracker check fails
         }
       }
@@ -8343,6 +8873,7 @@ IMPORTANT:
         isManualSearch,
       });
     } catch (error: any) {
+      console.error("Error getting match suggestions:", error);
       res.status(500).json({ message: error.message || "Failed to get suggestions" });
     }
   });
@@ -8568,6 +9099,7 @@ IMPORTANT:
         dba: dba || null
       });
     } catch (error: any) {
+      console.error("Error matching order:", error);
       res.status(500).json({ message: error.message || "Failed to match order" });
     }
   });
@@ -8596,12 +9128,14 @@ IMPORTANT:
         if (Object.keys(updates).length > 0) {
           await storage.updateOrder(orderId, updates);
           dbUpdated++;
+          console.log(`DB: Updated order ${orderId} with:`, updates);
         }
       }
 
       // Step 2: Write to Google Sheets Commission Tracker
       let sheetsWritten = 0;
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      console.log('Tracker sheet found:', trackerSheet ? `${trackerSheet.spreadsheetName} / ${trackerSheet.sheetName}` : 'NONE');
 
       if (trackerSheet) {
         const { spreadsheetId, sheetName } = trackerSheet;
@@ -8617,24 +9151,32 @@ IMPORTANT:
             columnMap[header.toLowerCase().trim()] = index;
           });
 
+          console.log('Headers:', headers);
+          console.log('Column map:', columnMap);
 
           // Read all existing rows
           const allDataRange = `${sheetName}!A:ZZ`;
           const allRows = await googleSheets.readSheetData(spreadsheetId, allDataRange);
           const existingRows = allRows.slice(1);
+          console.log(`Read ${existingRows.length} data rows from sheet`);
 
           for (const orderReq of orderUpdates) {
             const { orderId, commissionType, commissionAmount } = orderReq;
+            console.log(`\n--- Processing order ${orderId} ---`);
 
             // Get order from database
             const order = await storage.getOrderById(orderId);
             if (!order) {
+              console.log(`Order ${orderId} not found in database`);
               continue;
             }
+            console.log(`Order found: total=${order.total}`);
 
             // Find existing row(s) by Transaction ID in Commission Tracker
             const transactionIdIndex = columnMap['transaction id'];
+            console.log(`Transaction ID column index: ${transactionIdIndex}`);
             if (transactionIdIndex === undefined) {
+              console.log('ERROR: Transaction ID column not found in headers');
               continue;
             }
 
@@ -8644,10 +9186,13 @@ IMPORTANT:
               const rowTransactionId = existingRows[i][transactionIdIndex];
               if (rowTransactionId === orderId) {
                 matchingRowIndices.push(i + 2); // +2 for header and 1-indexed
+                console.log(`Found match at row ${i + 2}: Transaction ID = ${rowTransactionId}`);
               }
             }
 
+            console.log(`Found ${matchingRowIndices.length} matching rows for order ${orderId}`);
             if (matchingRowIndices.length === 0) {
+              console.log('No matching rows found - skipping');
               continue;
             }
 
@@ -8673,6 +9218,7 @@ IMPORTANT:
             else if (commissionType === '10') commissionTypeLabel = '10%';
 
             // Update all matching rows
+            console.log(`Calculated amount: $${amount.toFixed(2)}, type: ${commissionTypeLabel}`);
 
             for (const rowIndex of matchingRowIndices) {
               const updates: Array<{range: string, values: any[][]}> = [];
@@ -8684,7 +9230,9 @@ IMPORTANT:
                   range,
                   values: [[commissionTypeLabel]]
                 });
+                console.log(`Will update Commission Type: ${range} = ${commissionTypeLabel}`);
               } else {
+                console.log('WARNING: "commission type" column not found');
               }
 
               if ('amount' in columnMap) {
@@ -8694,7 +9242,9 @@ IMPORTANT:
                   range,
                   values: [[amount.toFixed(2)]]
                 });
+                console.log(`Will update Amount: ${range} = $${amount.toFixed(2)}`);
               } else {
+                console.log('WARNING: "amount" column not found');
               }
 
               if ('total' in columnMap && !isNaN(orderTotal)) {
@@ -8704,12 +9254,17 @@ IMPORTANT:
                   range,
                   values: [[orderTotal.toFixed(2)]]
                 });
+                console.log(`Will update Total: ${range} = $${orderTotal.toFixed(2)}`);
               } else if (!('total' in columnMap)) {
+                console.log('WARNING: "total" column not found');
               } else if (isNaN(orderTotal)) {
+                console.log(`WARNING: orderTotal is not a valid number: ${orderTotal}`);
               }
 
               for (const update of updates) {
+                console.log(`Writing to Google Sheets: ${update.range}`, update.values);
                 await googleSheets.writeSheetData(spreadsheetId, update.range, update.values);
+                console.log(`Successfully wrote: ${update.range}`);
               }
 
               sheetsWritten++;
@@ -8728,7 +9283,9 @@ IMPORTANT:
         try {
           await commissionService.applyCommissions(orderId);
           commissionsRecalculated++;
+          console.log(`Recalculated commissions for order ${orderId}`);
         } catch (error: any) {
+          console.error(`Failed to recalculate commissions for order ${orderId}:`, error);
         }
       }
 
@@ -8741,6 +9298,7 @@ IMPORTANT:
         commissionsRecalculated
       });
     } catch (error: any) {
+      console.error("Error saving commission settings:", error);
       res.status(500).json({ message: error.message || "Failed to save commission settings" });
     }
   });
@@ -8753,6 +9311,7 @@ IMPORTANT:
       const webhookTopic = req.headers['x-wc-webhook-topic'];
       const webhookSignature = req.headers['x-wc-webhook-signature'];
 
+      console.log('WooCommerce webhook received:', {
         topic: webhookTopic,
         source: webhookSource,
         orderId: webhookData.id
@@ -8760,11 +9319,13 @@ IMPORTANT:
 
       // Verify webhook is for order events
       if (!webhookTopic || !webhookTopic.toString().startsWith('order.')) {
+        console.log('Ignoring non-order webhook:', webhookTopic);
         return res.status(200).json({ message: 'Webhook received but not an order event' });
       }
 
       // Only process completed and processing orders
       if (webhookData.status !== 'completed' && webhookData.status !== 'processing') {
+        console.log('Ignoring order with status:', webhookData.status);
         return res.status(200).json({ message: 'Order status not tracked' });
       }
 
@@ -8775,6 +9336,7 @@ IMPORTANT:
       const salesAgentMeta = order.meta_data?.find((m: any) => m.key === '_sales_agent');
       const salesAgentName = salesAgentMeta?.value || null;
 
+      console.log(`Processing webhook for order ${order.id}:`, {
         email,
         company,
         salesAgentName,
@@ -8837,8 +9399,10 @@ IMPORTANT:
       // ONLY apply commissions automatically for REORDERS (existing clients)
       // First orders must be manually matched via WooCommerce Sync UI to set commission type
       if (client) {
+        console.log('[Webhook] Client found - auto-calculating commissions for reorder');
         await commissionService.applyCommissions(order.id.toString());
       } else {
+        console.log('[Webhook] New client - skipping auto commission calculation. Admin must match order manually.');
       }
 
       // Update client if matched
@@ -8877,6 +9441,7 @@ IMPORTANT:
           try {
             const sheetsConfig = await storage.getSheetsConfig();
             if (sheetsConfig?.spreadsheetId && sheetsConfig?.commissionTrackerSheetName) {
+              console.log('[Webhook] Writing order to Commission Tracker:', {
                 orderId: order.id,
                 client: client.name,
                 agent: client.assignedAgent,
@@ -8931,17 +9496,23 @@ IMPORTANT:
                 'P'
               );
 
+              console.log('[Webhook] ✅ Successfully wrote to Commission Tracker row', nextRow);
             }
           } catch (sheetsError: any) {
+            console.error('[Webhook] ❌ Failed to write to Commission Tracker:', sheetsError.message);
             // Don't fail the webhook - order is still processed in database
           }
         } else if (client.assignedAgent) {
+          console.log('[Webhook] Skipping Commission Tracker write - no commission calculated (order may be outside commission period)');
         } else {
+          console.log('[Webhook] Skipping Commission Tracker write - client has no assigned agent');
         }
       }
 
+      console.log('Webhook processed successfully:', { orderId: order.id, matched: !!client });
       res.status(200).json({ message: 'Webhook processed', matched: !!client });
     } catch (error: any) {
+      console.error("Webhook processing error:", error);
       // Always return 200 to WooCommerce to prevent retries
       res.status(200).json({ message: 'Webhook received but processing failed' });
     }
@@ -8958,6 +9529,10 @@ IMPORTANT:
       const consumerKey = integration?.wooConsumerKey;
       const consumerSecret = integration?.wooConsumerSecret;
 
+      console.log('WooCommerce sync started for user:', userId);
+      console.log('WooCommerce URL:', wooUrl);
+      console.log('Has consumer key:', !!consumerKey);
+      console.log('Has consumer secret:', !!consumerSecret);
 
       if (!wooUrl || !consumerKey || !consumerSecret) {
         return res.status(500).json({ message: "WooCommerce credentials not configured. Please configure in Settings." });
@@ -8965,6 +9540,7 @@ IMPORTANT:
 
       // Fetch ALL orders from WooCommerce with pagination
       const apiUrl = `${wooUrl}/wp-json/wc/v3/orders`;
+      console.log('Fetching from:', apiUrl);
 
       let allOrders: any[] = [];
       let page = 1;
@@ -8985,6 +9561,7 @@ IMPORTANT:
           },
         });
 
+        console.log(`Fetched page ${page}: ${response.data.length} orders`);
 
         if (response.data.length === 0) {
           hasMore = false;
@@ -8995,13 +9572,16 @@ IMPORTANT:
 
         // Safety check to prevent infinite loops
         if (page > 1000) {
+          console.log('Reached maximum page limit (1000)');
           hasMore = false;
         }
       }
 
+      console.log('WooCommerce total orders fetched:', allOrders.length);
       const orders = allOrders;
 
       if (!Array.isArray(orders)) {
+        console.error('Expected array of orders but got:', typeof orders);
         return res.status(500).json({
           message: "Invalid response from WooCommerce API",
           total: 0,
@@ -9011,6 +9591,7 @@ IMPORTANT:
       }
 
       if (orders.length === 0) {
+        console.log('No orders found in WooCommerce');
         return res.json({
           message: "No orders found in WooCommerce",
           total: 0,
@@ -9021,6 +9602,7 @@ IMPORTANT:
       let synced = 0;
       let matched = 0;
 
+      console.log(`Processing ${orders.length} orders...`);
 
       for (const order of orders) {
         // Try to find matching client by email or company
@@ -9031,6 +9613,7 @@ IMPORTANT:
         const salesAgentMeta = order.meta_data?.find((m: any) => m.key === '_sales_agent');
         const salesAgentName = salesAgentMeta?.value || null;
 
+        console.log(`Processing order ${order.id}:`, {
           email,
           company,
           salesAgentName,
@@ -9044,11 +9627,13 @@ IMPORTANT:
         if (email) {
           client = await storage.findClientByUniqueKey('Email', email) ||
                    await storage.findClientByUniqueKey('email', email);
+          console.log(`Client lookup by email '${email}':`, client ? 'FOUND' : 'NOT FOUND');
         }
 
         if (!client && company) {
           client = await storage.findClientByUniqueKey('Company', company) ||
                    await storage.findClientByUniqueKey('company', company);
+          console.log(`Client lookup by company '${company}':`, client ? 'FOUND' : 'NOT FOUND');
         }
 
         // Create or update order
@@ -9061,6 +9646,7 @@ IMPORTANT:
           const clientOrders = await storage.getOrdersByClient(client.id);
           if (clientOrders.length > 0) {
             isReOrder = true;
+            console.log(`Re-order detected for client ${client.id} (${clientOrders.length} previous orders)`);
           }
         }
 
@@ -9105,6 +9691,7 @@ IMPORTANT:
                 orderDate: order.date_created
               }
             });
+            console.log(`Created re-order notification for agent ${client.assignedAgent}`);
           }
         }
 
@@ -9147,6 +9734,7 @@ IMPORTANT:
       for (const localOrder of allLocalOrders) {
         if (!wooOrderIds.has(localOrder.id)) {
           // This order exists locally but not in WooCommerce anymore
+          console.log(`Deleting order ${localOrder.id} (no longer in WooCommerce)`);
           
           // Get commissions for this order BEFORE deleting (will be cascade deleted)
           const orderCommissions = await storage.getCommissionsByOrder(localOrder.id);
@@ -9179,16 +9767,19 @@ IMPORTANT:
                   }
                   
                   if (rowsToDelete.length === 0) {
+                    console.log(`⚠️  No Commission Tracker rows found for deleted order ${localOrder.id} (Transaction ID not matched)`);
                   }
                   
                   // Delete rows in reverse order to maintain row indices
                   for (const rowIndex of rowsToDelete.reverse()) {
                     await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, trackerSheet.sheetId!, rowIndex);
+                    console.log(`🗑️  Deleted Commission Tracker row ${rowIndex} for order ${localOrder.id}`);
                   }
                 }
               }
             }
           } catch (sheetError: any) {
+            console.error('Error deleting tracker sheet row:', sheetError);
             // Don't fail order deletion if sheet deletion fails
           }
           
@@ -9209,8 +9800,10 @@ IMPORTANT:
                   totalSales: newTotalSales.toString(),
                   commissionTotal: newCommissionTotal.toString()
                 });
+                console.log(`Updated client ${client.id}: totalSales=$${currentTotalSales.toFixed(2)}→$${newTotalSales.toFixed(2)}, commission=$${currentCommissionTotal.toFixed(2)}→$${newCommissionTotal.toFixed(2)}`);
               }
             } catch (clientError: any) {
+              console.error('Error updating client totals:', clientError);
               // Don't fail order deletion if client update fails
             }
           }
@@ -9221,8 +9814,10 @@ IMPORTANT:
         }
       }
 
+      console.log('Sync completed:', { total: orders.length, synced, matched, deleted });
 
       // AUTO-MATCHING: Match orders to stores in Google Sheets based on billing email
+      console.log('Starting auto-matching for claimed stores...');
       let autoMatched = 0;
 
       try {
@@ -9306,6 +9901,7 @@ IMPORTANT:
                       await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
 
                       autoMatched++;
+                      console.log(`Auto-matched order ${order.id} to store ${storeLink}`);
                     }
                   }
                 }
@@ -9314,12 +9910,15 @@ IMPORTANT:
           }
         }
       } catch (autoMatchError: any) {
+        console.error('Auto-matching error:', autoMatchError);
         // Don't fail the entire sync if auto-matching fails
       }
 
+      console.log('Auto-matching completed:', { autoMatched });
 
       // COMMISSION SYNC: Recalculate commissions for orders with changes or missing commissions
       // This ensures agent transfers from WooCommerce are automatically applied
+      console.log('Starting commission sync...');
       let commissionsCalculated = 0;
       let agentTransfers = 0;
       let sheetsUpdated = 0;
@@ -9341,6 +9940,7 @@ IMPORTANT:
           }
         }
       } catch (sheetError: any) {
+        console.error('Failed to load Commission Tracker sheet:', sheetError.message);
       }
 
       try {
@@ -9366,6 +9966,7 @@ IMPORTANT:
             // Recalculate if primary commission is missing (data corruption or manual deletion)
             if (!primaryCommission) {
               needsRecalculation = true;
+              console.log(`⚠️  Missing primary commission for order ${localOrder.id} - will recalculate`);
             } else {
               const commissionAgent = await db.query.users.findFirst({
                 where: eq(users.id, primaryCommission.agentId),
@@ -9377,9 +9978,11 @@ IMPORTANT:
               if (!commissionAgent) {
                 needsRecalculation = true;
                 agentTransfers++;
+                console.log(`🔄 Agent transfer detected for order ${localOrder.id}: <deleted agent> → ${localOrder.salesAgentName}`);
               } else if (commissionAgent.agentName?.toLowerCase().trim() !== localOrder.salesAgentName.toLowerCase().trim()) {
                 needsRecalculation = true;
                 agentTransfers++;
+                console.log(`🔄 Agent transfer detected for order ${localOrder.id}: ${commissionAgent.agentName} → ${localOrder.salesAgentName}`);
               }
             }
           }
@@ -9388,6 +9991,7 @@ IMPORTANT:
             try {
               await commissionService.applyCommissions(localOrder.id);
               commissionsCalculated++;
+              console.log(`✓ Synced commission for order ${localOrder.id} → ${localOrder.salesAgentName}`);
 
               // Update Google Sheets Commission Tracker with agent name and order total
               if (trackerSheet && trackerHeaders.length > 0) {
@@ -9434,7 +10038,9 @@ IMPORTANT:
                         }
 
                         sheetsUpdated++;
+                        console.log(`📝 Updated Google Sheets: Order ${localOrder.orderNumber} → ${localOrder.salesAgentName}, Total: $${localOrder.total}`);
                       } catch (writeErr: any) {
+                        console.error(`✗ Failed to update Google Sheets for order ${localOrder.orderNumber}:`, writeErr.message);
                       }
                       break;
                     }
@@ -9442,15 +10048,19 @@ IMPORTANT:
                 }
               }
             } catch (commErr: any) {
+              console.error(`✗ Failed to sync commission for order ${localOrder.id}:`, commErr.message);
             }
           }
         }
       } catch (syncError: any) {
+        console.error('Commission sync error:', syncError);
         // Don't fail the entire sync if commission calculation fails
       }
 
+      console.log('Commission sync completed:', { commissionsCalculated, agentTransfers, sheetsUpdated });
 
       // UPDATE TOTALS: Always update Column Q (Total) for all orders in tracker sheet
+      console.log('Starting total column sync...');
       let totalsUpdated = 0;
       
       if (trackerSheet) {
@@ -9461,9 +10071,12 @@ IMPORTANT:
           if (freshTrackerRows.length > 0) {
             trackerRows = freshTrackerRows;
             trackerHeaders = trackerRows[0];
+            console.log(`📋 Reloaded tracker sheet: ${trackerRows.length - 1} data rows, ${trackerHeaders.length} columns`);
           } else {
+            console.log('⚠️  Tracker sheet is empty after reload');
           }
         } catch (reloadErr: any) {
+          console.error('✗ Failed to reload tracker sheet:', reloadErr.message);
         }
       }
       
@@ -9495,18 +10108,25 @@ IMPORTANT:
                       [[orderTotal.toFixed(2)]]
                     );
                     totalsUpdated++;
+                    console.log(`📝 Updated Total: Order ${localOrder.orderNumber} → $${orderTotal.toFixed(2)} (${totalCellRange})`);
                   } catch (writeErr: any) {
+                    console.error(`✗ Failed to update total for order ${localOrder.orderNumber}:`, writeErr.message);
                   }
                 }
                 break;
               }
             }
           }
+        } else {
+          if (orderIdIndex === -1) console.log('⚠️  "Order ID" column not found in Commission Tracker');
+          if (totalIndex === -1) console.log('⚠️  "Total" column not found in Commission Tracker');
         }
       }
       
+      console.log('Total column sync completed:', { totalsUpdated });
 
       // RECALCULATE CLIENT TOTALS FROM SCRATCH: Rebuild totalSales and commissionTotal based on existing orders
+      console.log('Starting client totals recalculation...');
       let clientsRecalculated = 0;
       
       try {
@@ -9560,15 +10180,19 @@ IMPORTANT:
               totalSales: newTotalSales.toFixed(2),
               commissionTotal: newCommissionTotal.toFixed(2)
             });
+            console.log(`✓ Recalculated client ${client.id}: sales $${oldTotalSales.toFixed(2)}→$${newTotalSales.toFixed(2)}, commission $${oldCommissionTotal.toFixed(2)}→$${newCommissionTotal.toFixed(2)}`);
             clientsRecalculated++;
           }
         }
         
+        console.log('Client totals recalculation completed:', { clientsRecalculated });
       } catch (recalcError: any) {
+        console.error('Error recalculating client totals:', recalcError);
         // Don't fail the entire sync if recalculation fails
       }
 
       // CLEANUP COMMISSION TRACKER: Remove orphaned rows that don't exist in WooCommerce
+      console.log('Starting Commission Tracker cleanup...');
       let trackerRowsDeleted = 0;
       
       try {
@@ -9586,6 +10210,7 @@ IMPORTANT:
             if (transactionIdIndex !== -1) {
               // Build set of valid WooCommerce order IDs
               const wooOrderIds = new Set(orders.map((o: any) => o.id.toString()));
+              console.log(`Valid WooCommerce order IDs: ${Array.from(wooOrderIds).join(', ')}`);
               
               // Find rows with Transaction IDs that don't exist in WooCommerce
               const rowsToDelete: number[] = [];
@@ -9599,19 +10224,23 @@ IMPORTANT:
                 // If this transaction ID doesn't exist in WooCommerce, mark for deletion
                 if (!wooOrderIds.has(rowTransactionId)) {
                   rowsToDelete.push(i + 1); // 1-indexed for Google Sheets
+                  console.log(`📋 Marking orphaned row ${i + 1} for deletion (Transaction ID: ${rowTransactionId})`);
                 }
               }
               
               // Delete rows in reverse order to maintain row indices
               for (const rowIndex of rowsToDelete.reverse()) {
                 await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, trackerSheet.sheetId!, rowIndex);
+                console.log(`🗑️  Deleted orphaned Commission Tracker row ${rowIndex}`);
                 trackerRowsDeleted++;
               }
             }
           }
         }
         
+        console.log('Commission Tracker cleanup completed:', { trackerRowsDeleted });
       } catch (cleanupError: any) {
+        console.error('Error cleaning up Commission Tracker:', cleanupError);
         // Don't fail the entire sync if cleanup fails
       }
 
@@ -9629,6 +10258,8 @@ IMPORTANT:
         total: orders.length,
       });
     } catch (error: any) {
+      console.error("WooCommerce sync error:", error);
+      console.error("Error details:", {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status
@@ -9670,6 +10301,7 @@ IMPORTANT:
       // CRITICAL: Filter out empty headers to prevent sheet pollution
       const allHeaders = headerData[0];
       const headers = allHeaders.filter(h => h && h.trim() !== '');
+      console.log('Commission Tracker headers:', headers);
 
       // Build column map (case-insensitive)
       const columnMap: Record<string, number> = {};
@@ -9702,21 +10334,25 @@ IMPORTANT:
         // Get order from database
         const order = await storage.getOrderById(orderId);
         if (!order) {
+          console.log(`Skipping order ${orderId}: not matched to client`);
           continue;
         }
 
         // Extract link from order's client data
         const client = await storage.getClient(order.clientId);
         if (!client) {
+          console.log(`Skipping order ${orderId}: client not found`);
           continue;
         }
         let linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
         if (!linkValue) {
+          console.log(`Skipping order ${orderId}: no link found for client ${client.id}`);
           continue;
         }
 
         const salesAgentName = order.salesAgentName;
         if (!salesAgentName) {
+          console.log(`Skipping order ${orderId}: no sales agent name`);
           continue;
         }
 
@@ -9751,6 +10387,7 @@ IMPORTANT:
         });
 
         if (duplicateRow) {
+          console.log(`Skipping order ${order.orderNumber}: already exists in Commission Tracker`);
           continue;
         }
 
@@ -9771,6 +10408,7 @@ IMPORTANT:
             existingAgent: conflictingRow[columnMap['agent name']],
             link: linkValue,
           });
+          console.log(`Conflict detected for order ${order.orderNumber}: existing agent ${conflictingRow[columnMap['agent name']]} vs new agent ${salesAgentName}`);
           continue; // Skip writing this row
         }
 
@@ -9786,6 +10424,7 @@ IMPORTANT:
         // Append row to tracker sheet (range matches array length to avoid touching non-existent columns)
         await googleSheets.appendSheetData(spreadsheetId, `${sheetName}`, [rowData]);
         written++;
+        console.log(`Written order ${order.orderNumber} to tracker: ${salesAgentName} - $${amount.toFixed(2)}`);
       }
 
       res.json({
@@ -9794,6 +10433,7 @@ IMPORTANT:
         conflicts: conflicts.length > 0 ? conflicts : undefined,
       });
     } catch (error: any) {
+      console.error("Write to tracker error:", error);
       res.status(500).json({
         message: error.message || "Failed to write to tracker",
         written: 0
@@ -9827,6 +10467,7 @@ IMPORTANT:
 
       res.json(commissions);
     } catch (error: any) {
+      console.error("Error fetching commissions:", error);
       res.status(500).json({ message: error.message || "Failed to fetch commissions" });
     }
   });
@@ -9850,6 +10491,7 @@ IMPORTANT:
       const summary = await commissionService.getCommissionSummary(agentId);
       res.json(summary);
     } catch (error: any) {
+      console.error("Error fetching commission summary:", error);
       res.status(500).json({ message: error.message || "Failed to fetch commission summary" });
     }
   });
@@ -9873,6 +10515,7 @@ IMPORTANT:
       const teamData = await commissionService.getTeamCommissions(referrerId);
       res.json(teamData);
     } catch (error: any) {
+      console.error("Error fetching team commissions:", error);
       res.status(500).json({ message: error.message || "Failed to fetch team commissions" });
     }
   });
@@ -9886,6 +10529,7 @@ IMPORTANT:
       const sheets = await googleSheets.listSpreadsheets();
       res.json(sheets);
     } catch (error: any) {
+      console.error("Error listing sheets:", error);
       res.status(500).json({ message: error.message || "Failed to list sheets" });
     }
   });
@@ -9898,6 +10542,7 @@ IMPORTANT:
       const info = await googleSheets.getSpreadsheetInfo(spreadsheetId);
       res.json(info);
     } catch (error: any) {
+      console.error("Error getting sheet info:", error);
       res.status(500).json({ message: error.message || "Failed to get sheet info" });
     }
   });
@@ -9908,6 +10553,7 @@ IMPORTANT:
       const sheets = await storage.getAllActiveGoogleSheets();
       res.json(sheets.length > 0 ? sheets[0] : null);
     } catch (error: any) {
+      console.error("Error getting active sheets:", error);
       res.status(500).json({ message: error.message || "Failed to get active sheets" });
     }
   });
@@ -9955,6 +10601,7 @@ IMPORTANT:
 
       res.json({ message: "Sheet connected successfully", connection });
     } catch (error: any) {
+      console.error("Error connecting sheet:", error);
       res.status(500).json({ message: error.message || "Failed to connect sheet" });
     }
   });
@@ -9965,6 +10612,7 @@ IMPORTANT:
       const sheets = await storage.getAllActiveGoogleSheets();
       res.json({ sheets });
     } catch (error: any) {
+      console.error("Error fetching sheets:", error);
       res.status(500).json({ message: error.message || "Failed to fetch sheets" });
     }
   });
@@ -10008,6 +10656,7 @@ IMPORTANT:
         }
       });
     } catch (error: any) {
+      console.error("Error fetching sheet data:", error);
       res.status(500).json({ message: error.message || "Failed to fetch sheet data" });
     }
   });
@@ -10156,9 +10805,11 @@ IMPORTANT:
           // Show unclaimed stores (empty Agent Name) OR stores assigned to this agent
           return !rowAgentName || rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
         });
+        console.log(`Filtered store data for agent "${userAgentName}": ${filteredStoreData.length} rows (includes unclaimed stores)`);
       } else if (user?.role !== 'admin' && !userAgentName) {
         // No agent name available for the user, filter all rows to empty
         filteredStoreData = [];
+        console.log('No agent name found for user, filtering all store rows');
       }
 
       // Filter Tracker Data by Agent Name (for non-admin users)
@@ -10173,9 +10824,11 @@ IMPORTANT:
           // Case-insensitive match
           return rowAgentName && rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
         });
+        console.log(`Filtered tracker data for agent "${userAgentName}": ${filteredTrackerData.length} rows`);
       } else if (user?.role !== 'admin' && !userAgentName) {
         // No agent name available, filter all tracker rows to empty
         filteredTrackerData = [];
+        console.log('No agent name found for user, filtering all tracker rows');
       }
 
       // ============================================================================
@@ -10207,7 +10860,9 @@ IMPORTANT:
           return rowCategory && rowCategory.toLowerCase().trim() === selectedCategory.toLowerCase().trim();
         });
         const afterFilterCount = filteredStoreData.length;
+        console.log(`Category filter applied: "${selectedCategory}" - ${afterFilterCount} stores shown (${beforeFilterCount - afterFilterCount} filtered out)`);
       } else if (selectedCategory && !storeCategoryColumnName) {
+        console.log(`WARNING: User has selectedCategory "${selectedCategory}" but "Category" column not found in sheet`);
       }
 
       // ============================================================================
@@ -10361,6 +11016,7 @@ IMPORTANT:
 
       res.json(responseData);
     } catch (error: any) {
+      console.error("Error fetching merged data:", error);
       res.status(500).json({ message: error.message || "Failed to fetch merged data" });
     }
   });
@@ -10377,7 +11033,9 @@ IMPORTANT:
       if (trackerSheet) {
         // Sync Commission Tracker data to PostgreSQL
         const syncResult = await googleSheets.syncCommissionTrackerToPostgres(trackerSheet.id);
+        console.log(`📊 Sync result:`, syncResult);
       } else {
+        console.log('⚠️ No Commission Tracker sheet found, skipping sync');
       }
 
       // Clear cache for this user
@@ -10385,6 +11043,7 @@ IMPORTANT:
 
       res.json({ message: "Sync completed and cache cleared successfully" });
     } catch (error: any) {
+      console.error("Error during refresh:", error);
       res.status(500).json({ message: error.message || "Failed to refresh data" });
     }
   });
@@ -10415,6 +11074,7 @@ IMPORTANT:
 
       if (columnIndex === -1) {
         // Column doesn't exist - skip gracefully instead of failing
+        console.log(`[CELL UPDATE] Column "${column}" not found in sheet ${sheetName}, skipping update`);
         return res.json({ message: `Column "${column}" skipped (not found in sheet)`, skipped: true });
       }
 
@@ -10486,6 +11146,7 @@ IMPORTANT:
 
       res.json({ message: "Cell updated successfully" });
     } catch (error: any) {
+      console.error("Error updating cell:", error);
       res.status(500).json({ message: error.message || "Failed to update cell" });
     }
   });
@@ -10516,6 +11177,7 @@ IMPORTANT:
       
       return false;
     } catch (error) {
+      console.error('[VERIFY-TRACKER-ROW] Error:', error);
       return false;
     }
   }
@@ -10532,6 +11194,7 @@ IMPORTANT:
       const rows = await googleSheets.readSheetData(spreadsheetId, range);
       
       if (rows.length === 0) {
+        console.error('[CREATE-TRACKER-ROW] No headers found');
         return false;
       }
       
@@ -10544,6 +11207,7 @@ IMPORTANT:
       const statusIndex = headers.findIndex(h => h.toLowerCase() === 'status');
       
       if (linkIndex === -1) {
+        console.error('[CREATE-TRACKER-ROW] Link column not found');
         return false;
       }
       
@@ -10558,6 +11222,7 @@ IMPORTANT:
         newRow[statusIndex] = 'Claimed';
       }
       
+      console.log('[CREATE-TRACKER-ROW] Creating row for link:', link);
       
       const appendRange = `${sheetName}!A:ZZ`;
       const response = await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
@@ -10568,6 +11233,7 @@ IMPORTANT:
       const updatedRows = response.updates?.updatedRows || 0;
       const updatedRange = response.updates?.updatedRange || 'unknown';
       
+      console.log('[CREATE-TRACKER-ROW] Append response:', {
         updatedRows,
         updatedRange,
         updatedCells: response.updates?.updatedCells || 0,
@@ -10577,12 +11243,15 @@ IMPORTANT:
       // If we got a response without throwing (HTTP 200), the append succeeded
       // Google's API throws on permission/quota errors, so no exception = success
       if (updatedRows >= 1 || !response.updates) {
+        console.log('[CREATE-TRACKER-ROW] Row created successfully', 
           updatedRows >= 1 ? `at ${updatedRange}` : '(updates block missing, trusting HTTP 200)');
         return true;
       } else {
+        console.error('[CREATE-TRACKER-ROW] Unexpected: updates exists but updatedRows is 0');
         return false;
       }
     } catch (error) {
+      console.error('[CREATE-TRACKER-ROW] Error:', error);
       return false;
     }
   }
@@ -10607,6 +11276,7 @@ IMPORTANT:
       const { spreadsheetId, sheetName } = trackerSheet;
       const normalizedInputLink = normalizeLink(link.trim());
       
+      console.log('[E-Hub Tracker Sync] Processing link:', normalizedInputLink);
 
       // Read tracker sheet
       const range = `${sheetName}!A:ZZ`;
@@ -10644,6 +11314,7 @@ IMPORTANT:
 
       if (existingRowIndex === -1) {
         // Create new row
+        console.log('[E-Hub Tracker Sync] Creating new tracker row');
         
         const newRow = new Array(headers.length).fill('');
         newRow[linkIndex] = link;
@@ -10655,10 +11326,12 @@ IMPORTANT:
         if (notesIndex !== -1) newRow[notesIndex] = emailNote;
 
         await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:ZZ`, [newRow]);
+        console.log('[E-Hub Tracker Sync] New row created with Status=Contacted');
         
         return { success: true };
       } else {
         // Update existing row
+        console.log('[E-Hub Tracker Sync] Updating existing row at index', existingRowIndex);
 
         // Update Status only if empty or "Unclaimed" (preserves all other statuses)
         // This ensures we don't overwrite "Claimed", "Interested", "Follow Up", etc.
@@ -10671,7 +11344,9 @@ IMPORTANT:
             const statusCol = String.fromCharCode(65 + statusIndex);
             const statusCellRange = `${sheetName}!${statusCol}${existingRowIndex}`;
             await googleSheets.writeSheetData(spreadsheetId, statusCellRange, [['Contacted']]);
+            console.log(`[E-Hub Tracker Sync] Status set to Contacted (was "${existingStatus || 'empty'}")`);
           } else {
+            console.log(`[E-Hub Tracker Sync] Preserving existing status: "${existingStatus}"`);
           }
         }
 
@@ -10685,10 +11360,12 @@ IMPORTANT:
           await googleSheets.writeSheetData(spreadsheetId, notesCellRange, [[updatedNotes]]);
         }
 
+        console.log('[E-Hub Tracker Sync] Row updated and Notes appended');
         
         return { success: true };
       }
     } catch (error: any) {
+      console.error('[E-Hub Tracker Sync] Error:', error);
       return { success: false, message: error.message || 'Failed to sync tracker row' };
     }
   }
@@ -10699,6 +11376,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { link, updates } = req.body;
 
+      console.log('🔍 [TRACKER-UPSERT] Received request:', {
         link,
         linkLength: link?.length,
         updates,
@@ -10706,6 +11384,7 @@ IMPORTANT:
       });
 
       if (!link || !updates) {
+        console.error('[TRACKER-UPSERT] Missing required fields:', { hasLink: !!link, hasUpdates: !!updates });
         return res.status(400).json({ message: "Link and updates are required" });
       }
 
@@ -10732,6 +11411,7 @@ IMPORTANT:
       const { spreadsheetId, sheetName } = trackerSheet;
 
       const normalizedInputLink = normalizeLink(link.trim());
+      console.log('[TRACKER-UPSERT] Step 1: Check if row exists for link:', {
         originalLink: link,
         normalizedLink: normalizedInputLink
       });
@@ -10740,6 +11420,7 @@ IMPORTANT:
       const rowExists = await verifyTrackerRowExists(spreadsheetId, sheetName, link);
       
       if (!rowExists) {
+        console.log('[TRACKER-UPSERT] Step 2: Row does not exist, creating basic tracker row');
         
         // STEP 2: Create basic tracker row (Link, Agent Name, Status='Claimed')
         const created = await createBasicTrackerRow(spreadsheetId, sheetName, link, currentUser.agentName);
@@ -10750,7 +11431,9 @@ IMPORTANT:
           });
         }
         
+        console.log('[TRACKER-UPSERT] Step 3: Basic row created and verified');
       } else {
+        console.log('[TRACKER-UPSERT] Row already exists, proceeding to update');
       }
 
       // STEP 3: Now update the specific fields (row is guaranteed to exist)
@@ -10778,16 +11461,19 @@ IMPORTANT:
 
         if (rowLink && normalizedRowLink === normalizedInputLink) {
           rowIndex = i + 1; // +1 because sheets are 1-indexed
+          console.log('[TRACKER-UPSERT] Found row in cached data at index', rowIndex);
           break;
         }
       }
 
       // If not found in cache, wait and re-read from Google (append delay)
       if (rowIndex === -1) {
+        console.log('[TRACKER-UPSERT] Row not found in cache, waiting 2s for Google Sheets sync...');
         await new Promise(resolve => setTimeout(resolve, 2000)); // Increased to 2 seconds
         
         // Re-read the ENTIRE sheet fresh from Google
         rows = await googleSheets.readSheetData(spreadsheetId, range);
+        console.log('[TRACKER-UPSERT] Re-read sheet, now has', rows.length - 1, 'data rows');
         
         // Search again from end (new rows are appended at bottom)
         for (let i = rows.length - 1; i >= 1; i--) {
@@ -10796,16 +11482,21 @@ IMPORTANT:
 
           if (rowLink && normalizedRowLink === normalizedInputLink) {
             rowIndex = i + 1;
+            console.log('[TRACKER-UPSERT] Found row after refresh at index', rowIndex);
             break;
           }
         }
         
         // If STILL not found, log the last few rows for debugging
         if (rowIndex === -1) {
+          console.error('[TRACKER-UPSERT] Row still not found after refresh. Last 3 rows:');
           for (let i = Math.max(1, rows.length - 3); i < rows.length; i++) {
             const rowLink = rows[i][linkIndex];
             const normalized = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+            console.error(`  Row ${i + 1}: link="${rowLink}", normalized="${normalized}"`);
           }
+          console.error('[TRACKER-UPSERT] Expected link:', link);
+          console.error('[TRACKER-UPSERT] Expected normalized:', normalizedInputLink);
         }
       }
 
@@ -10815,10 +11506,12 @@ IMPORTANT:
         });
       }
 
+      console.log('[TRACKER-UPSERT] Step 4: Updating fields in row', rowIndex);
 
       // Update the specific fields
       for (const [column, value] of Object.entries(updates)) {
         const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
+        console.log(`🔍 [TRACKER-UPSERT] Processing column "${column}":`, {
           searchingFor: column,
           foundAtIndex: colIndex,
           value,
@@ -10828,8 +11521,11 @@ IMPORTANT:
         if (colIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + colIndex);
           const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
+          console.log(`✍️ [TRACKER-UPSERT] Writing to cell ${cellRange}:`, value);
           await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
+          console.log(`✅ [TRACKER-UPSERT] Successfully wrote to ${cellRange}`);
         } else {
+          console.warn(`⚠️ [TRACKER-UPSERT] Column "${column}" not found in headers:`, headers);
         }
       }
       
@@ -10844,8 +11540,10 @@ IMPORTANT:
       // Invalidate cache after successful update
       clearUserCache(userId);
 
+      console.log('[TRACKER-UPSERT] Success! Row updated at index:', rowIndex);
       res.json({ message: "Tracker row saved successfully", rowIndex });
     } catch (error: any) {
+      console.error("Error upserting tracker row:", error);
       res.status(500).json({ message: error.message || "Failed to upsert tracker row" });
     }
   });
@@ -10856,6 +11554,7 @@ IMPORTANT:
       const { encodedLink } = req.params;
       const storeLink = decodeURIComponent(encodedLink);
       
+      console.log('[Commission Count] Checking commissions for store:', storeLink);
       
       // Query commissions table joined with orders to filter by storeLink
       const commissionRecords = await db
@@ -10865,9 +11564,11 @@ IMPORTANT:
         .where(eq(orders.storeLink, storeLink));
       
       const count = Number(commissionRecords[0]?.count || 0);
+      console.log('[Commission Count] Found', count, 'commission records');
       
       res.json({ count });
     } catch (error: any) {
+      console.error('[Commission Count] Error:', error);
       res.status(500).json({ message: error.message || 'Failed to count commissions' });
     }
   });
@@ -10881,6 +11582,7 @@ IMPORTANT:
         return res.status(400).json({ message: 'Link is required' });
       }
       
+      console.log('[Unclaim] Deleting tracker row for link:', link);
       
       // Find Commission Tracker sheet
       const sheets = await storage.getAllActiveGoogleSheets();
@@ -10923,6 +11625,7 @@ IMPORTANT:
         return res.status(404).json({ message: 'Tracker row not found for this store' });
       }
       
+      console.log('[Unclaim] Found tracker row at index:', rowIndex);
       
       // Delete the row using Google Sheets API
       // First get the sheetId (not the sheet name) for batchUpdate
@@ -10957,9 +11660,11 @@ IMPORTANT:
         }
       });
       
+      console.log('[Unclaim] Successfully deleted tracker row');
       
       res.json({ message: 'Store unclaimed successfully', rowIndex });
     } catch (error: any) {
+      console.error('[Unclaim] Error:', error);
       res.status(500).json({ message: error.message || 'Failed to unclaim store' });
     }
   });
@@ -10979,6 +11684,7 @@ IMPORTANT:
         return res.status(400).json({ message: "Agent name not set in profile" });
       }
 
+      console.log('[AUTO-CLAIM] Request:', { link, agentName: user.agentName });
 
       // CRITICAL: ONLY write to Commission Tracker - Store Database syncs via Google Sheets formulas
       const sheets = await storage.getAllActiveGoogleSheets();
@@ -10990,11 +11696,13 @@ IMPORTANT:
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
+      console.log('[AUTO-CLAIM] Step 1: Check if row exists');
       
       // STEP 1: Check if row exists
       const rowExists = await verifyTrackerRowExists(spreadsheetId, sheetName, link);
       
       if (!rowExists) {
+        console.log('[AUTO-CLAIM] Step 2: Row does not exist, creating basic tracker row');
         
         // STEP 2: Create basic tracker row (Link, Agent Name, Status='Claimed')
         const created = await createBasicTrackerRow(spreadsheetId, sheetName, link, user.agentName);
@@ -11005,7 +11713,9 @@ IMPORTANT:
           });
         }
         
+        console.log('[AUTO-CLAIM] Step 3: Basic row created and verified');
       } else {
+        console.log('[AUTO-CLAIM] Row already exists, proceeding to update Agent Name');
       }
 
       // STEP 3: Now find the row and update Agent Name (row is guaranteed to exist)
@@ -11037,6 +11747,7 @@ IMPORTANT:
         });
       }
 
+      console.log('[AUTO-CLAIM] Step 4: Updating Agent Name in row', rowIndex);
 
       // Update Agent Name
       if (trackerAgentIndex !== -1) {
@@ -11053,8 +11764,10 @@ IMPORTANT:
         'O'
       );
       
+      console.log('[AUTO-CLAIM] Success! Store claimed at row', rowIndex);
       res.json({ message: "Store claimed in Commission Tracker (Agent Name in Store DB will auto-sync)", claimed: true });
     } catch (error: any) {
+      console.error("Error auto-claiming store:", error);
       res.status(500).json({ message: error.message || "Failed to auto-claim store" });
     }
   });
@@ -11074,6 +11787,7 @@ IMPORTANT:
         return res.status(400).json({ message: "Agent name not set in profile" });
       }
 
+      console.log('[CLAIM-STORE] Request:', { linkValue, column, value, joinColumn, agentName: user.agentName });
 
       // CRITICAL: ONLY write to Commission Tracker - Store Database syncs via Google Sheets formulas
       const sheets = await storage.getAllActiveGoogleSheets();
@@ -11085,11 +11799,13 @@ IMPORTANT:
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
+      console.log('[CLAIM-STORE] Step 1: Check if row exists for link:', linkValue);
       
       // STEP 1: Check if row exists
       const rowExists = await verifyTrackerRowExists(spreadsheetId, sheetName, linkValue);
       
       if (!rowExists) {
+        console.log('[CLAIM-STORE] Step 2: Row does not exist, creating basic tracker row');
         
         // STEP 2: Create basic tracker row (Link, Agent Name, Status='Claimed')
         const created = await createBasicTrackerRow(spreadsheetId, sheetName, linkValue, user.agentName);
@@ -11100,7 +11816,9 @@ IMPORTANT:
           });
         }
         
+        console.log('[CLAIM-STORE] Step 3: Basic row created and verified');
       } else {
+        console.log('[CLAIM-STORE] Row already exists, proceeding to update');
       }
 
       // STEP 3: Now find the row and update the fields (row is guaranteed to exist)
@@ -11133,6 +11851,7 @@ IMPORTANT:
         });
       }
 
+      console.log('[CLAIM-STORE] Step 4: Updating fields in row', rowIndex);
 
       // Update Agent Name (ensure it's set)
       const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
@@ -11148,13 +11867,16 @@ IMPORTANT:
         if (colIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + colIndex);
           const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
+          console.log('[CLAIM-STORE] Writing column value:', cellRange, '=', value);
           await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value || '']]);
         }
       }
 
       clearUserCache(userId);
+      console.log('[CLAIM-STORE] Success! Store claimed and updated at row', rowIndex);
       res.json({ message: "Store claimed in Commission Tracker (Agent Name in Store DB will auto-sync)", claimed: true });
     } catch (error: any) {
+      console.error("Error claiming store:", error);
       res.status(500).json({ message: error.message || "Failed to claim store" });
     }
   });
@@ -11268,6 +11990,7 @@ IMPORTANT:
         res.json({ message: "Contact action saved and store claimed in Commission Tracker", newRow: true });
       }
     } catch (error: any) {
+      console.error("Error saving contact action:", error);
       res.status(500).json({ message: error.message || "Failed to save contact action" });
     }
   });
@@ -11314,6 +12037,7 @@ IMPORTANT:
 
       res.json({ message: "Contact action updated successfully" });
     } catch (error: any) {
+      console.error("Error updating contact action:", error);
       res.status(500).json({ message: error.message || "Failed to update contact action" });
     }
   });
@@ -11325,6 +12049,7 @@ IMPORTANT:
       await storage.disconnectGoogleSheet(id);
       res.json({ message: "Sheet disconnected successfully" });
     } catch (error: any) {
+      console.error("Error disconnecting sheet:", error);
       res.status(500).json({ message: error.message || "Failed to disconnect sheet" });
     }
   });
@@ -11388,6 +12113,7 @@ IMPORTANT:
         total: parsed.length,
       });
     } catch (error: any) {
+      console.error("Error importing from sheet:", error);
       res.status(500).json({ message: error.message || "Import failed" });
     }
   });
@@ -11435,6 +12161,7 @@ IMPORTANT:
         updated: clients.length,
       });
     } catch (error: any) {
+      console.error("Error exporting to sheet:", error);
       res.status(500).json({ message: error.message || "Export failed" });
     }
   });
@@ -11496,6 +12223,7 @@ IMPORTANT:
         total: parsed.length,
       });
     } catch (error: any) {
+      console.error("Error in bidirectional sync:", error);
       res.status(500).json({ message: error.message || "Sync failed" });
     }
   });
@@ -11595,6 +12323,7 @@ IMPORTANT:
 
       res.json(store);
     } catch (error) {
+      console.error("Error fetching store details:", error);
       next(error);
     }
   });
@@ -11739,6 +12468,7 @@ IMPORTANT:
 
             // AUTO-CLAIM: If no tracker row exists, create one with agent name and status='Claimed'
             if (!trackerRow) {
+              console.log('[AUTO-CLAIM] Creating tracker row for unclaimed store:', decodedId);
               
               const newRow = new Array(trackerHeaders.length).fill('');
 
@@ -11767,6 +12497,7 @@ IMPORTANT:
                 const match = updatedRange.match(/!([A-Z]+)(\d+):/);
                 if (match) {
                   rowIndex = parseInt(match[2], 10);
+                  console.log('[AUTO-CLAIM] Created tracker row at index:', rowIndex);
                 }
               }
             }
@@ -11814,6 +12545,7 @@ IMPORTANT:
 
       res.json({ success: true, message: 'Store updated successfully' });
     } catch (error) {
+      console.error("Error updating store details:", error);
       next(error);
     }
   });
@@ -11825,6 +12557,7 @@ IMPORTANT:
       const { keeperLink, statusHierarchy } = req.body || {};
       const decodedLink = decodeURIComponent(link);
 
+      console.log('[DELETE-STORE] Deleting store:', decodedLink, 'Keeper:', keeperLink);
 
       // If keeperLink is provided, merge data first
       if (keeperLink && statusHierarchy) {
@@ -11871,16 +12604,20 @@ IMPORTANT:
 
         // Update the keeper with merged data
         await googleSheets.mergeAndUpdateStore(keeperLink, merged);
+        console.log('[DELETE-STORE] Merged data into keeper:', keeperLink);
 
         // Update Commission Tracker references
         await googleSheets.updateCommissionTrackerLinks(decodedLink, keeperLink);
+        console.log('[DELETE-STORE] Updated Commission Tracker links');
       }
 
       // Delete the store
       await googleSheets.deleteStoreFromSheet(decodedLink);
+      console.log('[DELETE-STORE] Deleted store:', decodedLink);
 
       res.json({ success: true, message: 'Store deleted successfully' });
     } catch (error: any) {
+      console.error('[DELETE-STORE] Error:', error);
       res.status(500).json({ message: error.message || 'Failed to delete store' });
     }
   });
@@ -11898,6 +12635,7 @@ IMPORTANT:
 
       res.json(hierarchy);
     } catch (error: any) {
+      console.error('[STATUS-HIERARCHY] Error:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch status hierarchy' });
     }
   });
@@ -11949,6 +12687,7 @@ IMPORTANT:
 
       res.json(stores);
     } catch (error: any) {
+      console.error("Error fetching all stores:", error);
       res.status(500).json({ message: error.message || "Failed to fetch stores" });
     }
   });
@@ -12002,6 +12741,7 @@ IMPORTANT:
 
       res.json(stores);
     } catch (error: any) {
+      console.error("Error fetching stores by DBA:", error);
       res.status(500).json({ message: error.message || "Failed to fetch stores by DBA" });
     }
   });
@@ -12049,6 +12789,8 @@ IMPORTANT:
       const storeDbaIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'dba');
       const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name' || h.toLowerCase() === 'agent');
 
+      console.log('[CLAIM-MULTIPLE] Store Database headers:', storeHeaders);
+      console.log('[CLAIM-MULTIPLE] Column indices - Link:', storeLinkIndex, 'DBA:', storeDbaIndex, 'Agent:', storeAgentIndex);
 
       if (storeLinkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found in Store Database' });
@@ -12067,6 +12809,8 @@ IMPORTANT:
         return res.status(404).json({ message: 'Link column not found in Commission Tracker' });
       }
 
+      console.log('[CLAIM-MULTIPLE] Commission Tracker headers:', trackerHeaders);
+      console.log('[CLAIM-MULTIPLE] Tracker column indices - Link:', trackerLinkIndex, 'Agent:', trackerAgentIndex, 'DBA:', trackerDbaIndex);
 
       let updatedTrackerCount = 0;
       let createdTrackerCount = 0;
@@ -12081,6 +12825,7 @@ IMPORTANT:
         const storeLink = storeLinks[idx];
         const normalizedLink = normalizeLink(storeLink);
 
+        console.log(`[CLAIM-MULTIPLE] Processing store ${idx + 1}/${storeLinks.length}: ${storeLink}`);
 
         // Find existing tracker row with this link
         let trackerRowIndex = -1;
@@ -12093,37 +12838,47 @@ IMPORTANT:
 
         if (trackerRowIndex !== -1) {
           // Row exists in tracker - update Agent Name (column D) and DBA (column R)
+          console.log(`[CLAIM-MULTIPLE] Tracker row exists at row ${trackerRowIndex}, updating...`);
 
           if (trackerAgentIndex !== -1) {
             const agentColumnLetter = String.fromCharCode(65 + trackerAgentIndex);
             const agentCellRange = `${trackerSheet.sheetName}!${agentColumnLetter}${trackerRowIndex}`;
+            console.log(`[CLAIM-MULTIPLE] Writing Agent "${agentName}" to Commission Tracker cell: ${agentCellRange}`);
             try {
               await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentCellRange, [[agentName]]);
+              console.log(`[CLAIM-MULTIPLE] ✓ Agent write successful`);
               await delay(WRITE_DELAY_MS); // Rate limiting
             } catch (error: any) {
+              console.error(`[CLAIM-MULTIPLE] ✗ Agent write failed:`, error.message);
             }
           }
 
           if (trackerDbaIndex !== -1) {
             const dbaColumnLetter = String.fromCharCode(65 + trackerDbaIndex);
             const dbaCellRange = `${trackerSheet.sheetName}!${dbaColumnLetter}${trackerRowIndex}`;
+            console.log(`[CLAIM-MULTIPLE] Writing DBA "${dbaName}" to Commission Tracker cell: ${dbaCellRange}`);
             try {
               await googleSheets.writeSheetData(trackerSheet.spreadsheetId, dbaCellRange, [[dbaName]]);
+              console.log(`[CLAIM-MULTIPLE] ✓ DBA write successful`);
               await delay(WRITE_DELAY_MS); // Rate limiting
             } catch (error: any) {
+              console.error(`[CLAIM-MULTIPLE] ✗ DBA write failed:`, error.message);
             }
           }
 
           updatedTrackerCount++;
         } else {
           // Row doesn't exist - create new tracker row
+          console.log(`[CLAIM-MULTIPLE] Creating new tracker row for: ${storeLink}`);
           const newTrackerRow = new Array(trackerHeaders.length).fill('');
           if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = storeLink;
           if (trackerAgentIndex !== -1) {
             newTrackerRow[trackerAgentIndex] = agentName;
+            console.log(`[CLAIM-MULTIPLE] Setting Agent at index ${trackerAgentIndex}: "${agentName}"`);
           }
           if (trackerDbaIndex !== -1) {
             newTrackerRow[trackerDbaIndex] = dbaName;
+            console.log(`[CLAIM-MULTIPLE] Setting DBA at index ${trackerDbaIndex}: "${dbaName}"`);
           }
 
           // Set Status to 'Claimed' when creating new tracker row
@@ -12133,12 +12888,20 @@ IMPORTANT:
           }
 
           const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+          console.log(`[CLAIM-MULTIPLE] Appending tracker row to Commission Tracker`);
           await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newTrackerRow]);
+          console.log(`[CLAIM-MULTIPLE] ✓ Commission Tracker append successful`);
           await delay(WRITE_DELAY_MS); // Rate limiting
           createdTrackerCount++;
         }
       }
 
+      console.log(`[CLAIM-MULTIPLE] FINAL SUMMARY:`);
+      console.log(`  - Updated Commission Tracker rows: ${updatedTrackerCount}`);
+      console.log(`  - Created Commission Tracker rows: ${createdTrackerCount}`);
+      console.log(`  - Skipped: ${skippedCount}`);
+      console.log(`  - Total requested: ${storeLinks.length}`);
+      console.log(`  - Store Database will auto-sync via formulas`);
 
       // Invalidate cache after successful updates
       clearUserCache(userId);
@@ -12152,6 +12915,7 @@ IMPORTANT:
         warnings: trackerDbaIndex === -1 ? ["DBA column not found in Commission Tracker - DBA not updated"] : []
       });
     } catch (error: any) {
+      console.error("Error claiming multiple stores:", error);
       res.status(500).json({ message: error.message || "Failed to claim stores" });
     }
   });
@@ -12231,6 +12995,7 @@ IMPORTANT:
         storeSheetId: storeSheet.id,
       });
     } catch (error: any) {
+      console.error("Error searching stores:", error);
       res.status(500).json({ message: error.message || "Failed to search stores" });
     }
   });
@@ -12319,6 +13084,7 @@ IMPORTANT:
         updatedCount
       });
     } catch (error: any) {
+      console.error("Error bulk assigning agent:", error);
       res.status(500).json({ message: error.message || "Failed to bulk assign agent" });
     }
   });
@@ -12618,6 +13384,7 @@ IMPORTANT:
         const openaiSettings = await storage.getOpenaiSettings();
         
         if (openaiSettings?.apiKey) {
+          console.log('[Parse-and-Match] Using OpenAI to clean and extract store locations...');
           
           const { default: OpenAI } = await import('openai');
           const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
@@ -12665,6 +13432,7 @@ ${rawText}`;
           });
 
           const responseText = completion.choices[0]?.message?.content || '{}';
+          console.log('[Parse-and-Match] OpenAI raw response:', responseText.substring(0, 200));
           
           // Parse OpenAI response
           let openaiData = JSON.parse(responseText);
@@ -12692,16 +13460,22 @@ ${rawText}`;
             });
             
             usedOpenAI = true;
+            console.log(`[Parse-and-Match] ✓ OpenAI extracted ${parsedStores.length} clean stores`);
           } else {
+            console.log('[Parse-and-Match] OpenAI returned empty array, falling back to regex');
           }
         } else {
+          console.log('[Parse-and-Match] No OpenAI API key configured, using regex parsing');
         }
       } catch (error: any) {
+        console.error('[Parse-and-Match] OpenAI parsing failed, falling back to regex:', error.message);
       }
       
       // ===== FALLBACK TO REGEX PARSING IF OPENAI FAILED =====
       if (parsedStores.length === 0) {
+        console.log('[Parse-and-Match] Using regex fallback parsing');
         const lines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
+        console.log(`[Parse-and-Match] Processing ${lines.length} lines of raw text`);
       
       // Extended noise words list
       const noiseWords = [
@@ -12774,6 +13548,7 @@ ${rawText}`;
           };
           
           parsedStores.push(parsedStore);
+          console.log(`[Parse-and-Match] Parsed store: "${storeName}" at ${line.substring(0, 50)}...`);
           
           // Reset previousLine after processing this store
           previousLine = '';
@@ -12783,13 +13558,16 @@ ${rawText}`;
         }
       }
       
+        console.log(`[Parse-and-Match] Successfully parsed ${parsedStores.length} stores from input (using regex fallback)`);
       } // End regex fallback
       
+      console.log(`[Parse-and-Match] Total parsed: ${parsedStores.length} stores (${usedOpenAI ? 'OpenAI' : 'regex'})`);
 
       // Match parsed stores against database with NEW scoring focused on building # + state
       const matched: any[] = [];
       const unmatched: any[] = [];
 
+      console.log(`[Parse-and-Match] Matching ${parsedStores.length} parsed stores against ${dbStores.length} database entries`);
 
       for (const parsed of parsedStores) {
         let bestMatch: any = null;
@@ -12850,11 +13628,14 @@ ${rawText}`;
             match: bestMatch,
             confidence: bestConfidence,
           });
+          console.log(`[Parse-and-Match] ✓ MATCHED: "${parsed.name}" -> "${bestMatch.name}" (confidence: ${bestConfidence}%)`);
         } else {
           unmatched.push(parsed);
+          console.log(`[Parse-and-Match] ✗ UNMATCHED: "${parsed.name}" at ${parsed.address} (best score: ${bestConfidence}%)`);
         }
       }
 
+      console.log(`[Parse-and-Match] Results: ${matched.length} matched, ${unmatched.length} unmatched`);
 
       // Detect brand name by consensus across matched CRM stores
       let detectedBrand = '';
@@ -12879,6 +13660,7 @@ ${rawText}`;
                 detectedBrand = brand;
               }
             });
+            console.log(`[Parse-and-Match] Detected brand by consensus: "${detectedBrand}" (${maxCount}/${matched.length} matches)`);
           }
         }
       }
@@ -12894,6 +13676,7 @@ ${rawText}`;
         }
       });
     } catch (error: any) {
+      console.error("Error parsing and matching stores:", error);
       res.status(500).json({ message: error.message || "Failed to parse and match stores" });
     }
   });
@@ -12962,6 +13745,7 @@ ${rawText}`;
 
       res.json({ stores: matchingStores });
     } catch (error: any) {
+      console.error("Error searching stores:", error);
       res.status(500).json({ message: error.message || "Failed to search stores" });
     }
   });
@@ -13025,6 +13809,7 @@ ${rawText}`;
         message: 'Store imported successfully'
       });
     } catch (error: any) {
+      console.error("Error importing new store:", error);
       res.status(500).json({ message: error.message || "Failed to import store" });
     }
   });
@@ -13050,6 +13835,7 @@ ${rawText}`;
         message: 'Store pair marked as not duplicates'
       });
     } catch (error: any) {
+      console.error("Error marking non-duplicates:", error);
       res.status(500).json({ message: error.message || "Failed to mark non-duplicates" });
     }
   });
@@ -13070,6 +13856,7 @@ ${rawText}`;
         message: 'Non-duplicate mark removed'
       });
     } catch (error: any) {
+      console.error("Error removing non-duplicate mark:", error);
       res.status(500).json({ message: error.message || "Failed to remove non-duplicate mark" });
     }
   });
@@ -13081,6 +13868,7 @@ ${rawText}`;
 
       res.json({ nonDuplicates });
     } catch (error: any) {
+      console.error("Error fetching non-duplicates:", error);
       res.status(500).json({ message: error.message || "Failed to fetch non-duplicates" });
     }
   });
@@ -13104,17 +13892,21 @@ ${rawText}`;
         const storeName = brandName || name;
         query = `${storeName} ${address}`.trim();
         location = `${city || ''} ${state || ''}`.trim();
+        console.log(`[Google Search] Using DBA+Address search: "${query}" near "${location}"`);
       } else if (brandName && city && state) {
         // FALLBACK: Brand + location if no address available
         query = `${brandName} ${category || 'dispensary'} ${city} ${state}`.trim();
+        console.log(`[Google Search] Using Brand+Location search: "${query}"`);
       } else {
         // LAST RESORT: Name only
         query = name;
         if (city && state) {
           location = `${city}, ${state}`;
         }
+        console.log(`[Google Search] Using Name-only search: "${query}" near "${location}"`);
       }
 
+      console.log(`[Google Search] Final Query: "${query}", Location: "${location}"`);
 
       // Search Google Places API
       const searchResults = await googleMaps.searchPlaces(query, location);
@@ -13147,6 +13939,7 @@ ${rawText}`;
               user_ratings_total: place.user_ratings_total,
             };
           } catch (error) {
+            console.error(`Error fetching details for place ${place.place_id}:`, error);
             return null;
           }
         })
@@ -13169,7 +13962,9 @@ ${rawText}`;
 
         if (stateFiltered.length > 0) {
           validResults = stateFiltered;
+          console.log(`[Google Search] Filtered to ${validResults.length} results matching state: ${state}`);
         } else {
+          console.log(`[Google Search] Warning: No results matched input state "${state}", returning all results`);
         }
       }
 
@@ -13186,6 +13981,7 @@ ${rawText}`;
 
         if (cityFiltered.length > 0) {
           validResults = cityFiltered;
+          console.log(`[Google Search] Further filtered to ${validResults.length} results matching city: ${city}`);
         }
       }
 
@@ -13207,6 +14003,7 @@ ${rawText}`;
             const nameSimilarity = stringSimilarity.compareTwoStrings(inputName, resultName);
             confidence += nameSimilarity;
             matchCount++;
+            console.log(`[Fuzzy Match] Name: "${inputName}" vs "${resultName}" = ${(nameSimilarity * 100).toFixed(1)}%`);
           }
           
           // Compare address (if provided)
@@ -13216,24 +14013,29 @@ ${rawText}`;
             const addressSimilarity = stringSimilarity.compareTwoStrings(inputAddress, resultAddress);
             confidence += addressSimilarity;
             matchCount++;
+            console.log(`[Fuzzy Match] Address: "${inputAddress}" vs "${resultAddress}" = ${(addressSimilarity * 100).toFixed(1)}%`);
           }
           
           // Calculate average confidence
           const avgConfidence = matchCount > 0 ? confidence / matchCount : 0;
           const passed = avgConfidence >= MIN_CONFIDENCE;
           
+          console.log(`[Fuzzy Match] "${result.name}" overall confidence: ${(avgConfidence * 100).toFixed(1)}% - ${passed ? 'PASS' : 'REJECT'}`);
           
           return passed;
         });
         
         if (fuzzyFiltered.length > 0) {
           validResults = fuzzyFiltered;
+          console.log(`[Google Search] Fuzzy match filtered to ${validResults.length} high-confidence results (>=${MIN_CONFIDENCE * 100}%)`);
         } else {
+          console.log(`[Google Search] Warning: All results failed fuzzy match threshold, returning original ${validResults.length} results`);
         }
       }
 
       res.json({ results: validResults });
     } catch (error: any) {
+      console.error("Error searching Google Places:", error);
       res.status(500).json({ message: error.message || "Failed to search Google Places" });
     }
   });
@@ -13390,6 +14192,7 @@ ${rawText}`;
       }
 
       const storeHeaders = storeRows[0];
+      console.log('[DBA-PARENT] Store Database headers:', storeHeaders);
       
       const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const categoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
@@ -13416,6 +14219,8 @@ ${rawText}`;
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
       const storeStatusIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
 
+      console.log('[DBA-PARENT] Column indices - Name:', storeNameIndex, 'Link:', storeLinkIndex, 'Category:', categoryIndex, 'Status:', storeStatusIndex);
+      console.log('[DBA-PARENT] Values to write - dbaName:', dbaName, 'corporateUuid:', corporateUuid, 'category:', category, 'status:', status);
 
       const storeRow = new Array(storeHeaders.length).fill('');
       if (storeNameIndex !== -1) storeRow[storeNameIndex] = dbaName;
@@ -13428,6 +14233,9 @@ ${rawText}`;
       if (categoryIndex !== -1) storeRow[categoryIndex] = category;
       if (storeStatusIndex !== -1 && status) storeRow[storeStatusIndex] = status;
 
+      console.log('[DBA-PARENT] Complete storeRow before append:', storeRow);
+      console.log('[DBA-PARENT] storeRow[0] (should be Name):', storeRow[0]);
+      console.log('[DBA-PARENT] storeRow[storeNameIndex]:', storeRow[storeNameIndex]);
 
       await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}`, [storeRow]);
 
@@ -13457,6 +14265,7 @@ ${rawText}`;
         parentLink: corporateUuid
       });
     } catch (error: any) {
+      console.error("Error creating parent DBA:", error);
       res.status(500).json({ message: error.message || "Failed to create parent DBA" });
     }
   });
@@ -13532,6 +14341,7 @@ ${rawText}`;
         linkedCount
       });
     } catch (error: any) {
+      console.error("Error linking child locations:", error);
       res.status(500).json({ message: error.message || "Failed to link child locations" });
     }
   });
@@ -13598,6 +14408,7 @@ ${rawText}`;
         unlinkedCount
       });
     } catch (error: any) {
+      console.error("Error unlinking child locations:", error);
       res.status(500).json({ message: error.message || "Failed to unlink child locations" });
     }
   });
@@ -13724,6 +14535,7 @@ ${rawText}`;
         pocInfoMerged: mergePocInfo && parentRowIndex !== -1
       });
     } catch (error: any) {
+      console.error("Error setting head office:", error);
       res.status(500).json({ message: error.message || "Failed to set head office" });
     }
   });
@@ -13797,6 +14609,7 @@ ${rawText}`;
 
       res.json({ children });
     } catch (error: any) {
+      console.error("Error getting child locations:", error);
       res.status(500).json({ message: error.message || "Failed to get child locations" });
     }
   });
@@ -13893,6 +14706,9 @@ ${rawText}`;
       let commission10Earnings = 0;
       const monthlyEarnings: { [key: string]: number } = {};
 
+      console.log('[DASHBOARD-SUMMARY] allowedAgentNames:', allowedAgentNames);
+      console.log('[DASHBOARD-SUMMARY] agentIndex:', agentIndex);
+      console.log('[DASHBOARD-SUMMARY] Processing', trackerRows.length - 1, 'tracker rows');
 
       // Process each tracker row
       for (let i = 1; i < trackerRows.length; i++) {
@@ -13906,6 +14722,7 @@ ${rawText}`;
         if (allowedAgentNames.length > 0) {
           // If Agent column doesn't exist, agents see ZERO data
           if (agentIndex === -1) {
+            console.log(`[DASHBOARD-SUMMARY] Row ${i}: SKIPPING - Agent column missing, security requires filtering`);
             continue;
           }
 
@@ -13914,18 +14731,22 @@ ${rawText}`;
             name.toLowerCase().trim() === rowAgentNormalized
           );
           if (!isAllowed) {
+            console.log(`[DASHBOARD-SUMMARY] Row ${i}: SKIPPING - rowAgent="${rowAgent}" not in allowedAgentNames`);
             continue;
           }
         }
 
+        console.log(`[DASHBOARD-SUMMARY] Row ${i}:`, { dateStr, amountStr, commissionType, rowAgent });
 
         // Parse amount
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         if (amount === 0) {
+          console.log(`[DASHBOARD-SUMMARY] Row ${i}: Skipping - amount is 0`);
           continue;
         }
 
         totalEarnings += amount;
+        console.log(`[DASHBOARD-SUMMARY] Row ${i}: Added $${amount}, total now: $${totalEarnings}`);
 
         // Parse date (handle formats: MM/DD/YYYY, M/D/YYYY, etc.)
         let orderDate: Date | null = null;
@@ -13997,6 +14818,7 @@ ${rawText}`;
         }
       });
     } catch (error: any) {
+      console.error('Error fetching dashboard summary:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch dashboard summary' });
     }
   });
@@ -14126,6 +14948,7 @@ ${rawText}`;
         }
       });
     } catch (error: any) {
+      console.error('Error fetching commission breakdown:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch commission breakdown' });
     }
   });
@@ -14331,6 +15154,7 @@ ${rawText}`;
         repeatOrderRate: repeatOrderRate.toFixed(1)
       });
     } catch (error: any) {
+      console.error('Error fetching portfolio metrics:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch portfolio metrics' });
     }
   });
@@ -14476,16 +15300,19 @@ ${rawText}`;
       // Get Store Database sheet to look up company names by link
       // Debug: Check all active sheets
       const allSheets = await storage.getAllActiveGoogleSheets();
+      console.log('[TOP-CLIENTS] All active sheets:', allSheets.map(s => ({ name: s.spreadsheetName, purpose: s.sheetPurpose })));
       
       const storeSheet = allSheets.find(s => s.sheetPurpose === 'Store Database');
       const linkToNameMap: { [normalizedLink: string]: string } = {};
 
+      console.log('[TOP-CLIENTS] Store sheet found:', !!storeSheet);
 
       if (storeSheet) {
         try {
           const storeRange = `${storeSheet.sheetName}!A:ZZ`;
           const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
+          console.log('[TOP-CLIENTS] Store Database rows:', storeRows.length);
 
           if (storeRows.length > 1) {
             const storeHeaders = storeRows[0];
@@ -14493,6 +15320,8 @@ ${rawText}`;
             const nameIndex = 0; // Column A = Name
             const dbaIndex = 13; // Column N = DBA
 
+            console.log('[TOP-CLIENTS] Store Headers:', storeHeaders);
+            console.log('[TOP-CLIENTS] Link column index:', storeLinkIndex, 'Name index:', nameIndex, 'DBA index:', dbaIndex);
 
             // Build lookup map: normalized link -> company name
             for (let i = 1; i < storeRows.length; i++) {
@@ -14507,11 +15336,15 @@ ${rawText}`;
                 linkToNameMap[normalized] = dba || name || storeLink;
                 
                 if (i <= 3) {
+                  console.log(`[TOP-CLIENTS] Row ${i}: link="${storeLink}" -> normalized="${normalized}" -> name="${linkToNameMap[normalized]}"`);
                 }
               }
             }
+            console.log('[TOP-CLIENTS] Lookup map size:', Object.keys(linkToNameMap).length);
+            console.log('[TOP-CLIENTS] Sample lookup keys:', Object.keys(linkToNameMap).slice(0, 5));
           }
         } catch (error) {
+          console.error('[TOP-CLIENTS] Error reading Store Database for name lookup:', error);
           // Continue without names - will fall back to links
         }
       }
@@ -14523,6 +15356,7 @@ ${rawText}`;
           const companyName = linkToNameMap[normalizedLink] || link;
           
           if (index < 3) {
+            console.log(`[TOP-CLIENTS] Client ${index + 1}: original="${link}" -> normalized="${normalizedLink}" -> found="${companyName}"`);
           }
           
           return {
@@ -14538,8 +15372,10 @@ ${rawText}`;
         .sort((a, b) => parseFloat(b.totalCommission) - parseFloat(a.totalCommission))
         .slice(0, topLimit);
 
+      console.log('[TOP-CLIENTS] Returning', topClients.length, 'clients');
       res.json({ topClients });
     } catch (error: any) {
+      console.error('Error fetching top clients:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch top clients' });
     }
   });
@@ -14586,6 +15422,7 @@ ${rawText}`;
         // Fetch user info to add agentName to each reminder
         const reminderUser = await storage.getUserById(uid);
         if (!reminderUser) {
+          console.warn(`[Reminders] User ${uid} not found, skipping reminders`);
           continue; // Skip if user not found
         }
 
@@ -14620,6 +15457,7 @@ ${rawText}`;
 
       res.json({ reminders: allReminders });
     } catch (error: any) {
+      console.error('Error fetching reminders:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch reminders' });
     }
   });
@@ -14639,6 +15477,7 @@ ${rawText}`;
       const userReminders = reminders.filter(r => r.userId === userId);
       res.json({ reminders: userReminders });
     } catch (error: any) {
+      console.error('Error fetching client reminders:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch client reminders' });
     }
   });
@@ -14669,6 +15508,7 @@ ${rawText}`;
 
       res.json({ reminders: sortedReminders });
     } catch (error: any) {
+      console.error('Error fetching reminders by date:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch reminders by date' });
     }
   });
@@ -14746,6 +15586,7 @@ ${rawText}`;
       // Validate with schema
       const validation = insertReminderSchema.safeParse(reminderData);
       if (!validation.success) {
+        console.error('Validation failed:', validation.error.errors);
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
@@ -14798,6 +15639,7 @@ ${rawText}`;
           }
         } catch (claimError: any) {
           // Log error but don't fail the request
+          console.error('[Auto-Claim] Failed to claim store:', claimError.message);
         }
       }
 
@@ -14805,16 +15647,19 @@ ${rawText}`;
       try {
         const integration = await storage.getUserIntegration(userId);
         if (integration?.googleCalendarAccessToken) {
+          console.log('[Calendar] Starting calendar event creation for reminder:', reminder.id);
 
           // Get system-wide OAuth credentials FIRST (needed for token refresh)
           const systemIntegration = await storage.getSystemIntegration('google_sheets');
           if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+            console.error('[Calendar] System-wide Google OAuth not configured');
             throw new Error('Google OAuth not configured');
           }
 
           // Check if token needs refresh
           let accessToken = integration.googleCalendarAccessToken;
           if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
+            console.log('[Calendar] Token expired, refreshing...');
             // Token expired, refresh it using system OAuth credentials
             if (integration.googleCalendarRefreshToken) {
               const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -14835,14 +15680,17 @@ ${rawText}`;
                   googleCalendarAccessToken: tokens.access_token,
                   googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
                 });
+                console.log('[Calendar] Token refreshed successfully');
               } else {
                 const errorText = await tokenResponse.text();
+                console.error('[Calendar] Token refresh failed:', {
                   status: tokenResponse.status,
                   error: errorText
                 });
                 throw new Error(`Token refresh failed: ${tokenResponse.status}`);
               }
             } else {
+              console.error('[Calendar] Missing refresh token for token refresh');
               throw new Error('Missing refresh token');
             }
           }
@@ -14933,6 +15781,7 @@ ${rawText}`;
             },
           };
 
+          console.log('[Calendar] Creating event with payload:', JSON.stringify(event, null, 2));
 
           const createdEvent = await calendar.events.insert({
             calendarId: 'primary',
@@ -14946,10 +15795,13 @@ ${rawText}`;
             });
           }
 
+          console.log(`[Calendar] ✅ Created event ${createdEvent.data.id} for reminder ${reminder.id}`);
         } else {
+          console.log('[Calendar] Skipping - Google Calendar not connected');
         }
       } catch (calendarError: any) {
         // Log error but don't fail the request - comprehensive logging for debugging
+        console.error('[Calendar] ❌ Failed to create calendar event:', {
           message: calendarError.message,
           status: calendarError.response?.status || calendarError.status,
           statusText: calendarError.response?.statusText,
@@ -14958,6 +15810,7 @@ ${rawText}`;
         });
         // Also log stack trace for unexpected errors
         if (!calendarError.response?.status) {
+          console.error('[Calendar] Stack trace:', calendarError.stack);
         }
       }
 
@@ -14979,15 +15832,18 @@ ${rawText}`;
             await storage.saveUserPreferences(userId, {
               defaultCalendarReminders: calendarReminders
             });
+            console.log(`[Smart Default] Updated calendar reminder defaults for user ${userId}`, 
               calendarReminders.length === 0 ? '(no reminders)' : `(${calendarReminders.length} reminder(s))`);
           }
         }
       } catch (prefsError: any) {
         // Don't fail the request if preference update fails
+        console.error('[Smart Default] Failed to update calendar reminder preferences:', prefsError.message);
       }
 
       res.json({ reminder });
     } catch (error: any) {
+      console.error('Error creating reminder:', error);
       res.status(500).json({ message: error.message || 'Failed to create reminder' });
     }
   });
@@ -15011,6 +15867,7 @@ ${rawText}`;
       const reminder = await storage.updateReminder(id, req.body);
       res.json({ reminder });
     } catch (error: any) {
+      console.error('Error updating reminder:', error);
       res.status(500).json({ message: error.message || 'Failed to update reminder' });
     }
   });
@@ -15034,6 +15891,7 @@ ${rawText}`;
       const reminder = await storage.updateReminder(id, req.body);
       res.json({ reminder });
     } catch (error: any) {
+      console.error('Error updating reminder:', error);
       res.status(500).json({ message: error.message || 'Failed to update reminder' });
     }
   });
@@ -15057,6 +15915,7 @@ ${rawText}`;
       await storage.deleteReminder(id);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting reminder:', error);
       res.status(500).json({ message: error.message || 'Failed to delete reminder' });
     }
   });
@@ -15199,8 +16058,10 @@ ${rawText}`;
           }
 
           syncedCount++;
+          console.log(`[Calendar Sync] Created event ${createdEvent.data.id} for reminder ${reminder.id}`);
         } catch (error: any) {
           errorCount++;
+          console.error(`[Calendar Sync] Failed to create event for reminder ${reminder.id}:`, error.message);
         }
       }
 
@@ -15212,6 +16073,7 @@ ${rawText}`;
         message: `Synced ${syncedCount} of ${activeReminders.length} reminders to Google Calendar`
       });
     } catch (error: any) {
+      console.error('Error syncing reminders to calendar:', error);
       res.status(500).json({ message: error.message || 'Failed to sync reminders' });
     }
   });
@@ -15280,6 +16142,7 @@ ${rawText}`;
       res.setHeader('Content-Disposition', 'attachment; filename="reminders.ics"');
       res.send(icsContent);
     } catch (error: any) {
+      console.error('Error exporting calendar:', error);
       res.status(500).json({ message: error.message || 'Failed to export calendar' });
     }
   });
@@ -15334,6 +16197,7 @@ ${rawText}`;
 
       res.json({ notifications: filtered });
     } catch (error: any) {
+      console.error('Error fetching notifications:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch notifications' });
     }
   });
@@ -15357,6 +16221,7 @@ ${rawText}`;
       const notification = await storage.markNotificationAsRead(id);
       res.json({ notification });
     } catch (error: any) {
+      console.error('Error marking notification as read:', error);
       res.status(500).json({ message: error.message || 'Failed to mark notification as read' });
     }
   });
@@ -15380,6 +16245,7 @@ ${rawText}`;
       const notification = await storage.markNotificationAsResolved(id);
       res.json({ notification });
     } catch (error: any) {
+      console.error('Error resolving notification:', error);
       res.status(500).json({ message: error.message || 'Failed to resolve notification' });
     }
   });
@@ -15403,6 +16269,7 @@ ${rawText}`;
       await storage.deleteNotification(id);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting notification:', error);
       res.status(500).json({ message: error.message || 'Failed to delete notification' });
     }
   });
@@ -15426,6 +16293,7 @@ ${rawText}`;
         googleCalendarEmail: integration?.googleCalendarEmail || null
       });
     } catch (error: any) {
+      console.error('Error fetching integration status:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch integration status' });
     }
   });
@@ -15446,6 +16314,7 @@ ${rawText}`;
         authUrl: null
       });
     } catch (error: any) {
+      console.error('Error connecting Google Calendar:', error);
       res.status(500).json({ message: error.message || 'Failed to connect Google Calendar' });
     }
   });
@@ -15470,6 +16339,7 @@ ${rawText}`;
 
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error disconnecting Google Sheets:', error);
       res.status(500).json({ message: error.message || 'Failed to disconnect Google Sheets' });
     }
   });
@@ -15507,7 +16377,9 @@ ${rawText}`;
               resourceId: integration.googleCalendarWebhookResourceId,
             },
           });
+          console.log('[Calendar Webhook] Stopped webhook on disconnect:', integration.googleCalendarWebhookChannelId);
         } catch (stopError: any) {
+          console.error('[Calendar Webhook] Failed to stop webhook on disconnect:', stopError.message);
         }
       }
 
@@ -15525,6 +16397,7 @@ ${rawText}`;
 
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error disconnecting Google Calendar:', error);
       res.status(500).json({ message: error.message || 'Failed to disconnect Google Calendar' });
     }
   });
@@ -15543,6 +16416,7 @@ ${rawText}`;
       const layout = await storage.getWidgetLayout(userId, dashboardType as string);
       res.json({ layout });
     } catch (error: any) {
+      console.error('Error fetching widget layout:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch widget layout' });
     }
   });
@@ -15559,6 +16433,7 @@ ${rawText}`;
       const layout = await storage.saveWidgetLayout(layoutData);
       res.json({ layout });
     } catch (error: any) {
+      console.error('Error saving widget layout:', error);
       res.status(500).json({ message: error.message || 'Failed to save widget layout' });
     }
   });
@@ -15568,16 +16443,22 @@ ${rawText}`;
   // Get OpenAI settings
   app.get('/api/openai/settings', isAuthenticated, async (req, res) => {
     try {
+      console.log('⚙️ [SETTINGS] Starting GET request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('⚙️ [SETTINGS] User ID:', userId);
 
       const user = await storage.getUser(userId);
+      console.log('⚙️ [SETTINGS] User role:', user?.role);
 
       if (user?.role !== 'admin') {
+        console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
 
+      console.log('⚙️ [SETTINGS] Fetching OpenAI settings from database...');
       const settings = await storage.getOpenaiSettings();
+      console.log('⚙️ [SETTINGS] Settings retrieved:', {
         hasSettings: !!settings,
         hasApiKey: !!settings?.apiKey,
         hasVectorStoreId: !!settings?.vectorStoreId,
@@ -15591,11 +16472,16 @@ ${rawText}`;
           apiKey: settings.apiKey ? `sk-...${settings.apiKey.slice(-4)}` : null,
           hasApiKey: !!settings.apiKey
         };
+        console.log('⚙️ [SETTINGS] ✅ Sending masked settings to client');
         res.json(maskedSettings);
       } else {
+        console.log('⚙️ [SETTINGS] ✅ No settings found, sending null');
         res.json(null);
       }
     } catch (error: any) {
+      console.error('⚙️ [SETTINGS] ❌ ERROR:', error.message);
+      console.error('⚙️ [SETTINGS] Stack trace:', error.stack);
+      console.error('⚙️ [SETTINGS] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch settings' });
     }
   });
@@ -15603,16 +16489,21 @@ ${rawText}`;
   // Save OpenAI settings
   app.post('/api/openai/settings', isAuthenticated, async (req, res) => {
     try {
+      console.log('⚙️ [SETTINGS] Starting POST request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('⚙️ [SETTINGS] User ID:', userId);
 
       const user = await storage.getUser(userId);
+      console.log('⚙️ [SETTINGS] User role:', user?.role);
 
       if (user?.role !== 'admin') {
+        console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
 
       const { apiKey, aiInstructions, vectorStoreId } = req.body;
+      console.log('⚙️ [SETTINGS] Request data:', {
         hasApiKey: !!apiKey,
         apiKeyPrefix: apiKey ? apiKey.substring(0, 7) + '...' : 'none',
         hasAiInstructions: !!aiInstructions,
@@ -15620,15 +16511,21 @@ ${rawText}`;
         vectorStoreId: vectorStoreId || 'none'
       });
 
+      console.log('⚙️ [SETTINGS] Saving settings to database...');
       const settings = await storage.saveOpenaiSettings({ apiKey, aiInstructions, vectorStoreId });
+      console.log('⚙️ [SETTINGS] Settings saved successfully');
 
       const response = { 
         success: true,
         hasApiKey: !!settings.apiKey,
         vectorStoreId: settings.vectorStoreId
       };
+      console.log('⚙️ [SETTINGS] ✅ Sending success response:', response);
       res.json(response);
     } catch (error: any) {
+      console.error('⚙️ [SETTINGS] ❌ ERROR:', error.message);
+      console.error('⚙️ [SETTINGS] Stack trace:', error.stack);
+      console.error('⚙️ [SETTINGS] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to save settings' });
     }
   });
@@ -15636,16 +16533,24 @@ ${rawText}`;
   // Get all knowledge base files
   app.get('/api/openai/files', isAuthenticated, async (req, res) => {
     try {
+      console.log('📁 [FILES] Starting GET request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('📁 [FILES] User ID:', userId);
 
+      console.log('📁 [FILES] Fetching all knowledge base files from database...');
       const files = await storage.getAllKnowledgeBaseFiles();
+      console.log('📁 [FILES] Files retrieved:', {
         count: files.length,
         fileIds: files.map(f => f.id)
       });
 
+      console.log('📁 [FILES] ✅ Sending files to client');
       res.json(files);
     } catch (error: any) {
+      console.error('📁 [FILES] ❌ ERROR:', error.message);
+      console.error('📁 [FILES] Stack trace:', error.stack);
+      console.error('📁 [FILES] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch files' });
     }
   });
@@ -15653,6 +16558,7 @@ ${rawText}`;
   // Upload file to knowledge base
   app.post('/api/openai/files/upload', isAuthenticated, async (req, res) => {
     try {
+      console.log('📤 [FILE UPLOAD] Starting file upload...');
 
       const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
       if (user?.role !== 'admin') {
@@ -15660,6 +16566,7 @@ ${rawText}`;
       }
 
       const { filename, content, category, productCategory, description } = req.body;
+      console.log('📤 [FILE UPLOAD] File details:', {
         filename,
         contentLength: content?.length || 0,
         category,
@@ -15676,9 +16583,14 @@ ${rawText}`;
       if (!settings?.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
       }
+      console.log('📤 [FILE UPLOAD] OpenAI settings retrieved, API key exists:', !!settings.apiKey);
+      console.log('📤 [FILE UPLOAD] Existing vector store ID:', settings.vectorStoreId || 'none');
 
       // Initialize OpenAI client
       const openai = new OpenAI({ apiKey: settings.apiKey });
+      console.log('📤 [FILE UPLOAD] OpenAI client initialized');
+      console.log('📤 [FILE UPLOAD] OpenAI beta available:', !!openai.beta);
+      console.log('📤 [FILE UPLOAD] OpenAI beta.vectorStores available:', !!openai.beta?.vectorStores);
 
       // Upload file to OpenAI using a temporary file
       const fs = await import('fs/promises');
@@ -15693,25 +16605,32 @@ ${rawText}`;
       const tmpDir = os.tmpdir();
       const tmpFilePath = path.join(tmpDir, tmpFilename);
 
+      console.log('📤 [FILE UPLOAD] Temp file path:', tmpFilePath);
 
       let file;
       try {
+        console.log('📤 [FILE UPLOAD] Writing file to temp location...');
         await fs.writeFile(tmpFilePath, content, 'utf-8');
+        console.log('📤 [FILE UPLOAD] File written successfully');
 
         const fileStream = (await import('fs')).createReadStream(tmpFilePath);
 
+        console.log('📤 [FILE UPLOAD] Uploading to OpenAI...');
         file = await openai.files.create({
           file: fileStream,
           purpose: 'assistants'
         });
+        console.log('📤 [FILE UPLOAD] File uploaded to OpenAI, file ID:', file.id);
       } finally {
         // Always clean up temporary file, even if upload fails
         await fs.unlink(tmpFilePath).catch(() => {});
+        console.log('📤 [FILE UPLOAD] Temp file cleaned up');
       }
 
       // If no vector store exists, create one using direct API call
       let vectorStoreId = settings.vectorStoreId;
       if (!vectorStoreId) {
+        console.log('📤 [FILE UPLOAD] No vector store exists, creating new one via REST API...');
         const vectorStoreResponse = await axios.post(
           'https://api.openai.com/v1/vector_stores',
           {
@@ -15726,11 +16645,15 @@ ${rawText}`;
           }
         );
         vectorStoreId = vectorStoreResponse.data.id;
+        console.log('📤 [FILE UPLOAD] Vector store created:', vectorStoreId);
         await storage.saveOpenaiSettings({ vectorStoreId });
+        console.log('📤 [FILE UPLOAD] Vector store ID saved to database');
       } else {
+        console.log('📤 [FILE UPLOAD] Using existing vector store:', vectorStoreId);
       }
 
       // Save file metadata to database with 'uploading' status
+      console.log('📤 [FILE UPLOAD] Saving file metadata to database...');
       const fileRecord = await storage.createKnowledgeBaseFile({
         filename: filename.replace(/[^a-zA-Z0-9.-]/g, '_'),
         originalName: filename,
@@ -15744,11 +16667,14 @@ ${rawText}`;
         processingStatus: 'uploading',
         isActive: true
       });
+      console.log('📤 [FILE UPLOAD] File metadata saved, record ID:', fileRecord.id);
 
       // Update status to 'processing'
       await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'processing');
+      console.log('📤 [FILE UPLOAD] Status updated to: processing');
 
       // Add file to vector store using direct API call
+      console.log('📤 [FILE UPLOAD] Adding file to vector store via REST API...');
       const vectorStoreFileResponse = await axios.post(
         `https://api.openai.com/v1/vector_stores/${vectorStoreId}/files`,
         {
@@ -15762,8 +16688,10 @@ ${rawText}`;
           }
         }
       );
+      console.log('📤 [FILE UPLOAD] File added to vector store, status:', vectorStoreFileResponse.data.status);
 
       // Poll for file processing completion
+      console.log('📤 [FILE UPLOAD] Waiting for file to be processed...');
       let processingComplete = false;
       let attempts = 0;
       const maxAttempts = 60; // 60 seconds max wait
@@ -15780,13 +16708,17 @@ ${rawText}`;
         );
 
         const status = statusResponse.data.status;
+        console.log('📤 [FILE UPLOAD] Processing status:', status, 'attempt:', attempts + 1);
 
         if (status === 'completed') {
           processingComplete = true;
+          console.log('📤 [FILE UPLOAD] File processing completed!');
           // Update status to 'ready'
           await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'ready');
+          console.log('📤 [FILE UPLOAD] Status updated to: ready');
         } else if (status === 'failed') {
           await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'failed');
+          console.log('📤 [FILE UPLOAD] Status updated to: failed');
           throw new Error('File processing failed in vector store');
         } else {
           // Wait 1 second before checking again
@@ -15796,12 +16728,18 @@ ${rawText}`;
       }
 
       if (!processingComplete) {
+        console.log('📤 [FILE UPLOAD] ⚠️ File processing timeout, but file may still complete');
         // Keep status as 'processing' if timeout - it might still complete on OpenAI's side
       }
 
+      console.log('📤 [FILE UPLOAD] File added to vector store successfully');
 
+      console.log('📤 [FILE UPLOAD] ✅ Upload completed successfully!');
       res.json({ success: true, file: fileRecord });
     } catch (error: any) {
+      console.error('📤 [FILE UPLOAD] ❌ ERROR:', error.message);
+      console.error('📤 [FILE UPLOAD] Stack trace:', error.stack);
+      console.error('📤 [FILE UPLOAD] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to upload file' });
     }
   });
@@ -15809,6 +16747,7 @@ ${rawText}`;
   // Update knowledge base file metadata
   app.put('/api/openai/files/:id', isAuthenticated, async (req, res) => {
     try {
+      console.log('📝 [EDIT FILE] Starting PUT request...');
 
       const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
       if (user?.role !== 'admin') {
@@ -15818,6 +16757,8 @@ ${rawText}`;
       const { id } = req.params;
       const { category, productCategory, description } = req.body;
 
+      console.log('📝 [EDIT FILE] Updating file:', id);
+      console.log('📝 [EDIT FILE] New values:', { category, productCategory, description });
 
       const updates: any = {};
       if (category !== undefined) updates.category = category;
@@ -15825,9 +16766,11 @@ ${rawText}`;
       if (description !== undefined) updates.description = description;
 
       const updatedFile = await storage.updateKnowledgeBaseFile(id, updates);
+      console.log('📝 [EDIT FILE] File updated successfully');
 
       res.json(updatedFile);
     } catch (error: any) {
+      console.error('📝 [EDIT FILE] ❌ ERROR:', error.message);
       res.status(500).json({ message: error.message || 'Failed to update file' });
     }
   });
@@ -15835,49 +16778,69 @@ ${rawText}`;
   // Delete knowledge base file
   app.delete('/api/openai/files/:id', isAuthenticated, async (req, res) => {
     try {
+      console.log('📁 [DELETE FILE] Starting DELETE request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('📁 [DELETE FILE] User ID:', userId);
 
       const user = await storage.getUser(userId);
+      console.log('📁 [DELETE FILE] User role:', user?.role);
 
       if (user?.role !== 'admin') {
+        console.log('📁 [DELETE FILE] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
 
       const fileId = req.params.id;
+      console.log('📁 [DELETE FILE] File ID to delete:', fileId);
 
+      console.log('📁 [DELETE FILE] Fetching file metadata from database...');
       const file = await storage.getKnowledgeBaseFile(fileId);
 
       if (!file) {
+        console.log('📁 [DELETE FILE] ❌ File not found in database');
         return res.status(404).json({ message: 'File not found' });
       }
 
+      console.log('📁 [DELETE FILE] File found:', {
         filename: file.filename,
         openaiFileId: file.openaiFileId,
         uploadedBy: file.uploadedBy
       });
 
       // Get OpenAI settings and delete from OpenAI
+      console.log('📁 [DELETE FILE] Fetching OpenAI settings...');
       const settings = await storage.getOpenaiSettings();
+      console.log('📁 [DELETE FILE] Settings retrieved:', {
         hasApiKey: !!settings?.apiKey,
         hasOpenaiFileId: !!file.openaiFileId
       });
 
       if (settings?.apiKey && file.openaiFileId) {
+        console.log('📁 [DELETE FILE] Deleting file from OpenAI...');
         const OpenAI = (await import('openai')).default;
         const openai = new OpenAI({ apiKey: settings.apiKey });
 
         try {
           await openai.files.del(file.openaiFileId);
+          console.log('📁 [DELETE FILE] File deleted from OpenAI successfully');
         } catch (err: any) {
+          console.error('📁 [DELETE FILE] ⚠️ Error deleting from OpenAI:', err.message);
+          console.error('📁 [DELETE FILE] Will continue with database deletion');
         }
       } else {
+        console.log('📁 [DELETE FILE] Skipping OpenAI deletion (no API key or file ID)');
       }
 
+      console.log('📁 [DELETE FILE] Deleting file from database...');
       await storage.deleteKnowledgeBaseFile(fileId);
+      console.log('📁 [DELETE FILE] ✅ File deleted successfully');
 
       res.json({ success: true });
     } catch (error: any) {
+      console.error('📁 [DELETE FILE] ❌ ERROR:', error.message);
+      console.error('📁 [DELETE FILE] Stack trace:', error.stack);
+      console.error('📁 [DELETE FILE] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to delete file' });
     }
   });
@@ -15885,9 +16848,11 @@ ${rawText}`;
   // Chat with AI
   app.post('/api/openai/chat', isAuthenticatedCustom, async (req: any, res) => {
     try {
+      console.log('💬 [CHAT] Starting chat request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { message, conversationId, contextData } = req.body;
+      console.log('💬 [CHAT] Request details:', {
         userId,
         messageLength: message?.length || 0,
         conversationId: conversationId || 'new conversation',
@@ -15895,12 +16860,14 @@ ${rawText}`;
       });
 
       if (!message) {
+        console.log('💬 [CHAT] ❌ No message provided');
         return res.status(400).json({ message: 'Message required' });
       }
 
       // Auto-create conversation if not provided
       let activeConversationId = conversationId;
       if (!activeConversationId) {
+        console.log('💬 [CHAT] Creating new conversation...');
         const newConversation = await storage.createConversation({
           userId,
           title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
@@ -15908,29 +16875,39 @@ ${rawText}`;
           projectId: null,
         });
         activeConversationId = newConversation.id;
+        console.log('💬 [CHAT] New conversation created:', activeConversationId);
       } else if (contextData) {
+        console.log('💬 [CHAT] Updating conversation with context data...');
         await storage.updateConversation(activeConversationId, { contextData });
       }
 
       // Get OpenAI settings
+      console.log('💬 [CHAT] Fetching OpenAI settings...');
       const settings = await storage.getOpenaiSettings();
+      console.log('💬 [CHAT] Settings retrieved:', {
         hasApiKey: !!settings?.apiKey,
         hasVectorStoreId: !!settings?.vectorStoreId,
         hasAiInstructions: !!settings?.aiInstructions
       });
 
       if (!settings?.apiKey) {
+        console.log('💬 [CHAT] ❌ No API key configured');
         return res.status(400).json({ message: 'OpenAI API key not configured' });
       }
 
       // Initialize OpenAI client
+      console.log('💬 [CHAT] Initializing OpenAI client...');
       const openai = new OpenAI({ apiKey: settings.apiKey });
+      console.log('💬 [CHAT] OpenAI client initialized');
 
       // Fetch conversation to get contextData
+      console.log('💬 [CHAT] Fetching conversation for contextData...');
       const conversation = await storage.getConversation(activeConversationId);
       const contextInfo = conversation?.contextData as any;
+      console.log('💬 [CHAT] Context data available:', !!contextInfo);
 
       // Save user message
+      console.log('💬 [CHAT] Saving user message to database...');
       await storage.saveChatMessage({
         userId,
         conversationId: activeConversationId,
@@ -15939,6 +16916,7 @@ ${rawText}`;
         responseId: null,
         metadata: {}
       });
+      console.log('💬 [CHAT] User message saved');
 
       // Create AI response using Chat Completions with tools
       let assistantMessage = '';
@@ -15947,7 +16925,9 @@ ${rawText}`;
       let tokensUsed = 0;
 
       // Fetch current user info for email signatures
+      console.log('💬 [CHAT] Fetching user info for email signatures...');
       const currentUser = await storage.getUser(userId);
+      console.log('💬 [CHAT] User info retrieved:', {
         hasFirstName: !!currentUser?.firstName,
         hasLastName: !!currentUser?.lastName,
         hasEmail: !!currentUser?.email
@@ -15955,6 +16935,7 @@ ${rawText}`;
 
       // Get user's selected category for category-aware prompting
       const selectedCategory = await storage.getSelectedCategory(userId);
+      console.log('💬 [CHAT] User selected category:', selectedCategory || 'none');
 
       // Get custom instructions or use default
       let systemInstructions = settings.aiInstructions || 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.';
@@ -15962,17 +16943,21 @@ ${rawText}`;
       // Add category-specific context to system prompt
       if (selectedCategory) {
         systemInstructions += `\n\nIMPORTANT CATEGORY RESTRICTION: You are specifically assisting with ${selectedCategory} product sales. Focus EXCLUSIVELY on ${selectedCategory}-related sales strategies, product information, and objection handling. DO NOT provide information, scripts, or advice about other product categories. If asked about other categories, politely redirect: "I specialize in ${selectedCategory} sales. For other products, please consult the appropriate specialist."\n`;
+        console.log('💬 [CHAT] Category-specific context added for:', selectedCategory);
       }
 
       // Append user signature information
       if (currentUser) {
+        console.log('💬 [CHAT] Appending user signature info to system instructions...');
 
         let signatureText = '';
 
         // Use custom signature if available, otherwise auto-generate
         if (currentUser.signature) {
+          console.log('💬 [CHAT] Using custom signature from user profile');
           signatureText = currentUser.signature;
         } else {
+          console.log('💬 [CHAT] Using auto-generated signature');
           const userFullName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Sales Representative';
           const userEmail = currentUser.email || '';
           const userRole = currentUser.role === 'admin' ? 'Sales Manager' : 'Sales Representative';
@@ -15990,10 +16975,12 @@ ${signatureText}
 IMPORTANT: Never use placeholders like [Your Name] or [Your Contact Information]. Always use the exact information provided above.`;
 
         systemInstructions += signatureInstructions;
+        console.log('💬 [CHAT] User signature appended');
       }
 
       // Append store context if available
       if (contextInfo && Object.keys(contextInfo).length > 0) {
+        console.log('💬 [CHAT] Appending store context to system instructions...');
         const contextString = `
 
 Current Store Information:
@@ -16075,14 +17062,18 @@ IMPORTANT: Never silently generate emails with missing recipient information. Al
 
 Use this store information to provide context-aware responses. When helping draft emails or communications, reference specific details about this store.`;
         systemInstructions += contextString;
+        console.log('💬 [CHAT] Store context appended (length:', contextString.length, ')');
       }
 
+      console.log('💬 [CHAT] System instructions length:', systemInstructions.length);
 
       if (settings.vectorStoreId) {
+        console.log('💬 [CHAT] Using Assistants API with vector store:', settings.vectorStoreId);
         // Use Assistants API with file search
         try {
           /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
           // Create assistant with file search
+          console.log('💬 [CHAT] Creating assistant with file search...');
           const assistant = await openai.beta.assistants.create({
             model: 'gpt-4o',
             instructions: systemInstructions,
@@ -16093,6 +17084,7 @@ Use this store information to provide context-aware responses. When helping draf
               }
             }
           });
+          console.log('💬 [CHAT] Assistant created:', assistant.id);
           */
 
           // OPTIMIZED: Reuse assistant instead of creating new one each time
@@ -16100,6 +17092,7 @@ Use this store information to provide context-aware responses. When helping draf
 
           // Get or create assistant
           if (assistantId) {
+            console.log('💬 [CHAT] Reusing existing assistant:', assistantId);
             try {
               // Verify assistant still exists and update its instructions AND vector store
               const assistant = await openai.beta.assistants.update(assistantId, {
@@ -16110,12 +17103,15 @@ Use this store information to provide context-aware responses. When helping draf
                   }
                 }
               });
+              console.log('💬 [CHAT] Assistant updated with new instructions and vector store');
             } catch (error: any) {
+              console.log('💬 [CHAT] Existing assistant not found, creating new one...');
               assistantId = null; // Force recreation
             }
           }
 
           if (!assistantId) {
+            console.log('💬 [CHAT] Creating new reusable assistant...');
             const assistant = await openai.beta.assistants.create({
               model: 'gpt-4o',
               instructions: systemInstructions,
@@ -16127,75 +17123,98 @@ Use this store information to provide context-aware responses. When helping draf
               }
             });
             assistantId = assistant.id;
+            console.log('💬 [CHAT] New assistant created:', assistantId);
 
             // Save assistant ID for future reuse
             await storage.saveOpenaiSettings({ assistantId });
+            console.log('💬 [CHAT] Assistant ID saved to database');
           }
 
           /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
           // Create thread
+          console.log('💬 [CHAT] Creating thread...');
           const thread = await openai.beta.threads.create();
+          console.log('💬 [CHAT] Thread created:', thread.id);
           */
 
           // OPTIMIZED: Reuse thread for this conversation
           let threadId = conversation?.threadId;
 
           if (threadId) {
+            console.log('💬 [CHAT] Reusing existing thread:', threadId);
           } else {
+            console.log('💬 [CHAT] Creating new thread for this conversation...');
             const thread = await openai.beta.threads.create();
             threadId = thread.id;
+            console.log('💬 [CHAT] New thread created:', threadId);
 
             // Save thread ID to conversation for future reuse
             await storage.updateConversation(activeConversationId, { threadId });
+            console.log('💬 [CHAT] Thread ID saved to conversation');
           }
 
           // Add message to thread
+          console.log('💬 [CHAT] Adding message to thread...');
           await openai.beta.threads.messages.create(threadId, {
             role: 'user',
             content: message
           });
+          console.log('💬 [CHAT] Message added to thread');
 
           // Run assistant
+          console.log('💬 [CHAT] Starting assistant run...');
           const run = await openai.beta.threads.runs.create(threadId, {
             assistant_id: assistantId
           });
+          console.log('💬 [CHAT] Run started:', run.id);
 
           // Poll for completion (OPTIMIZED: faster polling at 500ms instead of 1000ms)
+          console.log('💬 [CHAT] Polling for completion...');
           let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
           let attempts = 0;
           while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < 60) {
+            console.log('💬 [CHAT] Run status:', runStatus.status, 'attempt:', attempts + 1);
             await new Promise(resolve => setTimeout(resolve, 500)); // OPTIMIZED: 500ms instead of 1000ms
             runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
             attempts++;
           }
 
           if (runStatus.status === 'completed') {
+            console.log('💬 [CHAT] Run completed successfully');
             // Get messages
             const messages = await openai.beta.threads.messages.list(threadId);
             const lastMessage = messages.data[0];
 
             if (lastMessage.content[0].type === 'text') {
               assistantMessage = lastMessage.content[0].text.value;
+              console.log('💬 [CHAT] Assistant response length:', assistantMessage.length);
             }
             responseId = run.id;
           } else {
+            console.log('💬 [CHAT] ⚠️ Run did not complete, status:', runStatus.status);
             throw new Error('Assistant run did not complete successfully');
           }
 
           /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
           // Clean up assistant
+          console.log('💬 [CHAT] Cleaning up assistant...');
           await openai.beta.assistants.del(assistant.id);
+          console.log('💬 [CHAT] Assistant deleted');
           */
 
           // OPTIMIZED: Don't delete assistant - reuse it next time
+          console.log('💬 [CHAT] Assistant retained for future use (performance optimization)');
         } catch (error: any) {
+          console.error('💬 [CHAT] ⚠️ Assistants API error:', error.message);
           throw new Error(`Sales Assistant failed: ${error.message}. Please check your knowledge base configuration.`);
         }
       } else {
+        console.error('💬 [CHAT] ⚠️ No vector store configured');
         throw new Error('Knowledge base required. Please upload files to the knowledge base before using the Sales Assistant.');
       }
 
       // Save assistant message
+      console.log('💬 [CHAT] Saving assistant message to database...');
       await storage.saveChatMessage({
         userId,
         conversationId: activeConversationId,
@@ -16207,13 +17226,18 @@ Use this store information to provide context-aware responses. When helping draf
           tokensUsed: tokensUsed
         }
       });
+      console.log('💬 [CHAT] Assistant message saved');
 
+      console.log('💬 [CHAT] ✅ Chat completed successfully');
       res.json({
         message: assistantMessage,
         responseId: responseId,
         conversationId: activeConversationId
       });
     } catch (error: any) {
+      console.error('💬 [CHAT] ❌ ERROR:', error.message);
+      console.error('💬 [CHAT] Stack trace:', error.stack);
+      console.error('💬 [CHAT] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to get AI response' });
     }
   });
@@ -16221,22 +17245,30 @@ Use this store information to provide context-aware responses. When helping draf
   // Get chat history
   app.get('/api/openai/chat/history', isAuthenticatedCustom, async (req: any, res) => {
     try {
+      console.log('💬 [HISTORY] Starting GET request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const limit = parseInt(req.query.limit as string) || 50;
+      console.log('💬 [HISTORY] Request details:', {
         userId,
         limit
       });
 
+      console.log('💬 [HISTORY] Fetching chat history from database...');
       const history = await storage.getChatHistory(userId, limit);
+      console.log('💬 [HISTORY] Chat history retrieved:', {
         messageCount: history.length,
         hasMessages: history.length > 0
       });
 
       // Return in chronological order (oldest first)
       const reversedHistory = history.reverse();
+      console.log('💬 [HISTORY] ✅ Sending chat history to client');
       res.json(reversedHistory);
     } catch (error: any) {
+      console.error('💬 [HISTORY] ❌ ERROR:', error.message);
+      console.error('💬 [HISTORY] Stack trace:', error.stack);
+      console.error('💬 [HISTORY] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch chat history' });
     }
   });
@@ -16244,13 +17276,21 @@ Use this store information to provide context-aware responses. When helping draf
   // Clear chat history
   app.delete('/api/openai/chat/history', isAuthenticatedCustom, async (req, res) => {
     try {
+      console.log('💬 [CLEAR HISTORY] Starting DELETE request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('💬 [CLEAR HISTORY] User ID:', userId);
 
+      console.log('💬 [CLEAR HISTORY] Clearing chat history from database...');
       await storage.clearChatHistory(userId);
+      console.log('💬 [CLEAR HISTORY] Chat history cleared successfully');
 
+      console.log('💬 [CLEAR HISTORY] ✅ Sending success response');
       res.json({ success: true });
     } catch (error: any) {
+      console.error('💬 [CLEAR HISTORY] ❌ ERROR:', error.message);
+      console.error('💬 [CLEAR HISTORY] Stack trace:', error.stack);
+      console.error('💬 [CLEAR HISTORY] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to clear chat history' });
     }
   });
@@ -16262,6 +17302,7 @@ Use this store information to provide context-aware responses. When helping draf
       const conversations = await storage.getConversations(userId);
       res.json(conversations);
     } catch (error: any) {
+      console.error('Error fetching conversations:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch conversations' });
     }
   });
@@ -16283,6 +17324,7 @@ Use this store information to provide context-aware responses. When helping draf
       const messages = await storage.getConversationMessages(id);
       res.json({ ...conversation, messages });
     } catch (error: any) {
+      console.error('Error fetching conversation:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch conversation' });
     }
   });
@@ -16299,6 +17341,7 @@ Use this store information to provide context-aware responses. When helping draf
       const conversation = await storage.createConversation(validation.data);
       res.json(conversation);
     } catch (error: any) {
+      console.error('Error creating conversation:', error);
       res.status(500).json({ message: error.message || 'Failed to create conversation' });
     }
   });
@@ -16320,6 +17363,7 @@ Use this store information to provide context-aware responses. When helping draf
       const messages = await storage.getConversationMessages(id);
       res.json(messages);
     } catch (error: any) {
+      console.error('Error fetching conversation messages:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch messages' });
     }
   });
@@ -16346,6 +17390,7 @@ Use this store information to provide context-aware responses. When helping draf
       const updated = await storage.updateConversation(id, { title: title.trim() });
       res.json(updated);
     } catch (error: any) {
+      console.error('Error renaming conversation:', error);
       res.status(500).json({ message: error.message || 'Failed to rename conversation' });
     }
   });
@@ -16377,6 +17422,7 @@ Use this store information to provide context-aware responses. When helping draf
       const updated = await storage.updateConversation(id, validation.data);
       res.json(updated);
     } catch (error: any) {
+      console.error('Error updating conversation:', error);
       res.status(500).json({ message: error.message || 'Failed to update conversation' });
     }
   });
@@ -16398,6 +17444,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.deleteConversation(id);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting conversation:', error);
       res.status(500).json({ message: error.message || 'Failed to delete conversation' });
     }
   });
@@ -16428,6 +17475,7 @@ Use this store information to provide context-aware responses. When helping draf
       const updated = await storage.moveConversationToProject(id, validation.data.projectId);
       res.json(updated);
     } catch (error: any) {
+      console.error('Error moving conversation:', error);
       res.status(500).json({ message: error.message || 'Failed to move conversation' });
     }
   });
@@ -16470,6 +17518,7 @@ Use this store information to provide context-aware responses. When helping draf
       res.setHeader('Content-Disposition', `attachment; filename="conversation-${id}.txt"`);
       res.send(exportText);
     } catch (error: any) {
+      console.error('Error exporting conversation:', error);
       res.status(500).json({ message: error.message || 'Failed to export conversation' });
     }
   });
@@ -16481,6 +17530,7 @@ Use this store information to provide context-aware responses. When helping draf
       const projects = await storage.getProjects(userId);
       res.json(projects);
     } catch (error: any) {
+      console.error('Error fetching projects:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch projects' });
     }
   });
@@ -16497,6 +17547,7 @@ Use this store information to provide context-aware responses. When helping draf
       const project = await storage.createProject(validation.data);
       res.json(project);
     } catch (error: any) {
+      console.error('Error creating project:', error);
       res.status(500).json({ message: error.message || 'Failed to create project' });
     }
   });
@@ -16526,6 +17577,7 @@ Use this store information to provide context-aware responses. When helping draf
       const updated = await storage.updateProject(id, validation.data);
       res.json(updated);
     } catch (error: any) {
+      console.error('Error updating project:', error);
       res.status(500).json({ message: error.message || 'Failed to update project' });
     }
   });
@@ -16545,6 +17597,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.deleteProject(id);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting project:', error);
       res.status(500).json({ message: error.message || 'Failed to delete project' });
     }
   });
@@ -16556,6 +17609,7 @@ Use this store information to provide context-aware responses. When helping draf
       const templates = await storage.getUserTemplates(userId);
       res.json(templates);
     } catch (error: any) {
+      console.error('Error fetching templates:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch templates' });
     }
   });
@@ -16582,6 +17636,7 @@ Use this store information to provide context-aware responses. When helping draf
       const template = await storage.createTemplate(validation.data);
       res.json(template);
     } catch (error: any) {
+      console.error('Error creating template:', error);
       res.status(500).json({ message: error.message || 'Failed to create template' });
     }
   });
@@ -16629,6 +17684,7 @@ Use this store information to provide context-aware responses. When helping draf
       const updated = await storage.updateTemplate(id, validation.data);
       res.json(updated);
     } catch (error: any) {
+      console.error('Error updating template:', error);
       res.status(500).json({ message: error.message || 'Failed to update template' });
     }
   });
@@ -16650,6 +17706,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.deleteTemplate(id);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting template:', error);
       res.status(500).json({ message: error.message || 'Failed to delete template' });
     }
   });
@@ -16660,6 +17717,7 @@ Use this store information to provide context-aware responses. When helping draf
       const allTags = await storage.getAllTemplateTags();
       res.json(allTags);
     } catch (error: any) {
+      console.error('Error fetching template tags:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch template tags' });
     }
   });
@@ -16671,6 +17729,7 @@ Use this store information to provide context-aware responses. When helping draf
       const tags = await storage.getUserTags(userId);
       res.json(tags);
     } catch (error: any) {
+      console.error('Error fetching user tags:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch user tags' });
     }
   });
@@ -16687,6 +17746,7 @@ Use this store information to provide context-aware responses. When helping draf
       const newTag = await storage.addUserTag(userId, tag);
       res.json(newTag);
     } catch (error: any) {
+      console.error('Error adding user tag:', error);
       res.status(500).json({ message: error.message || 'Failed to add user tag' });
     }
   });
@@ -16699,6 +17759,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.removeUserTag(userId, decodeURIComponent(tag));
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting user tag:', error);
       res.status(500).json({ message: error.message || 'Failed to delete user tag' });
     }
   });
@@ -16711,6 +17772,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.removeUserTagById(userId, id);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting user tag by ID:', error);
       res.status(500).json({ message: error.message || 'Failed to delete user tag' });
     }
   });
@@ -16723,6 +17785,7 @@ Use this store information to provide context-aware responses. When helping draf
       const resourceState = req.headers['x-goog-resource-state'];
       const resourceId = req.headers['x-goog-resource-id'];
 
+      console.log('[Webhook] Received Google Calendar notification:', {
         channelId,
         resourceState,
         resourceId
@@ -16733,6 +17796,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Handle sync message (initial handshake)
       if (resourceState === 'sync') {
+        console.log('[Webhook] Sync message received, webhook active');
         return;
       }
 
@@ -16743,14 +17807,17 @@ Use this store information to provide context-aware responses. When helping draf
       );
 
       if (!userIntegration) {
+        console.log('[Webhook] No user found for channel ID:', channelId);
         return;
       }
 
       const userId = userIntegration.userId;
+      console.log('[Webhook] Processing calendar changes for user:', userId);
 
       // Get system OAuth credentials for token refresh
       const systemIntegration = await storage.getSystemIntegration('google_sheets');
       if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+        console.error('[Webhook] System OAuth not configured');
         return;
       }
 
@@ -16814,6 +17881,7 @@ Use this store information to provide context-aware responses. When helping draf
           // Check if event was modified
           if (event.status === 'cancelled') {
             // Event was deleted, delete the reminder
+            console.log(`[Webhook] Calendar event ${calendarEventId} deleted, deleting reminder ${reminder.id}`);
             await storage.deleteReminder(reminder.id);
           } else if (event.updated) {
             // Event was updated, sync the changes from Google Calendar
@@ -16831,6 +17899,8 @@ Use this store information to provide context-aware responses. When helping draf
 
               // Check if date or time changed
               if (newScheduledDate !== reminder.scheduledDate || newScheduledTime !== reminder.scheduledTime) {
+                console.log(`[Webhook] Calendar event ${calendarEventId} time changed, updating reminder ${reminder.id}`);
+                console.log(`[Webhook] Old: ${reminder.scheduledDate} ${reminder.scheduledTime}, New: ${newScheduledDate} ${newScheduledTime}`);
                 await storage.updateReminder(reminder.id, {
                   scheduledDate: newScheduledDate,
                   scheduledTime: newScheduledTime,
@@ -16841,6 +17911,7 @@ Use this store information to provide context-aware responses. When helping draf
 
             // Update title if changed
             if (event.summary && event.summary !== reminder.title) {
+              console.log(`[Webhook] Calendar event ${calendarEventId} title changed, updating reminder ${reminder.id}`);
               await storage.updateReminder(reminder.id, {
                 title: event.summary
               });
@@ -16849,13 +17920,17 @@ Use this store information to provide context-aware responses. When helping draf
         } catch (eventError: any) {
           // Event not found (404) means it was deleted
           if (eventError.code === 404 || eventError.status === 404) {
+            console.log(`[Webhook] Calendar event ${calendarEventId} not found (deleted), deleting reminder ${reminder.id}`);
             await storage.deleteReminder(reminder.id);
           } else {
+            console.error(`[Webhook] Error fetching event ${calendarEventId}:`, eventError.message);
           }
         }
       }
 
+      console.log('[Webhook] Calendar sync completed for user:', userId);
     } catch (error: any) {
+      console.error('[Webhook] Error processing calendar webhook:', error);
       // Don't send error response since we already responded with 200
     }
   });
@@ -16863,6 +17938,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Automatic webhook renewal system - runs daily
   async function renewWebhooksIfNeeded() {
     try {
+      console.log('[Webhook Renewal] Checking for webhooks that need renewal...');
 
       const allIntegrations = await storage.getAllUserIntegrations();
       const threeDaysFromNow = Date.now() + (3 * 24 * 60 * 60 * 1000);
@@ -16878,11 +17954,13 @@ Use this store information to provide context-aware responses. When helping draf
         // Skip inactive users - don't renew webhooks for deactivated accounts
         const user = await storage.getUser(integration.userId);
         if (!user || user.isActive === false) {
+          console.log(`[Webhook Renewal] Skipping renewal for inactive user ${integration.userId}`);
           continue;
         }
 
         // Check if webhook expires in less than 3 days
         if (integration.googleCalendarWebhookExpiry < threeDaysFromNow) {
+          console.log(`[Webhook Renewal] Renewing webhook for user ${integration.userId}`);
 
           try {
             // Check if token needs refresh
@@ -16936,7 +18014,9 @@ Use this store information to provide context-aware responses. When helping draf
                     resourceId: integration.googleCalendarWebhookResourceId,
                   },
                 });
+                console.log(`[Webhook Renewal] Stopped old webhook ${integration.googleCalendarWebhookChannelId}`);
               } catch (stopError: any) {
+                console.error('[Webhook Renewal] Failed to stop old webhook:', stopError.message);
               }
             }
 
@@ -16976,10 +18056,12 @@ Use this store information to provide context-aware responses. When helping draf
               googleCalendarWebhookExpiry: expiration,
             });
 
+            console.log(`[Webhook Renewal] ✅ Successfully renewed webhook for user ${integration.userId}`, {
               channelId,
               expiration: new Date(expiration).toISOString()
             });
           } catch (renewError: any) {
+            console.error(`[Webhook Renewal] ❌ FAILED to renew webhook for user ${integration.userId}:`, {
               error: renewError.message,
               userId: integration.userId
             });
@@ -16988,7 +18070,9 @@ Use this store information to provide context-aware responses. When helping draf
         }
       }
 
+      console.log('[Webhook Renewal] Check completed');
     } catch (error: any) {
+      console.error('[Webhook Renewal] Error during renewal check:', error);
     }
   }
 
@@ -16998,6 +18082,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Run initial check 1 minute after startup
   setTimeout(renewWebhooksIfNeeded, 60 * 1000);
 
+  console.log('[Webhook Renewal] Automatic renewal system started');
 
   // ============================================================================
   // CATEGORY MANAGEMENT ROUTES
@@ -17009,6 +18094,7 @@ Use this store information to provide context-aware responses. When helping draf
       const categories = await storage.getAllCategories();
       res.json({ categories });
     } catch (error: any) {
+      console.error('Error fetching categories:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch categories' });
     }
   });
@@ -17019,6 +18105,7 @@ Use this store information to provide context-aware responses. When helping draf
       const categories = await storage.getActiveCategories();
       res.json({ categories });
     } catch (error: any) {
+      console.error('Error fetching active categories:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch categories' });
     }
   });
@@ -17034,6 +18121,7 @@ Use this store information to provide context-aware responses. When helping draf
       const category = await storage.createCategory(validation.data);
       res.json({ category });
     } catch (error: any) {
+      console.error('Error creating category:', error);
       res.status(500).json({ message: error.message || 'Failed to create category' });
     }
   });
@@ -17050,6 +18138,7 @@ Use this store information to provide context-aware responses. When helping draf
       const category = await storage.updateCategory(id, validation.data);
       res.json({ category });
     } catch (error: any) {
+      console.error('Error updating category:', error);
       res.status(500).json({ message: error.message || 'Failed to update category' });
     }
   });
@@ -17061,6 +18150,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.deleteCategory(id);
       res.json({ message: 'Category deleted successfully' });
     } catch (error: any) {
+      console.error('Error deleting category:', error);
       res.status(500).json({ message: error.message || 'Failed to delete category' });
     }
   });
@@ -17075,6 +18165,7 @@ Use this store information to provide context-aware responses. When helping draf
       const statuses = await storage.getAllStatuses();
       res.json({ statuses });
     } catch (error: any) {
+      console.error('Error fetching statuses:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch statuses' });
     }
   });
@@ -17085,6 +18176,7 @@ Use this store information to provide context-aware responses. When helping draf
       const statuses = await storage.getActiveStatuses();
       res.json({ statuses });
     } catch (error: any) {
+      console.error('Error fetching active statuses:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch statuses' });
     }
   });
@@ -17103,6 +18195,7 @@ Use this store information to provide context-aware responses. When helping draf
       const status = await storage.createStatus(validation.data);
       res.json({ status });
     } catch (error: any) {
+      console.error('Error creating status:', error);
       res.status(500).json({ message: error.message || 'Failed to create status' });
     }
   });
@@ -17123,6 +18216,7 @@ Use this store information to provide context-aware responses. When helping draf
       const status = await storage.updateStatus(id, validation.data);
       res.json({ status });
     } catch (error: any) {
+      console.error('Error updating status:', error);
       res.status(500).json({ message: error.message || 'Failed to update status' });
     }
   });
@@ -17134,6 +18228,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.deleteStatus(id);
       res.json({ message: 'Status deleted successfully' });
     } catch (error: any) {
+      console.error('Error deleting status:', error);
       res.status(500).json({ message: error.message || 'Failed to delete status' });
     }
   });
@@ -17157,6 +18252,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.reorderStatuses(updates);
       res.json({ message: 'Statuses reordered successfully' });
     } catch (error: any) {
+      console.error('Error reordering statuses:', error);
       res.status(500).json({ message: error.message || 'Failed to reorder statuses' });
     }
   });
@@ -17246,6 +18342,7 @@ Use this store information to provide context-aware responses. When helping draf
         statuses: createdStatuses 
       });
     } catch (error: any) {
+      console.error('Error seeding statuses:', error);
       res.status(500).json({ message: error.message || 'Failed to seed statuses' });
     }
   });
@@ -17260,6 +18357,7 @@ Use this store information to provide context-aware responses. When helping draf
       const exclusions = await storage.getAllSavedExclusions();
       res.json({ exclusions });
     } catch (error: any) {
+      console.error('Error fetching exclusions:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
     }
   });
@@ -17274,6 +18372,7 @@ Use this store information to provide context-aware responses. When helping draf
       const exclusions = await storage.getSavedExclusionsByType(type);
       res.json({ exclusions });
     } catch (error: any) {
+      console.error('Error fetching exclusions by type:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
     }
   });
@@ -17291,6 +18390,7 @@ Use this store information to provide context-aware responses. When helping draf
       const exclusion = await storage.createSavedExclusion({ type, value: value.toLowerCase().trim() });
       res.json({ exclusion });
     } catch (error: any) {
+      console.error('Error creating exclusion:', error);
       res.status(500).json({ message: error.message || 'Failed to create exclusion' });
     }
   });
@@ -17302,6 +18402,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.deleteSavedExclusion(id);
       res.json({ message: 'Exclusion deleted successfully' });
     } catch (error: any) {
+      console.error('Error deleting exclusion:', error);
       res.status(500).json({ message: error.message || 'Failed to delete exclusion' });
     }
   });
@@ -17314,6 +18415,7 @@ Use this store information to provide context-aware responses. When helping draf
       const prefs = await storage.updateUserActiveExclusions(userId, activeKeywords, activeTypes);
       res.json({ preferences: prefs });
     } catch (error: any) {
+      console.error('Error updating active exclusions:', error);
       res.status(500).json({ message: error.message || 'Failed to update active exclusions' });
     }
   });
@@ -17328,6 +18430,7 @@ Use this store information to provide context-aware responses. When helping draf
       const history = await storage.getAllSearchHistory();
       res.json({ history });
     } catch (error: any) {
+      console.error('Error fetching search history:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch search history' });
     }
   });
@@ -17339,6 +18442,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.deleteSearchHistory(id);
       res.json({ message: 'Search history entry deleted successfully' });
     } catch (error: any) {
+      console.error('Error deleting search history:', error);
       res.status(500).json({ message: error.message || 'Failed to delete search history' });
     }
   });
@@ -17350,6 +18454,7 @@ Use this store information to provide context-aware responses. When helping draf
       const lastCategory = await storage.getLastCategory(userId);
       res.json({ category: lastCategory || 'Pets' }); // Default to 'Pets'
     } catch (error: any) {
+      console.error('Error fetching last category:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch last category' });
     }
   });
@@ -17367,6 +18472,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.setLastCategory(userId, category);
       res.json({ message: 'Last category saved successfully', category });
     } catch (error: any) {
+      console.error('Error saving last category:', error);
       res.status(500).json({ message: error.message || 'Failed to save last category' });
     }
   });
@@ -17378,6 +18484,7 @@ Use this store information to provide context-aware responses. When helping draf
       const selectedCategory = await storage.getSelectedCategory(userId);
       res.json({ category: selectedCategory });
     } catch (error: any) {
+      console.error('Error fetching selected category:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch selected category' });
     }
   });
@@ -17395,6 +18502,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.setSelectedCategory(userId, category);
       res.json({ message: 'Selected category saved successfully', category });
     } catch (error: any) {
+      console.error('Error saving selected category:', error);
       res.status(500).json({ message: error.message || 'Failed to save selected category' });
     }
   });
@@ -17476,6 +18584,7 @@ Use this store information to provide context-aware responses. When helping draf
         nextPageToken: searchResponse.nextPageToken
       });
     } catch (error: any) {
+      console.error('Error searching places:', error);
       res.status(500).json({ message: error.message || 'Failed to search places' });
     }
   });
@@ -17497,6 +18606,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json({ place: details });
     } catch (error: any) {
+      console.error('Error fetching place details:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch place details' });
     }
   });
@@ -17519,6 +18629,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json(result);
     } catch (error: any) {
+      console.error('Error reverse geocoding:', error);
       res.status(500).json({ message: error.message || 'Failed to reverse geocode location' });
     }
   });
@@ -17626,6 +18737,7 @@ Use this store information to provide context-aware responses. When helping draf
         }
       });
     } catch (error: any) {
+      console.error('Error saving place to sheet:', error);
       res.status(500).json({ message: error.message || 'Failed to save place to sheet' });
     }
   });
@@ -17645,6 +18757,7 @@ Use this store information to provide context-aware responses. When helping draf
       const count = await storage.getUnreadAdminCount();
       res.json({ count });
     } catch (error: any) {
+      console.error('Error getting unread count:', error);
       res.status(500).json({ message: error.message || 'Failed to get unread count' });
     }
   });
@@ -17675,6 +18788,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json({ tickets: ticketsWithUserInfo });
     } catch (error: any) {
+      console.error('Error fetching admin tickets:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
     }
   });
@@ -17694,6 +18808,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json({ tickets });
     } catch (error: any) {
+      console.error('Error fetching tickets:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
     }
   });
@@ -17740,6 +18855,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json({ ticket, replies: repliesWithUserInfo });
     } catch (error: any) {
+      console.error('Error fetching ticket:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch ticket' });
     }
   });
@@ -17764,11 +18880,12 @@ Use this store information to provide context-aware responses. When helping draf
           user.email || 'no-email',
           ticket.subject,
           ticket.message
-        ).catch(err => {});
+        ).catch(err => console.error('Failed to send new ticket email:', err));
       }
 
       res.json({ ticket });
     } catch (error: any) {
+      console.error('Error creating ticket:', error);
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid ticket data', errors: error.errors });
       }
@@ -17811,7 +18928,7 @@ Use this store information to provide context-aware responses. When helping draf
             ticketOwner.email,
             ticket.subject,
             req.body.message
-          ).catch(err => {});
+          ).catch(err => console.error('Failed to send reply email:', err));
         }
       } else {
         await storage.updateTicket(ticketId, { isUnreadByAdmin: true });
@@ -17822,11 +18939,12 @@ Use this store information to provide context-aware responses. When helping draf
           user.email || 'no-email',
           `Follow-up: ${ticket.subject}`,
           req.body.message
-        ).catch(err => {});
+        ).catch(err => console.error('Failed to send follow-up email:', err));
       }
 
       res.json({ reply });
     } catch (error: any) {
+      console.error('Error creating reply:', error);
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid reply data', errors: error.errors });
       }
@@ -17854,6 +18972,7 @@ Use this store information to provide context-aware responses. When helping draf
       const ticket = await storage.updateTicket(ticketId, { status });
       res.json({ ticket });
     } catch (error: any) {
+      console.error('Error updating ticket status:', error);
       res.status(500).json({ message: error.message || 'Failed to update ticket status' });
     }
   });
@@ -17901,6 +19020,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json({ webhooks: webhookStatuses });
     } catch (error: any) {
+      console.error('Error fetching webhook statuses:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch webhook statuses' });
     }
   });
@@ -17966,6 +19086,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json(results);
     } catch (error: any) {
+      console.error('Error bulk registering webhooks:', error);
       res.status(500).json({ message: error.message || 'Failed to bulk register webhooks' });
     }
   });
@@ -18005,6 +19126,7 @@ Use this store information to provide context-aware responses. When helping draf
         });
       }
     } catch (error: any) {
+      console.error('Error registering webhook:', error);
       res.status(500).json({ message: error.message || 'Failed to register webhook' });
     }
   });
@@ -18038,13 +19160,16 @@ Use this store information to provide context-aware responses. When helping draf
           const client = await storage.getClientByUniqueIdentifier(storeLink);
           if (client) {
             await storage.updateLastContactDate(client.id);
+            console.log(`[Manual Call] Updated lastContactDate for client ${client.id} (${storeName})`);
           }
         } catch (error) {
+          console.log('Could not update lastContactDate for client:', error);
         }
       }
       
       res.json(newCall);
     } catch (error: any) {
+      console.error('Error creating call history:', error);
       res.status(500).json({ message: error.message || 'Failed to log call' });
     }
   });
@@ -18074,6 +19199,7 @@ Use this store information to provide context-aware responses. When helping draf
         res.json(callHistory);
       }
     } catch (error: any) {
+      console.error('Error fetching call history:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch call history' });
     }
   });
@@ -18088,6 +19214,7 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { recipientEmail, subject, body, clientLink } = req.body;
 
+      console.log('[ManualFollowUps] 🔵 Request received:', {
         recipientEmail,
         hasSubject: !!subject,
         hasBody: !!body,
@@ -18096,12 +19223,14 @@ Use this store information to provide context-aware responses. When helping draf
       });
 
       if (!recipientEmail) {
+        console.log('[ManualFollowUps] ❌ Missing recipient email');
         return res.status(400).json({ message: 'Recipient email is required' });
       }
 
       // Only enroll if this draft has a clientLink (from Store Details)
       if (clientLink) {
         try {
+          console.log('[ManualFollowUps] Auto-enrolling draft recipient:', recipientEmail);
           
           // Get or create Manual Follow-Ups sequence
           const manualFollowUpsSequence = await storage.getOrCreateManualFollowUpsSequence();
@@ -18126,6 +19255,7 @@ Use this store information to provide context-aware responses. When helping draf
           }
           
           if (blacklisted) {
+            console.log('[ManualFollowUps] Email is blacklisted, skipping enrollment:', recipientEmail);
           } else {
             // Check if already enrolled
             const [existing] = await db
@@ -18140,6 +19270,7 @@ Use this store information to provide context-aware responses. When helping draf
               .limit(1);
             
             if (existing) {
+              console.log('[ManualFollowUps] Recipient already enrolled, skipping:', recipientEmail);
             } else {
               // Enroll at Step 1 (manual email)
               const [newRecipient] = await db
@@ -18179,16 +19310,21 @@ Use this store information to provide context-aware responses. When helping draf
                 })
                 .where(eq(sequences.id, manualFollowUpsSequence.id));
               
+              console.log('[ManualFollowUps] ✅ Auto-enrolled at Step 1:', recipientEmail);
             }
           }
         } catch (enrollError: any) {
+          console.error('[ManualFollowUps] Error auto-enrolling recipient:', enrollError);
           return res.status(500).json({ message: enrollError.message || 'Failed to enroll recipient' });
         }
       } else {
+        console.log('[ManualFollowUps] ⚠️  No clientLink provided, skipping enrollment');
       }
 
+      console.log('[ManualFollowUps] ✅ Request completed successfully');
       res.json({ success: true, message: 'Draft processed' });
     } catch (error: any) {
+      console.error('Error enrolling recipient:', error);
       res.status(500).json({ message: error.message || 'Failed to enroll recipient' });
     }
   });
@@ -18203,6 +19339,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'User not found' });
       }
 
+      console.log('[FOLLOW-UP] 👤 User:', user.email, 'Role:', user.role);
 
       // SECURITY: Determine which agents' data to show
       let allowedAgentNames: string[] = [];
@@ -18212,14 +19349,17 @@ Use this store information to provide context-aware responses. When helping draf
         // SECURITY: Agents can ONLY see their own claimed clients
         const currentAgentName = user.agentName || `${user.firstName} ${user.lastName}`.trim();
         allowedAgentNames = [currentAgentName];
+        console.log('[FOLLOW-UP] 🔐 Agent mode - filtering by:', currentAgentName);
       } else {
         // Admins see all clients (no filtering)
+        console.log('[FOLLOW-UP] 🔐 Admin mode - no filtering');
         allowedAgentNames = [];
       }
 
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
+        console.log('[FOLLOW-UP] ❌ No Commission Tracker sheet found');
         return res.json({ claimedUntouched: [], interestedGoingCold: [], closedWonReorder: [] });
       }
 
@@ -18228,6 +19368,7 @@ Use this store information to provide context-aware responses. When helping draf
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       if (trackerRows.length <= 1) {
+        console.log('[FOLLOW-UP] ❌ Commission Tracker is empty');
         return res.json({ claimedUntouched: [], interestedGoingCold: [], closedWonReorder: [] });
       }
 
@@ -18240,9 +19381,11 @@ Use this store information to provide context-aware responses. When helping draf
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const parentLinkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'parent link');
 
+      console.log('[FOLLOW-UP] 📋 Column indices:', { linkIndex, agentNameIndex, statusIndex, totalIndex, dateIndex });
 
       // Get all call history for correlation
       const allCallHistory = await storage.getAllCallHistory();
+      console.log('[FOLLOW-UP] 📞 Found', allCallHistory.length, 'total calls in history');
 
       // Build a map of Link -> call metrics
       const callMetrics: Map<string, { callCount: number; lastCallDate: Date | null; daysSinceCall: number }> = new Map();
@@ -18270,6 +19413,7 @@ Use this store information to provide context-aware responses. When helping draf
         });
       }
 
+      console.log('[FOLLOW-UP] 📊 Call metrics built for', callMetrics.size, 'unique stores');
 
       // Process tracker rows and build store objects with proper field mapping
       const storesByLink: Map<string, any> = new Map();
@@ -18333,6 +19477,7 @@ Use this store information to provide context-aware responses. When helping draf
         storesByLink.set(link, storeObj);
       }
 
+      console.log('[FOLLOW-UP] 🏪 Processed', storesByLink.size, 'unique stores from tracker');
 
       // Enrich with Store Database data (Name, Phone, etc.)
       const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
@@ -18375,11 +19520,13 @@ Use this store information to provide context-aware responses. When helping draf
             }
           }
           
+          console.log('[FOLLOW-UP] ✨ Enriched stores with Store Database data');
         }
       }
 
       const stores = Array.from(storesByLink.values());
 
+      console.log('[FOLLOW-UP] 🏪 Processed', stores.length, 'stores');
 
       // Get claim dates from PostgreSQL clients table
       const storeLinks = Array.from(storesByLink.keys());
@@ -18403,6 +19550,7 @@ Use this store information to provide context-aware responses. When helping draf
         }
       }
 
+      console.log('[FOLLOW-UP] 📅 Found claim dates for', claimDateMap.size, 'stores');
 
       // Apply bucket filters
       const now = new Date();
@@ -18469,6 +19617,7 @@ Use this store information to provide context-aware responses. When helping draf
           daysSinceOrder: s._orderDate ? Math.floor((now.getTime() - s._orderDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
         }));
 
+      console.log('[FOLLOW-UP] ✅ Results:', {
         claimedUntouched: claimedUntouched.length,
         interestedGoingCold: interestedGoingCold.length,
         closedWonReorder: closedWonReorder.length
@@ -18480,6 +19629,7 @@ Use this store information to provide context-aware responses. When helping draf
         closedWonReorder
       });
     } catch (error: any) {
+      console.error('Error fetching follow-up center data:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch follow-up data' });
     }
   });
@@ -18515,6 +19665,7 @@ Use this store information to provide context-aware responses. When helping draf
       const folders = await storage.getAllDriveFolders();
       res.json(folders);
     } catch (error: any) {
+      console.error('Error fetching Drive folders:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch folders' });
     }
   });
@@ -18523,9 +19674,12 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/drive/folders', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('🔍 [DRIVE FOLDER ADD] Request body:', JSON.stringify(req.body, null, 2));
       const { name, folderUrl } = req.body;
+      console.log('🔍 [DRIVE FOLDER ADD] Extracted values - name:', name, 'folderUrl:', folderUrl);
 
       if (!name || !folderUrl) {
+        console.log('❌ [DRIVE FOLDER ADD] Validation failed - missing name or URL');
         return res.status(400).json({ message: 'Folder name and URL are required' });
       }
 
@@ -18539,6 +19693,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json(folder);
     } catch (error: any) {
+      console.error('Error creating Drive folder:', error);
       res.status(500).json({ message: error.message || 'Failed to add folder' });
     }
   });
@@ -18556,6 +19711,7 @@ Use this store information to provide context-aware responses. When helping draf
       const folder = await storage.updateDriveFolder(id, updates);
       res.json(folder);
     } catch (error: any) {
+      console.error('Error updating Drive folder:', error);
       res.status(500).json({ message: error.message || 'Failed to update folder' });
     }
   });
@@ -18566,6 +19722,7 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.deleteDriveFolder(req.params.id);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting Drive folder:', error);
       res.status(500).json({ message: error.message || 'Failed to delete folder' });
     }
   });
@@ -18577,6 +19734,7 @@ Use this store information to provide context-aware responses. When helping draf
       const files = await googleDrive.listFilesInFolder(driveFolderId);
       res.json(files);
     } catch (error: any) {
+      console.error('Error listing Drive files:', error);
       res.status(500).json({ message: error.message || 'Failed to list files' });
     }
   });
@@ -18605,6 +19763,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json(uploadedFile);
     } catch (error: any) {
+      console.error('Error uploading file:', error);
       res.status(500).json({ message: error.message || 'Failed to upload file' });
     }
   });
@@ -18616,6 +19775,7 @@ Use this store information to provide context-aware responses. When helping draf
       await googleDrive.deleteFileFromDrive(fileId);
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting file:', error);
       res.status(500).json({ message: error.message || 'Failed to delete file' });
     }
   });
@@ -18647,6 +19807,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json(settings);
     } catch (error: any) {
+      console.error('Error fetching E-Hub settings:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch settings' });
     }
   });
@@ -18661,6 +19822,7 @@ Use this store information to provide context-aware responses. When helping draf
       const endDate = new Date(now);
       endDate.setDate(endDate.getDate() + timeWindowDays);
       
+      console.log('[QueueView] Fetching slots:', {
         now: now.toISOString(),
         endDate: endDate.toISOString(),
         timeWindowDays
@@ -18687,6 +19849,7 @@ Use this store information to provide context-aware responses. When helping draf
         LIMIT 100
       `);
       
+      console.log('[QueueView] Query result:', {
         isArray: Array.isArray(result),
         resultType: typeof result,
         resultKeys: result ? Object.keys(result) : null,
@@ -18697,6 +19860,7 @@ Use this store information to provide context-aware responses. When helping draf
       // Handle Drizzle result - extract rows from result object
       const rows = (result as any).rows || [];
       
+      console.log('[QueueView] Rows extracted:', {
         count: rows.length,
         sample: rows.slice(0, 2)
       });
@@ -18715,12 +19879,14 @@ Use this store information to provide context-aware responses. When helping draf
         subject: null,
       }));
       
+      console.log('[QueueView] Final queue:', {
         count: queue.length,
         sample: queue.slice(0, 2)
       });
       
       res.json(queue);
     } catch (error: any) {
+      console.error('[QueueView] Error fetching queue:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch queue' });
     }
   });
@@ -18728,9 +19894,11 @@ Use this store information to provide context-aware responses. When helping draf
   // Generate Queue - manually trigger 3-day slot generation (admin only)
   app.post('/api/ehub/queue/generate', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      console.log('[API] Manual queue generation triggered');
       await ensureDailySlots();
       res.json({ message: 'Queue generation completed successfully' });
     } catch (error: any) {
+      console.error('Error generating queue:', error);
       res.status(500).json({ message: error.message || 'Failed to generate queue' });
     }
   });
@@ -18743,12 +19911,14 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
+      console.log('[API] Force rebuild queue triggered by user:', userId);
       
       const { rebuildQueueFromNextBusinessDay } = await import('./services/Matrix2/queueRebuilder');
       await rebuildQueueFromNextBusinessDay(userId);
       
       res.json({ message: 'Queue rebuild completed successfully' });
     } catch (error: any) {
+      console.error('Error rebuilding queue:', error);
       res.status(500).json({ message: error.message || 'Failed to rebuild queue' });
     }
   });
@@ -18759,6 +19929,7 @@ Use this store information to provide context-aware responses. When helping draf
       const pausedRecipients = await storage.getPausedRecipients();
       res.json(pausedRecipients);
     } catch (error: any) {
+      console.error('Error fetching paused recipients:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch paused recipients' });
     }
   });
@@ -18769,6 +19940,7 @@ Use this store information to provide context-aware responses. When helping draf
       const count = await storage.getPausedRecipientsCount();
       res.json({ count });
     } catch (error: any) {
+      console.error('Error fetching paused count:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch paused count' });
     }
   });
@@ -18788,6 +19960,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json(recipient);
     } catch (error: any) {
+      console.error('Error pausing recipient:', error);
       res.status(500).json({ message: error.message || 'Failed to pause recipient' });
     }
   });
@@ -18803,6 +19976,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json(recipient);
     } catch (error: any) {
+      console.error('Error resuming recipient:', error);
       res.status(500).json({ message: error.message || 'Failed to resume recipient' });
     }
   });
@@ -18822,6 +19996,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json(recipient);
     } catch (error: any) {
+      console.error('Error skipping recipient step:', error);
       res.status(500).json({ message: error.message || 'Failed to skip step' });
     }
   });
@@ -18833,6 +20008,7 @@ Use this store information to provide context-aware responses. When helping draf
       const recipient = await storage.sendRecipientNow(id);
       res.json(recipient);
     } catch (error: any) {
+      console.error('Error sending email now:', error);
       res.status(500).json({ message: error.message || 'Failed to send email now' });
     }
   });
@@ -18850,6 +20026,7 @@ Use this store information to provide context-aware responses. When helping draf
       const recipient = await storage.delayRecipient(id, hours);
       res.json(recipient);
     } catch (error: any) {
+      console.error('Error delaying recipient:', error);
       res.status(500).json({ message: error.message || 'Failed to delay send' });
     }
   });
@@ -18872,6 +20049,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json(recipient);
     } catch (error: any) {
+      console.error('Error removing recipient:', error);
       res.status(500).json({ message: error.message || 'Failed to remove recipient' });
     }
   });
@@ -18896,6 +20074,7 @@ Use this store information to provide context-aware responses. When helping draf
           await clearSlotsForRecipient(recipientId);
           results.push({ id: recipientId, success: true });
         } catch (err) {
+          console.error(`Failed to remove recipient ${recipientId}:`, err);
           results.push({ id: recipientId, success: false, error: (err as any).message });
         }
       }
@@ -18909,6 +20088,7 @@ Use this store information to provide context-aware responses. When helping draf
         results 
       });
     } catch (error: any) {
+      console.error('Error in bulk recipient delete:', error);
       res.status(500).json({ message: error.message || 'Failed to delete recipients' });
     }
   });
@@ -18945,12 +20125,15 @@ Use this store information to provide context-aware responses. When helping draf
       );
       
       if (schedulingSettingsChanged) {
+        console.log('[EHub Settings] ⚡ Scheduling settings changed - triggering queue rebuild from next business day');
         
         // Trigger async queue rebuild (non-blocking)
         const { rebuildQueueFromNextBusinessDay } = await import('./services/Matrix2/queueRebuilder');
         rebuildQueueFromNextBusinessDay(userId).catch(err => {
+          console.error('[EHub Settings] ❌ Queue rebuild failed:', err);
         });
       } else {
+        console.log('[EHub Settings] Content settings updated (no queue rebuild needed)');
       }
       
       res.json(newSettings);
@@ -18958,6 +20141,7 @@ Use this store information to provide context-aware responses. When helping draf
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid settings data', errors: error.errors });
       }
+      console.error('Error updating E-Hub settings:', error);
       res.status(500).json({ message: error.message || 'Failed to update settings' });
     }
   });
@@ -18981,6 +20165,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json(result);
     } catch (error: any) {
+      console.error('Error fetching all contacts:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch contacts' });
     }
   });
@@ -18993,6 +20178,7 @@ Use this store information to provide context-aware responses. When helping draf
       const sequenceId = req.query.sequenceId as string | undefined;
       const statusFilter = req.query.status as string | undefined;
 
+      console.log('[SENT-HISTORY] Fetching with params:', { sequenceId, statusFilter, limit, offset });
 
       let query = db
         .select({
@@ -19041,6 +20227,7 @@ Use this store information to provide context-aware responses. When helping draf
         .limit(limit + 1)
         .offset(offset);
 
+      console.log('[SENT-HISTORY] Query returned rows:', messages.length);
 
       const hasMore = messages.length > limit;
       const sliced = messages.slice(0, limit);
@@ -19111,6 +20298,7 @@ Use this store information to provide context-aware responses. When helping draf
         hasMore,
       });
     } catch (error: any) {
+      console.error('Error fetching sent history:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch sent history' });
     }
   });
@@ -19155,6 +20343,7 @@ Use this store information to provide context-aware responses. When helping draf
         hasMore,
       });
     } catch (error: any) {
+      console.error('Error fetching email failures:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch email failures' });
     }
   });
@@ -19167,6 +20356,7 @@ Use this store information to provide context-aware responses. When helping draf
       // Support both dry run (preview) and actual execution with optional email selection
       const { dryRun = true, waitDays = 3, selectedEmails } = req.body;
       
+      console.log(`[API] Starting reply scan (dryRun: ${dryRun}, waitDays: ${waitDays}, selected: ${selectedEmails?.length || 'all'})`);
       
       const result = await gmailReplyScanner.scan(waitDays, dryRun, selectedEmails);
       
@@ -19179,6 +20369,7 @@ Use this store information to provide context-aware responses. When helping draf
           : `Enrolled ${result.newEnrollments} new contacts, promoted ${result.promoted} to Step 1`
       });
     } catch (error: any) {
+      console.error('[API] Error scanning for replies:', error);
       res.status(500).json({ 
         success: false,
         message: error.message || 'Failed to scan for replies' 
@@ -19196,6 +20387,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json(blacklist);
     } catch (error: any) {
+      console.error('[API] Error fetching blacklist:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch blacklist' });
     }
   });
@@ -19230,6 +20422,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json(newEntry);
     } catch (error: any) {
+      console.error('[API] Error adding to blacklist:', error);
       res.status(500).json({ message: error.message || 'Failed to add to blacklist' });
     }
   });
@@ -19250,6 +20443,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       res.json({ success: true, deleted: deleted[0] });
     } catch (error: any) {
+      console.error('[API] Error removing from blacklist:', error);
       res.status(500).json({ message: error.message || 'Failed to remove from blacklist' });
     }
   });
@@ -19264,6 +20458,7 @@ Use this store information to provide context-aware responses. When helping draf
         message: 'Manual Follow-Ups sequence is ready'
       });
     } catch (error: any) {
+      console.error('Error ensuring Manual Follow-Ups sequence:', error);
       res.status(500).json({ message: error.message || 'Failed to ensure Manual Follow-Ups sequence' });
     }
   });
@@ -19291,6 +20486,7 @@ Use this store information to provide context-aware responses. When helping draf
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid sequence data', errors: error.errors });
       }
+      console.error('Error creating sequence:', error);
       res.status(500).json({ message: error.message || 'Failed to create sequence' });
     }
   });
@@ -19302,6 +20498,7 @@ Use this store information to provide context-aware responses. When helping draf
       const sequences = await storage.listSequences({ status });
       res.json(sequences);
     } catch (error: any) {
+      console.error('Error listing sequences:', error);
       res.status(500).json({ message: error.message || 'Failed to list sequences' });
     }
   });
@@ -19312,6 +20509,7 @@ Use this store information to provide context-aware responses. When helping draf
       const result = await storage.syncSequenceRecipientCounts();
       res.json(result);
     } catch (error: any) {
+      console.error('Error syncing recipient counts:', error);
       res.status(500).json({ message: error.message || 'Failed to sync recipient counts' });
     }
   });
@@ -19325,6 +20523,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
       res.json(sequence);
     } catch (error: any) {
+      console.error('Error getting sequence:', error);
       res.status(500).json({ message: error.message || 'Failed to get sequence' });
     }
   });
@@ -19363,6 +20562,7 @@ Use this store information to provide context-aware responses. When helping draf
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid update data', errors: error.errors });
       }
+      console.error('Error updating sequence:', error);
       res.status(500).json({ message: error.message || 'Failed to update sequence' });
     }
   });
@@ -19400,6 +20600,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error deleting sequence:', error);
       res.status(500).json({ message: error.message || 'Failed to delete sequence' });
     }
   });
@@ -19416,6 +20617,7 @@ Use this store information to provide context-aware responses. When helping draf
       const transcript = sequence.strategyTranscript || { messages: [], lastUpdatedAt: new Date().toISOString() };
       res.json(transcript);
     } catch (error: any) {
+      console.error('Error getting strategy chat:', error);
       res.status(500).json({ message: error.message || 'Failed to get strategy chat' });
     }
   });
@@ -19464,6 +20666,7 @@ Use this store information to provide context-aware responses. When helping draf
         // Create new thread for persistent conversation
         const thread = await openai.beta.threads.create();
         threadId = thread.id;
+        console.log('[E-Hub Strategy] New thread created:', threadId);
       }
 
       // Build contextual instructions with E-Hub settings
@@ -19561,6 +20764,7 @@ Based on the conversation, help the user design an effective email sequence that
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid message data', errors: error.errors });
       }
+      console.error('Error in strategy chat:', error);
       res.status(500).json({ message: error.message || 'Failed to process strategy chat' });
     }
   });
@@ -19630,6 +20834,7 @@ Output format example:
 
 ${conversationContext}`;
 
+      console.log('[E-Hub Finalize] 🤖 Using Aligner assistant to synthesize Campaign Brief');
 
       // Create thread and run with Aligner
       const thread = await openai.beta.threads.create({
@@ -19678,10 +20883,12 @@ ${conversationContext}`;
         throw new Error('Failed to generate finalized strategy');
       }
 
+      console.log('[E-Hub Finalize] ✅ Campaign Brief synthesized:', finalizedBrief.substring(0, 100) + '...');
       
       // Return the brief without saving (let user edit first)
       res.json({ finalizedStrategy: finalizedBrief });
     } catch (error: any) {
+      console.error('Error finalizing strategy:', error);
       res.status(500).json({ message: error.message || 'Failed to finalize strategy' });
     }
   });
@@ -19710,6 +20917,7 @@ ${conversationContext}`;
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid finalized strategy', errors: error.errors });
       }
+      console.error('Error saving finalized strategy:', error);
       res.status(500).json({ message: error.message || 'Failed to save finalized strategy' });
     }
   });
@@ -19735,6 +20943,7 @@ ${conversationContext}`;
       }
       
       // Debug: Log strategy status
+      console.log('[SyntheticTest] Sequence strategy status:', {
         hasFinalizedStrategy: !!(sequence as any).finalizedStrategy,
         finalizedStrategyPreview: (sequence as any).finalizedStrategy?.substring(0, 100),
         hasStrategyTranscript: !!sequence.strategyTranscript,
@@ -19753,6 +20962,7 @@ ${conversationContext}`;
       }
       
       // Fetch ONE random real store from Store Database
+      console.log('[SyntheticTest] Fetching random real store from Store Database...');
       
       const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
       if (!storeSheet) {
@@ -19807,6 +21017,7 @@ ${conversationContext}`;
         }
       }
       
+      console.log('[SyntheticTest] Using random real store:', {
         name: realName,
         link: realLink,
         salesSummary: realSalesSummary ? realSalesSummary.substring(0, 100) + '...' : 'none',
@@ -19857,6 +21068,7 @@ ${conversationContext}`;
           const stepNumber = stepIndex + 1;
           
           // Debug: Log what we're passing to AI for this step
+          console.log(`[SyntheticTest] Generating step ${stepNumber}:`, {
             hasFinalizedStrategy: !!(sequence as any).finalizedStrategy,
             hasStrategyTranscript: !!sequence.strategyTranscript,
             stepNumber,
@@ -19913,10 +21125,12 @@ ${conversationContext}`;
           await storage.deleteRecipientMessages(testRecipientId);
           await storage.removeRecipient(testRecipientId);
         } catch (cleanupError) {
+          console.error('[SyntheticTest] Failed to clean up test data:', cleanupError);
         }
         throw generationError;
       }
     } catch (error: any) {
+      console.error('[SyntheticTest] Error generating synthetic emails:', error);
       res.status(500).json({ message: error.message || 'Failed to generate synthetic email preview' });
     }
   });
@@ -19955,6 +21169,7 @@ ${conversationContext}`;
       const updatedSequence = await storage.getSequence(id);
 
       // Matrix2 Note: Queue recalculation removed - Matrix2 slotAssigner handles scheduling
+      console.log(`[StepDelays] Step delays updated - Matrix2 slotAssigner will handle rescheduling`);
 
       res.json({
         sequence: updatedSequence,
@@ -19964,6 +21179,7 @@ ${conversationContext}`;
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid step delays', errors: error.errors });
       }
+      console.error('Error updating step delays:', error);
       res.status(500).json({ message: error.message || 'Failed to update step delays' });
     }
   });
@@ -20014,6 +21230,7 @@ ${conversationContext}`;
         return res.status(400).json({ message: 'Required columns (Name, Email) not found in sheet' });
       }
 
+      console.log('[E-Hub Import] Header mapping:', {
         name: nameIndex,
         email: emailIndex,
         link: linkIndex,
@@ -20075,7 +21292,9 @@ ${conversationContext}`;
             .toUpperCase(); // Uppercase for matching
           
           timezone = resolveTimezone(normalizedState);
+          console.log(`[E-Hub Import] Resolved timezone for ${email}: "${rawState}" → "${normalizedState}" → ${timezone}`);
         } else {
+          console.warn(`[E-Hub Import] No state found for ${email}, using default timezone`);
         }
 
         // Validate using Zod schema before adding to batch
@@ -20148,6 +21367,7 @@ ${conversationContext}`;
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
       }
+      console.error('Error importing recipients:', error);
       res.status(500).json({ message: error.message || 'Failed to import recipients' });
     }
   });
@@ -20331,6 +21551,7 @@ ${conversationContext}`;
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
       }
+      console.error('Error importing recipients:', error);
       res.status(500).json({ message: error.message || 'Failed to import recipients' });
     }
   });
@@ -20351,6 +21572,7 @@ ${conversationContext}`;
 
       if (!trackerSheet) {
         // Tracker sheet is required for E-Hub to function - return error
+        console.error('[E-Hub Recipients] No Commission Tracker found');
         return res.status(503).json({ 
           message: 'Commission Tracker sheet not configured. Please set up the tracker sheet before using E-Hub.' 
         });
@@ -20363,6 +21585,7 @@ ${conversationContext}`;
       const rows = await googleSheets.readSheetData(spreadsheetId, range);
 
       if (rows.length === 0) {
+        console.error('[E-Hub Recipients] Commission Tracker sheet is empty');
         return res.status(503).json({ 
           message: 'Commission Tracker sheet is empty. Please ensure headers are configured.' 
         });
@@ -20376,6 +21599,7 @@ ${conversationContext}`;
       const salesSummaryIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'sales-ready summary');
 
       if (linkIndex === -1) {
+        console.error('[E-Hub Recipients] Link column not found in Commission Tracker');
         return res.status(503).json({ 
           message: 'Link column not found in Commission Tracker. Please ensure the sheet has a "Link" column.' 
         });
@@ -20486,6 +21710,7 @@ ${conversationContext}`;
 
       res.json(filtered);
     } catch (error: any) {
+      console.error('Error getting recipients:', error);
       res.status(500).json({ message: error.message || 'Failed to get recipients' });
     }
   });
@@ -20519,6 +21744,7 @@ ${conversationContext}`;
         testEmail,
       });
     } catch (error: any) {
+      console.error('Error sending test email:', error);
       res.status(500).json({ message: error.message || 'Failed to send test email' });
     }
   });
@@ -20582,6 +21808,7 @@ ${conversationContext}`;
         message: 'Test email sent successfully'
       });
     } catch (error: any) {
+      console.error('Error sending test email:', error);
       res.status(500).json({ message: error.message || 'Failed to send test email' });
     }
   });
@@ -20628,6 +21855,7 @@ ${conversationContext}`;
         replies: replyResult.replies,
       });
     } catch (error: any) {
+      console.error('Error checking for replies:', error);
       res.status(500).json({ message: error.message || 'Failed to check for replies' });
     }
   });
@@ -20697,6 +21925,7 @@ ${conversationContext}`;
         threadId: sendResult.threadId,
       });
     } catch (error: any) {
+      console.error('Error sending follow-up:', error);
       res.status(500).json({ message: error.message || 'Failed to send follow-up' });
     }
   });
@@ -20712,6 +21941,7 @@ ${conversationContext}`;
       const history = await storage.listTestEmailSendsForUser(userId);
       res.json(history);
     } catch (error: any) {
+      console.error('Error getting test email history:', error);
       res.status(500).json({ message: error.message || 'Failed to get test email history' });
     }
   });
@@ -20724,6 +21954,7 @@ ${conversationContext}`;
       const counts = await storage.getTestDataNukeCounts(emailPattern);
       res.json(counts);
     } catch (error: any) {
+      console.error('Error getting nuke counts:', error);
       res.status(500).json({ message: error.message || 'Failed to get nuke counts' });
     }
   });
@@ -20747,6 +21978,7 @@ ${conversationContext}`;
         ...result,
       });
     } catch (error: any) {
+      console.error('Error nuking test data:', error);
       res.status(500).json({ message: error.message || 'Failed to delete test data' });
     }
   });

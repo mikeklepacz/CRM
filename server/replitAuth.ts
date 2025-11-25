@@ -123,6 +123,7 @@ export async function setupAuth(app: Express) {
           skipTokenCheck: true 
         });
       } catch (error) {
+        console.error('Error deserializing password auth user:', error);
         cb(error);
       }
     } else {
@@ -140,6 +141,7 @@ export async function setupAuth(app: Express) {
           cb(null, user);
         }
       } catch (error) {
+        console.error('Error deserializing Replit auth user:', error);
         // On error, return session data as-is instead of failing
         cb(null, user);
       }

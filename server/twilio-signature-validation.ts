@@ -15,10 +15,12 @@ export function validateTwilioSignature(
   params: Record<string, any>
 ): boolean {
   if (!authToken) {
+    console.warn('[Twilio] No auth token configured - skipping signature validation');
     return true; // Allow through if not configured (for development)
   }
 
   if (!signature) {
+    console.error('[Twilio] No signature provided in request');
     return false;
   }
 
@@ -32,6 +34,7 @@ export function validateTwilioSignature(
     
     return validator;
   } catch (error) {
+    console.error('[Twilio] Error validating signature:', error);
     return false;
   }
 }

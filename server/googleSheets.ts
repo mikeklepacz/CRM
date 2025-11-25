@@ -56,8 +56,10 @@ async function getSystemAccessToken() {
         expiryTime: newExpiryTime
       };
 
+      console.log('✅ Successfully refreshed system Google Sheets access token');
       return newAccessToken;
     } catch (error) {
+      console.error('❌ Failed to refresh Google Sheets access token:', error);
       throw new Error('Failed to refresh Google Sheets access token. Admin must reconnect in Admin Dashboard.');
     }
   }
@@ -241,6 +243,7 @@ export async function writeCommissionTrackerTimestamp(
   const timestamp = new Date().toISOString();
   const cellRange = `${sheetName}!${column}${rowIndex}`;
   await writeSheetData(spreadsheetId, cellRange, [[timestamp]]);
+  console.log(`✅ Wrote timestamp to ${cellRange}: ${timestamp}`);
 }
 
 // Sync Commission Tracker data to PostgreSQL clients table
@@ -251,12 +254,14 @@ export async function syncCommissionTrackerToPostgres(trackerSheetId: string) {
     throw new Error('Invalid Commission Tracker sheet');
   }
 
+  console.log(`📊 Starting Commission Tracker sync for sheet: ${sheet.sheetName}`);
   
   // Read all Commission Tracker data
   const range = `${sheet.sheetName}!A:P`; // Include columns up to P (updated timestamp)
   const rows = await readSheetData(sheet.spreadsheetId, range);
   
   if (rows.length === 0) {
+    console.log('⚠️ Commission Tracker is empty');
     return { synced: 0, skipped: 0 };
   }
 
@@ -271,6 +276,7 @@ export async function syncCommissionTrackerToPostgres(trackerSheetId: string) {
   }
 
   const lastSyncedAt = sheet.lastSyncedAt ? new Date(sheet.lastSyncedAt) : null;
+  console.log(`📅 Last synced at: ${lastSyncedAt?.toISOString() || 'never'}`);
 
   let synced = 0;
   let skipped = 0;
@@ -296,9 +302,11 @@ export async function syncCommissionTrackerToPostgres(trackerSheetId: string) {
     }
     
     if (changedLinks.size === 0) {
+      console.log('✅ No changes detected since last sync');
       return { synced: 0, skipped: rows.length - 1 };
     }
     
+    console.log(`📊 Detected ${changedLinks.size} clients with changes`);
   }
 
   // Second pass: calculate COMPLETE totals for changed clients (from ALL their rows)
@@ -359,12 +367,14 @@ export async function syncCommissionTrackerToPostgres(trackerSheetId: string) {
       }
       synced++;
     } catch (error: any) {
+      console.error(`❌ Error syncing client ${link}:`, error.message);
     }
   }
 
   // Update last synced timestamp on the sheet record
   await storage.updateGoogleSheetLastSync(trackerSheetId);
 
+  console.log(`✅ Sync complete: ${synced} clients synced, ${skipped} rows skipped`);
   return { synced, skipped };
 }
 
@@ -406,8 +416,10 @@ async function getUserAccessToken(userId: string) {
         googleCalendarTokenExpiry: newExpiryTime
       });
 
+      console.log('✅ Successfully refreshed user Google access token for user:', userId);
       return credentials.access_token!;
     } catch (error) {
+      console.error('❌ Failed to refresh user Google access token:', error);
       throw new Error('Failed to refresh Google access token. Please reconnect Google in Settings.');
     }
   }
@@ -663,5 +675,6 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
   // Batch update all rows
   if (updatedRows.length > 0) {
     await batchUpdateSheetData(trackerSheet.spreadsheetId, updatedRows);
+    console.log(`✅ Updated ${updatedRows.length} Commission Tracker row(s) from ${oldLink} to ${newLink}`);
   }
 }

@@ -122,6 +122,7 @@ export default function FollowUpCenter() {
       queryClient.invalidateQueries({ queryKey: ['/api/follow-up-center'] });
     },
     onError: (error: Error) => {
+      console.error('Failed to log call:', error);
     },
   });
 

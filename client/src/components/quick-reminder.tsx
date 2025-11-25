@@ -202,6 +202,7 @@ export function QuickReminder({
       
       return `${customerTimeFormatted} ${customerTzName} = ${agentTime} ${agentTzName}`;
     } catch (error) {
+      console.error('Error calculating timezone preview:', error);
       return null;
     }
   };
@@ -229,6 +230,7 @@ export function QuickReminder({
         finalTime = formatInTimeZone(utcDate, agentTimezone, 'HH:mm');
         agentDateStr = formatInTimeZone(utcDate, agentTimezone, 'yyyy-MM-dd');
       } catch (error) {
+        console.error('Error converting timezone for conflict check:', error);
         // If conversion fails, use original time/date as fallback
       }
     }

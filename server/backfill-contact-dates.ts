@@ -3,6 +3,7 @@ import { clients, callHistory } from '@shared/schema';
 import { eq, sql } from 'drizzle-orm';
 
 async function backfillContactDates() {
+  console.log('Starting lastContactDate backfill from callHistory...');
   
   try {
     // Get all call history records
@@ -11,6 +12,7 @@ async function backfillContactDates() {
       .from(callHistory)
       .orderBy(callHistory.calledAt);
     
+    console.log(`Found ${allCalls.length} call history records`);
     
     // Group calls by client (using storeLink to match)
     const clientCallsMap = new Map<string, Date>();
@@ -47,6 +49,8 @@ async function backfillContactDates() {
       }
     }
     
+    console.log(`Matched ${matchedCalls} calls to clients, ${unmatchedCalls} unmatched`);
+    console.log(`Found ${clientCallsMap.size} unique clients with call history`);
     
     // Update each client's lastContactDate using atomic conditional update
     let updatedCount = 0;
@@ -66,12 +70,18 @@ async function backfillContactDates() {
       
       if (result.length > 0) {
         updatedCount++;
+        console.log(`✓ Updated client ${clientId}: ${mostRecentCallDate.toISOString()}`);
       } else {
+        console.log(`⊘ Skipped client ${clientId}: existing date is newer or client not found`);
       }
     }
     
+    console.log('\nBackfill complete!');
+    console.log(`- Updated: ${updatedCount}`);
+    console.log(`- Total unique clients processed: ${clientCallsMap.size}`);
     
   } catch (error) {
+    console.error('Error during backfill:', error);
     throw error;
   }
 }
@@ -79,8 +89,10 @@ async function backfillContactDates() {
 // Run the backfill
 backfillContactDates()
   .then(() => {
+    console.log('Backfill script finished successfully');
     process.exit(0);
   })
   .catch((error) => {
+    console.error('Backfill script failed:', error);
     process.exit(1);
   });

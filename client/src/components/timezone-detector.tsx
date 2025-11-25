@@ -36,6 +36,7 @@ export function TimezoneDetector({ userTimezone, isLoading }: TimezoneDetectorPr
         setSelectedTimezone(detected);
         setOpen(true);
       } catch (error) {
+        console.error("Failed to detect timezone:", error);
         // Default to UTC if detection fails
         setDetectedTimezone("UTC");
         setSelectedTimezone("UTC");

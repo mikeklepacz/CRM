@@ -141,6 +141,7 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
         const utcDate = fromZonedTime(dateTimeStr, reminder.timezone);
         return utcDate;
       } catch (e) {
+        console.error('Error parsing reminder date:', e);
         // Fallback: parse as ISO string (will use browser timezone)
         const dateTimeStr = `${reminder.scheduledDate}T${reminder.scheduledTime}:00`;
         return new Date(dateTimeStr);
@@ -314,10 +315,12 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                               className="hover:text-primary hover:underline"
                               data-testid={`link-phone-${reminder.id}`}
                               onClick={(e) => {
+                                console.log('[RemindersWidget] Phone clicked:', reminder.storeMetadata.pocPhone);
                                 // Prevent immediate dial to avoid interrupting navigation
                                 e.preventDefault();
                                 // Navigate to store details, phone will dial after delay
                                 if (onPhoneClick && reminder.storeMetadata.uniqueIdentifier) {
+                                  console.log('[RemindersWidget] Calling onPhoneClick with store:', reminder.storeMetadata.uniqueIdentifier);
                                   onPhoneClick(reminder.storeMetadata.uniqueIdentifier, reminder.storeMetadata.pocPhone);
                                 }
                               }}

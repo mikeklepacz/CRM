@@ -44,15 +44,20 @@ export async function shouldSendEmail({
   // - scheduledAt - 60 seconds to scheduledAt (pre-check window)
   // - scheduledAt and beyond (final check)
   try {
+    console.log(`[ReplyGuard] Checking for replies on thread ${threadId} (scheduled: ${scheduledTime.toISOString()})`);
     
     const replyCheck = await checkForReplies(userId, threadId);
     
     if (replyCheck.hasReply) {
+      console.log(`[ReplyGuard] ❌ Reply detected - blocking send`);
       return false;
     }
     
+    console.log(`[ReplyGuard] ✅ No reply detected - allowing send`);
     return true;
   } catch (error: any) {
+    console.error(`[ReplyGuard] ⚠️  Reply check failed: ${error.message}`);
+    console.error(`[ReplyGuard] ⚠️  Defaulting to ALLOW send (fail-open for deliverability)`);
     // Fail-open: if Gmail API fails, don't block the send
     return true;
   }

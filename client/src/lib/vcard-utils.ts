@@ -260,6 +260,7 @@ export function generateAndDownloadVCard(
   platform: 'ios' | 'android'
 ): void {
   if (stores.length === 0) {
+    console.warn('No stores to export');
     return;
   }
   

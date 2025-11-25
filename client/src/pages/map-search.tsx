@@ -288,6 +288,7 @@ export default function MapSearch() {
           activeTypes,
         });
       } catch (error) {
+        console.error("Failed to save active exclusions:", error);
       }
     };
 
@@ -440,6 +441,7 @@ export default function MapSearch() {
         try {
           await apiRequest("POST", "/api/maps/last-category", { category });
         } catch (error) {
+          console.error("Failed to save last category:", error);
         }
       }
       

@@ -204,6 +204,7 @@ export default function StoreDetails() {
       queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
     },
     onError: (error: Error) => {
+      console.error('Failed to log call:', error);
     },
   });
 

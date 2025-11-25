@@ -218,6 +218,7 @@ export function detectDuplicates(
   similarityThreshold: number = 0.75,
   nonDuplicatePairs?: Array<{link1: string, link2: string}>
 ): DuplicateGroup[] {
+  console.log(`[DuplicateFinder] Starting duplicate detection on ${stores.length} stores`);
   const duplicateGroups: DuplicateGroup[] = [];
   const processedPairs = new Set<string>();
   
@@ -232,6 +233,7 @@ export function detectDuplicates(
       const key = makePairKey(pair.link1, pair.link2);
       nonDuplicateSet.add(key);
     });
+    console.log(`[DuplicateFinder] Loaded ${nonDuplicateSet.size} non-duplicate pairs to exclude`);
   }
   
   // Helper to check if a pair has been marked as non-duplicate
@@ -296,6 +298,8 @@ export function detectDuplicates(
     }
   });
   
+  console.log(`[DuplicateFinder] Created ${houseNumberGroups.size} house number groups from ${stores.length} stores`);
+  
   // Within each house number group, check for name + street similarity
   houseNumberGroups.forEach((group) => {
     if (group.length < 2) return;
@@ -310,6 +314,7 @@ export function detectDuplicates(
         
         // Skip if this pair has been marked as non-duplicate
         if (isNonDuplicatePair(store1.Link, store2.Link)) {
+          console.log(`[DuplicateFinder] Skipping pair marked as non-duplicate: ${store1.Link} <-> ${store2.Link}`);
           continue;
         }
         
@@ -347,6 +352,7 @@ export function detectDuplicates(
     }
   });
   
+  console.log(`[DuplicateFinder] Found ${duplicateGroups.length} duplicate groups`);
   return duplicateGroups.sort((a, b) => b.stores.length - a.stores.length);
 }
 

@@ -10,6 +10,7 @@ let isProcessing = false;
 
 export async function startJobProcessor() {
   if (isProcessing) {
+    console.log('[Job Processor] Already processing, skipping...');
     return;
   }
 
@@ -31,6 +32,7 @@ export async function startJobProcessor() {
       await processJob(job.id);
     }
   } catch (error) {
+    console.error('[Job Processor] Error:', error);
   } finally {
     isProcessing = false;
   }
@@ -41,6 +43,7 @@ async function processJob(jobId: string) {
     const job = await storage.getAnalysisJob(jobId);
     
     if (!job) {
+      console.error(`[Job Processor] Job ${jobId} not found`);
       return;
     }
 
@@ -50,6 +53,7 @@ async function processJob(jobId: string) {
       startedAt: new Date(),
     });
 
+    console.log(`[Job Processor] Starting job ${jobId} - ${job.type} analysis for ${job.agentId || 'all'}`);
 
     // Get Aligner assistant
     const alignerAssistant = await storage.getAssistantBySlug('aligner');
@@ -89,6 +93,7 @@ async function processJob(jobId: string) {
         completedAt: new Date(),
         currentCallIndex: job.totalCalls,
       });
+      console.log(`[Job Processor] Job ${jobId} completed - no calls to analyze`);
       return;
     }
 
@@ -106,6 +111,7 @@ async function processJob(jobId: string) {
       const batchNumber = Math.floor(i / CALLS_PER_BATCH) + 1;
       const totalBatches = Math.ceil(callsData.length / CALLS_PER_BATCH);
 
+      console.log(`[Job Processor] Processing batch ${batchNumber}/${totalBatches} (calls ${i + 1}-${i + batchCalls.length} of ${callsData.length})`);
 
       // Build transcript context for this batch
       const transcriptContext = batchCalls
@@ -161,6 +167,7 @@ ${recommendations || '(none)'}`;
       
       // If template is empty, fall back to default (should not happen in production)
       if (!analysisPrompt) {
+        console.warn('[Job Processor] Task prompt template is empty, using fallback');
         analysisPrompt = 'You are the Aligner assistant. Analyze the transcripts and KB files to propose improvements.';
       }
 
@@ -231,6 +238,7 @@ ${recommendations || '(none)'}`;
       try {
         analysisResult = JSON.parse(responseText);
       } catch (parseError) {
+        console.error('[Job Processor] Failed to parse JSON response:', responseText);
         throw new Error('Invalid JSON response from assistant');
       }
 
@@ -241,6 +249,7 @@ ${recommendations || '(none)'}`;
         const kbFile = kbFiles.find(f => f.filename === edit.file);
         
         if (!kbFile) {
+          console.warn(`[Job Processor] KB file not found: ${edit.file}`);
           continue;
         }
 
@@ -251,6 +260,7 @@ ${recommendations || '(none)'}`;
         )[0];
 
         if (!latestVersion) {
+          console.warn(`[Job Processor] No versions found for file: ${edit.file}`);
           continue;
         }
 
@@ -260,6 +270,7 @@ ${recommendations || '(none)'}`;
         if (edit.old && edit.old.trim() !== '') {
           // Replace exact match
           if (!proposedContent.includes(edit.old)) {
+            console.warn(`[Job Processor] Old text not found in ${edit.file} - skipping edit`);
             continue;
           }
           proposedContent = proposedContent.replace(edit.old, edit.new);
@@ -305,6 +316,7 @@ ${recommendations || '(none)'}`;
         proposalsCreated: totalProposalsCreated,
       });
 
+      console.log(`[Job Processor] Batch ${batchNumber}/${totalBatches} complete - ${edits.length} proposals created`);
     }
 
     // Job complete
@@ -315,8 +327,10 @@ ${recommendations || '(none)'}`;
       proposalsCreated: totalProposalsCreated,
     });
 
+    console.log(`[Job Processor] Job ${jobId} completed - ${totalProposalsCreated} total proposals created`);
 
   } catch (error: any) {
+    console.error(`[Job Processor] Job ${jobId} failed:`, error);
     
     await storage.updateAnalysisJob(jobId, {
       status: 'failed',

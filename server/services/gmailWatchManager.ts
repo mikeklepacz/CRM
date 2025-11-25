@@ -29,6 +29,7 @@ export class GmailWatchManager {
   }
 
   async watch(): Promise<{ historyId: string; expiration: number }> {
+    console.log('[GmailWatch] Starting Gmail watch...');
     
     const { gmail } = await getAdminGmailClient();
     
@@ -52,11 +53,13 @@ export class GmailWatchManager {
       })
       .where(eq(userIntegrations.userId, GMAIL_ADMIN_USER_ID));
 
+    console.log(`[GmailWatch] ✅ Watch registered. HistoryId: ${historyId}, Expires: ${new Date(expiration).toISOString()}`);
     
     return { historyId, expiration };
   }
 
   async stop(): Promise<void> {
+    console.log('[GmailWatch] Stopping Gmail watch...');
     
     const { gmail } = await getAdminGmailClient();
     
@@ -69,26 +72,31 @@ export class GmailWatchManager {
       })
       .where(eq(userIntegrations.userId, GMAIL_ADMIN_USER_ID));
 
+    console.log('[GmailWatch] ✅ Watch stopped');
   }
 
   async renewIfNeeded(): Promise<boolean> {
     const integration = await storage.getUserIntegration(GMAIL_ADMIN_USER_ID);
     if (!integration) {
+      console.log('[GmailWatch] No integration found for admin user');
       return false;
     }
 
     const expiration = integration.gmailWatchExpiration;
     if (!expiration) {
+      console.log('[GmailWatch] No active watch, starting new one...');
       await this.watch();
       return true;
     }
 
     const timeUntilExpiry = expiration - Date.now();
     if (timeUntilExpiry < WATCH_RENEWAL_BUFFER_MS) {
+      console.log(`[GmailWatch] Watch expires in ${Math.round(timeUntilExpiry / 1000 / 60 / 60)}h, renewing...`);
       await this.watch();
       return true;
     }
 
+    console.log(`[GmailWatch] Watch valid for ${Math.round(timeUntilExpiry / 1000 / 60 / 60)}h more`);
     return false;
   }
 
@@ -170,10 +178,13 @@ export class GmailWatchManager {
   }
 
   async attemptAutoRecovery(): Promise<boolean> {
+    console.log('[GmailWatch] Attempting auto-recovery...');
     try {
       await this.watch();
+      console.log('[GmailWatch] ✅ Auto-recovery successful');
       return true;
     } catch (error: any) {
+      console.error('[GmailWatch] ❌ Auto-recovery failed:', error.message);
       return false;
     }
   }

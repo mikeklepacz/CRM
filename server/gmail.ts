@@ -18,6 +18,7 @@ export async function sendGmailNotification(
     const adminUser = users.find(u => u.role === 'admin');
     
     if (!adminUser) {
+      console.error('[Gmail] No admin user found');
       return;
     }
 
@@ -25,6 +26,7 @@ export async function sendGmailNotification(
     const integration = await storage.getUserIntegration(adminUser.id);
     
     if (!integration?.accessToken || !integration?.refreshToken) {
+      console.error('[Gmail] No Gmail integration found for admin user');
       return;
     }
 
@@ -42,6 +44,7 @@ export async function sendGmailNotification(
 
     // Check if token needs refresh
     if (integration.expiresAt && new Date(integration.expiresAt) <= new Date()) {
+      console.log('[Gmail] Token expired, refreshing...');
       const { credentials } = await oauth2Client.refreshAccessToken();
       
       if (credentials.access_token) {
@@ -82,7 +85,9 @@ export async function sendGmailNotification(
       },
     });
 
+    console.log(`[Gmail] Email sent to ${to}: ${subject}`);
   } catch (error) {
+    console.error('[Gmail] Error sending email:', error);
     // Don't throw - email failures shouldn't break ticket creation
   }
 }
