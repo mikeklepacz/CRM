@@ -3687,11 +3687,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async pauseRecipient(id: string): Promise<SequenceRecipient> {
+    // Release any Matrix2 slots before pausing
+    const { releaseAllRecipientSlots } = await import('@server/services/Matrix2/matrix2Helper');
+    await releaseAllRecipientSlots(id);
+
     const [updated] = await db
       .update(sequenceRecipients)
       .set({ 
         status: 'paused',
-        nextSendAt: null, // Clear scheduled send time so they don't appear in queue
+        nextSendAt: null,
         updatedAt: new Date()
       })
       .where(eq(sequenceRecipients.id, id))
@@ -3817,6 +3821,10 @@ export class DatabaseStorage implements IStorage {
       throw new Error('Recipient not found');
     }
 
+    // Matrix2: Release all slots for this recipient before deletion
+    const { releaseAllRecipientSlots } = await import('@server/services/Matrix2/matrix2Helper');
+    await releaseAllRecipientSlots(id);
+
     // Delete all messages for this recipient
     await db
       .delete(sequenceRecipientMessages)
@@ -3856,46 +3864,25 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Cannot send: recipient status is ${recipient.status}`);
     }
 
-    // Find the next pending scheduled send for this recipient
-    const [nextScheduledSend] = await db
-      .select()
-      .from(sequenceScheduledSends)
-      .where(
-        and(
-          eq(sequenceScheduledSends.recipientId, id),
-          eq(sequenceScheduledSends.status, 'pending')
-        )
-      )
-      .orderBy(sequenceScheduledSends.stepNumber)
-      .limit(1);
+    // Matrix2: Get the recipient's current slot
+    const { getRecipientSlot, forceSendNow } = await import('@server/services/Matrix2/matrix2Helper');
+    const slot = await getRecipientSlot(id);
 
-    if (!nextScheduledSend) {
-      throw new Error('No pending scheduled send found for this recipient');
+    if (!slot) {
+      throw new Error('No slot assigned for this recipient');
     }
 
-    // Force immediate send by:
-    // 1. Setting scheduledAt to 1 second ago (makes it immediately eligible: scheduledAt <= now)
-    // 2. Setting manualOverride to true (bypasses pause check)
-    const oneSecondAgo = new Date(Date.now() - 1000);
-    await db
-      .update(sequenceScheduledSends)
-      .set({ 
-        scheduledAt: oneSecondAgo,
-        manualOverride: true
-      })
-      .where(eq(sequenceScheduledSends.id, nextScheduledSend.id));
+    // Force immediate send by setting slot_time_utc to 1 second ago
+    await forceSendNow(slot.id);
 
-    // Also update recipient's nextSendAt for consistency
+    // Return updated recipient
     const [updated] = await db
-      .update(sequenceRecipients)
-      .set({ 
-        nextSendAt: oneSecondAgo,
-        updatedAt: new Date()
-      })
+      .select()
+      .from(sequenceRecipients)
       .where(eq(sequenceRecipients.id, id))
-      .returning();
+      .limit(1);
 
-    return updated;
+    return updated!;
   }
 
   async delayRecipient(id: string, hours: number): Promise<SequenceRecipient> {
@@ -3915,29 +3902,34 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Recipient ${id} not found`);
     }
 
-    // Only allow delaying for pending/in_sequence recipients with a scheduled send
+    // Only allow delaying for pending/in_sequence recipients
     if (recipient.status !== 'pending' && recipient.status !== 'in_sequence') {
       throw new Error(`Cannot delay: recipient status is ${recipient.status}`);
     }
 
-    if (!recipient.nextSendAt) {
-      throw new Error('Cannot delay: recipient has no scheduled send time');
+    // Matrix2: Get the recipient's current slot and reschedule it
+    const { getRecipientSlot, updateSlotTime } = await import('@server/services/Matrix2/matrix2Helper');
+    const slot = await getRecipientSlot(id);
+
+    if (!slot) {
+      throw new Error('No slot assigned for this recipient');
     }
 
-    // Add hours to nextSendAt
+    // Calculate new slot time by adding hours to current slot time
     const delayMs = hours * 60 * 60 * 1000;
-    const newSendTime = new Date(recipient.nextSendAt.getTime() + delayMs);
+    const newSlotTime = new Date(slot.slotTimeUtc.getTime() + delayMs);
+    
+    // Update slot with new time
+    await updateSlotTime(slot.id, newSlotTime);
 
+    // Return updated recipient
     const [updated] = await db
-      .update(sequenceRecipients)
-      .set({ 
-        nextSendAt: newSendTime,
-        updatedAt: new Date()
-      })
+      .select()
+      .from(sequenceRecipients)
       .where(eq(sequenceRecipients.id, id))
-      .returning();
+      .limit(1);
 
-    return updated;
+    return updated!;
   }
 
   async skipRecipientStep(id: string): Promise<SequenceRecipient> {
@@ -3962,6 +3954,10 @@ export class DatabaseStorage implements IStorage {
     const newStep = oldCurrentStep + 1;
     const delays = stepDelays ? stepDelays.map((d: string) => parseFloat(d)) : [];
     const now = new Date();
+
+    // Matrix2: Release current slot before advancing step
+    const { releaseAllRecipientSlots } = await import('@server/services/Matrix2/matrix2Helper');
+    await releaseAllRecipientSlots(id);
 
     // Determine status based on sequence completion
     let recipientStatus = 'in_sequence';
