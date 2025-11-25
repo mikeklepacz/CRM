@@ -21528,18 +21528,28 @@ ${conversationContext}`;
           trackerData = emailDataMap.get(normalizedEmail);
         }
 
-        // Three-state logic based on tracker presence:
-        // - No tracker row (undefined) → 'unknown'
-        // - Tracker row exists with status='Contacted' → 'contacted'
-        // - Tracker row exists with other/empty status → 'not contacted'
+        // Determine contactedStatus with priority:
+        // 1. sequence_recipients status (most authoritative) 
+        // 2. Fall back to Commission Tracker status if in_progress/pending
         let contactedStatus: 'contacted' | 'not contacted' | 'unknown';
         
-        if (!trackerData) {
-          contactedStatus = 'unknown'; // No tracker row found
+        // Check sequence_recipients status first (highest priority)
+        const recipientStatus = recipient.status?.toLowerCase() || '';
+        if (recipientStatus === 'replied') {
+          contactedStatus = 'replied';
+        } else if (recipientStatus === 'bounced') {
+          contactedStatus = 'bounced';
+        } else if (recipientStatus === 'in_sequence') {
+          contactedStatus = 'in_sequence';
+        } else if (!trackerData) {
+          // No tracker row and not in an active sequence status
+          contactedStatus = 'unknown';
         } else if (trackerData.status.trim().toLowerCase() === 'contacted') {
-          contactedStatus = 'contacted'; // Tracker status is 'Contacted'
+          // Commission Tracker shows 'Contacted'
+          contactedStatus = 'contacted';
         } else {
-          contactedStatus = 'not contacted'; // Tracker row exists but not 'Contacted'
+          // Tracker row exists but status is not 'Contacted'
+          contactedStatus = 'not contacted';
         }
 
         // Return recipient with FRESH data from Commission Tracker
