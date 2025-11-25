@@ -3832,9 +3832,10 @@ export default function EHub() {
                             const newJitter = parseInt(val, 10);
                             if (isNaN(newJitter)) return;
                             
+                            const duration = settingsForm.sendingHoursDuration || ((settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart + 24) % 24) || 1;
                             const optimal = calculateOptimalDelays(
                               settingsForm.sendingHoursStart,
-                              settingsForm.sendingHoursEnd,
+                              duration,
                               settingsForm.dailyEmailLimit,
                               newJitter
                             );
@@ -3846,14 +3847,15 @@ export default function EHub() {
                             });
                           }}
                           onBlur={() => {
+                            const duration = settingsForm.sendingHoursDuration || ((settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart + 24) % 24) || 1;
                             if (settingsForm.jitterPercentage === '' || settingsForm.jitterPercentage === null as any) {
-                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, 50);
+                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, duration, settingsForm.dailyEmailLimit, 50);
                               setSettingsForm({ ...settingsForm, jitterPercentage: 50, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
                             } else if (settingsForm.jitterPercentage < 1) {
-                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, 1);
+                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, duration, settingsForm.dailyEmailLimit, 1);
                               setSettingsForm({ ...settingsForm, jitterPercentage: 1, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
                             } else if (settingsForm.jitterPercentage > 100) {
-                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, 100);
+                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, duration, settingsForm.dailyEmailLimit, 100);
                               setSettingsForm({ ...settingsForm, jitterPercentage: 100, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
                             }
                           }}
