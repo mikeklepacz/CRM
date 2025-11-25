@@ -4713,7 +4713,12 @@ export class DatabaseStorage implements IStorage {
           name,
           created_by as "createdBy",
           strategy_transcript as "strategyTranscript",
-          finalized_strategy as "finalizedStrategy"
+          finalized_strategy as "finalizedStrategy",
+          step_delays as "stepDelays",
+          repeat_last_step as "repeatLastStep",
+          status,
+          step_templates as "stepTemplates",
+          settings_json as "settingsJson"
         FROM sequences
         WHERE id = ${sequenceId}
         LIMIT 1
