@@ -89,7 +89,7 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
         const emailMatch = fromValue.match(/<([^>]+)>/) || [null, fromValue];
         const senderEmail = (emailMatch[1] || fromValue).toLowerCase().trim();
 
-        if (senderEmail.includes(ourEmail.toLowerCase())) {
+        if (senderEmail === ourEmail.toLowerCase()) {
           console.log(`[GmailHistory] Skipping our own sent email from ${senderEmail}`);
           await db.insert(processedGmailMessages).values({
             gmailMessageId: messageId,
