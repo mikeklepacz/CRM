@@ -20696,17 +20696,9 @@ ${conversationContext}`;
         }
       }
       
-      console.log('[SyntheticTest] Using random real store:', {
-        name: realName,
-        link: realLink,
-        salesSummary: realSalesSummary ? realSalesSummary.substring(0, 100) + '...' : 'none',
-        state: realState,
-        timezone,
-      });
-      
       // Create a temporary test recipient with REAL store data but FAKE email
-      // CRITICAL: Use "SYNTHETIC_TEST_" prefix in ID so queue processors can skip it
-      const testRecipientId = `SYNTHETIC_TEST_${Date.now()}`;
+      // CRITICAL: Use a proper UUID for test recipient ID (database column requires UUID type)
+      const testRecipientId = v4(); // Generate proper UUID for test recipient
       const testEmail = `synthetic-test-${Date.now()}@test.local`; // Unique fake email
       
       const testRecipient = {
@@ -20745,13 +20737,6 @@ ${conversationContext}`;
         const stepCount = sequence.stepDelays.length;
         for (let stepIndex = 0; stepIndex < stepCount; stepIndex++) {
           const stepNumber = stepIndex + 1;
-          
-          // Debug: Log what we're passing to AI for this step
-          console.log(`[SyntheticTest] Generating step ${stepNumber}:`, {
-            hasFinalizedStrategy: !!(sequence as any).finalizedStrategy,
-            hasStrategyTranscript: !!sequence.strategyTranscript,
-            stepNumber,
-          });
           
           // Generate email using the existing AI logic
           const { subject, body } = await personalizeEmailWithAI(
