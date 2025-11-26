@@ -9,7 +9,7 @@ import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown } from 'lucide-react';
+import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, Lock, Unlock } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 
@@ -68,7 +68,12 @@ export default function ProductMockup() {
     return { x: 0, y: 0, z: 0, scale: 1, cameraZ: 0.15, rotX: 90, rotY: 0 };
   };
   
+  const getLockedState = () => {
+    return localStorage.getItem('cylinderPositionLocked') === 'true';
+  };
+  
   const [cylinderPos, setCylinderPos] = useState(getDefaultPosition);
+  const [positionLocked, setPositionLocked] = useState(getLockedState);
 
   const generateKraftBase = useCallback((width: number, height: number): ImageData => {
     if (kraftBaseRef.current && kraftBaseRef.current.width === width && kraftBaseRef.current.height === height) {
@@ -201,14 +206,9 @@ export default function ProductMockup() {
 
   const createLabelTexture = useCallback((): THREE.CanvasTexture => {
     const canvas = document.createElement('canvas');
-    canvas.width = LABEL_HEIGHT;
-    canvas.height = LABEL_WIDTH;
+    canvas.width = LABEL_WIDTH;
+    canvas.height = LABEL_HEIGHT;
     const ctx = canvas.getContext('2d')!;
-
-    ctx.save();
-    ctx.translate(LABEL_HEIGHT / 2, LABEL_WIDTH / 2);
-    ctx.rotate(Math.PI / 2);
-    ctx.translate(-LABEL_WIDTH / 2, -LABEL_HEIGHT / 2);
 
     applyKraftBase(ctx, LABEL_WIDTH, LABEL_HEIGHT);
     ctx.globalCompositeOperation = 'multiply';
@@ -242,11 +242,13 @@ export default function ProductMockup() {
     }
 
     ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.rotation = Math.PI / 2;
+    texture.center.set(0.5, 0.5);
+    texture.offset.x = 0.25;
     texture.needsUpdate = true;
     return texture;
   }, [elements, mode, uploadedLabel, applyKraftBase]);
@@ -1030,81 +1032,106 @@ export default function ProductMockup() {
             </div>
 
             <div className="border-t pt-4 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <Label className="text-sm font-medium">3D Position Controls</Label>
-                <Button size="sm" variant="default" onClick={savePosition} data-testid="button-save-position">
-                  Save Position
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant={positionLocked ? "destructive" : "outline"}
+                    onClick={() => {
+                      const newLocked = !positionLocked;
+                      setPositionLocked(newLocked);
+                      localStorage.setItem('cylinderPositionLocked', String(newLocked));
+                    }}
+                    data-testid="button-lock-position"
+                  >
+                    {positionLocked ? <Lock className="w-4 h-4 mr-1" /> : <Unlock className="w-4 h-4 mr-1" />}
+                    {positionLocked ? 'Locked' : 'Unlocked'}
+                  </Button>
+                  {!positionLocked && (
+                    <Button size="sm" variant="default" onClick={savePosition} data-testid="button-save-position">
+                      Save Position
+                    </Button>
+                  )}
+                </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Tilt X: {cylinderPos.rotX.toFixed(1)}°</Label>
-                  <Slider
-                    value={[cylinderPos.rotX * 10]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotX: v / 10 }))}
-                    min={0}
-                    max={1800}
-                    step={1}
-                    data-testid="slider-rot-x"
-                  />
+              {!positionLocked && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tilt X: {cylinderPos.rotX.toFixed(1)}°</Label>
+                    <Slider
+                      value={[cylinderPos.rotX * 10]}
+                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotX: v / 10 }))}
+                      min={0}
+                      max={1800}
+                      step={1}
+                      data-testid="slider-rot-x"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tilt Z: {cylinderPos.rotY.toFixed(1)}°</Label>
+                    <Slider
+                      value={[cylinderPos.rotY * 10]}
+                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotY: v / 10 }))}
+                      min={-900}
+                      max={900}
+                      step={1}
+                      data-testid="slider-rot-y"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Move X: {cylinderPos.x.toFixed(4)}</Label>
+                    <Slider
+                      value={[cylinderPos.x * 10000]}
+                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, x: v / 10000 }))}
+                      min={-500}
+                      max={500}
+                      step={1}
+                      data-testid="slider-pos-x"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Move Y: {cylinderPos.y.toFixed(4)}</Label>
+                    <Slider
+                      value={[cylinderPos.y * 10000]}
+                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, y: v / 10000 }))}
+                      min={-500}
+                      max={500}
+                      step={1}
+                      data-testid="slider-pos-y"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Scale: {cylinderPos.scale.toFixed(2)}</Label>
+                    <Slider
+                      value={[cylinderPos.scale * 100]}
+                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, scale: v / 100 }))}
+                      min={10}
+                      max={500}
+                      step={1}
+                      data-testid="slider-scale-3d"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Zoom: {cylinderPos.cameraZ.toFixed(4)}</Label>
+                    <Slider
+                      value={[cylinderPos.cameraZ * 10000]}
+                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, cameraZ: v / 10000 }))}
+                      min={500}
+                      max={5000}
+                      step={1}
+                      data-testid="slider-camera-z"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Tilt Z: {cylinderPos.rotY.toFixed(1)}°</Label>
-                  <Slider
-                    value={[cylinderPos.rotY * 10]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotY: v / 10 }))}
-                    min={-900}
-                    max={900}
-                    step={1}
-                    data-testid="slider-rot-y"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Move X: {cylinderPos.x.toFixed(4)}</Label>
-                  <Slider
-                    value={[cylinderPos.x * 10000]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, x: v / 10000 }))}
-                    min={-500}
-                    max={500}
-                    step={1}
-                    data-testid="slider-pos-x"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Move Y: {cylinderPos.y.toFixed(4)}</Label>
-                  <Slider
-                    value={[cylinderPos.y * 10000]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, y: v / 10000 }))}
-                    min={-500}
-                    max={500}
-                    step={1}
-                    data-testid="slider-pos-y"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Scale: {cylinderPos.scale.toFixed(2)}</Label>
-                  <Slider
-                    value={[cylinderPos.scale * 100]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, scale: v / 100 }))}
-                    min={10}
-                    max={500}
-                    step={1}
-                    data-testid="slider-scale-3d"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Zoom: {cylinderPos.cameraZ.toFixed(4)}</Label>
-                  <Slider
-                    value={[cylinderPos.cameraZ * 10000]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, cameraZ: v / 10000 }))}
-                    min={500}
-                    max={5000}
-                    step={1}
-                    data-testid="slider-camera-z"
-                  />
-                </div>
-              </div>
+              )}
+              
+              {positionLocked && (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  Position controls are locked. Click "Locked" to unlock and adjust.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
