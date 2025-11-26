@@ -137,61 +137,59 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <Menu className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            {user.role === 'admin' && (
-              <DropdownMenuItem onClick={() => { setLocation('/admin'); setMobileMenuOpen(false); }}>
-                <ShieldCheck className="mr-2 h-4 w-4" />
-                Admin
+            <DropdownMenuContent align="start" className="w-56">
+              {user.role === 'admin' && (
+                <DropdownMenuItem onClick={() => { setLocation('/admin'); setMobileMenuOpen(false); }}>
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Admin
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => { setLocation('/'); setMobileMenuOpen(false); }}>
+                <Home className="mr-2 h-4 w-4" />
+                Dashboard
               </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={() => { setLocation('/'); setMobileMenuOpen(false); }}>
-              <Home className="mr-2 h-4 w-4" />
-              Dashboard
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setLocation('/clients'); setMobileMenuOpen(false); }}>
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Clients
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setLocation('/follow-up-center'); setMobileMenuOpen(false); }}>
-              <Target className="mr-2 h-4 w-4" />
-              Follow-Up Center
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setLocation('/map-search'); setMobileMenuOpen(false); }}>
-              <MapPin className="mr-2 h-4 w-4" />
-              Map Search
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setLocation('/sales'); setMobileMenuOpen(false); }}>
-              <TrendingUp className="mr-2 h-4 w-4" />
-              Sales
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setLocation('/assistant'); setMobileMenuOpen(false); }}>
-              <Bot className="mr-2 h-4 w-4" />
-              Assistant
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setLocation('/documents'); setMobileMenuOpen(false); }}>
-              <FileText className="mr-2 h-4 w-4" />
-              Documents
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => { setLocation('/product-mockup'); setMobileMenuOpen(false); }}>
-              <Palette className="mr-2 h-4 w-4" />
-              Label Designer
-            </DropdownMenuItem>
-            {(user.role === 'admin' || user.hasVoiceAccess) && (
-              <DropdownMenuItem onClick={() => { setLocation('/call-manager'); setMobileMenuOpen(false); }}>
-                <Phone className="mr-2 h-4 w-4" />
-                Call Manager
+              <DropdownMenuItem onClick={() => { setLocation('/clients'); setMobileMenuOpen(false); }}>
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Clients
               </DropdownMenuItem>
-            )}
-            {user.role === 'admin' && (
-              <DropdownMenuItem onClick={() => { setLocation('/ehub'); setMobileMenuOpen(false); }}>
-                <Mail className="mr-2 h-4 w-4" />
-                E-Hub
+              <DropdownMenuItem onClick={() => { setLocation('/follow-up-center'); setMobileMenuOpen(false); }}>
+                <Target className="mr-2 h-4 w-4" />
+                Follow-Up Center
               </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        
-        <div className="flex items-center gap-2">
+              <DropdownMenuItem onClick={() => { setLocation('/map-search'); setMobileMenuOpen(false); }}>
+                <MapPin className="mr-2 h-4 w-4" />
+                Map Search
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setLocation('/sales'); setMobileMenuOpen(false); }}>
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Sales
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setLocation('/assistant'); setMobileMenuOpen(false); }}>
+                <Bot className="mr-2 h-4 w-4" />
+                Assistant
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setLocation('/documents'); setMobileMenuOpen(false); }}>
+                <FileText className="mr-2 h-4 w-4" />
+                Documents
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setLocation('/product-mockup'); setMobileMenuOpen(false); }}>
+                <Palette className="mr-2 h-4 w-4" />
+                Label Designer
+              </DropdownMenuItem>
+              {(user.role === 'admin' || user.hasVoiceAccess) && (
+                <DropdownMenuItem onClick={() => { setLocation('/call-manager'); setMobileMenuOpen(false); }}>
+                  <Phone className="mr-2 h-4 w-4" />
+                  Call Manager
+                </DropdownMenuItem>
+              )}
+              {user.role === 'admin' && (
+                <DropdownMenuItem onClick={() => { setLocation('/ehub'); setMobileMenuOpen(false); }}>
+                  <Mail className="mr-2 h-4 w-4" />
+                  E-Hub
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           {/* Utilities Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
