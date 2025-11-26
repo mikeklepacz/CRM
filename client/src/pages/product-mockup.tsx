@@ -829,11 +829,11 @@ export default function ProductMockup() {
         <p className="text-muted-foreground">Design your label and preview how it wraps around the product</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <Card className="lg:col-span-1">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-lg">Flat Label Design</CardTitle>
+              <CardTitle className="text-base">Label Design</CardTitle>
               <Button
                 size="sm"
                 variant="outline"
@@ -1218,10 +1218,132 @@ export default function ProductMockup() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Lighting</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Ambient: {lighting.ambient.toFixed(1)}</Label>
+              <Slider
+                value={[lighting.ambient * 10]}
+                onValueChange={([v]) => setLighting(l => ({ ...l, ambient: v / 10 }))}
+                min={0}
+                max={30}
+                step={1}
+                data-testid="slider-ambient"
+              />
+            </div>
+            
+            <div className="pt-2 border-t">
+              <Label className="text-xs font-medium text-muted-foreground">Key Light</Label>
+            </div>
+            
+            <div className="space-y-1">
+              <Label className="text-xs">Intensity: {lighting.front.toFixed(1)}</Label>
+              <Slider
+                value={[lighting.front * 10]}
+                onValueChange={([v]) => setLighting(l => ({ ...l, front: v / 10 }))}
+                min={0}
+                max={30}
+                step={1}
+                data-testid="slider-key-intensity"
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <Label className="text-xs">Angle: {lighting.keyAngle}°</Label>
+              <Slider
+                value={[lighting.keyAngle]}
+                onValueChange={([v]) => setLighting(l => ({ ...l, keyAngle: v }))}
+                min={0}
+                max={360}
+                step={5}
+                data-testid="slider-key-angle"
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <Label className="text-xs">Height: {lighting.keyHeight}°</Label>
+              <Slider
+                value={[lighting.keyHeight]}
+                onValueChange={([v]) => setLighting(l => ({ ...l, keyHeight: v }))}
+                min={-45}
+                max={90}
+                step={5}
+                data-testid="slider-key-height"
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <Label className="text-xs">Distance: {lighting.keyDistance.toFixed(1)}</Label>
+              <Slider
+                value={[lighting.keyDistance * 10]}
+                onValueChange={([v]) => setLighting(l => ({ ...l, keyDistance: v / 10 }))}
+                min={5}
+                max={50}
+                step={1}
+                data-testid="slider-key-distance"
+              />
+            </div>
+            
+            <div className="pt-2 border-t">
+              <Label className="text-xs font-medium text-muted-foreground">Fill Light</Label>
+            </div>
+            
+            <div className="space-y-1">
+              <Label className="text-xs">Intensity: {lighting.top.toFixed(1)}</Label>
+              <Slider
+                value={[lighting.top * 10]}
+                onValueChange={([v]) => setLighting(l => ({ ...l, top: v / 10 }))}
+                min={0}
+                max={20}
+                step={1}
+                data-testid="slider-fill-intensity"
+              />
+            </div>
+            
+            <div className="pt-2 border-t">
+              <Label className="text-xs font-medium text-muted-foreground">Color</Label>
+            </div>
+            
+            <div className="space-y-1">
+              <Label className="text-xs">Warmth: {lighting.warmth > 0 ? `+${lighting.warmth.toFixed(1)}` : lighting.warmth.toFixed(1)}</Label>
+              <Slider
+                value={[lighting.warmth * 10]}
+                onValueChange={([v]) => setLighting(l => ({ ...l, warmth: v / 10 }))}
+                min={-10}
+                max={10}
+                step={1}
+                data-testid="slider-warmth"
+              />
+            </div>
+            
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full mt-2"
+              onClick={() => setLighting({ 
+                ambient: 1.2, 
+                front: 0.8, 
+                top: 0.4, 
+                warmth: 0.3,
+                keyAngle: 45,
+                keyHeight: 30,
+                keyDistance: 2,
+              })}
+              data-testid="button-reset-lighting"
+            >
+              <RotateCcw className="w-3 h-3 mr-1" />
+              Reset
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-lg">Product Preview</CardTitle>
+              <CardTitle className="text-base">Product Preview</CardTitle>
               <Button
                 size="icon"
                 variant="outline"
@@ -1232,7 +1354,7 @@ export default function ProductMockup() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <div 
               className="relative w-full flex items-center justify-center rounded-lg overflow-hidden"
               style={{ 
@@ -1254,10 +1376,8 @@ export default function ProductMockup() {
               />
             </div>
             
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm">Rotate View: {labelRotation}°</Label>
-              </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Rotate View: {labelRotation}°</Label>
               <Slider
                 value={[labelRotation]}
                 onValueChange={([v]) => setLabelRotation(v)}
@@ -1266,145 +1386,6 @@ export default function ProductMockup() {
                 step={5}
                 data-testid="slider-view-rotation"
               />
-              <p className="text-xs text-muted-foreground text-center">
-                Slide to rotate and see your label from all angles
-              </p>
-            </div>
-
-            <div className="border-t pt-4 space-y-3">
-              <Label className="text-sm font-medium">Lighting Controls</Label>
-              
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Ambient: {lighting.ambient.toFixed(1)}</Label>
-                  </div>
-                  <Slider
-                    value={[lighting.ambient * 10]}
-                    onValueChange={([v]) => setLighting(l => ({ ...l, ambient: v / 10 }))}
-                    min={0}
-                    max={30}
-                    step={1}
-                    data-testid="slider-ambient"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Front Light: {lighting.front.toFixed(1)}</Label>
-                  </div>
-                  <Slider
-                    value={[lighting.front * 10]}
-                    onValueChange={([v]) => setLighting(l => ({ ...l, front: v / 10 }))}
-                    min={0}
-                    max={20}
-                    step={1}
-                    data-testid="slider-front-light"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Top Light: {lighting.top.toFixed(1)}</Label>
-                  </div>
-                  <Slider
-                    value={[lighting.top * 10]}
-                    onValueChange={([v]) => setLighting(l => ({ ...l, top: v / 10 }))}
-                    min={0}
-                    max={20}
-                    step={1}
-                    data-testid="slider-top-light"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Warmth: {lighting.warmth > 0 ? `+${lighting.warmth.toFixed(1)}` : lighting.warmth.toFixed(1)}</Label>
-                  </div>
-                  <Slider
-                    value={[lighting.warmth * 10]}
-                    onValueChange={([v]) => setLighting(l => ({ ...l, warmth: v / 10 }))}
-                    min={-10}
-                    max={10}
-                    step={1}
-                    data-testid="slider-warmth"
-                  />
-                  <p className="text-xs text-muted-foreground text-center">
-                    Cool (blue) ← → Warm (yellow)
-                  </p>
-                </div>
-                
-                <div className="border-t pt-3 mt-3">
-                  <Label className="text-xs font-medium text-muted-foreground">Key Light Position</Label>
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Angle: {lighting.keyAngle}°</Label>
-                  </div>
-                  <Slider
-                    value={[lighting.keyAngle]}
-                    onValueChange={([v]) => setLighting(l => ({ ...l, keyAngle: v }))}
-                    min={0}
-                    max={360}
-                    step={5}
-                    data-testid="slider-key-angle"
-                  />
-                  <p className="text-xs text-muted-foreground text-center">
-                    0° = Front, 90° = Right, 180° = Back, 270° = Left
-                  </p>
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Height: {lighting.keyHeight}°</Label>
-                  </div>
-                  <Slider
-                    value={[lighting.keyHeight]}
-                    onValueChange={([v]) => setLighting(l => ({ ...l, keyHeight: v }))}
-                    min={-45}
-                    max={90}
-                    step={5}
-                    data-testid="slider-key-height"
-                  />
-                  <p className="text-xs text-muted-foreground text-center">
-                    -45° = Below, 0° = Eye level, 90° = Above
-                  </p>
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Distance: {lighting.keyDistance.toFixed(1)}</Label>
-                  </div>
-                  <Slider
-                    value={[lighting.keyDistance * 10]}
-                    onValueChange={([v]) => setLighting(l => ({ ...l, keyDistance: v / 10 }))}
-                    min={5}
-                    max={50}
-                    step={1}
-                    data-testid="slider-key-distance"
-                  />
-                </div>
-                
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setLighting({ 
-                    ambient: 1.2, 
-                    front: 0.8, 
-                    top: 0.4, 
-                    warmth: 0.3,
-                    keyAngle: 45,
-                    keyHeight: 30,
-                    keyDistance: 2,
-                  })}
-                  data-testid="button-reset-lighting"
-                >
-                  <RotateCcw className="w-3 h-3 mr-1" />
-                  Reset Lighting
-                </Button>
-              </div>
             </div>
           </CardContent>
         </Card>
