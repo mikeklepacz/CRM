@@ -1230,12 +1230,15 @@ export default function ProductMockup() {
                                       <CommandItem
                                         key={font}
                                         value={font}
-                                        onSelect={() => {
-                                          loadGoogleFont(font).then(() => {
-                                            updateElement(selectedId!, { font });
+                                        onSelect={(currentValue) => {
+                                          const selectedFont = GOOGLE_FONTS.find(
+                                            f => f.toLowerCase() === currentValue.toLowerCase()
+                                          ) || font;
+                                          loadGoogleFont(selectedFont).then(() => {
+                                            updateElement(selectedId!, { font: selectedFont });
                                           });
                                         }}
-                                        className="text-xs"
+                                        className="text-xs cursor-pointer"
                                         style={{ fontFamily: font }}
                                         data-testid={`font-option-${font.toLowerCase().replace(/\s+/g, '-')}`}
                                       >
