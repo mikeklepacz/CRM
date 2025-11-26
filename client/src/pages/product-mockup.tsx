@@ -271,7 +271,7 @@ export default function ProductMockup() {
 
     const texture = new THREE.CanvasTexture(textureCanvas);
     texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
     
     // Apply texture mapping by explicitly creating Vector2 objects
     texture.offset = new THREE.Vector2(textureMapping.offsetX, textureMapping.offsetY);
@@ -466,6 +466,20 @@ export default function ProductMockup() {
       material.needsUpdate = true;
     });
   }, [createLabelTexture, cylinderLoaded]);
+
+  useEffect(() => {
+    const ctx = threeContextRef.current;
+    if (!ctx || !ctx.cylinder) return;
+    
+    const material = ctx.cylinder.material as THREE.MeshStandardMaterial;
+    if (material.map) {
+      material.map.offset = new THREE.Vector2(textureMapping.offsetX, textureMapping.offsetY);
+      material.map.center = new THREE.Vector2(textureMapping.centerX, textureMapping.centerY);
+      material.map.scale = new THREE.Vector2(textureMapping.scaleX, textureMapping.scaleY);
+      material.map.rotation = (textureMapping.rotation * Math.PI) / 180;
+      material.needsUpdate = true;
+    }
+  }, [textureMapping, cylinderLoaded]);
 
   useEffect(() => {
     const ctx = threeContextRef.current;
