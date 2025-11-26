@@ -375,14 +375,14 @@ export default function ProductMockup() {
         });
         
         cylinder = new THREE.Mesh(loadedGeometry, loadedMaterial);
-        cylinder.rotation.x = ((savedPos.rotX || 90) * Math.PI) / 180;
+        cylinder.rotation.x = (DEFAULT_CYLINDER_POS.rotX * Math.PI) / 180;
         cylinder.rotation.y = (120 * Math.PI) / 180;
-        cylinder.rotation.z = ((savedPos.rotY || 0) * Math.PI) / 180;
-        cylinder.position.set(savedPos.x, savedPos.y, savedPos.z);
-        cylinder.scale.setScalar(savedPos.scale);
+        cylinder.rotation.z = (DEFAULT_CYLINDER_POS.rotY * Math.PI) / 180;
+        cylinder.position.set(DEFAULT_CYLINDER_POS.x, DEFAULT_CYLINDER_POS.y, DEFAULT_CYLINDER_POS.z);
+        cylinder.scale.setScalar(DEFAULT_CYLINDER_POS.scale);
         scene.add(cylinder);
         
-        console.log('Cylinder added:', { pos: cylinder.position, scale: savedPos.scale, rotX: savedPos.rotX });
+        console.log('Cylinder added:', { pos: cylinder.position, scale: DEFAULT_CYLINDER_POS.scale, rotX: DEFAULT_CYLINDER_POS.rotX });
         
         threeContextRef.current = {
           scene,
@@ -409,8 +409,8 @@ export default function ProductMockup() {
         });
         
         cylinder = new THREE.Mesh(loadedGeometry, loadedMaterial);
-        cylinder.position.set(savedPos.x, savedPos.y, savedPos.z);
-        cylinder.scale.setScalar(savedPos.scale);
+        cylinder.position.set(DEFAULT_CYLINDER_POS.x, DEFAULT_CYLINDER_POS.y, DEFAULT_CYLINDER_POS.z);
+        cylinder.scale.setScalar(DEFAULT_CYLINDER_POS.scale);
         scene.add(cylinder);
         
         threeContextRef.current = {
