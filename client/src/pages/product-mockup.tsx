@@ -62,6 +62,16 @@ interface ThreeContext {
   geometry: THREE.BufferGeometry | null;
   material: THREE.MeshStandardMaterial | null;
   animationId: number;
+  ambientLight: THREE.AmbientLight | null;
+  frontLight: THREE.DirectionalLight | null;
+  topLight: THREE.DirectionalLight | null;
+}
+
+interface LightingSettings {
+  ambient: number;
+  front: number;
+  top: number;
+  warmth: number; // -1 = cool (blue tint), 0 = neutral, 1 = warm (yellow tint)
 }
 
 // PERMANENT DEFAULTS - These are the "in stone" settings for the 3D product mockup
@@ -112,6 +122,14 @@ export default function ProductMockup() {
   const [showBleedOverlay, setShowBleedOverlay] = useState(true);
   const [bleedOverlayLoaded, setBleedOverlayLoaded] = useState(false);
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
+  
+  // Lighting controls
+  const [lighting, setLighting] = useState<LightingSettings>({
+    ambient: 1.2,  // Increased from 0.8 for brighter colors
+    front: 0.8,    // Increased from 0.6
+    top: 0.4,      // Increased from 0.3
+    warmth: 0.3,   // Slight warm tint to match kraft paper
+  });
   
   useEffect(() => {
     const img = new window.Image();
@@ -337,14 +355,14 @@ export default function ProductMockup() {
     renderer.domElement.style.transform = 'translate(-50%, -50%)';
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, lighting.ambient);
     scene.add(ambientLight);
 
-    const frontLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    const frontLight = new THREE.DirectionalLight(0xffffff, lighting.front);
     frontLight.position.set(0, 0, 1);
     scene.add(frontLight);
 
-    const topLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    const topLight = new THREE.DirectionalLight(0xffffff, lighting.top);
     topLight.position.set(0, 1, 0.5);
     scene.add(topLight);
 
@@ -394,6 +412,9 @@ export default function ProductMockup() {
           geometry: loadedGeometry,
           material: loadedMaterial,
           animationId: 0,
+          ambientLight,
+          frontLight,
+          topLight,
         };
         
         setCylinderLoaded(true);
@@ -423,6 +444,9 @@ export default function ProductMockup() {
           geometry: loadedGeometry,
           material: loadedMaterial,
           animationId: 0,
+          ambientLight,
+          frontLight,
+          topLight,
         };
         
         setCylinderLoaded(true);
@@ -444,6 +468,9 @@ export default function ProductMockup() {
       geometry: null,
       material: null,
       animationId,
+      ambientLight,
+      frontLight,
+      topLight,
     };
 
     return () => {
@@ -523,6 +550,36 @@ export default function ProductMockup() {
     ctx.cylinder.rotation.z = (cylinderPos.rotY * Math.PI) / 180;
     ctx.camera.position.z = cylinderPos.cameraZ;
   }, [cylinderPos, cylinderLoaded]);
+
+  // Update lighting when settings change
+  useEffect(() => {
+    const ctx = threeContextRef.current;
+    if (!ctx) return;
+    
+    // Calculate warm/cool tint color
+    const warmth = lighting.warmth;
+    let lightColor: THREE.Color;
+    if (warmth >= 0) {
+      // Warm tint: blend white towards warm yellow/orange
+      lightColor = new THREE.Color(1, 1 - warmth * 0.1, 1 - warmth * 0.2);
+    } else {
+      // Cool tint: blend white towards cool blue
+      lightColor = new THREE.Color(1 + warmth * 0.1, 1 + warmth * 0.05, 1);
+    }
+    
+    if (ctx.ambientLight) {
+      ctx.ambientLight.intensity = lighting.ambient;
+      ctx.ambientLight.color = lightColor;
+    }
+    if (ctx.frontLight) {
+      ctx.frontLight.intensity = lighting.front;
+      ctx.frontLight.color = lightColor;
+    }
+    if (ctx.topLight) {
+      ctx.topLight.intensity = lighting.top;
+      ctx.topLight.color = lightColor;
+    }
+  }, [lighting, cylinderLoaded]);
 
   const savePosition = () => {
     // Settings are hardcoded - show confirmation
@@ -1196,354 +1253,80 @@ export default function ProductMockup() {
               </p>
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
-              {[0, 180, 360, 540].map(angle => (
-                <Button
-                  key={angle}
-                  size="sm"
-                  variant={labelRotation === angle ? 'default' : 'outline'}
-                  onClick={() => setLabelRotation(angle)}
-                  data-testid={`button-angle-${angle}`}
-                >
-                  {angle}°
-                </Button>
-              ))}
-            </div>
-
             <div className="border-t pt-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <Label className="text-sm font-medium">3D Position Controls</Label>
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant={positionLocked ? "destructive" : "outline"}
-                    onClick={() => {
-                      const newLocked = !positionLocked;
-                      setPositionLocked(newLocked);
-                      localStorage.setItem('cylinderPositionLocked', String(newLocked));
-                    }}
-                    data-testid="button-lock-position"
-                  >
-                    {positionLocked ? <Lock className="w-4 h-4 mr-1" /> : <Unlock className="w-4 h-4 mr-1" />}
-                    {positionLocked ? 'Locked' : 'Unlocked'}
-                  </Button>
-                  {!positionLocked && (
-                    <Button size="sm" variant="default" onClick={savePosition} data-testid="button-save-position">
-                      Save Position
-                    </Button>
-                  )}
-                </div>
-              </div>
-              
-              {!positionLocked && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Tilt X: {cylinderPos.rotX.toFixed(1)}°</Label>
-                    <Slider
-                      value={[cylinderPos.rotX * 10]}
-                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotX: v / 10 }))}
-                      min={0}
-                      max={1800}
-                      step={1}
-                      data-testid="slider-rot-x"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Tilt Z: {cylinderPos.rotY.toFixed(1)}°</Label>
-                    <Slider
-                      value={[cylinderPos.rotY * 10]}
-                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotY: v / 10 }))}
-                      min={-900}
-                      max={900}
-                      step={1}
-                      data-testid="slider-rot-y"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Move X: {cylinderPos.x.toFixed(4)}</Label>
-                    <Slider
-                      value={[cylinderPos.x * 10000]}
-                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, x: v / 10000 }))}
-                      min={-500}
-                      max={500}
-                      step={1}
-                      data-testid="slider-pos-x"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Move Y: {cylinderPos.y.toFixed(4)}</Label>
-                    <Slider
-                      value={[cylinderPos.y * 10000]}
-                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, y: v / 10000 }))}
-                      min={-500}
-                      max={500}
-                      step={1}
-                      data-testid="slider-pos-y"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Scale: {cylinderPos.scale.toFixed(2)}</Label>
-                    <Slider
-                      value={[cylinderPos.scale * 100]}
-                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, scale: v / 100 }))}
-                      min={10}
-                      max={500}
-                      step={1}
-                      data-testid="slider-scale-3d"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Zoom: {cylinderPos.cameraZ.toFixed(4)}</Label>
-                    <Slider
-                      value={[cylinderPos.cameraZ * 10000]}
-                      onValueChange={([v]) => setCylinderPos(p => ({ ...p, cameraZ: v / 10000 }))}
-                      min={500}
-                      max={5000}
-                      step={1}
-                      data-testid="slider-camera-z"
-                    />
-                  </div>
-                </div>
-              )}
-              
-              {positionLocked && (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  Position controls are locked. Click "Locked" to unlock and adjust.
-                </p>
-              )}
-            </div>
-
-            <div className="border-t pt-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <Label className="text-sm font-medium">Texture Mapping</Label>
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant={textureMappingLocked ? "destructive" : "outline"}
-                    onClick={() => {
-                      const newLocked = !textureMappingLocked;
-                      setTextureMappingLocked(newLocked);
-                      localStorage.setItem('textureMappingLocked', String(newLocked));
-                    }}
-                    data-testid="button-lock-texture"
-                  >
-                    {textureMappingLocked ? <Lock className="w-4 h-4 mr-1" /> : <Unlock className="w-4 h-4 mr-1" />}
-                    {textureMappingLocked ? 'Locked' : 'Unlocked'}
-                  </Button>
-                  {!textureMappingLocked && (
-                    <Button size="sm" variant="default" onClick={saveTextureMapping} data-testid="button-save-texture">
-                      Save
-                    </Button>
-                  )}
-                </div>
-              </div>
-              
-              {!textureMappingLocked && (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setTextureMapping({ offsetX: 0, offsetY: 0, rotation: 0, scaleX: 1, scaleY: 1, centerX: 0.5, centerY: 0.5 })}
-                    data-testid="button-texture-reset"
-                  >
-                    <RotateCcw className="w-3 h-3 mr-1" />
-                    Reset
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setTextureMapping(t => ({ ...t, scaleX: 1.6, scaleY: 1.17, rotation: 90 }))}
-                    data-testid="button-texture-preset-wrap"
-                  >
-                    Wrap Fit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setTextureMapping(t => ({ ...t, scaleX: 2, scaleY: 1.5 }))}
-                    data-testid="button-texture-preset-tile"
-                  >
-                    Tile 2x
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setTextureMapping(t => ({ ...t, scaleX: 1, scaleY: 1, rotation: 90 }))}
-                    data-testid="button-texture-preset-rotated"
-                  >
-                    90° Fit
-                  </Button>
-                </div>
-              )}
+              <Label className="text-sm font-medium">Lighting Controls</Label>
               
               <div className="space-y-3">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Offset X: {textureMapping.offsetX.toFixed(3)}</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, offsetX: t.offsetX - 0.001 }))} disabled={textureMappingLocked} data-testid="btn-offset-x-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, offsetX: t.offsetX + 0.001 }))} disabled={textureMappingLocked} data-testid="btn-offset-x-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
+                    <Label className="text-xs">Ambient: {lighting.ambient.toFixed(1)}</Label>
                   </div>
                   <Slider
-                    value={[textureMapping.offsetX * 1000]}
-                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, offsetX: v / 1000 }))}
-                    min={-1000}
-                    max={1000}
-                    step={1}
-                    disabled={textureMappingLocked}
-                    data-testid="slider-offset-x"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Offset Y: {textureMapping.offsetY.toFixed(3)}</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, offsetY: t.offsetY - 0.001 }))} disabled={textureMappingLocked} data-testid="btn-offset-y-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, offsetY: t.offsetY + 0.001 }))} disabled={textureMappingLocked} data-testid="btn-offset-y-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[textureMapping.offsetY * 1000]}
-                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, offsetY: v / 1000 }))}
-                    min={-1000}
-                    max={1000}
-                    step={1}
-                    disabled={textureMappingLocked}
-                    data-testid="slider-offset-y"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Rotation: {textureMapping.rotation.toFixed(1)}°</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, rotation: t.rotation - 0.1 }))} disabled={textureMappingLocked} data-testid="btn-rotation-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, rotation: t.rotation + 0.1 }))} disabled={textureMappingLocked} data-testid="btn-rotation-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[textureMapping.rotation * 10]}
-                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, rotation: v / 10 }))}
+                    value={[lighting.ambient * 10]}
+                    onValueChange={([v]) => setLighting(l => ({ ...l, ambient: v / 10 }))}
                     min={0}
-                    max={3600}
+                    max={30}
                     step={1}
-                    disabled={textureMappingLocked}
-                    data-testid="slider-texture-rotation"
+                    data-testid="slider-ambient"
                   />
                 </div>
                 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Scale X: {textureMapping.scaleX.toFixed(3)}</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, scaleX: Math.max(0.1, t.scaleX - 0.01) }))} disabled={textureMappingLocked} data-testid="btn-scale-x-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, scaleX: t.scaleX + 0.01 }))} disabled={textureMappingLocked} data-testid="btn-scale-x-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
+                    <Label className="text-xs">Front Light: {lighting.front.toFixed(1)}</Label>
                   </div>
                   <Slider
-                    value={[textureMapping.scaleX * 100]}
-                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, scaleX: v / 100 }))}
-                    min={10}
-                    max={500}
-                    step={1}
-                    disabled={textureMappingLocked}
-                    data-testid="slider-scale-x"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Scale Y: {textureMapping.scaleY.toFixed(3)}</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, scaleY: Math.max(0.1, t.scaleY - 0.01) }))} disabled={textureMappingLocked} data-testid="btn-scale-y-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, scaleY: t.scaleY + 0.01 }))} disabled={textureMappingLocked} data-testid="btn-scale-y-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[textureMapping.scaleY * 100]}
-                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, scaleY: v / 100 }))}
-                    min={10}
-                    max={500}
-                    step={1}
-                    disabled={textureMappingLocked}
-                    data-testid="slider-scale-y"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Center X: {textureMapping.centerX.toFixed(3)}</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, centerX: t.centerX - 0.001 }))} disabled={textureMappingLocked} data-testid="btn-center-x-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, centerX: t.centerX + 0.001 }))} disabled={textureMappingLocked} data-testid="btn-center-x-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[textureMapping.centerX * 1000]}
-                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, centerX: v / 1000 }))}
+                    value={[lighting.front * 10]}
+                    onValueChange={([v]) => setLighting(l => ({ ...l, front: v / 10 }))}
                     min={0}
-                    max={1000}
+                    max={20}
                     step={1}
-                    disabled={textureMappingLocked}
-                    data-testid="slider-center-x"
+                    data-testid="slider-front-light"
                   />
                 </div>
                 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Center Y: {textureMapping.centerY.toFixed(3)}</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, centerY: t.centerY - 0.001 }))} disabled={textureMappingLocked} data-testid="btn-center-y-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, centerY: t.centerY + 0.001 }))} disabled={textureMappingLocked} data-testid="btn-center-y-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
+                    <Label className="text-xs">Top Light: {lighting.top.toFixed(1)}</Label>
                   </div>
                   <Slider
-                    value={[textureMapping.centerY * 1000]}
-                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, centerY: v / 1000 }))}
+                    value={[lighting.top * 10]}
+                    onValueChange={([v]) => setLighting(l => ({ ...l, top: v / 10 }))}
                     min={0}
-                    max={1000}
+                    max={20}
                     step={1}
-                    disabled={textureMappingLocked}
-                    data-testid="slider-center-y"
+                    data-testid="slider-top-light"
                   />
                 </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Warmth: {lighting.warmth > 0 ? `+${lighting.warmth.toFixed(1)}` : lighting.warmth.toFixed(1)}</Label>
+                  </div>
+                  <Slider
+                    value={[lighting.warmth * 10]}
+                    onValueChange={([v]) => setLighting(l => ({ ...l, warmth: v / 10 }))}
+                    min={-10}
+                    max={10}
+                    step={1}
+                    data-testid="slider-warmth"
+                  />
+                  <p className="text-xs text-muted-foreground text-center">
+                    Cool (blue) ← → Warm (yellow)
+                  </p>
+                </div>
+                
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setLighting({ ambient: 1.2, front: 0.8, top: 0.4, warmth: 0.3 })}
+                  data-testid="button-reset-lighting"
+                >
+                  <RotateCcw className="w-3 h-3 mr-1" />
+                  Reset Lighting
+                </Button>
               </div>
-              
-              {textureMappingLocked && (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  Texture mapping is locked. Click "Locked" to unlock and adjust.
-                </p>
-              )}
             </div>
           </CardContent>
         </Card>
