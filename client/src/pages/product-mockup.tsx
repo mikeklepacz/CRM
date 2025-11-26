@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +37,8 @@ interface ThreeContext {
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   cylinder: THREE.Mesh | null;
+  geometry: THREE.BufferGeometry | null;
+  material: THREE.MeshStandardMaterial | null;
   animationId: number;
 }
 
@@ -46,6 +48,8 @@ export default function ProductMockup() {
   const threeContextRef = useRef<ThreeContext | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const labelInputRef = useRef<HTMLInputElement>(null);
+  const kraftBaseRef = useRef<ImageData | null>(null);
+  const textureUpdateTimerRef = useRef<number | null>(null);
   
   const [elements, setElements] = useState<LabelElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -56,7 +60,16 @@ export default function ProductMockup() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
 
-  const generateKraftTexture = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
+  const generateKraftBase = useCallback((width: number, height: number): ImageData => {
+    if (kraftBaseRef.current && kraftBaseRef.current.width === width && kraftBaseRef.current.height === height) {
+      return kraftBaseRef.current;
+    }
+    
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const ctx = tempCanvas.getContext('2d')!;
+    
     ctx.fillStyle = '#c4a574';
     ctx.fillRect(0, 0, width, height);
 
@@ -80,7 +93,15 @@ export default function ProductMockup() {
       ctx.lineTo(x + (Math.random() - 0.5) * 40, y + (Math.random() - 0.5) * 40);
       ctx.stroke();
     }
+    
+    kraftBaseRef.current = ctx.getImageData(0, 0, width, height);
+    return kraftBaseRef.current;
   }, []);
+
+  const applyKraftBase = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const baseData = generateKraftBase(width, height);
+    ctx.putImageData(baseData, 0, 0);
+  }, [generateKraftBase]);
 
   const drawFlatLabel = useCallback(() => {
     const canvas = canvasRef.current;
@@ -89,7 +110,7 @@ export default function ProductMockup() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    generateKraftTexture(ctx, LABEL_WIDTH, LABEL_HEIGHT);
+    applyKraftBase(ctx, LABEL_WIDTH, LABEL_HEIGHT);
 
     ctx.globalCompositeOperation = 'multiply';
 
@@ -166,7 +187,7 @@ export default function ProductMockup() {
         ctx.restore();
       }
     }
-  }, [elements, selectedId, mode, uploadedLabel, generateKraftTexture]);
+  }, [elements, selectedId, mode, uploadedLabel, applyKraftBase]);
 
   const createLabelTexture = useCallback((): THREE.CanvasTexture => {
     const canvas = document.createElement('canvas');
@@ -179,7 +200,7 @@ export default function ProductMockup() {
     ctx.rotate(Math.PI / 2);
     ctx.translate(-LABEL_WIDTH / 2, -LABEL_HEIGHT / 2);
 
-    generateKraftTexture(ctx, LABEL_WIDTH, LABEL_HEIGHT);
+    applyKraftBase(ctx, LABEL_WIDTH, LABEL_HEIGHT);
     ctx.globalCompositeOperation = 'multiply';
 
     if (mode === 'upload' && uploadedLabel) {
@@ -218,7 +239,7 @@ export default function ProductMockup() {
     texture.wrapT = THREE.ClampToEdgeWrapping;
     texture.needsUpdate = true;
     return texture;
-  }, [elements, mode, uploadedLabel, generateKraftTexture]);
+  }, [elements, mode, uploadedLabel, applyKraftBase]);
 
   useEffect(() => {
     drawFlatLabel();
@@ -258,21 +279,23 @@ export default function ProductMockup() {
     scene.add(topLight);
 
     let cylinder: THREE.Mesh | null = null;
+    let loadedGeometry: THREE.BufferGeometry | null = null;
+    let loadedMaterial: THREE.MeshStandardMaterial | null = null;
     
     const loader = new OBJLoader();
     loader.load(
       '/attached_assets/HempWick%20Roll%20Object_1764118046566.obj',
       (obj) => {
-        const geometry = (obj.children[0] as THREE.Mesh).geometry;
+        loadedGeometry = (obj.children[0] as THREE.Mesh).geometry;
         
         const labelTexture = createLabelTexture();
-        const material = new THREE.MeshStandardMaterial({
+        loadedMaterial = new THREE.MeshStandardMaterial({
           map: labelTexture,
           roughness: 0.7,
           metalness: 0.05,
         });
         
-        cylinder = new THREE.Mesh(geometry, material);
+        cylinder = new THREE.Mesh(loadedGeometry, loadedMaterial);
         cylinder.rotation.x = Math.PI / 2;
         cylinder.rotation.y = (120 * Math.PI) / 180;
         cylinder.position.y = 0;
@@ -283,6 +306,8 @@ export default function ProductMockup() {
           camera,
           renderer,
           cylinder,
+          geometry: loadedGeometry,
+          material: loadedMaterial,
           animationId: 0,
         };
         
@@ -291,16 +316,16 @@ export default function ProductMockup() {
       undefined,
       (error) => {
         console.error('Error loading OBJ:', error);
-        const geometry = new THREE.CylinderGeometry(0.01, 0.01, 0.052, 64, 1, true);
+        loadedGeometry = new THREE.CylinderGeometry(0.01, 0.01, 0.052, 64, 1, true);
         const labelTexture = createLabelTexture();
-        const material = new THREE.MeshStandardMaterial({
+        loadedMaterial = new THREE.MeshStandardMaterial({
           map: labelTexture,
           roughness: 0.7,
           metalness: 0.05,
           side: THREE.DoubleSide,
         });
         
-        cylinder = new THREE.Mesh(geometry, material);
+        cylinder = new THREE.Mesh(loadedGeometry, loadedMaterial);
         scene.add(cylinder);
         
         threeContextRef.current = {
@@ -308,6 +333,8 @@ export default function ProductMockup() {
           camera,
           renderer,
           cylinder,
+          geometry: loadedGeometry,
+          material: loadedMaterial,
           animationId: 0,
         };
         
@@ -327,11 +354,25 @@ export default function ProductMockup() {
       camera,
       renderer,
       cylinder: null,
+      geometry: null,
+      material: null,
       animationId,
     };
 
     return () => {
       cancelAnimationFrame(animationId);
+      
+      const ctx = threeContextRef.current;
+      if (ctx) {
+        if (ctx.material) {
+          if (ctx.material.map) ctx.material.map.dispose();
+          ctx.material.dispose();
+        }
+        if (ctx.geometry) {
+          ctx.geometry.dispose();
+        }
+      }
+      
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
@@ -344,13 +385,22 @@ export default function ProductMockup() {
     const ctx = threeContextRef.current;
     if (!ctx || !ctx.cylinder) return;
 
-    const newTexture = createLabelTexture();
-    const material = ctx.cylinder.material as THREE.MeshStandardMaterial;
-    if (material.map) {
-      material.map.dispose();
+    if (textureUpdateTimerRef.current) {
+      cancelAnimationFrame(textureUpdateTimerRef.current);
     }
-    material.map = newTexture;
-    material.needsUpdate = true;
+    
+    textureUpdateTimerRef.current = requestAnimationFrame(() => {
+      const currentCtx = threeContextRef.current;
+      if (!currentCtx || !currentCtx.cylinder) return;
+      
+      const newTexture = createLabelTexture();
+      const material = currentCtx.cylinder.material as THREE.MeshStandardMaterial;
+      if (material.map) {
+        material.map.dispose();
+      }
+      material.map = newTexture;
+      material.needsUpdate = true;
+    });
   }, [createLabelTexture, cylinderLoaded]);
 
   useEffect(() => {
