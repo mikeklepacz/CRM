@@ -52,17 +52,48 @@ export async function getUncachableGoogleDriveClient() {
   return google.drive({ version: 'v3', auth: oauth2Client });
 }
 
-// Label Projects folder ID from the shared link
-const LABEL_PROJECTS_FOLDER_ID = '1VIEFwO2af3RAOJuUUa0esKUKAE1i-XgW';
+// Find or create "Label Projects" folder in user's Drive
+async function findOrCreateLabelProjectsFolder(): Promise<string> {
+  const drive = await getUncachableGoogleDriveClient();
+  
+  // Search for existing "Label Projects" folder
+  const searchResponse = await drive.files.list({
+    q: "name='Label Projects' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+    fields: 'files(id, name)',
+    spaces: 'drive'
+  });
+  
+  if (searchResponse.data.files && searchResponse.data.files.length > 0) {
+    console.log('[GoogleDrive] Found existing Label Projects folder');
+    return searchResponse.data.files[0].id!;
+  }
+  
+  // Create new folder in Drive root
+  console.log('[GoogleDrive] Creating new Label Projects folder');
+  const folderMetadata = {
+    name: 'Label Projects',
+    mimeType: 'application/vnd.google-apps.folder'
+  };
+
+  const folder = await drive.files.create({
+    requestBody: folderMetadata,
+    fields: 'id'
+  });
+
+  return folder.data.id!;
+}
 
 // Create a project folder inside Label Projects
 export async function createProjectFolder(projectName: string): Promise<string> {
   const drive = await getUncachableGoogleDriveClient();
   
+  // Get or create the parent Label Projects folder
+  const labelProjectsFolderId = await findOrCreateLabelProjectsFolder();
+  
   const folderMetadata = {
     name: projectName,
     mimeType: 'application/vnd.google-apps.folder',
-    parents: [LABEL_PROJECTS_FOLDER_ID]
+    parents: [labelProjectsFolderId]
   };
 
   const folder = await drive.files.create({
