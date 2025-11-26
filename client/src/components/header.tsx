@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -104,6 +104,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <Button variant="ghost" size="sm" data-testid="nav-documents">
                   <FileText className="mr-2 h-4 w-4" />
                   Documents
+                </Button>
+              </Link>
+              <Link href="/product-mockup">
+                <Button variant="ghost" size="sm" data-testid="nav-product-mockup">
+                  <Palette className="mr-2 h-4 w-4" />
+                  Label Designer
                 </Button>
               </Link>
               {(user.role === 'admin' || user.hasVoiceAccess) && (
