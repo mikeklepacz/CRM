@@ -65,7 +65,7 @@ export default function ProductMockup() {
     if (saved) {
       try { return JSON.parse(saved); } catch { }
     }
-    return { x: 0, y: 0, z: 0, scale: 1, cameraZ: 0.15 };
+    return { x: 0, y: 0, z: 0, scale: 1, cameraZ: 0.15, rotX: 90, rotY: 0 };
   };
   
   const [cylinderPos, setCylinderPos] = useState(getDefaultPosition);
@@ -322,13 +322,14 @@ export default function ProductMockup() {
         });
         
         cylinder = new THREE.Mesh(loadedGeometry, loadedMaterial);
-        cylinder.rotation.x = Math.PI / 2;
+        cylinder.rotation.x = ((savedPos.rotX || 90) * Math.PI) / 180;
         cylinder.rotation.y = (120 * Math.PI) / 180;
+        cylinder.rotation.z = ((savedPos.rotY || 0) * Math.PI) / 180;
         cylinder.position.set(savedPos.x, savedPos.y, savedPos.z);
         cylinder.scale.setScalar(savedPos.scale);
         scene.add(cylinder);
         
-        console.log('Cylinder added to scene at position:', cylinder.position, 'scale:', savedPos.scale);
+        console.log('Cylinder added:', { pos: cylinder.position, scale: savedPos.scale, rotX: savedPos.rotX });
         
         threeContextRef.current = {
           scene,
@@ -446,6 +447,8 @@ export default function ProductMockup() {
     
     ctx.cylinder.position.set(cylinderPos.x, cylinderPos.y, cylinderPos.z);
     ctx.cylinder.scale.setScalar(cylinderPos.scale);
+    ctx.cylinder.rotation.x = (cylinderPos.rotX * Math.PI) / 180;
+    ctx.cylinder.rotation.z = (cylinderPos.rotY * Math.PI) / 180;
     ctx.camera.position.z = cylinderPos.cameraZ;
   }, [cylinderPos, cylinderLoaded]);
 
@@ -1036,7 +1039,29 @@ export default function ProductMockup() {
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">X: {cylinderPos.x.toFixed(3)}</Label>
+                  <Label className="text-xs">Tilt X: {cylinderPos.rotX}°</Label>
+                  <Slider
+                    value={[cylinderPos.rotX]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotX: v }))}
+                    min={0}
+                    max={180}
+                    step={1}
+                    data-testid="slider-rot-x"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Tilt Z: {cylinderPos.rotY}°</Label>
+                  <Slider
+                    value={[cylinderPos.rotY]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotY: v }))}
+                    min={-90}
+                    max={90}
+                    step={1}
+                    data-testid="slider-rot-y"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Move X: {cylinderPos.x.toFixed(3)}</Label>
                   <Slider
                     value={[cylinderPos.x * 1000]}
                     onValueChange={([v]) => setCylinderPos(p => ({ ...p, x: v / 1000 }))}
@@ -1047,7 +1072,7 @@ export default function ProductMockup() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Y: {cylinderPos.y.toFixed(3)}</Label>
+                  <Label className="text-xs">Move Y: {cylinderPos.y.toFixed(3)}</Label>
                   <Slider
                     value={[cylinderPos.y * 1000]}
                     onValueChange={([v]) => setCylinderPos(p => ({ ...p, y: v / 1000 }))}
