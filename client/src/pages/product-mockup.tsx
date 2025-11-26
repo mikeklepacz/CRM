@@ -13,7 +13,7 @@ import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Minus, T
 import { HexColorPicker } from 'react-colorful';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 
-const LABEL_WIDTH = 628;
+const LABEL_WIDTH = 600;
 const LABEL_HEIGHT = 600;
 const OVERLAP_HEIGHT = 60;
 
