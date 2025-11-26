@@ -77,7 +77,7 @@ export default function ProductMockup() {
     if (saved) {
       try { return JSON.parse(saved); } catch { }
     }
-    return { offsetX: 0, offsetY: 0, rotation: 0, centerX: 0.5, centerY: 0.5 };
+    return { offsetX: 0, offsetY: 0, rotation: 0, scaleX: 1, scaleY: 1, centerX: 0.5, centerY: 0.5 };
   };
   
   const getTextureMappingLocked = () => {
@@ -275,6 +275,7 @@ export default function ProductMockup() {
     texture.rotation = (textureMapping.rotation * Math.PI) / 180;
     texture.center.set(textureMapping.centerX, textureMapping.centerY);
     texture.offset.set(textureMapping.offsetX, textureMapping.offsetY);
+    texture.scale.set(textureMapping.scaleX, textureMapping.scaleY);
     texture.needsUpdate = true;
     return texture;
   }, [elements, mode, uploadedLabel, applyKraftBase, textureMapping]);
@@ -1277,7 +1278,49 @@ export default function ProductMockup() {
                 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Center X: {textureMapping.centerX.toFixed(3)}</Label>
+                    <Label className="text-xs">Scale X: {textureMapping.scaleX.toFixed(3)}</Label>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, scaleX: Math.max(0.1, t.scaleX - 0.01) }))} disabled={textureMappingLocked} data-testid="btn-scale-x-minus">
+                        <Minus className="w-3 h-3" />
+                      </Button>
+                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, scaleX: t.scaleX + 0.01 }))} disabled={textureMappingLocked} data-testid="btn-scale-x-plus">
+                        <Plus className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <Slider
+                    value={[textureMapping.scaleX * 100]}
+                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, scaleX: v / 100 }))}
+                    min={10}
+                    max={500}
+                    step={1}
+                    disabled={textureMappingLocked}
+                    data-testid="slider-scale-x"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Scale Y: {textureMapping.scaleY.toFixed(3)}</Label>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, scaleY: Math.max(0.1, t.scaleY - 0.01) }))} disabled={textureMappingLocked} data-testid="btn-scale-y-minus">
+                        <Minus className="w-3 h-3" />
+                      </Button>
+                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, scaleY: t.scaleY + 0.01 }))} disabled={textureMappingLocked} data-testid="btn-scale-y-plus">
+                        <Plus className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <Slider
+                    value={[textureMapping.scaleY * 100]}
+                    onValueChange={([v]) => setTextureMapping(t => ({ ...t, scaleY: v / 100 }))}
+                    min={10}
+                    max={500}
+                    step={1}
+                    disabled={textureMappingLocked}
+                    data-testid="slider-scale-y"
+                  />
+                </div>
                     <div className="flex gap-1">
                       <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, centerX: t.centerX - 0.001 }))} disabled={textureMappingLocked} data-testid="btn-center-x-minus">
                         <Minus className="w-3 h-3" />
