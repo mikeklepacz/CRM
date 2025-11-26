@@ -48,14 +48,65 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
     : user.email || 'User';
 
   return (
-    <header className="border-b bg-card">
-      <div className="px-2 py-2 md:px-4 md:py-3">
-        <div className="flex items-center justify-between gap-1 md:gap-2">
-          <div className="flex items-center gap-1 md:gap-3 min-w-0">
-            <h1 className="text-sm md:text-lg font-semibold text-foreground whitespace-nowrap">NMU CRM</h1>
+    <header className="border-b bg-card sticky top-0 z-50">
+      <div className="px-2 py-2 md:px-3">
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+            <h1 className="text-xs md:text-sm font-semibold text-foreground whitespace-nowrap flex-shrink-0">NMU CRM</h1>
             
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-0">
+            {/* Compact Navigation - Icon Buttons on MD/LG, Hidden on Smaller */}
+            <nav className="hidden md:flex lg:hidden items-center gap-0 ml-1 overflow-x-auto">
+              <Link href="/">
+                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-dashboard-icon" title="Dashboard">
+                  <Home className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/clients">
+                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-clients-icon" title="Clients">
+                  <BarChart3 className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/follow-up-center">
+                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-follow-up-icon" title="Follow-Up">
+                  <Target className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/map-search">
+                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-map-icon" title="Map Search">
+                  <MapPin className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/sales">
+                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-sales-icon" title="Sales">
+                  <TrendingUp className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/assistant">
+                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-assistant-icon" title="Assistant">
+                  <Bot className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/documents">
+                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-docs-icon" title="Documents">
+                  <FileText className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/product-mockup">
+                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-label-icon" title="Label Designer">
+                  <Palette className="h-4 w-4" />
+                </Button>
+              </Link>
+              {(user.role === 'admin' || user.hasVoiceAccess) && (
+                <Link href="/call-manager">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" data-testid="nav-call-icon" title="Call Manager">
+                    <Phone className="h-4 w-4" />
+                  </Button>
+                </Link>
+              )}
+            </nav>
+
+            {/* Full Desktop Navigation - LG+ */}
+            <nav className="hidden lg:flex items-center gap-0 ml-1">
               {user.role === 'admin' && (
                 <Link href="/admin">
                   <Button variant="ghost" size="sm" data-testid="nav-admin">
@@ -130,9 +181,9 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               )}
             </nav>
 
-            {/* Mobile Menu Button */}
+            {/* Mobile Menu Button - Show on small screens only */}
             <DropdownMenu open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <DropdownMenuTrigger asChild className="lg:hidden">
+              <DropdownMenuTrigger asChild className="md:hidden ml-auto">
                 <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
                   <Menu className="h-5 w-5" />
                 </Button>
