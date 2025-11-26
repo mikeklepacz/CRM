@@ -1,4 +1,139 @@
 import PDFDocument from 'pdfkit';
+import opentype from 'opentype.js';
+import axios from 'axios';
+
+// Font cache to avoid re-downloading
+const fontCache: Map<string, opentype.Font> = new Map();
+
+// System fonts mapping - these won't work with Google Fonts API
+const SYSTEM_FONTS = ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New'];
+
+// In-flight promise cache to prevent duplicate requests
+const fontPromiseCache: Map<string, Promise<opentype.Font | null>> = new Map();
+
+async function loadGoogleFont(fontFamily: string): Promise<opentype.Font | null> {
+  // Check cache first
+  if (fontCache.has(fontFamily)) {
+    return fontCache.get(fontFamily)!;
+  }
+  
+  // Check if there's already an in-flight request for this font
+  if (fontPromiseCache.has(fontFamily)) {
+    return fontPromiseCache.get(fontFamily)!;
+  }
+  
+  // System fonts can't be fetched - return null
+  if (SYSTEM_FONTS.includes(fontFamily)) {
+    return null;
+  }
+  
+  // Create and cache the promise
+  const promise = loadGoogleFontInternal(fontFamily);
+  fontPromiseCache.set(fontFamily, promise);
+  
+  try {
+    const result = await promise;
+    return result;
+  } finally {
+    // Clean up in-flight cache after resolution
+    fontPromiseCache.delete(fontFamily);
+  }
+}
+
+async function loadGoogleFontInternal(fontFamily: string): Promise<opentype.Font | null> {
+  try {
+    // Use an old user agent that makes Google serve TTF format
+    // Modern browsers get WOFF2, but older Safari/IE get TTF
+    const cssUrl = `https://fonts.googleapis.com/css?family=${encodeURIComponent(fontFamily.replace(/ /g, '+'))}:400,700`;
+    
+    const cssResponse = await axios.get(cssUrl, {
+      headers: {
+        // Old Safari user agent - Google serves TTF for this
+        'User-Agent': 'Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_8; en-us) AppleWebKit/531.22.7 (KHTML, like Gecko) Version/4.0.5 Safari/531.22.7'
+      }
+    });
+    
+    const cssText = cssResponse.data as string;
+    
+    // Extract TTF URL - with old UA, Google returns TrueType format
+    const urlMatch = cssText.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.ttf)\)/);
+    if (!urlMatch) {
+      console.log(`Could not find TTF URL for ${fontFamily}, CSS response may be woff/woff2`);
+      return null;
+    }
+    
+    const fontUrl = urlMatch[1];
+    console.log(`Loading TTF font for ${fontFamily}: ${fontUrl}`);
+    
+    // Download the TTF file
+    const fontResponse = await axios.get(fontUrl, {
+      responseType: 'arraybuffer'
+    });
+    
+    // Parse with opentype.js (works with TTF and OTF)
+    const fontBuffer = Buffer.from(fontResponse.data);
+    const font = opentype.parse(fontBuffer.buffer.slice(fontBuffer.byteOffset, fontBuffer.byteOffset + fontBuffer.byteLength));
+    
+    // Cache for future use
+    fontCache.set(fontFamily, font);
+    
+    return font;
+  } catch (error) {
+    console.error(`Failed to load font ${fontFamily}:`, error);
+    return null;
+  }
+}
+
+// Convert opentype path to PDFKit path commands
+function drawTextAsVectors(
+  doc: InstanceType<typeof PDFDocument>,
+  font: opentype.Font,
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number
+): { width: number; height: number } {
+  const path = font.getPath(text, 0, 0, fontSize);
+  const bbox = path.getBoundingBox();
+  
+  // Calculate proper baseline using font metrics
+  // ascender is typically positive (above baseline), descender negative (below)
+  const scale = fontSize / font.unitsPerEm;
+  const ascender = font.ascender * scale;
+  
+  // Move to starting position - ascender positions text correctly from top
+  doc.save();
+  doc.translate(x, y + ascender);
+  
+  // Convert path commands to PDFKit
+  for (const cmd of path.commands) {
+    switch (cmd.type) {
+      case 'M':
+        doc.moveTo(cmd.x!, cmd.y!);
+        break;
+      case 'L':
+        doc.lineTo(cmd.x!, cmd.y!);
+        break;
+      case 'C':
+        doc.bezierCurveTo(cmd.x1!, cmd.y1!, cmd.x2!, cmd.y2!, cmd.x!, cmd.y!);
+        break;
+      case 'Q':
+        doc.quadraticCurveTo(cmd.x1!, cmd.y1!, cmd.x!, cmd.y!);
+        break;
+      case 'Z':
+        doc.closePath();
+        break;
+    }
+  }
+  
+  doc.fill();
+  doc.restore();
+  
+  return { 
+    width: bbox.x2 - bbox.x1, 
+    height: bbox.y2 - bbox.y1 
+  };
+}
 
 export interface TextElement {
   id: string;
@@ -66,6 +201,15 @@ function mmToPt(mm: number): number {
 }
 
 export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<Buffer> {
+  // Pre-load all fonts before starting PDF generation
+  const textElements = data.elements.filter(el => el.type === 'text' && el.visible !== false);
+  const fontPromises = textElements.map(el => loadGoogleFont(el.font || 'Arial'));
+  const preloadedFonts = await Promise.all(fontPromises);
+  const fontMap = new Map<string, opentype.Font | null>();
+  textElements.forEach((el, i) => {
+    fontMap.set(el.id, preloadedFonts[i]);
+  });
+  
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     
@@ -179,18 +323,19 @@ export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<
     doc.text('Text Elements (CMYK)', margin, yPos);
     yPos += 20;
     
-    const textElements = data.elements.filter(el => el.type === 'text' && el.visible !== false);
-    
+    // Use the pre-filtered textElements from above
     if (textElements.length === 0) {
       doc.fontSize(9).font('Helvetica-Oblique').fillColor('#666666');
       doc.text('No text elements in design', margin, yPos);
       yPos += 15;
     } else {
-      for (const element of textElements) {
+      for (let i = 0; i < textElements.length; i++) {
+        const element = textElements[i];
         const fontFamily = element.font || 'Arial';
         const visualSize = element.visualSize || (element.fontSize || 24) * element.scale;
         const cmykStr = element.cmyk || 'C: 0% M: 0% Y: 0% K: 100%';
         const cmyk = parseCmykString(cmykStr);
+        const font = fontMap.get(element.id);
         
         // CMYK values normalized to 0-1 range for PDF operators
         const c = cmyk.c / 100;
@@ -199,28 +344,34 @@ export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<
         const k = cmyk.k / 100;
         
         // Use raw PDF operators for DeviceCMYK
-        // 'k' operator sets fill color in CMYK, 'K' sets stroke color
         const cmykFillCmd = `${c.toFixed(3)} ${m.toFixed(3)} ${y.toFixed(3)} ${k.toFixed(3)} k`;
         
-        // Render text sample at fixed readable size
         const sampleFontSize = 14;
-        doc.fontSize(sampleFontSize).font('Helvetica-Bold');
         
-        // Write CMYK color command directly to PDF stream
-        (doc as any).addContent(cmykFillCmd);
-        doc.text(element.content, margin, yPos);
-        yPos += sampleFontSize + 8;
+        if (font) {
+          // Render as vector outlines using opentype.js
+          (doc as any).addContent(cmykFillCmd);
+          drawTextAsVectors(doc, font, element.content, margin, yPos, sampleFontSize);
+          yPos += sampleFontSize + 8;
+        } else {
+          // Fallback to system font if Google Font not available
+          doc.fontSize(sampleFontSize).font('Helvetica-Bold');
+          (doc as any).addContent(cmykFillCmd);
+          doc.text(element.content, margin, yPos);
+          yPos += sampleFontSize + 8;
+        }
         
         // Color swatch (CMYK)
         const swatchSize = 10;
         (doc as any).addContent(cmykFillCmd);
         doc.rect(margin, yPos, swatchSize, swatchSize).fill();
         
-        // Specs line
+        // Specs line - note: Font rendered as vector outlines
         doc.fillColor('#666666');
         doc.fontSize(9).font('Helvetica');
+        const vectorNote = font ? ' (vector)' : '';
         doc.text(
-          `Font: ${fontFamily}  |  Size: ${Math.round(visualSize)}px  |  ${cmykStr}`,
+          `Font: ${fontFamily}${vectorNote}  |  Size: ${Math.round(visualSize)}px  |  ${cmykStr}`,
           margin + swatchSize + 8, 
           yPos + 2
         );
