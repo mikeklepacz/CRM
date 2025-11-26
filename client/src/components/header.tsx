@@ -16,9 +16,23 @@ import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { TicketDialog } from "./ticket-dialog";
 import { WebhookStatusBadge } from "./WebhookStatusBadge";
+
+type VisibleModules = {
+  admin?: boolean;
+  dashboard?: boolean;
+  clients?: boolean;
+  followUp?: boolean;
+  mapSearch?: boolean;
+  sales?: boolean;
+  assistant?: boolean;
+  docs?: boolean;
+  labelDesigner?: boolean;
+  callManager?: boolean;
+  ehub?: boolean;
+};
 
 interface HeaderProps {
   colorPresets?: Array<{name: string, color: string}>;
@@ -38,6 +52,29 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
     enabled: user?.role === 'admin',
   });
 
+  // Fetch user preferences for module visibility
+  const { data: userPreferences } = useQuery<{ visibleModules?: VisibleModules }>({
+    queryKey: ['/api/user/preferences'],
+  });
+
+  // Default all modules visible if not set
+  const visibleModules = useMemo<VisibleModules>(() => {
+    const defaults: VisibleModules = {
+      admin: true,
+      dashboard: true,
+      clients: true,
+      followUp: true,
+      mapSearch: true,
+      sales: true,
+      assistant: true,
+      docs: true,
+      labelDesigner: true,
+      callManager: true,
+      ehub: true,
+    };
+    return { ...defaults, ...userPreferences?.visibleModules };
+  }, [userPreferences?.visibleModules]);
+
   const unreadCount = unreadData?.count || 0;
 
   if (!user) return null;
@@ -54,7 +91,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
         
         {/* Full Navigation - Shows on md+, wraps naturally */}
         <nav className="hidden md:flex items-center gap-0 flex-wrap flex-1">
-          {user.role === 'admin' && (
+          {user.role === 'admin' && visibleModules.admin && (
             <Link href="/admin">
               <Button variant="ghost" size="sm" data-testid="nav-admin">
                 <ShieldCheck className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -62,55 +99,71 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          <Link href="/">
-            <Button variant="ghost" size="sm" data-testid="nav-dashboard">
-              <Home className="hidden xl:mr-2 xl:inline h-4 w-4" />
-              Dashboard
-            </Button>
-          </Link>
-          <Link href="/clients">
-            <Button variant="ghost" size="sm" data-testid="nav-clients">
-              <BarChart3 className="hidden xl:mr-2 xl:inline h-4 w-4" />
-              Clients
-            </Button>
-          </Link>
-          <Link href="/follow-up-center">
-            <Button variant="ghost" size="sm" data-testid="nav-follow-up-center">
-              <Target className="hidden xl:mr-2 xl:inline h-4 w-4" />
-              Follow-Up
-            </Button>
-          </Link>
-          <Link href="/map-search">
-            <Button variant="ghost" size="sm" data-testid="nav-map-search">
-              <MapPin className="hidden xl:mr-2 xl:inline h-4 w-4" />
-              Map Search
-            </Button>
-          </Link>
-          <Link href="/sales">
-            <Button variant="ghost" size="sm" data-testid="nav-sales">
-              <TrendingUp className="hidden xl:mr-2 xl:inline h-4 w-4" />
-              Sales
-            </Button>
-          </Link>
-          <Link href="/assistant">
-            <Button variant="ghost" size="sm" data-testid="nav-assistant">
-              <Bot className="hidden xl:mr-2 xl:inline h-4 w-4" />
-              Assistant
-            </Button>
-          </Link>
-          <Link href="/documents">
-            <Button variant="ghost" size="sm" data-testid="nav-documents">
-              <FileText className="hidden xl:mr-2 xl:inline h-4 w-4" />
-              Docs
-            </Button>
-          </Link>
-          <Link href="/product-mockup">
-            <Button variant="ghost" size="sm" data-testid="nav-product-mockup">
-              <Palette className="hidden xl:mr-2 xl:inline h-4 w-4" />
-              Label Designer
-            </Button>
-          </Link>
-          {(user.role === 'admin' || user.hasVoiceAccess) && (
+          {visibleModules.dashboard && (
+            <Link href="/">
+              <Button variant="ghost" size="sm" data-testid="nav-dashboard">
+                <Home className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Dashboard
+              </Button>
+            </Link>
+          )}
+          {visibleModules.clients && (
+            <Link href="/clients">
+              <Button variant="ghost" size="sm" data-testid="nav-clients">
+                <BarChart3 className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Clients
+              </Button>
+            </Link>
+          )}
+          {visibleModules.followUp && (
+            <Link href="/follow-up-center">
+              <Button variant="ghost" size="sm" data-testid="nav-follow-up-center">
+                <Target className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Follow-Up
+              </Button>
+            </Link>
+          )}
+          {visibleModules.mapSearch && (
+            <Link href="/map-search">
+              <Button variant="ghost" size="sm" data-testid="nav-map-search">
+                <MapPin className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Map Search
+              </Button>
+            </Link>
+          )}
+          {visibleModules.sales && (
+            <Link href="/sales">
+              <Button variant="ghost" size="sm" data-testid="nav-sales">
+                <TrendingUp className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Sales
+              </Button>
+            </Link>
+          )}
+          {visibleModules.assistant && (
+            <Link href="/assistant">
+              <Button variant="ghost" size="sm" data-testid="nav-assistant">
+                <Bot className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Assistant
+              </Button>
+            </Link>
+          )}
+          {visibleModules.docs && (
+            <Link href="/documents">
+              <Button variant="ghost" size="sm" data-testid="nav-documents">
+                <FileText className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Docs
+              </Button>
+            </Link>
+          )}
+          {visibleModules.labelDesigner && (
+            <Link href="/product-mockup">
+              <Button variant="ghost" size="sm" data-testid="nav-product-mockup">
+                <Palette className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Label Designer
+              </Button>
+            </Link>
+          )}
+          {(user.role === 'admin' || user.hasVoiceAccess) && visibleModules.callManager && (
             <Link href="/call-manager">
               <Button variant="ghost" size="sm" data-testid="nav-call-manager">
                 <Phone className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -118,7 +171,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {user.role === 'admin' && (
+          {user.role === 'admin' && visibleModules.ehub && (
             <Link href="/ehub">
               <Button variant="ghost" size="sm" data-testid="nav-ehub">
                 <Mail className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -138,51 +191,67 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              {user.role === 'admin' && (
+              {user.role === 'admin' && visibleModules.admin && (
                 <DropdownMenuItem onClick={() => { setLocation('/admin'); setMobileMenuOpen(false); }}>
                   <ShieldCheck className="mr-2 h-4 w-4" />
                   Admin
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => { setLocation('/'); setMobileMenuOpen(false); }}>
-                <Home className="mr-2 h-4 w-4" />
-                Dashboard
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setLocation('/clients'); setMobileMenuOpen(false); }}>
-                <BarChart3 className="mr-2 h-4 w-4" />
-                Clients
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setLocation('/follow-up-center'); setMobileMenuOpen(false); }}>
-                <Target className="mr-2 h-4 w-4" />
-                Follow-Up Center
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setLocation('/map-search'); setMobileMenuOpen(false); }}>
-                <MapPin className="mr-2 h-4 w-4" />
-                Map Search
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setLocation('/sales'); setMobileMenuOpen(false); }}>
-                <TrendingUp className="mr-2 h-4 w-4" />
-                Sales
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setLocation('/assistant'); setMobileMenuOpen(false); }}>
-                <Bot className="mr-2 h-4 w-4" />
-                Assistant
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setLocation('/documents'); setMobileMenuOpen(false); }}>
-                <FileText className="mr-2 h-4 w-4" />
-                Documents
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setLocation('/product-mockup'); setMobileMenuOpen(false); }}>
-                <Palette className="mr-2 h-4 w-4" />
-                Label Designer
-              </DropdownMenuItem>
-              {(user.role === 'admin' || user.hasVoiceAccess) && (
+              {visibleModules.dashboard && (
+                <DropdownMenuItem onClick={() => { setLocation('/'); setMobileMenuOpen(false); }}>
+                  <Home className="mr-2 h-4 w-4" />
+                  Dashboard
+                </DropdownMenuItem>
+              )}
+              {visibleModules.clients && (
+                <DropdownMenuItem onClick={() => { setLocation('/clients'); setMobileMenuOpen(false); }}>
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Clients
+                </DropdownMenuItem>
+              )}
+              {visibleModules.followUp && (
+                <DropdownMenuItem onClick={() => { setLocation('/follow-up-center'); setMobileMenuOpen(false); }}>
+                  <Target className="mr-2 h-4 w-4" />
+                  Follow-Up Center
+                </DropdownMenuItem>
+              )}
+              {visibleModules.mapSearch && (
+                <DropdownMenuItem onClick={() => { setLocation('/map-search'); setMobileMenuOpen(false); }}>
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Map Search
+                </DropdownMenuItem>
+              )}
+              {visibleModules.sales && (
+                <DropdownMenuItem onClick={() => { setLocation('/sales'); setMobileMenuOpen(false); }}>
+                  <TrendingUp className="mr-2 h-4 w-4" />
+                  Sales
+                </DropdownMenuItem>
+              )}
+              {visibleModules.assistant && (
+                <DropdownMenuItem onClick={() => { setLocation('/assistant'); setMobileMenuOpen(false); }}>
+                  <Bot className="mr-2 h-4 w-4" />
+                  Assistant
+                </DropdownMenuItem>
+              )}
+              {visibleModules.docs && (
+                <DropdownMenuItem onClick={() => { setLocation('/documents'); setMobileMenuOpen(false); }}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Documents
+                </DropdownMenuItem>
+              )}
+              {visibleModules.labelDesigner && (
+                <DropdownMenuItem onClick={() => { setLocation('/product-mockup'); setMobileMenuOpen(false); }}>
+                  <Palette className="mr-2 h-4 w-4" />
+                  Label Designer
+                </DropdownMenuItem>
+              )}
+              {(user.role === 'admin' || user.hasVoiceAccess) && visibleModules.callManager && (
                 <DropdownMenuItem onClick={() => { setLocation('/call-manager'); setMobileMenuOpen(false); }}>
                   <Phone className="mr-2 h-4 w-4" />
                   Call Manager
                 </DropdownMenuItem>
               )}
-              {user.role === 'admin' && (
+              {user.role === 'admin' && visibleModules.ehub && (
                 <DropdownMenuItem onClick={() => { setLocation('/ehub'); setMobileMenuOpen(false); }}>
                   <Mail className="mr-2 h-4 w-4" />
                   E-Hub
