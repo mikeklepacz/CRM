@@ -272,10 +272,6 @@ export default function ProductMockup() {
     const texture = new THREE.CanvasTexture(textureCanvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.rotation = (textureMapping.rotation * Math.PI) / 180;
-    texture.center.set(textureMapping.centerX, textureMapping.centerY);
-    texture.offset.set(textureMapping.offsetX, textureMapping.offsetY);
-    texture.scale.set(textureMapping.scaleX, textureMapping.scaleY);
     texture.needsUpdate = true;
     return texture;
   }, [elements, mode, uploadedLabel, applyKraftBase, textureMapping]);
