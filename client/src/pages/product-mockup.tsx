@@ -72,6 +72,9 @@ interface LightingSettings {
   front: number;
   top: number;
   warmth: number; // -1 = cool (blue tint), 0 = neutral, 1 = warm (yellow tint)
+  keyAngle: number; // Horizontal angle of key light (0-360 degrees)
+  keyHeight: number; // Vertical angle/height of key light (-90 to 90 degrees)
+  keyDistance: number; // Distance of key light from center
 }
 
 // PERMANENT DEFAULTS - These are the "in stone" settings for the 3D product mockup
@@ -129,6 +132,9 @@ export default function ProductMockup() {
     front: 0.8,    // Increased from 0.6
     top: 0.4,      // Increased from 0.3
     warmth: 0.3,   // Slight warm tint to match kraft paper
+    keyAngle: 45,  // 45 degrees from front-right
+    keyHeight: 30, // 30 degrees above horizontal
+    keyDistance: 2, // Distance from center
   });
   
   useEffect(() => {
@@ -574,6 +580,18 @@ export default function ProductMockup() {
     if (ctx.frontLight) {
       ctx.frontLight.intensity = lighting.front;
       ctx.frontLight.color = lightColor;
+      
+      // Position key light based on angle, height, and distance
+      const angleRad = (lighting.keyAngle * Math.PI) / 180;
+      const heightRad = (lighting.keyHeight * Math.PI) / 180;
+      const dist = lighting.keyDistance;
+      
+      // Spherical to cartesian: x = cos(height)*sin(angle), y = sin(height), z = cos(height)*cos(angle)
+      const x = Math.cos(heightRad) * Math.sin(angleRad) * dist;
+      const y = Math.sin(heightRad) * dist;
+      const z = Math.cos(heightRad) * Math.cos(angleRad) * dist;
+      
+      ctx.frontLight.position.set(x, y, z);
     }
     if (ctx.topLight) {
       ctx.topLight.intensity = lighting.top;
@@ -1316,11 +1334,71 @@ export default function ProductMockup() {
                   </p>
                 </div>
                 
+                <div className="border-t pt-3 mt-3">
+                  <Label className="text-xs font-medium text-muted-foreground">Key Light Position</Label>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Angle: {lighting.keyAngle}°</Label>
+                  </div>
+                  <Slider
+                    value={[lighting.keyAngle]}
+                    onValueChange={([v]) => setLighting(l => ({ ...l, keyAngle: v }))}
+                    min={0}
+                    max={360}
+                    step={5}
+                    data-testid="slider-key-angle"
+                  />
+                  <p className="text-xs text-muted-foreground text-center">
+                    0° = Front, 90° = Right, 180° = Back, 270° = Left
+                  </p>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Height: {lighting.keyHeight}°</Label>
+                  </div>
+                  <Slider
+                    value={[lighting.keyHeight]}
+                    onValueChange={([v]) => setLighting(l => ({ ...l, keyHeight: v }))}
+                    min={-45}
+                    max={90}
+                    step={5}
+                    data-testid="slider-key-height"
+                  />
+                  <p className="text-xs text-muted-foreground text-center">
+                    -45° = Below, 0° = Eye level, 90° = Above
+                  </p>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Distance: {lighting.keyDistance.toFixed(1)}</Label>
+                  </div>
+                  <Slider
+                    value={[lighting.keyDistance * 10]}
+                    onValueChange={([v]) => setLighting(l => ({ ...l, keyDistance: v / 10 }))}
+                    min={5}
+                    max={50}
+                    step={1}
+                    data-testid="slider-key-distance"
+                  />
+                </div>
+                
                 <Button
                   size="sm"
                   variant="outline"
                   className="w-full"
-                  onClick={() => setLighting({ ambient: 1.2, front: 0.8, top: 0.4, warmth: 0.3 })}
+                  onClick={() => setLighting({ 
+                    ambient: 1.2, 
+                    front: 0.8, 
+                    top: 0.4, 
+                    warmth: 0.3,
+                    keyAngle: 45,
+                    keyHeight: 30,
+                    keyDistance: 2,
+                  })}
                   data-testid="button-reset-lighting"
                 >
                   <RotateCcw className="w-3 h-3 mr-1" />
