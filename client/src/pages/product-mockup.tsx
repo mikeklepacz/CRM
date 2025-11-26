@@ -103,7 +103,6 @@ export default function ProductMockup() {
   const threeContainerRef = useRef<HTMLDivElement>(null);
   const threeContextRef = useRef<ThreeContext | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const labelInputRef = useRef<HTMLInputElement>(null);
   const kraftBaseRef = useRef<ImageData | null>(null);
   const textureUpdateTimerRef = useRef<number | null>(null);
   
@@ -111,8 +110,6 @@ export default function ProductMockup() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [viewRotation, setViewRotation] = useState(115); // Fixed at 115° for correct tilt alignment
   const [labelRotation, setLabelRotation] = useState(0); // New rotation control using Offset X
-  const [uploadedLabel, setUploadedLabel] = useState<HTMLImageElement | null>(null);
-  const [mode, setMode] = useState<'build' | 'upload'>('build');
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
@@ -126,16 +123,16 @@ export default function ProductMockup() {
   const [bleedOverlayLoaded, setBleedOverlayLoaded] = useState(false);
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
   
-  // Lighting controls
-  const [lighting, setLighting] = useState<LightingSettings>({
-    ambient: 1.2,  // Increased from 0.8 for brighter colors
-    front: 0.8,    // Increased from 0.6
-    top: 0.4,      // Increased from 0.3
-    warmth: 0.3,   // Slight warm tint to match kraft paper
-    keyAngle: 45,  // 45 degrees from front-right
-    keyHeight: 30, // 30 degrees above horizontal
-    keyDistance: 2, // Distance from center
-  });
+  // LOCKED LIGHTING SETTINGS - These are "in stone" and hidden from UI
+  const lighting: LightingSettings = {
+    ambient: 1.4,      // Locked ambient brightness
+    front: 2.7,        // Key light intensity
+    top: 0.6,          // Fill light intensity  
+    warmth: 0.2,       // Slight warm tint
+    keyAngle: 325,     // Key light angle
+    keyHeight: 30,     // Key light height
+    keyDistance: 2.5,  // Key light distance
+  };
   
   useEffect(() => {
     const img = new window.Image();
@@ -200,33 +197,26 @@ export default function ProductMockup() {
 
     ctx.globalCompositeOperation = 'multiply';
 
-    if (mode === 'upload' && uploadedLabel) {
-      const scale = Math.min(LABEL_WIDTH / uploadedLabel.width, LABEL_HEIGHT / uploadedLabel.height);
-      const w = uploadedLabel.width * scale;
-      const h = uploadedLabel.height * scale;
-      ctx.drawImage(uploadedLabel, (LABEL_WIDTH - w) / 2, (LABEL_HEIGHT - h) / 2, w, h);
-    } else {
-      elements.filter(el => el.visible !== false).forEach(el => {
-        ctx.save();
-        ctx.translate(el.x, el.y);
-        ctx.rotate((el.rotation * Math.PI) / 180);
-        ctx.scale(el.scale, el.scale);
+    elements.filter(el => el.visible !== false).forEach(el => {
+      ctx.save();
+      ctx.translate(el.x, el.y);
+      ctx.rotate((el.rotation * Math.PI) / 180);
+      ctx.scale(el.scale, el.scale);
 
-        if (el.type === 'logo' && el.image) {
-          const w = el.image.width;
-          const h = el.image.height;
-          ctx.drawImage(el.image, -w / 2, -h / 2, w, h);
-        } else if (el.type === 'text') {
-          ctx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
-          ctx.fillStyle = el.color || '#1a1a1a';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(el.content, 0, 0);
-        }
+      if (el.type === 'logo' && el.image) {
+        const w = el.image.width;
+        const h = el.image.height;
+        ctx.drawImage(el.image, -w / 2, -h / 2, w, h);
+      } else if (el.type === 'text') {
+        ctx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
+        ctx.fillStyle = el.color || '#1a1a1a';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(el.content, 0, 0);
+      }
 
-        ctx.restore();
-      });
-    }
+      ctx.restore();
+    });
 
     ctx.globalCompositeOperation = 'source-over';
 
@@ -262,7 +252,7 @@ export default function ProductMockup() {
         ctx.restore();
       }
     }
-  }, [elements, selectedId, mode, uploadedLabel, applyKraftBase, showBleedOverlay, bleedOverlayLoaded]);
+  }, [elements, selectedId, applyKraftBase, showBleedOverlay, bleedOverlayLoaded]);
 
   const createLabelTexture = useCallback((): THREE.CanvasTexture => {
     // First create the flat label canvas
@@ -274,33 +264,26 @@ export default function ProductMockup() {
     applyKraftBase(flatCtx, LABEL_WIDTH, LABEL_HEIGHT);
     flatCtx.globalCompositeOperation = 'multiply';
 
-    if (mode === 'upload' && uploadedLabel) {
-      const scale = Math.min(LABEL_WIDTH / uploadedLabel.width, LABEL_HEIGHT / uploadedLabel.height);
-      const w = uploadedLabel.width * scale;
-      const h = uploadedLabel.height * scale;
-      flatCtx.drawImage(uploadedLabel, (LABEL_WIDTH - w) / 2, (LABEL_HEIGHT - h) / 2, w, h);
-    } else {
-      elements.filter(el => el.visible !== false).forEach(el => {
-        flatCtx.save();
-        flatCtx.translate(el.x, el.y);
-        flatCtx.rotate((el.rotation * Math.PI) / 180);
-        flatCtx.scale(el.scale, el.scale);
+    elements.filter(el => el.visible !== false).forEach(el => {
+      flatCtx.save();
+      flatCtx.translate(el.x, el.y);
+      flatCtx.rotate((el.rotation * Math.PI) / 180);
+      flatCtx.scale(el.scale, el.scale);
 
-        if (el.type === 'logo' && el.image) {
-          const w = el.image.width;
-          const h = el.image.height;
-          flatCtx.drawImage(el.image, -w / 2, -h / 2, w, h);
-        } else if (el.type === 'text') {
-          flatCtx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
-          flatCtx.fillStyle = el.color || '#1a1a1a';
-          flatCtx.textAlign = 'center';
-          flatCtx.textBaseline = 'middle';
-          flatCtx.fillText(el.content, 0, 0);
-        }
+      if (el.type === 'logo' && el.image) {
+        const w = el.image.width;
+        const h = el.image.height;
+        flatCtx.drawImage(el.image, -w / 2, -h / 2, w, h);
+      } else if (el.type === 'text') {
+        flatCtx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
+        flatCtx.fillStyle = el.color || '#1a1a1a';
+        flatCtx.textAlign = 'center';
+        flatCtx.textBaseline = 'middle';
+        flatCtx.fillText(el.content, 0, 0);
+      }
 
-        flatCtx.restore();
-      });
-    }
+      flatCtx.restore();
+    });
 
     flatCtx.globalCompositeOperation = 'source-over';
 
@@ -329,7 +312,7 @@ export default function ProductMockup() {
     
     texture.needsUpdate = true;
     return texture;
-  }, [elements, mode, uploadedLabel, applyKraftBase, textureMapping, labelRotation]);
+  }, [elements, applyKraftBase, textureMapping, labelRotation]);
 
   useEffect(() => {
     drawFlatLabel();
@@ -716,22 +699,6 @@ export default function ProductMockup() {
     }
   };
 
-  const handleLabelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new window.Image();
-        img.onload = () => {
-          setUploadedLabel(img);
-          setMode('upload');
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const addTextElement = () => {
     const textCount = elements.filter(el => el.type === 'text').length;
     const newElement: LabelElement = {
@@ -785,8 +752,6 @@ export default function ProductMockup() {
   const handleReset = () => {
     setElements([]);
     setSelectedId(null);
-    setUploadedLabel(null);
-    setMode('build');
     setLabelRotation(0);
     // viewRotation stays locked at 115° for correct tilt alignment
   };
