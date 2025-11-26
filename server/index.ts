@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import path from "path";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { callDispatcher } from "./call_dispatcher";
@@ -11,6 +12,9 @@ import { startSlotMaintenance } from "./services/slotMaintenance";
 import { gmailWatchManager } from "./services/gmailWatchManager";
 
 const app = express();
+
+// Serve attached_assets statically (for OBJ files, images, etc.)
+app.use('/attached_assets', express.static(path.resolve(import.meta.dirname, '../attached_assets')));
 
 // Capture raw body for webhook signature validation
 app.use(express.json({

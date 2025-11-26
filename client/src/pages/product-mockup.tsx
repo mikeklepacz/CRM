@@ -261,7 +261,7 @@ export default function ProductMockup() {
     
     const loader = new OBJLoader();
     loader.load(
-      '/attached_assets/HempWick Roll Object_1764118046566.obj',
+      '/attached_assets/HempWick%20Roll%20Object_1764118046566.obj',
       (obj) => {
         const geometry = (obj.children[0] as THREE.Mesh).geometry;
         
