@@ -1,0 +1,51 @@
+client:536 WebSocket connection to 'wss://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/?token=EQMQXn7R4eJc' failed: 
+setupWebSocket @ client:536
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=EQMQXn7R4eJc' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+chunk-NFC5BX5N.js?v=98bacdca:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+product-mockup.tsx:157 Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently
+(anonymous) @ product-mockup.tsx:157
+chunk-NFC5BX5N.js?v=98bacdca:16670 Uncaught ReferenceError: getDefaultPosition is not defined
+    at product-mockup.tsx:321:22
+    at commitHookEffectListMount (chunk-NFC5BX5N.js?v=98bacdca:16915:34)
+    at commitPassiveMountOnFiber (chunk-NFC5BX5N.js?v=98bacdca:18156:19)
+    at commitPassiveMountEffects_complete (chunk-NFC5BX5N.js?v=98bacdca:18129:17)
+    at commitPassiveMountEffects_begin (chunk-NFC5BX5N.js?v=98bacdca:18119:15)
+    at commitPassiveMountEffects (chunk-NFC5BX5N.js?v=98bacdca:18109:11)
+    at flushPassiveEffectsImpl (chunk-NFC5BX5N.js?v=98bacdca:19490:11)
+    at flushPassiveEffects (chunk-NFC5BX5N.js?v=98bacdca:19447:22)
+    at commitRootImpl (chunk-NFC5BX5N.js?v=98bacdca:19416:13)
+    at commitRoot (chunk-NFC5BX5N.js?v=98bacdca:19277:13)
+chunk-NFC5BX5N.js?v=98bacdca:14032 The above error occurred in the <ProductMockup> component:
+
+    at ProductMockup (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/pages/product-mockup.tsx:57:21)
+    at Route (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=98bacdca:323:16)
+    at Switch (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=98bacdca:379:17)
+    at main
+    at div
+    at ChatPanelProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/hooks/useChatPanel.tsx:20:37)
+    at EventStreamProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/lib/eventStream.tsx:55:39)
+    at Router (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/App.tsx?v=9RdqC-gbobcIjBM7I_zpq:51:48)
+    at Provider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-FYP7TLMM.js?v=98bacdca:38:15)
+    at TooltipProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=98bacdca:64:5)
+    at AgentFilterProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/contexts/agent-filter-context.tsx:21:39)
+    at ThemeProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/components/theme-provider.tsx:26:3)
+    at QueryClientProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=98bacdca:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+logCapturedError @ chunk-NFC5BX5N.js?v=98bacdca:14032
+chunk-NFC5BX5N.js?v=98bacdca:9129 Uncaught ReferenceError: getDefaultPosition is not defined
+    at product-mockup.tsx:321:22
+    at commitHookEffectListMount (chunk-NFC5BX5N.js?v=98bacdca:16915:34)
+    at commitPassiveMountOnFiber (chunk-NFC5BX5N.js?v=98bacdca:18156:19)
+    at commitPassiveMountEffects_complete (chunk-NFC5BX5N.js?v=98bacdca:18129:17)
+    at commitPassiveMountEffects_begin (chunk-NFC5BX5N.js?v=98bacdca:18119:15)
+    at commitPassiveMountEffects (chunk-NFC5BX5N.js?v=98bacdca:18109:11)
+    at flushPassiveEffectsImpl (chunk-NFC5BX5N.js?v=98bacdca:19490:11)
+    at flushPassiveEffects (chunk-NFC5BX5N.js?v=98bacdca:19447:22)
+    at commitRootImpl (chunk-NFC5BX5N.js?v=98bacdca:19416:13)
+    at commitRoot (chunk-NFC5BX5N.js?v=98bacdca:19277:13)

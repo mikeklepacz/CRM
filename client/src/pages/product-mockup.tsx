@@ -318,9 +318,8 @@ export default function ProductMockup() {
 
     const scene = new THREE.Scene();
 
-    const savedPos = getDefaultPosition();
     const camera = new THREE.PerspectiveCamera(35, width / height, 0.01, 100);
-    camera.position.set(0, 0, savedPos.cameraZ);
+    camera.position.set(0, 0, DEFAULT_CYLINDER_POS.cameraZ);
 
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true, 
