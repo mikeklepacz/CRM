@@ -68,57 +68,7 @@ const LABEL_WIDTH = 450;  // 3:4 ratio (60mm wide)
 const LABEL_HEIGHT = 600; // 3:4 ratio (80mm tall)
 const OVERLAP_HEIGHT = 60;
 
-// Convert CMYK (0-100) to RGB (0-255)
-function cmykToRgb(c: number, m: number, y: number, k: number): { r: number; g: number; b: number } {
-  const c1 = c / 100;
-  const m1 = m / 100;
-  const y1 = y / 100;
-  const k1 = k / 100;
-  
-  const r = Math.round(255 * (1 - c1) * (1 - k1));
-  const g = Math.round(255 * (1 - m1) * (1 - k1));
-  const b = Math.round(255 * (1 - y1) * (1 - k1));
-  
-  return { r, g, b };
-}
-
-// Convert RGB (0-255) to CMYK (0-100)
-function rgbToCmyk(r: number, g: number, b: number): { c: number; m: number; y: number; k: number } {
-  const r1 = r / 255;
-  const g1 = g / 255;
-  const b1 = b / 255;
-  
-  const k = 1 - Math.max(r1, g1, b1);
-  if (k === 1) {
-    return { c: 0, m: 0, y: 0, k: 100 };
-  }
-  
-  const c = Math.round(((1 - r1 - k) / (1 - k)) * 100);
-  const m = Math.round(((1 - g1 - k) / (1 - k)) * 100);
-  const y = Math.round(((1 - b1 - k) / (1 - k)) * 100);
-  
-  return { c, m, y, k: Math.round(k * 100) };
-}
-
-// Parse rgba string to RGB values
-function parseRgba(color: string): { r: number; g: number; b: number } {
-  const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-  if (match) {
-    return { r: parseInt(match[1]), g: parseInt(match[2]), b: parseInt(match[3]) };
-  }
-  // Fallback for hex
-  if (color.startsWith('#')) {
-    const hex = color.slice(1);
-    return {
-      r: parseInt(hex.slice(0, 2), 16),
-      g: parseInt(hex.slice(2, 4), 16),
-      b: parseInt(hex.slice(4, 6), 16)
-    };
-  }
-  return { r: 0, g: 0, b: 0 };
-}
-
-// CMYK Color Picker Component with CMYK inputs as default
+// CMYK Color Picker Component
 function CMYKColorPicker({ 
   color, 
   onChange,
@@ -135,88 +85,46 @@ function CMYKColorPicker({
   onRemoveSwatch?: (id: string) => void;
 }) {
   const [localColor, setLocalColor] = useState(color);
+  const { valueToCmyk } = useColorPicker(localColor, setLocalColor);
   
-  // Track CMYK values separately for direct input
-  const rgb = parseRgba(localColor);
-  const cmykValues = rgbToCmyk(rgb.r, rgb.g, rgb.b);
-  const [cmyk, setCmyk] = useState(cmykValues);
-  
-  // Sync external color changes
   useEffect(() => {
     setLocalColor(color);
-    const newRgb = parseRgba(color);
-    const newCmyk = rgbToCmyk(newRgb.r, newRgb.g, newRgb.b);
-    setCmyk(newCmyk);
   }, [color]);
   
-  // Handle visual picker changes (updates CMYK display)
-  const handlePickerChange = (newColor: string) => {
-    setLocalColor(newColor);
-    const newRgb = parseRgba(newColor);
-    const newCmyk = rgbToCmyk(newRgb.r, newRgb.g, newRgb.b);
-    setCmyk(newCmyk);
-    onChange(newColor);
-  };
-  
-  // Handle CMYK input changes
-  const handleCmykChange = (channel: 'c' | 'm' | 'y' | 'k', value: number) => {
-    const newCmyk = { ...cmyk, [channel]: Math.max(0, Math.min(100, value)) };
-    setCmyk(newCmyk);
-    const newRgb = cmykToRgb(newCmyk.c, newCmyk.m, newCmyk.y, newCmyk.k);
-    const newColor = `rgba(${newRgb.r}, ${newRgb.g}, ${newRgb.b}, 1)`;
+  const handleChange = (newColor: string) => {
     setLocalColor(newColor);
     onChange(newColor);
   };
   
-  const cmykString = `C: ${cmyk.c}%  M: ${cmyk.m}%  Y: ${cmyk.y}%  K: ${cmyk.k}%`;
+  // Parse CMYK values and convert to clean percentages
+  const cmykRaw = valueToCmyk();
+  const cmykMatch = cmykRaw.match(/cmyk\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)/);
+  const formatCmyk = () => {
+    if (!cmykMatch) return 'C: 0%  M: 0%  Y: 0%  K: 0%';
+    const c = Math.round(parseFloat(cmykMatch[1]) * 100);
+    const m = Math.round(parseFloat(cmykMatch[2]) * 100);
+    const y = Math.round(parseFloat(cmykMatch[3]) * 100);
+    const k = Math.round(parseFloat(cmykMatch[4]) * 100);
+    return `C: ${c}%  M: ${m}%  Y: ${y}%  K: ${k}%`;
+  };
+  
+  const cmykString = formatCmyk();
   
   return (
     <div className="space-y-3">
       <ColorPicker
         value={localColor}
-        onChange={handlePickerChange}
+        onChange={handleChange}
         hideColorTypeBtns
         hideAdvancedSliders
         hidePresets
         hideOpacity
-        hideInputs
-        hideControls
         width={220}
         height={150}
       />
-      
-      {/* CMYK Input Controls */}
-      <div className="space-y-2">
-        <div className="text-xs font-medium text-muted-foreground">CMYK Values (0-100%)</div>
-        <div className="grid grid-cols-4 gap-1">
-          {(['c', 'm', 'y', 'k'] as const).map((channel) => (
-            <div key={channel} className="flex flex-col items-center">
-              <label className="text-[10px] font-bold text-muted-foreground mb-1">
-                {channel.toUpperCase()}
-              </label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={cmyk[channel]}
-                onChange={(e) => handleCmykChange(channel, parseInt(e.target.value) || 0)}
-                className="h-7 w-full text-center text-xs px-1"
-                data-testid={`input-cmyk-${channel}`}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* Color Preview */}
-      <div className="flex items-center gap-2">
-        <div 
-          className="w-8 h-8 rounded border border-border"
-          style={{ backgroundColor: localColor }}
-        />
-        <div className="text-xs font-mono text-muted-foreground flex-1">
-          {cmykString}
-        </div>
+      <div className="p-2 bg-muted rounded text-xs font-mono">
+        <div className="text-muted-foreground mb-1">CMYK for Print:</div>
+        <div className="text-foreground font-medium">{cmykString}</div>
       </div>
       
       {onSaveSwatch && (
