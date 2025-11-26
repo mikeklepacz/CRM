@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter } from 'lucide-react';
-import { HexColorPicker } from 'react-colorful';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Type, Check, ChevronsUpDown } from 'lucide-react';
+import ColorPicker, { useColorPicker } from 'react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Red Bleed_1764162964434.png';
@@ -37,6 +38,98 @@ interface TextureMapping {
 const LABEL_WIDTH = 450;  // 3:4 ratio (60mm wide)
 const LABEL_HEIGHT = 600; // 3:4 ratio (80mm tall)
 const OVERLAP_HEIGHT = 60;
+
+// CMYK Color Picker Component
+function CMYKColorPicker({ 
+  color, 
+  onChange 
+}: { 
+  color: string; 
+  onChange: (color: string) => void;
+}) {
+  const [localColor, setLocalColor] = useState(color);
+  const { valueToCmyk } = useColorPicker(localColor, setLocalColor);
+  
+  useEffect(() => {
+    setLocalColor(color);
+  }, [color]);
+  
+  const handleChange = (newColor: string) => {
+    setLocalColor(newColor);
+    onChange(newColor);
+  };
+  
+  const cmykValues = valueToCmyk();
+  
+  return (
+    <div className="space-y-3">
+      <ColorPicker
+        value={localColor}
+        onChange={handleChange}
+        hideColorTypeBtns
+        hideAdvancedSliders
+        hidePresets
+        hideOpacity
+        width={220}
+        height={150}
+      />
+      <div className="p-2 bg-muted rounded text-xs font-mono">
+        <div className="text-muted-foreground mb-1">CMYK for Print:</div>
+        <div className="text-foreground font-medium">{cmykValues}</div>
+      </div>
+    </div>
+  );
+}
+
+// Popular Google Fonts for print and web - comprehensive list
+const GOOGLE_FONTS = [
+  // Sans-Serif
+  'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Inter', 'Nunito', 'Raleway',
+  'Ubuntu', 'Rubik', 'Work Sans', 'Noto Sans', 'Quicksand', 'Karla', 'Mulish', 'Josefin Sans',
+  'Source Sans Pro', 'Barlow', 'DM Sans', 'Manrope', 'Outfit', 'Plus Jakarta Sans',
+  'Public Sans', 'Be Vietnam Pro', 'Figtree', 'Lexend', 'Sora', 'Space Grotesk',
+  'Albert Sans', 'Urbanist', 'Geologica', 'Instrument Sans',
+  // Serif
+  'Playfair Display', 'Merriweather', 'Lora', 'PT Serif', 'Libre Baskerville',
+  'Crimson Text', 'Cormorant Garamond', 'EB Garamond', 'Spectral', 'Source Serif Pro',
+  'Noto Serif', 'Bitter', 'Vollkorn', 'Cardo', 'Libre Caslon Text', 'DM Serif Display',
+  'Fraunces', 'Bodoni Moda', 'Newsreader', 'Literata',
+  // Display
+  'Oswald', 'Bebas Neue', 'Anton', 'Archivo Black', 'Russo One', 'Righteous',
+  'Alfa Slab One', 'Abril Fatface', 'Lobster', 'Pacifico', 'Permanent Marker',
+  'Bangers', 'Fredoka One', 'Passion One', 'Bungee', 'Titan One', 'Black Ops One',
+  'Monoton', 'Audiowide', 'Orbitron', 'Staatliches', 'Teko', 'Chakra Petch',
+  // Handwritten
+  'Dancing Script', 'Great Vibes', 'Parisienne', 'Sacramento', 'Satisfy', 'Allura',
+  'Cookie', 'Kaushan Script', 'Alex Brush', 'Tangerine', 'Mr Dafoe', 'Pinyon Script',
+  'Yellowtail', 'Courgette', 'Caveat', 'Indie Flower', 'Shadows Into Light',
+  // Monospace
+  'Roboto Mono', 'Source Code Pro', 'Fira Code', 'JetBrains Mono', 'IBM Plex Mono',
+  'Space Mono', 'Inconsolata', 'Ubuntu Mono', 'Overpass Mono',
+  // System Fallbacks
+  'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New',
+].sort();
+
+// Track loaded fonts
+const loadedFonts = new Set<string>();
+
+function loadGoogleFont(fontName: string): Promise<void> {
+  if (loadedFonts.has(fontName) || ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New'].includes(fontName)) {
+    return Promise.resolve();
+  }
+  
+  return new Promise((resolve, reject) => {
+    const link = document.createElement('link');
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName.replace(/ /g, '+'))}:wght@400;700&display=swap`;
+    link.rel = 'stylesheet';
+    link.onload = () => {
+      loadedFonts.add(fontName);
+      resolve();
+    };
+    link.onerror = reject;
+    document.head.appendChild(link);
+  });
+}
 
 interface LabelElement {
   id: string;
@@ -207,7 +300,7 @@ export default function ProductMockup() {
         const h = el.image.height;
         ctx.drawImage(el.image, -w / 2, -h / 2, w, h);
       } else if (el.type === 'text') {
-        ctx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
+        ctx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial'}`;
         ctx.fillStyle = el.color || '#1a1a1a';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -274,7 +367,7 @@ export default function ProductMockup() {
         const h = el.image.height;
         flatCtx.drawImage(el.image, -w / 2, -h / 2, w, h);
       } else if (el.type === 'text') {
-        flatCtx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
+        flatCtx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial'}`;
         flatCtx.fillStyle = el.color || '#1a1a1a';
         flatCtx.textAlign = 'center';
         flatCtx.textBaseline = 'middle';
@@ -708,7 +801,7 @@ export default function ProductMockup() {
       rotation: 0,
       scale: 1,
       content: 'New Text',
-      font: 'Arial Black',
+      font: 'Arial',
       fontSize: 36,
       color: '#1a1a1a',
       visible: true,
@@ -1041,6 +1134,60 @@ export default function ProductMockup() {
                         />
                         
                         <div className="flex items-center gap-2">
+                          <Label className="text-xs w-12">Font:</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                role="combobox"
+                                className="flex-1 justify-between"
+                                data-testid="button-font-picker"
+                              >
+                                <span 
+                                  className="truncate text-xs"
+                                  style={{ fontFamily: selectedElement.font || 'Arial' }}
+                                >
+                                  {selectedElement.font || 'Arial'}
+                                </span>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[220px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Search fonts..." className="h-9" />
+                                <CommandList>
+                                  <CommandEmpty>No font found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {GOOGLE_FONTS.map((font) => (
+                                      <CommandItem
+                                        key={font}
+                                        value={font}
+                                        onSelect={() => {
+                                          loadGoogleFont(font).then(() => {
+                                            updateElement(selectedId!, { font });
+                                          });
+                                        }}
+                                        className="text-xs"
+                                        style={{ fontFamily: font }}
+                                        data-testid={`font-option-${font.toLowerCase().replace(/\s+/g, '-')}`}
+                                      >
+                                        <Check
+                                          className={`mr-2 h-4 w-4 ${
+                                            (selectedElement.font || 'Arial') === font ? 'opacity-100' : 'opacity-0'
+                                          }`}
+                                        />
+                                        {font}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
                           <Label className="text-xs w-12">Color:</Label>
                           <Popover>
                             <PopoverTrigger asChild>
@@ -1059,16 +1206,9 @@ export default function ProductMockup() {
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-3" align="start">
-                              <HexColorPicker
+                              <CMYKColorPicker
                                 color={selectedElement.color || '#1a1a1a'}
                                 onChange={(color) => updateElement(selectedId!, { color })}
-                              />
-                              <Input
-                                value={selectedElement.color || '#1a1a1a'}
-                                onChange={(e) => updateElement(selectedId!, { color: e.target.value })}
-                                className="mt-2 font-mono text-sm"
-                                placeholder="#000000"
-                                data-testid="input-color-hex"
                               />
                             </PopoverContent>
                           </Popover>
