@@ -109,6 +109,63 @@ export function getPathCommands(path: opentype.Path): PathCommand[] {
   return path.commands as PathCommand[];
 }
 
+/**
+ * Get SVG path data string from opentype.js path
+ * This is the industry-standard intermediate format for vector graphics
+ */
+export function getTextSvgPathData(
+  font: opentype.Font,
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number
+): string {
+  const path = font.getPath(text, x, y, fontSize);
+  // toPathData() returns just the 'd' attribute content (e.g., "M10 20 L30 40...")
+  return path.toPathData(2); // 2 decimal places precision
+}
+
+/**
+ * Parse SVG path 'd' attribute into path commands
+ * Standard SVG path parsing for M, L, C, Q, Z commands
+ */
+export function parseSvgPathData(d: string): PathCommand[] {
+  const commands: PathCommand[] = [];
+  
+  // Match commands: letter followed by optional numbers
+  const regex = /([MLCQZ])\s*([-\d.,\s]*)/gi;
+  let match;
+  
+  while ((match = regex.exec(d)) !== null) {
+    const type = match[1].toUpperCase() as 'M' | 'L' | 'C' | 'Q' | 'Z';
+    const nums = match[2].trim().split(/[\s,]+/).filter(n => n).map(Number);
+    
+    switch (type) {
+      case 'M':
+      case 'L':
+        if (nums.length >= 2) {
+          commands.push({ type, x: nums[0], y: nums[1] });
+        }
+        break;
+      case 'Q':
+        if (nums.length >= 4) {
+          commands.push({ type, x1: nums[0], y1: nums[1], x: nums[2], y: nums[3] });
+        }
+        break;
+      case 'C':
+        if (nums.length >= 6) {
+          commands.push({ type, x1: nums[0], y1: nums[1], x2: nums[2], y2: nums[3], x: nums[4], y: nums[5] });
+        }
+        break;
+      case 'Z':
+        commands.push({ type });
+        break;
+    }
+  }
+  
+  return commands;
+}
+
 export function isSystemFont(fontFamily: string): boolean {
   return SYSTEM_FONTS.includes(fontFamily);
 }

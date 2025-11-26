@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { loadFont, getTextPath, getPathCommands, isSystemFont, type PathCommand } from './fonts';
+import { loadFont, getTextSvgPathData, parseSvgPathData, isSystemFont, type PathCommand } from './fonts';
 
 export interface TextElement {
   id: string;
@@ -312,8 +312,9 @@ export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<
           const font = await loadFont(fontFamily);
           if (font) {
             const pdfFontSize = fontSize * 0.3;
-            const path = getTextPath(font, element.content, 0, 0, pdfFontSize);
-            const commands = getPathCommands(path);
+            // Use SVG path data as industry-standard intermediate format
+            const svgPathData = getTextSvgPathData(font, element.content, 0, 0, pdfFontSize);
+            const commands = parseSvgPathData(svgPathData);
             
             if (commands.length > 0) {
               drawPathOnPdf(doc, commands, margin, yPos + pdfFontSize, 1, color);
