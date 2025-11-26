@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import * as THREE from 'three';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Download, Upload, RotateCcw, Image, Type, Move, Palette } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
+import productImageUrl from '@assets/Hemp-Wick-without-Label---Square_1764117282500.jpg';
 
 const LABEL_WIDTH = 628;
 const LABEL_HEIGHT = 600;
@@ -25,31 +26,35 @@ interface LabelElement {
   font?: string;
   fontSize?: number;
   color?: string;
+  visible?: boolean;
   image?: HTMLImageElement;
-}
-
-interface ThreeContext {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  renderer: THREE.WebGLRenderer;
-  cylinder: THREE.Mesh;
-  animationId: number;
 }
 
 export default function ProductMockup() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const threeContainerRef = useRef<HTMLDivElement>(null);
-  const threeContextRef = useRef<ThreeContext | null>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const labelInputRef = useRef<HTMLInputElement>(null);
+  const productImageRef = useRef<HTMLImageElement | null>(null);
   
   const [elements, setElements] = useState<LabelElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [cylinderRotation, setCylinderRotation] = useState(0);
+  const [viewRotation, setViewRotation] = useState(120);
   const [uploadedLabel, setUploadedLabel] = useState<HTMLImageElement | null>(null);
   const [mode, setMode] = useState<'build' | 'upload'>('build');
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [productImageLoaded, setProductImageLoaded] = useState(false);
+
+  useEffect(() => {
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      productImageRef.current = img;
+      setProductImageLoaded(true);
+    };
+    img.src = productImageUrl;
+  }, []);
 
   const generateKraftTexture = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
     ctx.fillStyle = '#c4a574';
@@ -94,7 +99,7 @@ export default function ProductMockup() {
       const h = uploadedLabel.height * scale;
       ctx.drawImage(uploadedLabel, (LABEL_WIDTH - w) / 2, (LABEL_HEIGHT - h) / 2, w, h);
     } else {
-      elements.forEach(el => {
+      elements.filter(el => el.visible !== false).forEach(el => {
         ctx.save();
         ctx.translate(el.x, el.y);
         ctx.rotate((el.rotation * Math.PI) / 180);
@@ -137,7 +142,7 @@ export default function ProductMockup() {
 
     if (selectedId) {
       const selected = elements.find(el => el.id === selectedId);
-      if (selected) {
+      if (selected && selected.visible !== false) {
         ctx.save();
         ctx.translate(selected.x, selected.y);
         ctx.rotate((selected.rotation * Math.PI) / 180);
@@ -163,7 +168,7 @@ export default function ProductMockup() {
     }
   }, [elements, selectedId, mode, uploadedLabel, generateKraftTexture]);
 
-  const createCylinderTexture = useCallback((): THREE.CanvasTexture => {
+  const createLabelTexture = useCallback(() => {
     const canvas = document.createElement('canvas');
     canvas.width = LABEL_HEIGHT;
     canvas.height = LABEL_WIDTH;
@@ -183,7 +188,7 @@ export default function ProductMockup() {
       const h = uploadedLabel.height * scale;
       ctx.drawImage(uploadedLabel, (LABEL_WIDTH - w) / 2, (LABEL_HEIGHT - h) / 2, w, h);
     } else {
-      elements.forEach(el => {
+      elements.filter(el => el.visible !== false).forEach(el => {
         ctx.save();
         ctx.translate(el.x, el.y);
         ctx.rotate((el.rotation * Math.PI) / 180);
@@ -208,167 +213,81 @@ export default function ProductMockup() {
     ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
 
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.needsUpdate = true;
-    return texture;
+    return canvas;
   }, [elements, mode, uploadedLabel, generateKraftTexture]);
+
+  const drawProductPreview = useCallback(() => {
+    const canvas = previewCanvasRef.current;
+    const productImage = productImageRef.current;
+    if (!canvas || !productImage || !productImageLoaded) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const size = 400;
+    canvas.width = size;
+    canvas.height = size;
+
+    ctx.drawImage(productImage, 0, 0, size, size);
+
+    const labelTexture = createLabelTexture();
+    
+    const cylinderCenterX = size * 0.485;
+    const cylinderTop = size * 0.185;
+    const cylinderBottom = size * 0.78;
+    const cylinderRadius = size * 0.095;
+    const cylinderHeight = cylinderBottom - cylinderTop;
+
+    const rotationOffset = (viewRotation / 360) * Math.PI * 2;
+    const visibleStart = -Math.PI / 2 + rotationOffset;
+    const visibleEnd = Math.PI / 2 + rotationOffset;
+    
+    const slices = 60;
+    for (let i = 0; i < slices; i++) {
+      const angle = visibleStart + (i / slices) * (visibleEnd - visibleStart);
+      const nextAngle = visibleStart + ((i + 1) / slices) * (visibleEnd - visibleStart);
+      
+      const x1 = cylinderCenterX + Math.sin(angle) * cylinderRadius;
+      const x2 = cylinderCenterX + Math.sin(nextAngle) * cylinderRadius;
+      
+      const normalizedAngle = ((angle - rotationOffset + Math.PI) / (Math.PI * 2) + 0.5) % 1;
+      const srcX = normalizedAngle * labelTexture.width;
+      const srcWidth = labelTexture.width / slices;
+      
+      const depth = Math.cos(angle);
+      const brightness = 0.6 + depth * 0.4;
+      
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x1, cylinderTop);
+      ctx.lineTo(x2, cylinderTop);
+      ctx.lineTo(x2, cylinderBottom);
+      ctx.lineTo(x1, cylinderBottom);
+      ctx.closePath();
+      ctx.clip();
+      
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.drawImage(
+        labelTexture,
+        srcX, 0, srcWidth, labelTexture.height,
+        x1, cylinderTop, x2 - x1 + 1, cylinderHeight
+      );
+      
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `rgba(0, 0, 0, ${(1 - brightness) * 0.3})`;
+      ctx.fillRect(x1, cylinderTop, x2 - x1 + 1, cylinderHeight);
+      
+      ctx.restore();
+    }
+  }, [createLabelTexture, viewRotation, productImageLoaded]);
 
   useEffect(() => {
     drawFlatLabel();
   }, [drawFlatLabel]);
 
   useEffect(() => {
-    const container = threeContainerRef.current;
-    if (!container) return;
-
-    const rect = container.getBoundingClientRect();
-    const width = rect.width || 400;
-    const height = rect.height || 400;
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#f5f0e8');
-
-    const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 6);
-
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true, 
-      preserveDrawingBuffer: true,
-    });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(5, 5, 5);
-    scene.add(directionalLight);
-
-    const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    backLight.position.set(-5, 3, -5);
-    scene.add(backLight);
-
-    const radius = 0.5;
-    const heightVal = 3.0;
-
-    const labelTexture = createCylinderTexture();
-    const bodyGeometry = new THREE.CylinderGeometry(radius, radius, heightVal, 64, 1, true);
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-      map: labelTexture,
-      roughness: 0.6,
-      metalness: 0.05,
-      side: THREE.DoubleSide,
-    });
-    const cylinder = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    scene.add(cylinder);
-
-    const hempCanvas = document.createElement('canvas');
-    hempCanvas.width = 256;
-    hempCanvas.height = 256;
-    const hempCtx = hempCanvas.getContext('2d')!;
-    hempCtx.fillStyle = '#8b7355';
-    hempCtx.fillRect(0, 0, 256, 256);
-    
-    for (let i = 0; i < 40; i++) {
-      hempCtx.strokeStyle = i % 2 === 0 ? '#9a8265' : '#7a6345';
-      hempCtx.lineWidth = 4;
-      hempCtx.beginPath();
-      const y = (i / 40) * 256;
-      hempCtx.moveTo(0, y);
-      for (let x = 0; x < 256; x += 8) {
-        hempCtx.lineTo(x, y + Math.sin(x * 0.05 + i) * 2);
-      }
-      hempCtx.stroke();
-    }
-    const hempTexture = new THREE.CanvasTexture(hempCanvas);
-
-    const capMaterial = new THREE.MeshStandardMaterial({
-      map: hempTexture,
-      roughness: 0.95,
-      metalness: 0,
-    });
-
-    const topCapGeometry = new THREE.CircleGeometry(radius, 64);
-    const topCap = new THREE.Mesh(topCapGeometry, capMaterial);
-    topCap.rotation.x = -Math.PI / 2;
-    topCap.position.y = heightVal / 2;
-    scene.add(topCap);
-
-    const bottomCapGeometry = new THREE.CircleGeometry(radius, 64);
-    const bottomCap = new THREE.Mesh(bottomCapGeometry, capMaterial);
-    bottomCap.rotation.x = Math.PI / 2;
-    bottomCap.position.y = -heightVal / 2;
-    scene.add(bottomCap);
-
-    const wickGeometry = new THREE.CylinderGeometry(0.02, 0.015, 0.5, 12);
-    const wickMaterial = new THREE.MeshStandardMaterial({
-      color: 0x6b5344,
-      roughness: 1,
-    });
-    const wick = new THREE.Mesh(wickGeometry, wickMaterial);
-    wick.position.y = heightVal / 2 + 0.2;
-    wick.position.x = 0.12;
-    wick.rotation.z = Math.PI / 7;
-    scene.add(wick);
-
-    let animationId: number;
-    const animate = () => {
-      animationId = requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    const handleResize = () => {
-      const newRect = container.getBoundingClientRect();
-      const newWidth = newRect.width || 400;
-      const newHeight = newRect.height || 400;
-      camera.aspect = newWidth / newHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newWidth, newHeight);
-    };
-    window.addEventListener('resize', handleResize);
-
-    threeContextRef.current = {
-      scene,
-      camera,
-      renderer,
-      cylinder,
-      animationId,
-    };
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(animationId);
-      renderer.dispose();
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
-      threeContextRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const ctx = threeContextRef.current;
-    if (!ctx) return;
-
-    const newTexture = createCylinderTexture();
-    const material = ctx.cylinder.material as THREE.MeshStandardMaterial;
-    if (material.map) {
-      material.map.dispose();
-    }
-    material.map = newTexture;
-    material.needsUpdate = true;
-  }, [createCylinderTexture]);
-
-  useEffect(() => {
-    const ctx = threeContextRef.current;
-    if (!ctx) return;
-    ctx.cylinder.rotation.y = (cylinderRotation * Math.PI) / 180;
-  }, [cylinderRotation]);
+    drawProductPreview();
+  }, [drawProductPreview]);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -383,6 +302,8 @@ export default function ProductMockup() {
     let found: string | null = null;
     for (let i = elements.length - 1; i >= 0; i--) {
       const el = elements[i];
+      if (el.visible === false) continue;
+      
       let w = 100, h = 50;
       if (el.type === 'logo' && el.image) {
         w = el.image.width * el.scale;
@@ -457,6 +378,7 @@ export default function ProductMockup() {
             rotation: 0,
             scale: Math.min(200 / img.width, 200 / img.height),
             content: '',
+            visible: true,
             image: img,
           };
           setElements(prev => [...prev, newElement]);
@@ -485,33 +407,53 @@ export default function ProductMockup() {
   };
 
   const addTextElement = () => {
+    const textCount = elements.filter(el => el.type === 'text').length;
     const newElement: LabelElement = {
       id: `text-${Date.now()}`,
       type: 'text',
       x: LABEL_WIDTH / 2,
-      y: LABEL_HEIGHT / 2,
+      y: 150 + (textCount * 60) % (LABEL_HEIGHT - 200),
       rotation: 0,
       scale: 1,
-      content: 'Your Text',
+      content: 'New Text',
       font: 'Arial Black',
       fontSize: 36,
       color: '#1a1a1a',
+      visible: true,
     };
     setElements(prev => [...prev, newElement]);
     setSelectedId(newElement.id);
   };
 
-  const updateSelectedElement = (updates: Partial<LabelElement>) => {
-    if (!selectedId) return;
+  const updateElement = (id: string, updates: Partial<LabelElement>) => {
     setElements(prev => prev.map(el => 
-      el.id === selectedId ? { ...el, ...updates } : el
+      el.id === id ? { ...el, ...updates } : el
     ));
   };
 
-  const deleteSelected = () => {
-    if (!selectedId) return;
-    setElements(prev => prev.filter(el => el.id !== selectedId));
-    setSelectedId(null);
+  const deleteElement = (id: string) => {
+    setElements(prev => prev.filter(el => el.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  };
+
+  const toggleVisibility = (id: string) => {
+    setElements(prev => prev.map(el => 
+      el.id === id ? { ...el, visible: el.visible === false ? true : false } : el
+    ));
+  };
+
+  const moveElement = (id: string, direction: 'up' | 'down') => {
+    setElements(prev => {
+      const index = prev.findIndex(el => el.id === id);
+      if (index === -1) return prev;
+      
+      const newIndex = direction === 'up' ? index + 1 : index - 1;
+      if (newIndex < 0 || newIndex >= prev.length) return prev;
+      
+      const newElements = [...prev];
+      [newElements[index], newElements[newIndex]] = [newElements[newIndex], newElements[index]];
+      return newElements;
+    });
   };
 
   const handleReset = () => {
@@ -519,16 +461,16 @@ export default function ProductMockup() {
     setSelectedId(null);
     setUploadedLabel(null);
     setMode('build');
-    setCylinderRotation(0);
+    setViewRotation(0);
   };
 
   const handleDownload = () => {
-    const ctx = threeContextRef.current;
-    if (!ctx) return;
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
     
     const link = document.createElement('a');
     link.download = 'hemp-wick-mockup.png';
-    link.href = ctx.renderer.domElement.toDataURL('image/png');
+    link.href = canvas.toDataURL('image/png');
     link.click();
   };
 
@@ -546,17 +488,15 @@ export default function ProductMockup() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-lg">Flat Label Design</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleReset}
-                  data-testid="button-reset"
-                >
-                  <RotateCcw className="h-4 w-4 mr-1" />
-                  Reset
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleReset}
+                data-testid="button-reset"
+              >
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Reset
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -585,23 +525,13 @@ export default function ProductMockup() {
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="default"
                     onClick={addTextElement}
                     data-testid="button-add-text"
                   >
-                    <Type className="h-4 w-4 mr-1" />
+                    <Plus className="h-4 w-4 mr-1" />
                     Add Text
                   </Button>
-                  {selectedId && (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={deleteSelected}
-                      data-testid="button-delete"
-                    >
-                      Delete
-                    </Button>
-                  )}
                 </div>
                 <input
                   ref={fileInputRef}
@@ -610,6 +540,77 @@ export default function ProductMockup() {
                   className="hidden"
                   onChange={handleLogoUpload}
                 />
+
+                {elements.length > 0 && (
+                  <div className="border rounded-lg">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b">
+                      <Layers className="h-4 w-4" />
+                      <span className="text-sm font-medium">Layers ({elements.length})</span>
+                    </div>
+                    <ScrollArea className="max-h-40">
+                      <div className="divide-y">
+                        {[...elements].reverse().map((el, idx) => (
+                          <div
+                            key={el.id}
+                            className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-muted/50 ${
+                              selectedId === el.id ? 'bg-primary/10' : ''
+                            }`}
+                            onClick={() => setSelectedId(el.id)}
+                            data-testid={`layer-item-${idx}`}
+                          >
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6"
+                              onClick={(e) => { e.stopPropagation(); toggleVisibility(el.id); }}
+                            >
+                              {el.visible !== false ? (
+                                <Eye className="h-3 w-3" />
+                              ) : (
+                                <EyeOff className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </Button>
+                            <div 
+                              className="w-4 h-4 rounded border"
+                              style={{ backgroundColor: el.type === 'text' ? (el.color || '#1a1a1a') : '#888' }}
+                            />
+                            <span className={`flex-1 text-xs truncate ${el.visible === false ? 'text-muted-foreground' : ''}`}>
+                              {el.type === 'text' ? el.content : 'Logo'}
+                            </span>
+                            <div className="flex gap-0.5">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5"
+                                onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'up'); }}
+                                disabled={idx === 0}
+                              >
+                                <ChevronUp className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5"
+                                onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'down'); }}
+                                disabled={idx === elements.length - 1}
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5 text-destructive hover:text-destructive"
+                                onClick={(e) => { e.stopPropagation(); deleteElement(el.id); }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
               </TabsContent>
               
               <TabsContent value="upload" className="space-y-3">
@@ -654,33 +655,46 @@ export default function ProductMockup() {
             </div>
 
             <p className="text-xs text-muted-foreground text-center">
-              Label size: ~63mm × 60mm (circumference × height) • Click to select, drag to move
+              Click to select, drag to move • Click "Add Text" for more text lines
             </p>
 
             {selectedElement && mode === 'build' && (
               <div className="p-3 bg-muted rounded-lg space-y-3">
-                <div className="flex items-center gap-2">
-                  <Move className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Selected: {selectedElement.type}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Move className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">
+                      {selectedElement.type === 'text' ? 'Edit Text' : 'Edit Logo'}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => deleteElement(selectedId!)}
+                    data-testid="button-delete"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Delete
+                  </Button>
                 </div>
                 
                 {selectedElement.type === 'text' && (
                   <div className="space-y-3">
                     <Input
                       value={selectedElement.content}
-                      onChange={(e) => updateSelectedElement({ content: e.target.value })}
+                      onChange={(e) => updateElement(selectedId!, { content: e.target.value })}
                       placeholder="Enter text"
                       data-testid="input-text-content"
                     />
                     
                     <div className="flex items-center gap-2">
-                      <Label className="text-xs w-16">Color:</Label>
+                      <Label className="text-xs w-14">Color:</Label>
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="w-full justify-start gap-2"
+                            className="flex-1 justify-start gap-2"
                             data-testid="button-color-picker"
                           >
                             <div 
@@ -694,11 +708,11 @@ export default function ProductMockup() {
                         <PopoverContent className="w-auto p-3" align="start">
                           <HexColorPicker
                             color={selectedElement.color || '#1a1a1a'}
-                            onChange={(color) => updateSelectedElement({ color })}
+                            onChange={(color) => updateElement(selectedId!, { color })}
                           />
                           <Input
                             value={selectedElement.color || '#1a1a1a'}
-                            onChange={(e) => updateSelectedElement({ color: e.target.value })}
+                            onChange={(e) => updateElement(selectedId!, { color: e.target.value })}
                             className="mt-2 font-mono text-sm"
                             placeholder="#000000"
                             data-testid="input-color-hex"
@@ -708,47 +722,47 @@ export default function ProductMockup() {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      <Label className="text-xs w-16">Size:</Label>
+                      <Label className="text-xs w-14">Size:</Label>
                       <Slider
                         value={[selectedElement.fontSize || 32]}
-                        onValueChange={([v]) => updateSelectedElement({ fontSize: v })}
+                        onValueChange={([v]) => updateElement(selectedId!, { fontSize: v })}
                         min={12}
                         max={80}
                         step={2}
                         className="flex-1"
                         data-testid="slider-text-size"
                       />
-                      <span className="text-xs w-8">{selectedElement.fontSize}px</span>
+                      <span className="text-xs w-10 text-right">{selectedElement.fontSize}px</span>
                     </div>
                   </div>
                 )}
                 
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs w-16">Scale:</Label>
+                  <Label className="text-xs w-14">Scale:</Label>
                   <Slider
                     value={[selectedElement.scale * 100]}
-                    onValueChange={([v]) => updateSelectedElement({ scale: v / 100 })}
+                    onValueChange={([v]) => updateElement(selectedId!, { scale: v / 100 })}
                     min={10}
                     max={300}
                     step={5}
                     className="flex-1"
                     data-testid="slider-scale"
                   />
-                  <span className="text-xs w-8">{Math.round(selectedElement.scale * 100)}%</span>
+                  <span className="text-xs w-10 text-right">{Math.round(selectedElement.scale * 100)}%</span>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs w-16">Rotate:</Label>
+                  <Label className="text-xs w-14">Rotate:</Label>
                   <Slider
                     value={[selectedElement.rotation]}
-                    onValueChange={([v]) => updateSelectedElement({ rotation: v })}
+                    onValueChange={([v]) => updateElement(selectedId!, { rotation: v })}
                     min={0}
                     max={360}
                     step={5}
                     className="flex-1"
                     data-testid="slider-rotation"
                   />
-                  <span className="text-xs w-8">{selectedElement.rotation}°</span>
+                  <span className="text-xs w-10 text-right">{selectedElement.rotation}°</span>
                 </div>
               </div>
             )}
@@ -765,7 +779,7 @@ export default function ProductMockup() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-lg">3D Wrapped Preview</CardTitle>
+              <CardTitle className="text-lg">Product Preview</CardTitle>
               <Button
                 size="icon"
                 variant="outline"
@@ -778,26 +792,33 @@ export default function ProductMockup() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div 
-              ref={threeContainerRef} 
-              className="w-full h-[350px] rounded-lg overflow-hidden"
-              style={{ background: '#f5f0e8' }}
-              data-testid="container-3d-viewer"
-            />
+              className="w-full flex items-center justify-center rounded-lg overflow-hidden"
+              style={{ background: '#e8dcc8' }}
+              data-testid="container-preview"
+            >
+              <canvas
+                ref={previewCanvasRef}
+                width={400}
+                height={400}
+                className="max-w-full"
+                style={{ imageRendering: 'auto' }}
+              />
+            </div>
             
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-sm">Rotate View: {cylinderRotation}°</Label>
+                <Label className="text-sm">Rotate View: {viewRotation}°</Label>
               </div>
               <Slider
-                value={[cylinderRotation]}
-                onValueChange={([v]) => setCylinderRotation(v)}
+                value={[viewRotation]}
+                onValueChange={([v]) => setViewRotation(v)}
                 min={0}
                 max={360}
                 step={5}
-                data-testid="slider-cylinder-rotation"
+                data-testid="slider-view-rotation"
               />
               <p className="text-xs text-muted-foreground text-center">
-                Slide to rotate the product and see your label from all angles
+                Slide to rotate and see your label from all angles
               </p>
             </div>
 
@@ -806,8 +827,8 @@ export default function ProductMockup() {
                 <Button
                   key={angle}
                   size="sm"
-                  variant={cylinderRotation === angle ? 'default' : 'outline'}
-                  onClick={() => setCylinderRotation(angle)}
+                  variant={viewRotation === angle ? 'default' : 'outline'}
+                  onClick={() => setViewRotation(angle)}
                   data-testid={`button-angle-${angle}`}
                 >
                   {angle}°
