@@ -106,3 +106,6 @@ integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:1.0.
 [userenv.shared]
 GMAIL_PUBSUB_TOPIC = "projects/durable-student-395209/topics/gmail-inbox-push"
 GMAIL_ADMIN_USER_ID = "4df35876-ab89-4860-8656-0440accfea14"
+
+[userenv.development]
+VITE_HMR_PORT = "5000"

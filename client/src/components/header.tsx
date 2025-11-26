@@ -49,13 +49,88 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
 
   return (
     <header className="border-b bg-card sticky top-0 z-50">
-      {/* Row 1: Logo + Utilities */}
-      <div className="px-2 py-2 md:px-3 flex items-center justify-between">
+      <div className="px-2 py-2 md:px-3 flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xs md:text-sm font-semibold text-foreground whitespace-nowrap">NMU CRM</h1>
         
-        {/* Mobile Menu Button */}
+        {/* Full Navigation - Shows on md+, wraps naturally */}
+        <nav className="hidden md:flex items-center gap-0 flex-wrap">
+          {user.role === 'admin' && (
+            <Link href="/admin">
+              <Button variant="ghost" size="sm" data-testid="nav-admin">
+                <ShieldCheck className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Admin
+              </Button>
+            </Link>
+          )}
+          <Link href="/">
+            <Button variant="ghost" size="sm" data-testid="nav-dashboard">
+              <Home className="hidden xl:mr-2 xl:inline h-4 w-4" />
+              Dashboard
+            </Button>
+          </Link>
+          <Link href="/clients">
+            <Button variant="ghost" size="sm" data-testid="nav-clients">
+              <BarChart3 className="hidden xl:mr-2 xl:inline h-4 w-4" />
+              Clients
+            </Button>
+          </Link>
+          <Link href="/follow-up-center">
+            <Button variant="ghost" size="sm" data-testid="nav-follow-up-center">
+              <Target className="hidden xl:mr-2 xl:inline h-4 w-4" />
+              Follow-Up
+            </Button>
+          </Link>
+          <Link href="/map-search">
+            <Button variant="ghost" size="sm" data-testid="nav-map-search">
+              <MapPin className="hidden xl:mr-2 xl:inline h-4 w-4" />
+              Map Search
+            </Button>
+          </Link>
+          <Link href="/sales">
+            <Button variant="ghost" size="sm" data-testid="nav-sales">
+              <TrendingUp className="hidden xl:mr-2 xl:inline h-4 w-4" />
+              Sales
+            </Button>
+          </Link>
+          <Link href="/assistant">
+            <Button variant="ghost" size="sm" data-testid="nav-assistant">
+              <Bot className="hidden xl:mr-2 xl:inline h-4 w-4" />
+              Assistant
+            </Button>
+          </Link>
+          <Link href="/documents">
+            <Button variant="ghost" size="sm" data-testid="nav-documents">
+              <FileText className="hidden xl:mr-2 xl:inline h-4 w-4" />
+              Docs
+            </Button>
+          </Link>
+          <Link href="/product-mockup">
+            <Button variant="ghost" size="sm" data-testid="nav-product-mockup">
+              <Palette className="hidden xl:mr-2 xl:inline h-4 w-4" />
+              Label Designer
+            </Button>
+          </Link>
+          {(user.role === 'admin' || user.hasVoiceAccess) && (
+            <Link href="/call-manager">
+              <Button variant="ghost" size="sm" data-testid="nav-call-manager">
+                <Phone className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Call Manager
+              </Button>
+            </Link>
+          )}
+          {user.role === 'admin' && (
+            <Link href="/ehub">
+              <Button variant="ghost" size="sm" data-testid="nav-ehub">
+                <Mail className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                E-Hub
+              </Button>
+            </Link>
+          )}
+        </nav>
+
+        {/* Mobile Menu Button - Only on small screens */}
         <DropdownMenu open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <DropdownMenuTrigger asChild className="lg:hidden">
+          <DropdownMenuTrigger asChild className="md:hidden">
             <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
               <Menu className="h-5 w-5" />
             </Button>
@@ -178,82 +253,6 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
           </DropdownMenu>
         </div>
       </div>
-
-      {/* Row 2: Full Navigation (Large screens only) */}
-      <nav className="hidden lg:flex border-t px-2 py-1 md:px-3 items-center gap-0 overflow-x-auto">
-        {user.role === 'admin' && (
-          <Link href="/admin">
-            <Button variant="ghost" size="sm" data-testid="nav-admin">
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              Admin
-            </Button>
-          </Link>
-        )}
-        <Link href="/">
-          <Button variant="ghost" size="sm" data-testid="nav-dashboard">
-            <Home className="mr-2 h-4 w-4" />
-            Dashboard
-          </Button>
-        </Link>
-        <Link href="/clients">
-          <Button variant="ghost" size="sm" data-testid="nav-clients">
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Clients
-          </Button>
-        </Link>
-        <Link href="/follow-up-center">
-          <Button variant="ghost" size="sm" data-testid="nav-follow-up-center">
-            <Target className="mr-2 h-4 w-4" />
-            Follow-Up
-          </Button>
-        </Link>
-        <Link href="/map-search">
-          <Button variant="ghost" size="sm" data-testid="nav-map-search">
-            <MapPin className="mr-2 h-4 w-4" />
-            Map Search
-          </Button>
-        </Link>
-        <Link href="/sales">
-          <Button variant="ghost" size="sm" data-testid="nav-sales">
-            <TrendingUp className="mr-2 h-4 w-4" />
-            Sales
-          </Button>
-        </Link>
-        <Link href="/assistant">
-          <Button variant="ghost" size="sm" data-testid="nav-assistant">
-            <Bot className="mr-2 h-4 w-4" />
-            Assistant
-          </Button>
-        </Link>
-        <Link href="/documents">
-          <Button variant="ghost" size="sm" data-testid="nav-documents">
-            <FileText className="mr-2 h-4 w-4" />
-            Docs
-          </Button>
-        </Link>
-        <Link href="/product-mockup">
-          <Button variant="ghost" size="sm" data-testid="nav-product-mockup">
-            <Palette className="mr-2 h-4 w-4" />
-            Label Designer
-          </Button>
-        </Link>
-        {(user.role === 'admin' || user.hasVoiceAccess) && (
-          <Link href="/call-manager">
-            <Button variant="ghost" size="sm" data-testid="nav-call-manager">
-              <Phone className="mr-2 h-4 w-4" />
-              Call Manager
-            </Button>
-          </Link>
-        )}
-        {user.role === 'admin' && (
-          <Link href="/ehub">
-            <Button variant="ghost" size="sm" data-testid="nav-ehub">
-              <Mail className="mr-2 h-4 w-4" />
-              E-Hub
-            </Button>
-          </Link>
-        )}
-      </nav>
       
       <TicketDialog open={ticketDialogOpen} onOpenChange={setTicketDialogOpen} />
     </header>
