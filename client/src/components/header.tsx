@@ -49,13 +49,13 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
 
   return (
     <header className="border-b bg-card">
-      <div className="container mx-auto px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-foreground">NMU CRM</h1>
+      <div className="px-2 py-2 md:px-4 md:py-3">
+        <div className="flex items-center justify-between gap-1 md:gap-2">
+          <div className="flex items-center gap-1 md:gap-3 min-w-0">
+            <h1 className="text-sm md:text-lg font-semibold text-foreground whitespace-nowrap">NMU CRM</h1>
             
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center gap-1">
+            <nav className="hidden md:flex items-center gap-0">
               {user.role === 'admin' && (
                 <Link href="/admin">
                   <Button variant="ghost" size="sm" data-testid="nav-admin">
@@ -103,7 +103,13 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               <Link href="/documents">
                 <Button variant="ghost" size="sm" data-testid="nav-documents">
                   <FileText className="mr-2 h-4 w-4" />
-                  Documents
+                  Docs
+                </Button>
+              </Link>
+              <Link href="/product-mockup">
+                <Button variant="ghost" size="sm" data-testid="nav-product-mockup">
+                  <Palette className="mr-2 h-4 w-4" />
+                  <span className="hidden xl:inline">Label</span>
                 </Button>
               </Link>
               {(user.role === 'admin' || user.hasVoiceAccess) && (
