@@ -207,221 +207,142 @@ export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<
   });
   
   const pageWidth = 210;
-  const pageHeight = 297;
   const margin = 15;
   let yPos = margin;
   
-  doc.setFontSize(24);
+  // Header
+  doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.text('Label Project Specifications', margin, yPos);
-  yPos += 12;
+  yPos += 10;
   
-  doc.setFontSize(12);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Project: ${data.projectName}`, margin, yPos);
-  yPos += 6;
-  doc.text(`Email: ${data.projectEmail}`, margin, yPos);
-  yPos += 6;
-  doc.text(`Date: ${new Date().toLocaleDateString()}`, margin, yPos);
-  yPos += 12;
+  doc.text(`Project: ${data.projectName}  |  Email: ${data.projectEmail}  |  Date: ${new Date().toLocaleDateString()}`, margin, yPos);
+  yPos += 8;
   
   doc.setDrawColor(200, 200, 200);
   doc.line(margin, yPos, pageWidth - margin, yPos);
-  yPos += 8;
+  yPos += 6;
   
-  doc.setFontSize(16);
+  // Side-by-side images
+  const contentWidth = pageWidth - margin * 2;
+  const halfWidth = (contentWidth - 10) / 2; // 10mm gap between images
+  const leftX = margin;
+  const rightX = margin + halfWidth + 10;
+  
+  // Design Preview (left side) - 3:4 ratio
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('Design Preview', margin, yPos);
-  yPos += 8;
+  doc.text('Design Preview', leftX, yPos);
+  doc.text('3D Mockup Preview', rightX, yPos);
+  yPos += 5;
+  
+  const designWidth = halfWidth;
+  const designHeight = designWidth * (4/3); // 3:4 aspect ratio
   
   if (data.designPng) {
     try {
       const imgData = data.designPng.startsWith('data:') 
         ? data.designPng 
         : `data:image/png;base64,${data.designPng}`;
-      
-      // Use 3:4 ratio (75×100mm) to match the 450×600px canvas exactly
-      const designWidth = 75;
-      const designHeight = 100;
-      
-      doc.addImage(imgData, 'PNG', margin, yPos, designWidth, designHeight);
-      yPos += designHeight + 10;
+      doc.addImage(imgData, 'PNG', leftX, yPos, designWidth, designHeight);
     } catch (error) {
       console.error('Failed to add design image to PDF:', error);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'italic');
-      doc.text('[Design image could not be embedded]', margin, yPos);
-      yPos += 8;
     }
   }
   
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('3D Mockup Preview', margin, yPos);
-  yPos += 8;
-  
+  // 3D Mockup Preview (right side) - preserve aspect ratio
   if (data.mockupPng) {
     try {
       const imgData = data.mockupPng.startsWith('data:') 
         ? data.mockupPng 
         : `data:image/png;base64,${data.mockupPng}`;
       
-      // Parse PNG dimensions from header to preserve actual aspect ratio
+      // Parse PNG dimensions to preserve aspect ratio
       const base64Data = data.mockupPng.replace(/^data:image\/\w+;base64,/, '');
       const pngBuffer = Buffer.from(base64Data, 'base64');
       
-      // PNG header: bytes 16-19 = width, bytes 20-23 = height (big endian)
-      let imgWidth = 400;  // fallback
-      let imgHeight = 400; // fallback
+      let imgWidth = 400;
+      let imgHeight = 500;
       if (pngBuffer.length > 24 && pngBuffer[0] === 0x89 && pngBuffer[1] === 0x50) {
         imgWidth = pngBuffer.readUInt32BE(16);
         imgHeight = pngBuffer.readUInt32BE(20);
       }
       
-      // Calculate dimensions to fit in max 80mm while preserving aspect ratio
-      const maxSize = 80;
       const aspectRatio = imgWidth / imgHeight;
-      let mockupWidth: number;
-      let mockupHeight: number;
+      let mockupWidth = halfWidth;
+      let mockupHeight = mockupWidth / aspectRatio;
       
-      if (aspectRatio > 1) {
-        // Wider than tall
-        mockupWidth = maxSize;
-        mockupHeight = maxSize / aspectRatio;
-      } else {
-        // Taller than wide or square
-        mockupHeight = maxSize;
-        mockupWidth = maxSize * aspectRatio;
+      // If mockup would be taller than design, constrain by height
+      if (mockupHeight > designHeight) {
+        mockupHeight = designHeight;
+        mockupWidth = mockupHeight * aspectRatio;
       }
       
-      doc.addImage(imgData, 'PNG', margin, yPos, mockupWidth, mockupHeight);
-      yPos += mockupHeight + 10;
+      doc.addImage(imgData, 'PNG', rightX, yPos, mockupWidth, mockupHeight);
     } catch (error) {
       console.error('Failed to add mockup image to PDF:', error);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'italic');
-      doc.text('[Mockup image could not be embedded]', margin, yPos);
-      yPos += 8;
     }
   }
   
-  if (yPos > pageHeight - 80) {
-    doc.addPage();
-    yPos = margin;
-  }
+  yPos += designHeight + 8;
   
-  doc.setFontSize(16);
+  // Text Elements section with vector text rendering
+  doc.setDrawColor(200, 200, 200);
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 6;
+  
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.text('Text Elements', margin, yPos);
-  yPos += 8;
+  yPos += 6;
   
   const textElements = data.elements.filter(el => el.type === 'text' && el.visible !== false);
   
   if (textElements.length === 0) {
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'italic');
+    doc.setTextColor(100, 100, 100);
     doc.text('No text elements in design', margin, yPos);
-    yPos += 8;
+    doc.setTextColor(0, 0, 0);
+    yPos += 6;
   } else {
     for (const element of textElements) {
-      if (yPos > pageHeight - 50) {
-        doc.addPage();
-        yPos = margin;
-      }
-      
       const fontFamily = element.font || 'Arial';
       const visualSize = element.visualSize || (element.fontSize || 24) * element.scale;
       const color = parseColorToRgb(element.color || '#000000');
       const cmykStr = element.cmyk || 'C: 0% M: 0% Y: 0% K: 100%';
       
-      // Draw text content
-      doc.setFontSize(12);
+      // Render the actual text at visual size (scaled to fit PDF)
+      // Convert pixel size to mm (roughly 1pt = 0.35mm, but adjust for screen)
+      const pdfFontSize = Math.min(visualSize * 0.5, 36); // Cap at 36pt for PDF
+      
+      doc.setFontSize(pdfFontSize);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(color.r, color.g, color.b);
-      doc.text(`"${element.content}"`, margin, yPos);
+      doc.text(element.content, margin, yPos);
       doc.setTextColor(0, 0, 0);
-      yPos += 6;
+      yPos += pdfFontSize * 0.4 + 2;
       
-      // Draw font info
-      doc.setFontSize(9);
+      // Font specs on same line
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(80, 80, 80);
-      doc.text(`Font: ${fontFamily}`, margin + 5, yPos);
-      yPos += 4;
-      doc.text(`Size: ${visualSize}pt`, margin + 5, yPos);
-      yPos += 4;
       
-      // Draw CMYK color swatch and info
-      const swatchSize = 4;
+      // Color swatch
+      const swatchSize = 3;
       doc.setFillColor(color.r, color.g, color.b);
-      doc.setDrawColor(100, 100, 100);
-      doc.rect(margin + 5, yPos - 3, swatchSize, swatchSize, 'FD');
-      doc.text(`Color: ${cmykStr}`, margin + 5 + swatchSize + 2, yPos);
+      doc.setDrawColor(150, 150, 150);
+      doc.rect(margin, yPos - 2.5, swatchSize, swatchSize, 'FD');
+      
+      doc.text(`${fontFamily}  |  ${Math.round(visualSize)}pt  |  ${cmykStr}`, margin + swatchSize + 2, yPos);
       doc.setTextColor(0, 0, 0);
-      
-      yPos += 10;
+      yPos += 8;
     }
   }
   
-  yPos += 10;
-  
-  if (yPos > pageHeight - 60) {
-    doc.addPage();
-    yPos = margin;
-  }
-  
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('CMYK Color Swatches', margin, yPos);
-  yPos += 8;
-  
-  if (data.savedSwatches.length === 0) {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text('No saved color swatches', margin, yPos);
-    yPos += 8;
-  } else {
-    const swatchSize = 15;
-    const swatchesPerRow = 4;
-    const swatchSpacing = 45;
-    
-    for (let i = 0; i < data.savedSwatches.length; i++) {
-      const swatch = data.savedSwatches[i];
-      const row = Math.floor(i / swatchesPerRow);
-      const col = i % swatchesPerRow;
-      
-      const xPos = margin + col * swatchSpacing;
-      const swatchY = yPos + row * (swatchSize + 15);
-      
-      if (swatchY > pageHeight - 30) {
-        doc.addPage();
-        yPos = margin;
-        continue;
-      }
-      
-      const cmyk = parseCmykString(swatch.cmyk);
-      const rgb = cmykToRgb(cmyk.c, cmyk.m, cmyk.y, cmyk.k);
-      
-      doc.setFillColor(rgb.r, rgb.g, rgb.b);
-      doc.setDrawColor(0, 0, 0);
-      doc.rect(xPos, swatchY, swatchSize, swatchSize, 'FD');
-      
-      doc.setFontSize(6);
-      doc.setFont('helvetica', 'normal');
-      const cmykLabel = `C${cmyk.c} M${cmyk.m} Y${cmyk.y} K${cmyk.k}`;
-      doc.text(cmykLabel, xPos, swatchY + swatchSize + 4);
-    }
-    
-    const totalRows = Math.ceil(data.savedSwatches.length / swatchesPerRow);
-    yPos += totalRows * (swatchSize + 15) + 10;
-  }
-  
-  yPos += 10;
-  
-  if (yPos > pageHeight - 40) {
-    doc.addPage();
-    yPos = margin;
-  }
+  yPos += 4;
   
   doc.setDrawColor(200, 200, 200);
   doc.line(margin, yPos, pageWidth - margin, yPos);
