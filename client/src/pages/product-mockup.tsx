@@ -11,8 +11,31 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, Lock, Unlock, AlignLeft, AlignRight, AlignCenterHorizontal, AlignStartVertical, AlignEndVertical, AlignCenterVertical } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Hemp Wick Roll Bleed _1764154739524.png';
+
+interface CylinderPos {
+  x: number;
+  y: number;
+  z: number;
+  scale: number;
+  cameraZ: number;
+  rotX: number;
+  rotY: number;
+}
+
+interface TextureMapping {
+  offsetX: number;
+  offsetY: number;
+  rotation: number;
+  scaleX: number;
+  scaleY: number;
+  centerX: number;
+  centerY: number;
+}
 
 const LABEL_WIDTH = 450;  // 3:4 ratio (60mm wide)
 const LABEL_HEIGHT = 600; // 3:4 ratio (80mm tall)
@@ -43,7 +66,11 @@ interface ThreeContext {
   animationId: number;
 }
 
+const DEFAULT_CYLINDER_POS: CylinderPos = { x: 0, y: 0, z: 0, scale: 1, cameraZ: 0.15, rotX: 90, rotY: 0 };
+const DEFAULT_TEXTURE_MAPPING: TextureMapping = { offsetX: 0, offsetY: 0, rotation: 0, scaleX: 1, scaleY: 1, centerX: 0.5, centerY: 0.5 };
+
 export default function ProductMockup() {
+  const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const threeContainerRef = useRef<HTMLDivElement>(null);
   const threeContextRef = useRef<ThreeContext | null>(null);
@@ -62,36 +89,71 @@ export default function ProductMockup() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
   
-  const getDefaultPosition = () => {
-    const saved = localStorage.getItem('cylinderPosition');
-    if (saved) {
-      try { return JSON.parse(saved); } catch { }
-    }
-    return { x: 0, y: 0, z: 0, scale: 1, cameraZ: 0.15, rotX: 90, rotY: 0 };
-  };
+  // Fetch user preferences for 3D settings from database
+  const { data: userPrefs } = useQuery<{ cylinderPos?: CylinderPos; textureMapping?: TextureMapping }>({
+    queryKey: ['/api/user/preferences'],
+  });
+
+  // Get initial values from database preferences, falling back to defaults
+  const getInitialPosition = useCallback((): CylinderPos => {
+    if (userPrefs?.cylinderPos) return userPrefs.cylinderPos;
+    return DEFAULT_CYLINDER_POS;
+  }, [userPrefs]);
+
+  const getInitialTextureMapping = useCallback((): TextureMapping => {
+    if (userPrefs?.textureMapping) return userPrefs.textureMapping;
+    return DEFAULT_TEXTURE_MAPPING;
+  }, [userPrefs]);
   
   const getLockedState = () => {
     return localStorage.getItem('cylinderPositionLocked') === 'true';
-  };
-  
-  const getDefaultTextureMapping = () => {
-    const saved = localStorage.getItem('textureMapping');
-    if (saved) {
-      try { return JSON.parse(saved); } catch { }
-    }
-    return { offsetX: 0, offsetY: 0, rotation: 0, scaleX: 1, scaleY: 1, centerX: 0.5, centerY: 0.5 };
   };
   
   const getTextureMappingLocked = () => {
     return localStorage.getItem('textureMappingLocked') === 'true';
   };
   
-  const [cylinderPos, setCylinderPos] = useState(getDefaultPosition);
+  const [cylinderPos, setCylinderPos] = useState<CylinderPos>(DEFAULT_CYLINDER_POS);
   const [positionLocked, setPositionLocked] = useState(getLockedState);
-  const [textureMapping, setTextureMapping] = useState(getDefaultTextureMapping);
+  const [textureMapping, setTextureMapping] = useState<TextureMapping>(DEFAULT_TEXTURE_MAPPING);
   const [textureMappingLocked, setTextureMappingLocked] = useState(getTextureMappingLocked);
   const [showBleedOverlay, setShowBleedOverlay] = useState(true);
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
+  const prefsLoadedRef = useRef(false);
+
+  // Load settings from database when preferences are fetched
+  useEffect(() => {
+    if (userPrefs && !prefsLoadedRef.current) {
+      if (userPrefs.cylinderPos) {
+        setCylinderPos(userPrefs.cylinderPos);
+      }
+      if (userPrefs.textureMapping) {
+        setTextureMapping(userPrefs.textureMapping);
+      }
+      prefsLoadedRef.current = true;
+    }
+  }, [userPrefs]);
+
+  // Mutation to save 3D settings to database
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (data: { cylinderPos?: CylinderPos; textureMapping?: TextureMapping }) => {
+      return await apiRequest("PUT", "/api/user/preferences", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      toast({
+        title: "Settings Saved",
+        description: "Your 3D settings have been saved permanently.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
   
   useEffect(() => {
     const img = new window.Image();
@@ -505,11 +567,13 @@ export default function ProductMockup() {
   }, [cylinderPos, cylinderLoaded]);
 
   const savePosition = () => {
-    localStorage.setItem('cylinderPosition', JSON.stringify(cylinderPos));
+    // Save to database for permanent storage
+    saveSettingsMutation.mutate({ cylinderPos });
   };
 
   const saveTextureMapping = () => {
-    localStorage.setItem('textureMapping', JSON.stringify(textureMapping));
+    // Save to database for permanent storage
+    saveSettingsMutation.mutate({ textureMapping });
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
