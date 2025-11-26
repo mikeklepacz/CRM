@@ -9,11 +9,11 @@ import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, Lock, Unlock, AlignLeft, AlignRight, AlignCenterHorizontal, AlignStartVertical, AlignEndVertical, AlignCenterVertical } from 'lucide-react';
+import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
-import bleedOverlayUrl from '@assets/Hemp Wick Roll Bleed _1764154739524.png';
+import bleedOverlayUrl from '@assets/Red Bleed_1764162964434.png';
 
 interface CylinderPos {
   x: number;
@@ -1048,7 +1048,7 @@ export default function ProductMockup() {
                       title="Align Left"
                       data-testid="button-align-left"
                     >
-                      <AlignLeft className="w-4 h-4" />
+                      <ArrowLeftToLine className="w-4 h-4" />
                     </Button>
                     <Button
                       size="icon"
@@ -1058,7 +1058,7 @@ export default function ProductMockup() {
                       title="Center Horizontal"
                       data-testid="button-align-center-h"
                     >
-                      <AlignCenterHorizontal className="w-4 h-4" />
+                      <AlignVerticalDistributeCenter className="w-4 h-4" />
                     </Button>
                     <Button
                       size="icon"
@@ -1068,7 +1068,7 @@ export default function ProductMockup() {
                       title="Align Right"
                       data-testid="button-align-right"
                     >
-                      <AlignRight className="w-4 h-4" />
+                      <ArrowRightToLine className="w-4 h-4" />
                     </Button>
                     <div className="w-px bg-border mx-1" />
                     <Button
@@ -1079,7 +1079,7 @@ export default function ProductMockup() {
                       title="Align Top"
                       data-testid="button-align-top"
                     >
-                      <AlignStartVertical className="w-4 h-4" />
+                      <ArrowUpToLine className="w-4 h-4" />
                     </Button>
                     <Button
                       size="icon"
@@ -1089,7 +1089,7 @@ export default function ProductMockup() {
                       title="Center Vertical"
                       data-testid="button-align-center-v"
                     >
-                      <AlignCenterVertical className="w-4 h-4" />
+                      <AlignHorizontalDistributeCenter className="w-4 h-4" />
                     </Button>
                     <Button
                       size="icon"
@@ -1099,7 +1099,7 @@ export default function ProductMockup() {
                       title="Align Bottom"
                       data-testid="button-align-bottom"
                     >
-                      <AlignEndVertical className="w-4 h-4" />
+                      <ArrowDownToLine className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
