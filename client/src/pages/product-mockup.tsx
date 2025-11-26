@@ -9,12 +9,13 @@ import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, Lock, Unlock } from 'lucide-react';
+import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, Lock, Unlock, AlignLeft, AlignRight, AlignCenterHorizontal, AlignStartVertical, AlignEndVertical, AlignCenterVertical } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
+import bleedOverlayUrl from '@assets/Hemp Wick Roll Bleed _1764154739524.png';
 
-const LABEL_WIDTH = 600;
-const LABEL_HEIGHT = 600;
+const LABEL_WIDTH = 450;  // 3:4 ratio (60mm wide)
+const LABEL_HEIGHT = 600; // 3:4 ratio (80mm tall)
 const OVERLAP_HEIGHT = 60;
 
 interface LabelElement {
@@ -53,7 +54,8 @@ export default function ProductMockup() {
   
   const [elements, setElements] = useState<LabelElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [viewRotation, setViewRotation] = useState(120);
+  const [viewRotation, setViewRotation] = useState(115); // Fixed at 115° for correct tilt alignment
+  const [labelRotation, setLabelRotation] = useState(0); // New rotation control using Offset X
   const [uploadedLabel, setUploadedLabel] = useState<HTMLImageElement | null>(null);
   const [mode, setMode] = useState<'build' | 'upload'>('build');
   const [isDragging, setIsDragging] = useState(false);
@@ -88,6 +90,16 @@ export default function ProductMockup() {
   const [positionLocked, setPositionLocked] = useState(getLockedState);
   const [textureMapping, setTextureMapping] = useState(getDefaultTextureMapping);
   const [textureMappingLocked, setTextureMappingLocked] = useState(getTextureMappingLocked);
+  const [showBleedOverlay, setShowBleedOverlay] = useState(true);
+  const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
+  
+  useEffect(() => {
+    const img = new window.Image();
+    img.onload = () => {
+      bleedOverlayRef.current = img;
+    };
+    img.src = bleedOverlayUrl;
+  }, []);
 
   const generateKraftBase = useCallback((width: number, height: number): ImageData => {
     if (kraftBaseRef.current && kraftBaseRef.current.width === width && kraftBaseRef.current.height === height) {
@@ -99,7 +111,7 @@ export default function ProductMockup() {
     tempCanvas.height = height;
     const ctx = tempCanvas.getContext('2d')!;
     
-    ctx.fillStyle = '#c4a574';
+    ctx.fillStyle = '#BEAD81';
     ctx.fillRect(0, 0, width, height);
 
     const imageData = ctx.getImageData(0, 0, width, height);
@@ -190,6 +202,12 @@ export default function ProductMockup() {
     ctx.textAlign = 'center';
     ctx.fillText('OVERLAP ZONE - Gets covered when wrapped', LABEL_WIDTH / 2, OVERLAP_HEIGHT / 2);
 
+    if (showBleedOverlay && bleedOverlayRef.current) {
+      ctx.globalAlpha = 0.7;
+      ctx.drawImage(bleedOverlayRef.current, 0, 0, LABEL_WIDTH, LABEL_HEIGHT);
+      ctx.globalAlpha = 1.0;
+    }
+
     if (selectedId) {
       const selected = elements.find(el => el.id === selectedId);
       if (selected && selected.visible !== false) {
@@ -216,7 +234,7 @@ export default function ProductMockup() {
         ctx.restore();
       }
     }
-  }, [elements, selectedId, mode, uploadedLabel, applyKraftBase]);
+  }, [elements, selectedId, mode, uploadedLabel, applyKraftBase, showBleedOverlay]);
 
   const createLabelTexture = useCallback((): THREE.CanvasTexture => {
     // First create the flat label canvas
@@ -274,14 +292,16 @@ export default function ProductMockup() {
     texture.wrapT = THREE.RepeatWrapping;
     
     // Apply texture mapping - use 'repeat' for scaling (not 'scale' which doesn't exist)
-    texture.offset.set(textureMapping.offsetX, textureMapping.offsetY);
+    // labelRotation converts degrees to offset (360° = 1.0 offset for full wrap)
+    const rotationOffset = labelRotation / 360;
+    texture.offset.set(textureMapping.offsetX + rotationOffset, textureMapping.offsetY);
     texture.center.set(textureMapping.centerX, textureMapping.centerY);
     texture.repeat.set(textureMapping.scaleX, textureMapping.scaleY);
     texture.rotation = (textureMapping.rotation * Math.PI) / 180;
     
     texture.needsUpdate = true;
     return texture;
-  }, [elements, mode, uploadedLabel, applyKraftBase, textureMapping]);
+  }, [elements, mode, uploadedLabel, applyKraftBase, textureMapping, labelRotation]);
 
   useEffect(() => {
     drawFlatLabel();
@@ -473,14 +493,16 @@ export default function ProductMockup() {
     
     const material = ctx.cylinder.material as THREE.MeshStandardMaterial;
     if (material.map) {
-      material.map.offset.set(textureMapping.offsetX, textureMapping.offsetY);
+      // Include labelRotation in offset calculation (360° = 1.0 offset)
+      const rotationOffset = labelRotation / 360;
+      material.map.offset.set(textureMapping.offsetX + rotationOffset, textureMapping.offsetY);
       material.map.center.set(textureMapping.centerX, textureMapping.centerY);
       material.map.repeat.set(textureMapping.scaleX, textureMapping.scaleY);
       material.map.rotation = (textureMapping.rotation * Math.PI) / 180;
       material.map.needsUpdate = true;
       material.needsUpdate = true;
     }
-  }, [textureMapping, cylinderLoaded]);
+  }, [textureMapping, cylinderLoaded, labelRotation]);
 
   useEffect(() => {
     const ctx = threeContextRef.current;
@@ -679,7 +701,8 @@ export default function ProductMockup() {
     setSelectedId(null);
     setUploadedLabel(null);
     setMode('build');
-    setViewRotation(120);
+    setLabelRotation(0);
+    // viewRotation stays locked at 115° for correct tilt alignment
   };
 
   const handleDownload = () => {
@@ -873,6 +896,19 @@ export default function ProductMockup() {
               </TabsContent>
             </Tabs>
 
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Canvas (60mm × 80mm)</span>
+              <Button
+                size="sm"
+                variant={showBleedOverlay ? "default" : "outline"}
+                onClick={() => setShowBleedOverlay(!showBleedOverlay)}
+                data-testid="button-toggle-bleed"
+              >
+                {showBleedOverlay ? <Eye className="w-3 h-3 mr-1" /> : <EyeOff className="w-3 h-3 mr-1" />}
+                Bleed Guide
+              </Button>
+            </div>
+
             <div 
               className="relative border rounded-lg overflow-hidden bg-muted"
               style={{ aspectRatio: `${LABEL_WIDTH}/${LABEL_HEIGHT}` }}
@@ -913,6 +949,73 @@ export default function ProductMockup() {
                     <Trash2 className="h-3 w-3 mr-1" />
                     Delete
                   </Button>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-xs">Align on Canvas:</Label>
+                  <div className="flex gap-1 flex-wrap">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => updateElement(selectedId!, { x: 50 })}
+                      title="Align Left"
+                      data-testid="button-align-left"
+                    >
+                      <AlignLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => updateElement(selectedId!, { x: LABEL_WIDTH / 2 })}
+                      title="Center Horizontal"
+                      data-testid="button-align-center-h"
+                    >
+                      <AlignCenterHorizontal className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => updateElement(selectedId!, { x: LABEL_WIDTH - 50 })}
+                      title="Align Right"
+                      data-testid="button-align-right"
+                    >
+                      <AlignRight className="w-4 h-4" />
+                    </Button>
+                    <div className="w-px bg-border mx-1" />
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => updateElement(selectedId!, { y: 50 })}
+                      title="Align Top"
+                      data-testid="button-align-top"
+                    >
+                      <AlignStartVertical className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => updateElement(selectedId!, { y: LABEL_HEIGHT / 2 })}
+                      title="Center Vertical"
+                      data-testid="button-align-center-v"
+                    >
+                      <AlignCenterVertical className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => updateElement(selectedId!, { y: LABEL_HEIGHT - 50 })}
+                      title="Align Bottom"
+                      data-testid="button-align-bottom"
+                    >
+                      <AlignEndVertical className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
                 
                 {selectedElement.type === 'text' && (
@@ -1067,13 +1170,13 @@ export default function ProductMockup() {
             
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-sm">Rotate View: {viewRotation}°</Label>
+                <Label className="text-sm">Rotate View: {labelRotation}°</Label>
               </div>
               <Slider
-                value={[viewRotation]}
-                onValueChange={([v]) => setViewRotation(v)}
+                value={[labelRotation]}
+                onValueChange={([v]) => setLabelRotation(v)}
                 min={0}
-                max={360}
+                max={720}
                 step={5}
                 data-testid="slider-view-rotation"
               />
@@ -1083,12 +1186,12 @@ export default function ProductMockup() {
             </div>
 
             <div className="grid grid-cols-4 gap-2">
-              {[0, 90, 180, 270].map(angle => (
+              {[0, 180, 360, 540].map(angle => (
                 <Button
                   key={angle}
                   size="sm"
-                  variant={viewRotation === angle ? 'default' : 'outline'}
-                  onClick={() => setViewRotation(angle)}
+                  variant={labelRotation === angle ? 'default' : 'outline'}
+                  onClick={() => setLabelRotation(angle)}
                   data-testid={`button-angle-${angle}`}
                 >
                   {angle}°
