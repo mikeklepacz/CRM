@@ -9,7 +9,7 @@ import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Type, Check, ChevronsUpDown } from 'lucide-react';
+import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Type, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import ColorPicker, { useColorPicker } from 'react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
@@ -120,23 +120,34 @@ const GOOGLE_FONTS = [
   'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New',
 ].sort();
 
-// Track loaded fonts
-const loadedFonts = new Set<string>();
+// System fonts that don't need loading
+const SYSTEM_FONTS = ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New'];
 
-function loadGoogleFont(fontName: string): Promise<void> {
-  if (loadedFonts.has(fontName) || ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New'].includes(fontName)) {
-    return Promise.resolve();
-  }
+// Track loaded fonts globally
+const loadedFonts = new Set<string>(SYSTEM_FONTS);
+let fontsPreloaded = false;
+
+// Preload all Google Fonts at once using a single request
+function preloadAllFonts(): Promise<void> {
+  if (fontsPreloaded) return Promise.resolve();
   
-  return new Promise((resolve, reject) => {
+  const googleFonts = GOOGLE_FONTS.filter(f => !SYSTEM_FONTS.includes(f));
+  const fontFamilies = googleFonts.map(f => `family=${encodeURIComponent(f.replace(/ /g, '+'))}:wght@400;700`).join('&');
+  
+  return new Promise((resolve) => {
     const link = document.createElement('link');
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName.replace(/ /g, '+'))}:wght@400;700&display=swap`;
+    link.href = `https://fonts.googleapis.com/css2?${fontFamilies}&display=swap`;
     link.rel = 'stylesheet';
     link.onload = () => {
-      loadedFonts.add(fontName);
+      googleFonts.forEach(f => loadedFonts.add(f));
+      fontsPreloaded = true;
       resolve();
     };
-    link.onerror = reject;
+    link.onerror = () => {
+      // Even if there's an error, mark as loaded to prevent blocking
+      fontsPreloaded = true;
+      resolve();
+    };
     document.head.appendChild(link);
   });
 }
@@ -224,6 +235,14 @@ export default function ProductMockup() {
   const [showBleedOverlay, setShowBleedOverlay] = useState(true);
   const [bleedOverlayLoaded, setBleedOverlayLoaded] = useState(false);
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
+  const [fontsLoaded, setFontsLoaded] = useState(fontsPreloaded);
+  
+  // Preload all fonts on mount
+  useEffect(() => {
+    if (!fontsLoaded) {
+      preloadAllFonts().then(() => setFontsLoaded(true));
+    }
+  }, [fontsLoaded]);
   
   // LOCKED LIGHTING SETTINGS - These are "in stone" and hidden from UI
   const lighting: LightingSettings = {
@@ -1152,15 +1171,25 @@ export default function ProductMockup() {
                                 size="sm"
                                 role="combobox"
                                 className="flex-1 justify-between"
+                                disabled={!fontsLoaded}
                                 data-testid="button-font-picker"
                               >
-                                <span 
-                                  className="truncate text-xs"
-                                  style={{ fontFamily: selectedElement.font || 'Arial' }}
-                                >
-                                  {selectedElement.font || 'Arial'}
-                                </span>
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                {!fontsLoaded ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    <span className="text-xs">Loading fonts...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span 
+                                      className="truncate text-xs"
+                                      style={{ fontFamily: selectedElement.font || 'Arial' }}
+                                    >
+                                      {selectedElement.font || 'Arial'}
+                                    </span>
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </>
+                                )}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[220px] p-0" align="start">
@@ -1173,11 +1202,7 @@ export default function ProductMockup() {
                                       <CommandItem
                                         key={font}
                                         value={font}
-                                        onSelect={() => {
-                                          loadGoogleFont(font).then(() => {
-                                            updateElement(selectedId!, { font });
-                                          });
-                                        }}
+                                        onSelect={() => updateElement(selectedId!, { font })}
                                         className="text-xs"
                                         style={{ fontFamily: font }}
                                         data-testid={`font-option-${font.toLowerCase().replace(/\s+/g, '-')}`}
