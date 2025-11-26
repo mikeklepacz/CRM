@@ -66,8 +66,25 @@ interface ThreeContext {
   animationId: number;
 }
 
-const DEFAULT_CYLINDER_POS: CylinderPos = { x: 0, y: 0, z: 0, scale: 1, cameraZ: 0.15, rotX: 90, rotY: 0 };
-const DEFAULT_TEXTURE_MAPPING: TextureMapping = { offsetX: 0, offsetY: 0, rotation: 0, scaleX: 1, scaleY: 1, centerX: 0.5, centerY: 0.5 };
+// PERMANENT DEFAULTS - These are the "in stone" settings for the 3D product mockup
+const DEFAULT_CYLINDER_POS: CylinderPos = { 
+  x: 0.0013, 
+  y: -0.0083, 
+  z: 0, 
+  scale: 1.02, 
+  cameraZ: 0.134, 
+  rotX: 180, 
+  rotY: -3.1 
+};
+const DEFAULT_TEXTURE_MAPPING: TextureMapping = { 
+  offsetX: 0.131, 
+  offsetY: -0.502, 
+  rotation: 90, 
+  scaleX: 1, 
+  scaleY: 2.01, 
+  centerX: 0.499, 
+  centerY: 0.5 
+};
 
 export default function ProductMockup() {
   const { toast } = useToast();
