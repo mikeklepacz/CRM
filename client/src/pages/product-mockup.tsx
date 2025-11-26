@@ -110,12 +110,14 @@ export default function ProductMockup() {
   const [textureMapping, setTextureMapping] = useState<TextureMapping>(DEFAULT_TEXTURE_MAPPING);
   const [textureMappingLocked, setTextureMappingLocked] = useState(true); // Locked by default
   const [showBleedOverlay, setShowBleedOverlay] = useState(true);
+  const [bleedOverlayLoaded, setBleedOverlayLoaded] = useState(false);
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
   
   useEffect(() => {
     const img = new window.Image();
     img.onload = () => {
       bleedOverlayRef.current = img;
+      setBleedOverlayLoaded(true); // Trigger re-render when image loads
     };
     img.src = bleedOverlayUrl;
   }, []);
@@ -236,7 +238,7 @@ export default function ProductMockup() {
         ctx.restore();
       }
     }
-  }, [elements, selectedId, mode, uploadedLabel, applyKraftBase, showBleedOverlay]);
+  }, [elements, selectedId, mode, uploadedLabel, applyKraftBase, showBleedOverlay, bleedOverlayLoaded]);
 
   const createLabelTexture = useCallback((): THREE.CanvasTexture => {
     // First create the flat label canvas
