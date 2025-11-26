@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,171 +31,126 @@ interface TextLine {
   font: string;
 }
 
+interface ThreeContext {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  renderer: THREE.WebGLRenderer;
+  controls: OrbitControls;
+  cylinder: THREE.Mesh;
+  animationId: number;
+}
+
+function createLabelTexture(
+  textLines: TextLine[],
+  logoImage: HTMLImageElement | null,
+  logoScale: number,
+  logoY: number
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  // Base kraft paper color
+  ctx.fillStyle = '#c4a574';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Add paper grain/noise
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (Math.random() - 0.5) * 25;
+    data[i] = Math.min(255, Math.max(0, data[i] + noise));
+    data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
+    data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  // Add fiber lines for paper texture
+  ctx.strokeStyle = 'rgba(139, 119, 101, 0.2)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 80; i++) {
+    ctx.beginPath();
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 30);
+    ctx.stroke();
+  }
+
+  // Apply multiply blend mode for printing simulation
+  ctx.globalCompositeOperation = 'multiply';
+
+  // Draw logo if exists
+  if (logoImage) {
+    const scale = logoScale / 100;
+    const logoWidth = Math.min(logoImage.width * scale, canvas.width * 0.7);
+    const logoHeight = (logoImage.height / logoImage.width) * logoWidth;
+    const logoX = (canvas.width - logoWidth) / 2;
+    const logoYPos = (logoY / 100) * (canvas.height - logoHeight - 50);
+    ctx.drawImage(logoImage, logoX, logoYPos, logoWidth, logoHeight);
+  }
+
+  // Draw text lines
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#1a1a1a';
+
+  let currentY = logoImage ? (logoY / 100) * canvas.height + 100 : 100;
+
+  textLines.forEach((line) => {
+    if (line.text.trim()) {
+      ctx.font = `bold ${line.fontSize}px ${line.font}`;
+      ctx.fillText(line.text, canvas.width / 2, currentY);
+      currentY += line.fontSize * 1.3;
+    }
+  });
+
+  ctx.globalCompositeOperation = 'source-over';
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export default function ProductMockup() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const controlsRef = useRef<OrbitControls | null>(null);
-  const cylinderRef = useRef<THREE.Mesh | null>(null);
-  const labelTextureRef = useRef<THREE.CanvasTexture | null>(null);
-  const animationRef = useRef<number | null>(null);
+  const threeContextRef = useRef<ThreeContext | null>(null);
 
   const [textLines, setTextLines] = useState<TextLine[]>(DEFAULT_LINES);
   const [logoImage, setLogoImage] = useState<HTMLImageElement | null>(null);
   const [logoScale, setLogoScale] = useState(100);
-  const [logoY, setLogoY] = useState(50);
+  const [logoY, setLogoY] = useState(30);
   const [isAutoRotating, setIsAutoRotating] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Create kraft paper texture with grain
-  const createKraftTexture = useCallback(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d')!;
-
-    // Base kraft color
-    ctx.fillStyle = '#c4a574';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Add paper grain/noise
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const noise = (Math.random() - 0.5) * 30;
-      data[i] = Math.min(255, Math.max(0, data[i] + noise));
-      data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
-      data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
-    }
-    ctx.putImageData(imageData, 0, 0);
-
-    // Add some subtle fiber lines
-    ctx.strokeStyle = 'rgba(139, 119, 101, 0.3)';
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i < 100; i++) {
-      ctx.beginPath();
-      const x = Math.random() * canvas.width;
-      const y = Math.random() * canvas.height;
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + (Math.random() - 0.5) * 20, y + (Math.random() - 0.5) * 20);
-      ctx.stroke();
-    }
-
-    return new THREE.CanvasTexture(canvas);
-  }, []);
-
-  // Create hemp wick texture for the ends
-  const createHempTexture = useCallback(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d')!;
-
-    // Base hemp color
-    ctx.fillStyle = '#8b7355';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Add rope-like texture
-    ctx.strokeStyle = '#a08060';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 50; i++) {
-      ctx.beginPath();
-      const y = (i / 50) * canvas.height;
-      ctx.moveTo(0, y);
-      for (let x = 0; x < canvas.width; x += 10) {
-        ctx.lineTo(x, y + Math.sin(x * 0.1) * 3);
-      }
-      ctx.stroke();
-    }
-
-    return new THREE.CanvasTexture(canvas);
-  }, []);
-
-  // Create label texture with multiply blend effect
-  const createLabelTexture = useCallback(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d')!;
-
-    // Start with kraft paper base
-    ctx.fillStyle = '#c4a574';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Add paper grain
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const noise = (Math.random() - 0.5) * 20;
-      data[i] = Math.min(255, Math.max(0, data[i] + noise));
-      data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
-      data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
-    }
-    ctx.putImageData(imageData, 0, 0);
-
-    // Apply multiply blend mode for all content
-    ctx.globalCompositeOperation = 'multiply';
-
-    // Draw logo if exists
-    if (logoImage) {
-      const scale = logoScale / 100;
-      const logoWidth = Math.min(logoImage.width * scale, canvas.width * 0.8);
-      const logoHeight = (logoImage.height / logoImage.width) * logoWidth;
-      const logoX = (canvas.width - logoWidth) / 2;
-      const logoYPos = (logoY / 100) * (canvas.height - logoHeight);
-      
-      ctx.drawImage(logoImage, logoX, logoYPos, logoWidth, logoHeight);
-    }
-
-    // Draw text lines
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#1a1a1a';
-
-    let currentY = logoImage ? (logoY / 100) * canvas.height + 120 : 80;
-    
-    textLines.forEach((line) => {
-      if (line.text.trim()) {
-        ctx.font = `bold ${line.fontSize}px ${line.font}`;
-        ctx.fillText(line.text, canvas.width / 2, currentY);
-        currentY += line.fontSize * 1.4;
-      }
-    });
-
-    // Reset composite operation
-    ctx.globalCompositeOperation = 'source-over';
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    return texture;
-  }, [textLines, logoImage, logoScale, logoY]);
 
   // Initialize Three.js scene
   useEffect(() => {
-    if (!containerRef.current || isInitialized) return;
-
     const container = containerRef.current;
-    const width = container.clientWidth;
-    const height = container.clientHeight || 500;
+    if (!container) return;
 
-    // Scene
+    // Wait for container to have dimensions
+    const rect = container.getBoundingClientRect();
+    const width = rect.width || 600;
+    const height = rect.height || 500;
+
+    // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#f5f0e8');
-    sceneRef.current = scene;
 
     // Camera
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 7);
-    cameraRef.current = camera;
+    camera.position.set(0, 0.5, 5);
 
     // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      preserveDrawingBuffer: true,
+      alpha: true
+    });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
 
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -203,74 +158,101 @@ export default function ProductMockup() {
     controls.dampingFactor = 0.05;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 2;
-    controlsRef.current = controls;
+    controls.minDistance = 2;
+    controls.maxDistance = 10;
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
     directionalLight.position.set(5, 5, 5);
-    directionalLight.castShadow = true;
     scene.add(directionalLight);
 
-    const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.4);
     backLight.position.set(-5, 3, -5);
     scene.add(backLight);
 
-    // Create cylinder (20mm x 60mm ratio = 3:1 height:diameter)
-    const radius = 0.5;
-    const height_val = 3.0; // diameter = 1, height = 3, ratio = 3:1
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(0, -3, 3);
+    scene.add(fillLight);
 
-    // Main body with label
-    const bodyGeometry = new THREE.CylinderGeometry(radius, radius, height_val, 64, 1, true);
-    const labelTexture = createLabelTexture();
-    labelTextureRef.current = labelTexture;
-    
+    // Cylinder dimensions: 20mm x 60mm = 3:1 height:diameter ratio
+    const radius = 0.5;
+    const heightVal = 3.0;
+
+    // Create label texture
+    const labelTexture = createLabelTexture(textLines, logoImage, logoScale, logoY);
+
+    // Main cylinder body (open ended for label wrap)
+    const bodyGeometry = new THREE.CylinderGeometry(radius, radius, heightVal, 64, 1, true);
     const bodyMaterial = new THREE.MeshStandardMaterial({
       map: labelTexture,
-      roughness: 0.7,
-      metalness: 0.1,
+      roughness: 0.6,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
     });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    cylinderRef.current = body;
-    scene.add(body);
+    const cylinder = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    scene.add(cylinder);
 
-    // Top cap with hemp texture
-    const hempTexture = createHempTexture();
+    // Hemp wick texture for ends
+    const hempCanvas = document.createElement('canvas');
+    hempCanvas.width = 256;
+    hempCanvas.height = 256;
+    const hempCtx = hempCanvas.getContext('2d')!;
+    hempCtx.fillStyle = '#8b7355';
+    hempCtx.fillRect(0, 0, 256, 256);
+    
+    // Add rope texture lines
+    for (let i = 0; i < 40; i++) {
+      hempCtx.strokeStyle = i % 2 === 0 ? '#9a8265' : '#7a6345';
+      hempCtx.lineWidth = 4;
+      hempCtx.beginPath();
+      const y = (i / 40) * 256;
+      hempCtx.moveTo(0, y);
+      for (let x = 0; x < 256; x += 8) {
+        hempCtx.lineTo(x, y + Math.sin(x * 0.05 + i) * 2);
+      }
+      hempCtx.stroke();
+    }
+    const hempTexture = new THREE.CanvasTexture(hempCanvas);
+
     const capMaterial = new THREE.MeshStandardMaterial({
       map: hempTexture,
-      roughness: 0.9,
+      roughness: 0.95,
       metalness: 0,
     });
 
+    // Top cap
     const topCapGeometry = new THREE.CircleGeometry(radius, 64);
     const topCap = new THREE.Mesh(topCapGeometry, capMaterial);
     topCap.rotation.x = -Math.PI / 2;
-    topCap.position.y = height_val / 2;
+    topCap.position.y = heightVal / 2;
     scene.add(topCap);
 
+    // Bottom cap
     const bottomCapGeometry = new THREE.CircleGeometry(radius, 64);
     const bottomCap = new THREE.Mesh(bottomCapGeometry, capMaterial);
     bottomCap.rotation.x = Math.PI / 2;
-    bottomCap.position.y = -height_val / 2;
+    bottomCap.position.y = -heightVal / 2;
     scene.add(bottomCap);
 
-    // Add wick coming out of top
-    const wickGeometry = new THREE.CylinderGeometry(0.015, 0.015, 0.4, 16);
+    // Wick coming out of top
+    const wickGeometry = new THREE.CylinderGeometry(0.02, 0.015, 0.5, 12);
     const wickMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8b7355,
+      color: 0x6b5344,
       roughness: 1,
     });
     const wick = new THREE.Mesh(wickGeometry, wickMaterial);
-    wick.position.y = height_val / 2 + 0.15;
-    wick.position.x = 0.1;
-    wick.rotation.z = Math.PI / 8;
+    wick.position.y = heightVal / 2 + 0.2;
+    wick.position.x = 0.12;
+    wick.rotation.z = Math.PI / 7;
     scene.add(wick);
 
     // Animation loop
+    let animationId: number;
     const animate = () => {
-      animationRef.current = requestAnimationFrame(animate);
+      animationId = requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
     };
@@ -278,44 +260,55 @@ export default function ProductMockup() {
 
     // Handle resize
     const handleResize = () => {
-      const newWidth = container.clientWidth;
-      const newHeight = container.clientHeight || 500;
+      const newRect = container.getBoundingClientRect();
+      const newWidth = newRect.width || 600;
+      const newHeight = newRect.height || 500;
       camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(newWidth, newHeight);
     };
     window.addEventListener('resize', handleResize);
 
-    setIsInitialized(true);
+    // Store context
+    threeContextRef.current = {
+      scene,
+      camera,
+      renderer,
+      controls,
+      cylinder,
+      animationId,
+    };
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      cancelAnimationFrame(animationId);
       renderer.dispose();
-      container.removeChild(renderer.domElement);
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+      threeContextRef.current = null;
     };
-  }, [createKraftTexture, createHempTexture, createLabelTexture, isInitialized]);
+  }, []);
 
-  // Update label texture when content changes
+  // Update texture when label content changes
   useEffect(() => {
-    if (!cylinderRef.current || !isInitialized) return;
+    const ctx = threeContextRef.current;
+    if (!ctx) return;
 
-    const newTexture = createLabelTexture();
-    (cylinderRef.current.material as THREE.MeshStandardMaterial).map = newTexture;
-    (cylinderRef.current.material as THREE.MeshStandardMaterial).needsUpdate = true;
-    
-    if (labelTextureRef.current) {
-      labelTextureRef.current.dispose();
+    const newTexture = createLabelTexture(textLines, logoImage, logoScale, logoY);
+    const material = ctx.cylinder.material as THREE.MeshStandardMaterial;
+    if (material.map) {
+      material.map.dispose();
     }
-    labelTextureRef.current = newTexture;
-  }, [textLines, logoImage, logoScale, logoY, createLabelTexture, isInitialized]);
+    material.map = newTexture;
+    material.needsUpdate = true;
+  }, [textLines, logoImage, logoScale, logoY]);
 
   // Toggle auto-rotation
   useEffect(() => {
-    if (controlsRef.current) {
-      controlsRef.current.autoRotate = isAutoRotating;
+    const ctx = threeContextRef.current;
+    if (ctx) {
+      ctx.controls.autoRotate = isAutoRotating;
     }
   }, [isAutoRotating]);
 
@@ -326,9 +319,7 @@ export default function ProductMockup() {
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
-        img.onload = () => {
-          setLogoImage(img);
-        };
+        img.onload = () => setLogoImage(img);
         img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
@@ -349,16 +340,17 @@ export default function ProductMockup() {
     setTextLines(DEFAULT_LINES);
     setLogoImage(null);
     setLogoScale(100);
-    setLogoY(50);
+    setLogoY(30);
   };
 
   // Download mockup
   const handleDownload = () => {
-    if (!rendererRef.current) return;
+    const ctx = threeContextRef.current;
+    if (!ctx) return;
     
     const link = document.createElement('a');
     link.download = 'hemp-wick-mockup.png';
-    link.href = rendererRef.current.domElement.toDataURL('image/png');
+    link.href = ctx.renderer.domElement.toDataURL('image/png');
     link.click();
   };
 
@@ -398,7 +390,8 @@ export default function ProductMockup() {
           <CardContent>
             <div 
               ref={containerRef} 
-              className="w-full h-[400px] md:h-[500px] rounded-lg overflow-hidden bg-[#f5f0e8]"
+              className="w-full h-[400px] md:h-[500px] rounded-lg overflow-hidden"
+              style={{ background: '#f5f0e8' }}
               data-testid="container-3d-viewer"
             />
             <p className="text-xs text-muted-foreground mt-2 text-center">
@@ -476,7 +469,7 @@ export default function ProductMockup() {
                       value={[logoY]}
                       onValueChange={([val]) => setLogoY(val)}
                       min={0}
-                      max={100}
+                      max={80}
                       step={5}
                       data-testid="slider-logo-position"
                     />
