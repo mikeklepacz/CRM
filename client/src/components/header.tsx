@@ -49,11 +49,11 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
 
   return (
     <header className="border-b bg-card sticky top-0 z-50">
-      <div className="px-2 py-2 md:px-3 flex items-center justify-between flex-wrap gap-2">
+      <div className="px-2 py-2 md:px-3 flex items-center gap-2">
         <h1 className="text-xs md:text-sm font-semibold text-foreground whitespace-nowrap">NMU CRM</h1>
         
         {/* Full Navigation - Shows on md+, wraps naturally */}
-        <nav className="hidden md:flex items-center gap-0 flex-wrap">
+        <nav className="hidden md:flex items-center gap-0 flex-wrap flex-1">
           {user.role === 'admin' && (
             <Link href="/admin">
               <Button variant="ghost" size="sm" data-testid="nav-admin">
@@ -128,13 +128,15 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
           )}
         </nav>
 
-        {/* Mobile Menu Button - Only on small screens */}
-        <DropdownMenu open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <DropdownMenuTrigger asChild className="md:hidden">
-            <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </DropdownMenuTrigger>
+        {/* Utilities Section - Always right aligned */}
+        <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+          {/* Mobile Menu Button - Only on small screens */}
+          <DropdownMenu open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <DropdownMenuTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
             {user.role === 'admin' && (
               <DropdownMenuItem onClick={() => { setLocation('/admin'); setMobileMenuOpen(false); }}>
