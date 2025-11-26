@@ -1,42 +1,49 @@
 // Google Drive Integration for Label Projects
-// Uses Replit's Google Drive connection
+// Uses the same Google Sheets integration credentials as the docs section
 
 import { google } from 'googleapis';
+import { storage } from '../storage';
 
-let connectionSettings: any;
-
+// Get access token from the Google Sheets integration (same as docs section)
 async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
-  }
+  const integration = await storage.getSystemIntegration('google_sheets');
   
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+  if (!integration?.googleAccessToken || !integration?.googleRefreshToken) {
+    throw new Error('Google integration not configured. Admin must connect Google in Admin Dashboard.');
   }
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-drive',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
+  const now = Date.now();
+  const expiryTime = integration.googleTokenExpiry || 0;
+  const isExpired = expiryTime <= now + (5 * 60 * 1000); // 5 minute buffer
+
+  if (isExpired && integration.googleRefreshToken && integration.googleClientId && integration.googleClientSecret) {
+    // Token is expired, refresh it
+    const oauth2Client = new google.auth.OAuth2(
+      integration.googleClientId,
+      integration.googleClientSecret
+    );
+
+    oauth2Client.setCredentials({
+      refresh_token: integration.googleRefreshToken
+    });
+
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      
+      // Update stored tokens
+      await storage.updateSystemIntegration('google_sheets', {
+        googleAccessToken: credentials.access_token!,
+        googleTokenExpiry: credentials.expiry_date || (Date.now() + 3600 * 1000),
+      });
+      
+      return credentials.access_token!;
+    } catch (error) {
+      console.error('Failed to refresh Google token:', error);
+      throw new Error('Failed to refresh Google access token');
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Google Drive not connected');
   }
-  return accessToken;
+
+  return integration.googleAccessToken;
 }
 
 // WARNING: Never cache this client.
