@@ -103,15 +103,39 @@ function drawPathOnPdf(
   
   let pathData = '';
   
+  // Pre-scan to find initial position from first M command (paths should always start with M)
+  // This ensures we have valid coordinates even for defensive edge case handling
+  let initialX = 0;
+  let initialY = 0;
+  for (const cmd of commands) {
+    if (cmd.type === 'M' && cmd.x !== undefined && cmd.y !== undefined) {
+      initialX = cmd.x;
+      initialY = cmd.y;
+      break;
+    }
+  }
+  
+  // Track current position for proper quadratic-to-cubic Bézier conversion
+  let currentX = initialX;
+  let currentY = initialY;
+  let startX = initialX;
+  let startY = initialY;
+  
   for (const cmd of commands) {
     switch (cmd.type) {
       case 'M':
         if (cmd.x !== undefined && cmd.y !== undefined) {
+          currentX = cmd.x;
+          currentY = cmd.y;
+          startX = cmd.x;
+          startY = cmd.y;
           pathData += `${(cmd.x * scale + offsetX).toFixed(2)} ${(cmd.y * scale + offsetY).toFixed(2)} m `;
         }
         break;
       case 'L':
         if (cmd.x !== undefined && cmd.y !== undefined) {
+          currentX = cmd.x;
+          currentY = cmd.y;
           pathData += `${(cmd.x * scale + offsetX).toFixed(2)} ${(cmd.y * scale + offsetY).toFixed(2)} l `;
         }
         break;
@@ -119,26 +143,46 @@ function drawPathOnPdf(
         if (cmd.x1 !== undefined && cmd.y1 !== undefined && 
             cmd.x2 !== undefined && cmd.y2 !== undefined &&
             cmd.x !== undefined && cmd.y !== undefined) {
+          currentX = cmd.x;
+          currentY = cmd.y;
           pathData += `${(cmd.x1 * scale + offsetX).toFixed(2)} ${(cmd.y1 * scale + offsetY).toFixed(2)} ` +
                       `${(cmd.x2 * scale + offsetX).toFixed(2)} ${(cmd.y2 * scale + offsetY).toFixed(2)} ` +
                       `${(cmd.x * scale + offsetX).toFixed(2)} ${(cmd.y * scale + offsetY).toFixed(2)} c `;
         }
         break;
       case 'Q':
+        // Convert quadratic Bézier to cubic Bézier using current position
+        // Quadratic: P0, P1 (control), P2 (end)
+        // Cubic: P0, CP1 = P0 + 2/3*(P1-P0), CP2 = P2 + 2/3*(P1-P2), P2
         if (cmd.x1 !== undefined && cmd.y1 !== undefined &&
             cmd.x !== undefined && cmd.y !== undefined) {
-          const x0 = 0;
-          const y0 = 0;
-          const cx1 = x0 + (2/3) * (cmd.x1 - x0);
-          const cy1 = y0 + (2/3) * (cmd.y1 - y0);
-          const cx2 = cmd.x + (2/3) * (cmd.x1 - cmd.x);
-          const cy2 = cmd.y + (2/3) * (cmd.y1 - cmd.y);
+          // Current position is P0 (start point)
+          const x0 = currentX;
+          const y0 = currentY;
+          // Control point P1
+          const qx = cmd.x1;
+          const qy = cmd.y1;
+          // End point P2
+          const x2 = cmd.x;
+          const y2 = cmd.y;
+          
+          // Calculate cubic control points
+          const cx1 = x0 + (2/3) * (qx - x0);
+          const cy1 = y0 + (2/3) * (qy - y0);
+          const cx2 = x2 + (2/3) * (qx - x2);
+          const cy2 = y2 + (2/3) * (qy - y2);
+          
+          currentX = x2;
+          currentY = y2;
+          
           pathData += `${(cx1 * scale + offsetX).toFixed(2)} ${(cy1 * scale + offsetY).toFixed(2)} ` +
                       `${(cx2 * scale + offsetX).toFixed(2)} ${(cy2 * scale + offsetY).toFixed(2)} ` +
-                      `${(cmd.x * scale + offsetX).toFixed(2)} ${(cmd.y * scale + offsetY).toFixed(2)} c `;
+                      `${(x2 * scale + offsetX).toFixed(2)} ${(y2 * scale + offsetY).toFixed(2)} c `;
         }
         break;
       case 'Z':
+        currentX = startX;
+        currentY = startY;
         pathData += 'h ';
         break;
     }
