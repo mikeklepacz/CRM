@@ -9,11 +9,26 @@ import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Type, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Type, Check, ChevronsUpDown, Loader2, Save, X } from 'lucide-react';
 import ColorPicker, { useColorPicker } from 'react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Red Bleed_1764162964434.png';
+
+// Saved color swatch interface
+interface ColorSwatch {
+  id: string;
+  color: string;
+  cmyk: string;
+}
+
+// Original asset data for export
+interface OriginalAsset {
+  name: string;
+  data: string; // base64
+  mimeType: string;
+}
 
 interface CylinderPos {
   x: number;
@@ -42,10 +57,18 @@ const OVERLAP_HEIGHT = 60;
 // CMYK Color Picker Component
 function CMYKColorPicker({ 
   color, 
-  onChange 
+  onChange,
+  savedSwatches = [],
+  onSaveSwatch,
+  onUseSwatch,
+  onRemoveSwatch
 }: { 
   color: string; 
   onChange: (color: string) => void;
+  savedSwatches?: ColorSwatch[];
+  onSaveSwatch?: (color: string, cmyk: string) => void;
+  onUseSwatch?: (color: string) => void;
+  onRemoveSwatch?: (id: string) => void;
 }) {
   const [localColor, setLocalColor] = useState(color);
   const { valueToCmyk } = useColorPicker(localColor, setLocalColor);
@@ -71,6 +94,8 @@ function CMYKColorPicker({
     return `C: ${c}%  M: ${m}%  Y: ${y}%  K: ${k}%`;
   };
   
+  const cmykString = formatCmyk();
+  
   return (
     <div className="space-y-3">
       <ColorPicker
@@ -82,11 +107,55 @@ function CMYKColorPicker({
         hideOpacity
         width={220}
         height={150}
+        showColorGuide
       />
       <div className="p-2 bg-muted rounded text-xs font-mono">
         <div className="text-muted-foreground mb-1">CMYK for Print:</div>
-        <div className="text-foreground font-medium">{formatCmyk()}</div>
+        <div className="text-foreground font-medium">{cmykString}</div>
       </div>
+      
+      {onSaveSwatch && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full"
+          onClick={() => onSaveSwatch(localColor, cmykString)}
+          data-testid="button-save-swatch"
+        >
+          <Plus className="w-3 h-3 mr-1" />
+          Save to Swatches
+        </Button>
+      )}
+      
+      {savedSwatches.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">Saved Swatches:</div>
+          <div className="flex flex-wrap gap-1">
+            {savedSwatches.map((swatch) => (
+              <div key={swatch.id} className="relative group">
+                <button
+                  className="w-6 h-6 rounded border border-border cursor-pointer hover:ring-2 hover:ring-primary"
+                  style={{ backgroundColor: swatch.color }}
+                  onClick={() => onUseSwatch?.(swatch.color)}
+                  title={swatch.cmyk}
+                  data-testid={`swatch-${swatch.id}`}
+                />
+                {onRemoveSwatch && (
+                  <button
+                    className="absolute -top-1 -right-1 w-3 h-3 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px]"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveSwatch(swatch.id);
+                    }}
+                  >
+                    <X className="w-2 h-2" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -165,6 +234,7 @@ interface LabelElement {
   color?: string;
   visible?: boolean;
   image?: HTMLImageElement;
+  originalAsset?: OriginalAsset; // Store original upload for export
 }
 
 interface ThreeContext {
@@ -237,12 +307,59 @@ export default function ProductMockup() {
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
   const [fontsLoaded, setFontsLoaded] = useState(fontsPreloaded);
   
+  // Project info state (required before using designer)
+  const [projectName, setProjectName] = useState<string>(() => {
+    return localStorage.getItem('labelDesigner_projectName') || '';
+  });
+  const [projectEmail, setProjectEmail] = useState<string>(() => {
+    return localStorage.getItem('labelDesigner_projectEmail') || '';
+  });
+  const [showProjectOverlay, setShowProjectOverlay] = useState(() => {
+    const name = localStorage.getItem('labelDesigner_projectName');
+    const email = localStorage.getItem('labelDesigner_projectEmail');
+    return !name || !email;
+  });
+  const [tempProjectName, setTempProjectName] = useState('');
+  const [tempProjectEmail, setTempProjectEmail] = useState('');
+  
+  // Color swatches for the session
+  const [savedSwatches, setSavedSwatches] = useState<ColorSwatch[]>([]);
+  
+  // Track original assets for export
+  const [originalAssets, setOriginalAssets] = useState<OriginalAsset[]>([]);
+  
   // Preload all fonts on mount
   useEffect(() => {
     if (!fontsLoaded) {
       preloadAllFonts().then(() => setFontsLoaded(true));
     }
   }, [fontsLoaded]);
+  
+  // Save project info to localStorage
+  const handleProjectSubmit = () => {
+    if (tempProjectName.trim() && tempProjectEmail.trim()) {
+      localStorage.setItem('labelDesigner_projectName', tempProjectName.trim());
+      localStorage.setItem('labelDesigner_projectEmail', tempProjectEmail.trim());
+      setProjectName(tempProjectName.trim());
+      setProjectEmail(tempProjectEmail.trim());
+      setShowProjectOverlay(false);
+    }
+  };
+  
+  // Add a color to saved swatches
+  const addColorToSwatches = (color: string, cmyk: string) => {
+    const newSwatch: ColorSwatch = {
+      id: Date.now().toString(),
+      color,
+      cmyk
+    };
+    setSavedSwatches(prev => [...prev, newSwatch]);
+  };
+  
+  // Remove a swatch
+  const removeSwatch = (id: string) => {
+    setSavedSwatches(prev => prev.filter(s => s.id !== id));
+  };
   
   // LOCKED LIGHTING SETTINGS - These are "in stone" and hidden from UI
   const lighting: LightingSettings = {
@@ -798,8 +915,18 @@ export default function ProductMockup() {
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        const base64Data = dataUrl.split(',')[1]; // Remove data:image/xxx;base64, prefix
+        
         const img = new window.Image();
         img.onload = () => {
+          // Store original asset for export
+          const originalAsset: OriginalAsset = {
+            name: file.name,
+            data: base64Data,
+            mimeType: file.type
+          };
+          
           const newElement: LabelElement = {
             id: `logo-${Date.now()}`,
             type: 'logo',
@@ -807,14 +934,16 @@ export default function ProductMockup() {
             y: LABEL_HEIGHT / 2,
             rotation: 0,
             scale: Math.min(200 / img.width, 200 / img.height),
-            content: '',
+            content: file.name, // Store filename
             visible: true,
             image: img,
+            originalAsset, // Store for export
           };
           setElements(prev => [...prev, newElement]);
+          setOriginalAssets(prev => [...prev, originalAsset]);
           setSelectedId(newElement.id);
         };
-        img.src = event.target?.result as string;
+        img.src = dataUrl;
       };
       reader.readAsDataURL(file);
     }
@@ -909,11 +1038,63 @@ export default function ProductMockup() {
   const selectedElement = elements.find(el => el.id === selectedId);
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold" data-testid="text-page-title">Hemp Wick Label Designer</h1>
-        <p className="text-muted-foreground text-sm">Design your label and preview how it wraps around the product</p>
-      </div>
+    <>
+      {/* Project Name/Email Overlay - blocks designer until completed */}
+      <Dialog open={showProjectOverlay} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Start Your Label Project</DialogTitle>
+            <DialogDescription>
+              Enter your project name and email to begin designing. This info will be saved with your project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="project-name">Project Name</Label>
+              <Input
+                id="project-name"
+                placeholder="e.g., Hemp Wick 200ft Roll"
+                value={tempProjectName}
+                onChange={(e) => setTempProjectName(e.target.value)}
+                data-testid="input-project-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-email">Email</Label>
+              <Input
+                id="project-email"
+                type="email"
+                placeholder="your@email.com"
+                value={tempProjectEmail}
+                onChange={(e) => setTempProjectEmail(e.target.value)}
+                data-testid="input-project-email"
+              />
+            </div>
+          </div>
+          <Button 
+            className="w-full" 
+            onClick={handleProjectSubmit}
+            disabled={!tempProjectName.trim() || !tempProjectEmail.trim()}
+            data-testid="button-start-project"
+          >
+            Start Designing
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <div className="p-4 md:p-6 max-w-7xl mx-auto">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Hemp Wick Label Designer</h1>
+            <p className="text-muted-foreground text-sm">Design your label and preview how it wraps around the product</p>
+          </div>
+          {projectName && (
+            <div className="text-right text-sm">
+              <div className="font-medium" data-testid="text-project-name">{projectName}</div>
+              <div className="text-muted-foreground text-xs" data-testid="text-project-email">{projectEmail}</div>
+            </div>
+          )}
+        </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
@@ -1224,8 +1405,8 @@ export default function ProductMockup() {
                         
                         <div className="flex items-center gap-2">
                           <Label className="text-xs w-12">Color:</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
+                          <Dialog>
+                            <DialogTrigger asChild>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -1239,14 +1420,21 @@ export default function ProductMockup() {
                                 <span className="text-xs font-mono">{selectedElement.color || '#1a1a1a'}</span>
                                 <Palette className="h-4 w-4 ml-auto" />
                               </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-3" align="start">
+                            </DialogTrigger>
+                            <DialogContent className="w-auto max-w-[280px] p-4">
+                              <DialogHeader>
+                                <DialogTitle className="text-sm">Pick Color</DialogTitle>
+                              </DialogHeader>
                               <CMYKColorPicker
                                 color={selectedElement.color || '#1a1a1a'}
                                 onChange={(color) => updateElement(selectedId!, { color })}
+                                savedSwatches={savedSwatches}
+                                onSaveSwatch={addColorToSwatches}
+                                onUseSwatch={(color) => updateElement(selectedId!, { color })}
+                                onRemoveSwatch={removeSwatch}
                               />
-                            </PopoverContent>
-                          </Popover>
+                            </DialogContent>
+                          </Dialog>
                         </div>
                         
                         <div className="flex items-center gap-2">
@@ -1377,6 +1565,7 @@ export default function ProductMockup() {
           </CardContent>
         </Card>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
