@@ -985,16 +985,16 @@ export default function ProductMockup() {
               }}
               data-testid="container-preview"
             >
-              <div 
-                ref={threeContainerRef}
-                className="absolute inset-0"
-                style={{ zIndex: 2 }}
-              />
               <img 
                 src={hempClearUrl}
                 alt="Hemp wick overlay"
                 className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                style={{ zIndex: 3 }}
+                style={{ zIndex: 1 }}
+              />
+              <div 
+                ref={threeContainerRef}
+                className="absolute inset-0"
+                style={{ zIndex: 2 }}
               />
             </div>
             
@@ -1039,45 +1039,45 @@ export default function ProductMockup() {
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Tilt X: {cylinderPos.rotX}°</Label>
+                  <Label className="text-xs">Tilt X: {cylinderPos.rotX.toFixed(1)}°</Label>
                   <Slider
-                    value={[cylinderPos.rotX]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotX: v }))}
+                    value={[cylinderPos.rotX * 10]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotX: v / 10 }))}
                     min={0}
-                    max={180}
+                    max={1800}
                     step={1}
                     data-testid="slider-rot-x"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Tilt Z: {cylinderPos.rotY}°</Label>
+                  <Label className="text-xs">Tilt Z: {cylinderPos.rotY.toFixed(1)}°</Label>
                   <Slider
-                    value={[cylinderPos.rotY]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotY: v }))}
-                    min={-90}
-                    max={90}
+                    value={[cylinderPos.rotY * 10]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, rotY: v / 10 }))}
+                    min={-900}
+                    max={900}
                     step={1}
                     data-testid="slider-rot-y"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Move X: {cylinderPos.x.toFixed(3)}</Label>
+                  <Label className="text-xs">Move X: {cylinderPos.x.toFixed(4)}</Label>
                   <Slider
-                    value={[cylinderPos.x * 1000]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, x: v / 1000 }))}
-                    min={-50}
-                    max={50}
+                    value={[cylinderPos.x * 10000]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, x: v / 10000 }))}
+                    min={-500}
+                    max={500}
                     step={1}
                     data-testid="slider-pos-x"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Move Y: {cylinderPos.y.toFixed(3)}</Label>
+                  <Label className="text-xs">Move Y: {cylinderPos.y.toFixed(4)}</Label>
                   <Slider
-                    value={[cylinderPos.y * 1000]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, y: v / 1000 }))}
-                    min={-50}
-                    max={50}
+                    value={[cylinderPos.y * 10000]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, y: v / 10000 }))}
+                    min={-500}
+                    max={500}
                     step={1}
                     data-testid="slider-pos-y"
                   />
@@ -1089,18 +1089,18 @@ export default function ProductMockup() {
                     onValueChange={([v]) => setCylinderPos(p => ({ ...p, scale: v / 100 }))}
                     min={10}
                     max={500}
-                    step={5}
+                    step={1}
                     data-testid="slider-scale-3d"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Zoom: {cylinderPos.cameraZ.toFixed(3)}</Label>
+                  <Label className="text-xs">Zoom: {cylinderPos.cameraZ.toFixed(4)}</Label>
                   <Slider
-                    value={[cylinderPos.cameraZ * 1000]}
-                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, cameraZ: v / 1000 }))}
-                    min={50}
-                    max={500}
-                    step={5}
+                    value={[cylinderPos.cameraZ * 10000]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, cameraZ: v / 10000 }))}
+                    min={500}
+                    max={5000}
+                    step={1}
                     data-testid="slider-camera-z"
                   />
                 </div>
