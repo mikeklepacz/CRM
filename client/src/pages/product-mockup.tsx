@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import * as THREE from 'three';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
-import productImageUrl from '@assets/Hemp-Wick-without-Label---Square_1764117282500.jpg';
+import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 
 const LABEL_WIDTH = 628;
 const LABEL_HEIGHT = 600;
@@ -30,12 +32,20 @@ interface LabelElement {
   image?: HTMLImageElement;
 }
 
+interface ThreeContext {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  renderer: THREE.WebGLRenderer;
+  cylinder: THREE.Mesh | null;
+  animationId: number;
+}
+
 export default function ProductMockup() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const threeContainerRef = useRef<HTMLDivElement>(null);
+  const threeContextRef = useRef<ThreeContext | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const labelInputRef = useRef<HTMLInputElement>(null);
-  const productImageRef = useRef<HTMLImageElement | null>(null);
   
   const [elements, setElements] = useState<LabelElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -44,17 +54,7 @@ export default function ProductMockup() {
   const [mode, setMode] = useState<'build' | 'upload'>('build');
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [productImageLoaded, setProductImageLoaded] = useState(false);
-
-  useEffect(() => {
-    const img = new window.Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      productImageRef.current = img;
-      setProductImageLoaded(true);
-    };
-    img.src = productImageUrl;
-  }, []);
+  const [cylinderLoaded, setCylinderLoaded] = useState(false);
 
   const generateKraftTexture = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
     ctx.fillStyle = '#c4a574';
@@ -168,7 +168,7 @@ export default function ProductMockup() {
     }
   }, [elements, selectedId, mode, uploadedLabel, generateKraftTexture]);
 
-  const createLabelTexture = useCallback(() => {
+  const createLabelTexture = useCallback((): THREE.CanvasTexture => {
     const canvas = document.createElement('canvas');
     canvas.width = LABEL_HEIGHT;
     canvas.height = LABEL_WIDTH;
@@ -213,81 +213,151 @@ export default function ProductMockup() {
     ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
 
-    return canvas;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+    return texture;
   }, [elements, mode, uploadedLabel, generateKraftTexture]);
-
-  const drawProductPreview = useCallback(() => {
-    const canvas = previewCanvasRef.current;
-    const productImage = productImageRef.current;
-    if (!canvas || !productImage || !productImageLoaded) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const size = 400;
-    canvas.width = size;
-    canvas.height = size;
-
-    ctx.drawImage(productImage, 0, 0, size, size);
-
-    const labelTexture = createLabelTexture();
-    
-    const cylinderCenterX = size * 0.485;
-    const cylinderTop = size * 0.185;
-    const cylinderBottom = size * 0.78;
-    const cylinderRadius = size * 0.095;
-    const cylinderHeight = cylinderBottom - cylinderTop;
-
-    const rotationOffset = (viewRotation / 360) * Math.PI * 2;
-    const visibleStart = -Math.PI / 2 + rotationOffset;
-    const visibleEnd = Math.PI / 2 + rotationOffset;
-    
-    const slices = 60;
-    for (let i = 0; i < slices; i++) {
-      const angle = visibleStart + (i / slices) * (visibleEnd - visibleStart);
-      const nextAngle = visibleStart + ((i + 1) / slices) * (visibleEnd - visibleStart);
-      
-      const x1 = cylinderCenterX + Math.sin(angle) * cylinderRadius;
-      const x2 = cylinderCenterX + Math.sin(nextAngle) * cylinderRadius;
-      
-      const normalizedAngle = ((angle - rotationOffset + Math.PI) / (Math.PI * 2) + 0.5) % 1;
-      const srcX = normalizedAngle * labelTexture.width;
-      const srcWidth = labelTexture.width / slices;
-      
-      const depth = Math.cos(angle);
-      const brightness = 0.6 + depth * 0.4;
-      
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(x1, cylinderTop);
-      ctx.lineTo(x2, cylinderTop);
-      ctx.lineTo(x2, cylinderBottom);
-      ctx.lineTo(x1, cylinderBottom);
-      ctx.closePath();
-      ctx.clip();
-      
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.drawImage(
-        labelTexture,
-        srcX, 0, srcWidth, labelTexture.height,
-        x1, cylinderTop, x2 - x1 + 1, cylinderHeight
-      );
-      
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = `rgba(0, 0, 0, ${(1 - brightness) * 0.3})`;
-      ctx.fillRect(x1, cylinderTop, x2 - x1 + 1, cylinderHeight);
-      
-      ctx.restore();
-    }
-  }, [createLabelTexture, viewRotation, productImageLoaded]);
 
   useEffect(() => {
     drawFlatLabel();
   }, [drawFlatLabel]);
 
   useEffect(() => {
-    drawProductPreview();
-  }, [drawProductPreview]);
+    const container = threeContainerRef.current;
+    if (!container) return;
+
+    const width = 300;
+    const height = 500;
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 1000);
+    camera.position.set(0, 0, 0.12);
+
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      preserveDrawingBuffer: true,
+    });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+    container.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+
+    const frontLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    frontLight.position.set(0, 0, 1);
+    scene.add(frontLight);
+
+    const topLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    topLight.position.set(0, 1, 0.5);
+    scene.add(topLight);
+
+    let cylinder: THREE.Mesh | null = null;
+    
+    const loader = new OBJLoader();
+    loader.load(
+      '/attached_assets/HempWick Roll Object_1764118046566.obj',
+      (obj) => {
+        const geometry = (obj.children[0] as THREE.Mesh).geometry;
+        
+        const labelTexture = createLabelTexture();
+        const material = new THREE.MeshStandardMaterial({
+          map: labelTexture,
+          roughness: 0.7,
+          metalness: 0.05,
+        });
+        
+        cylinder = new THREE.Mesh(geometry, material);
+        cylinder.rotation.x = Math.PI / 2;
+        cylinder.rotation.y = (120 * Math.PI) / 180;
+        cylinder.position.y = 0;
+        scene.add(cylinder);
+        
+        threeContextRef.current = {
+          scene,
+          camera,
+          renderer,
+          cylinder,
+          animationId: 0,
+        };
+        
+        setCylinderLoaded(true);
+      },
+      undefined,
+      (error) => {
+        console.error('Error loading OBJ:', error);
+        const geometry = new THREE.CylinderGeometry(0.01, 0.01, 0.052, 64, 1, true);
+        const labelTexture = createLabelTexture();
+        const material = new THREE.MeshStandardMaterial({
+          map: labelTexture,
+          roughness: 0.7,
+          metalness: 0.05,
+          side: THREE.DoubleSide,
+        });
+        
+        cylinder = new THREE.Mesh(geometry, material);
+        scene.add(cylinder);
+        
+        threeContextRef.current = {
+          scene,
+          camera,
+          renderer,
+          cylinder,
+          animationId: 0,
+        };
+        
+        setCylinderLoaded(true);
+      }
+    );
+
+    let animationId: number;
+    const animate = () => {
+      animationId = requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    threeContextRef.current = {
+      scene,
+      camera,
+      renderer,
+      cylinder: null,
+      animationId,
+    };
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+      threeContextRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const ctx = threeContextRef.current;
+    if (!ctx || !ctx.cylinder) return;
+
+    const newTexture = createLabelTexture();
+    const material = ctx.cylinder.material as THREE.MeshStandardMaterial;
+    if (material.map) {
+      material.map.dispose();
+    }
+    material.map = newTexture;
+    material.needsUpdate = true;
+  }, [createLabelTexture, cylinderLoaded]);
+
+  useEffect(() => {
+    const ctx = threeContextRef.current;
+    if (!ctx || !ctx.cylinder) return;
+    ctx.cylinder.rotation.y = (viewRotation * Math.PI) / 180;
+  }, [viewRotation, cylinderLoaded]);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -461,17 +531,36 @@ export default function ProductMockup() {
     setSelectedId(null);
     setUploadedLabel(null);
     setMode('build');
-    setViewRotation(0);
+    setViewRotation(120);
   };
 
   const handleDownload = () => {
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
+    const container = threeContainerRef.current;
+    if (!container) return;
     
-    const link = document.createElement('a');
-    link.download = 'hemp-wick-mockup.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    const downloadCanvas = document.createElement('canvas');
+    downloadCanvas.width = 300;
+    downloadCanvas.height = 500;
+    const downloadCtx = downloadCanvas.getContext('2d')!;
+    
+    downloadCtx.fillStyle = '#e8dcc8';
+    downloadCtx.fillRect(0, 0, 300, 500);
+    
+    const threeCanvas = container.querySelector('canvas');
+    if (threeCanvas) {
+      downloadCtx.drawImage(threeCanvas, 0, 0);
+    }
+    
+    const overlayImg = new window.Image();
+    overlayImg.crossOrigin = 'anonymous';
+    overlayImg.onload = () => {
+      downloadCtx.drawImage(overlayImg, 0, 0, 300, 500);
+      const link = document.createElement('a');
+      link.download = 'hemp-wick-mockup.png';
+      link.href = downloadCanvas.toDataURL('image/png');
+      link.click();
+    };
+    overlayImg.src = hempClearUrl;
   };
 
   const selectedElement = elements.find(el => el.id === selectedId);
@@ -792,16 +881,23 @@ export default function ProductMockup() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div 
-              className="w-full flex items-center justify-center rounded-lg overflow-hidden"
-              style={{ background: '#e8dcc8' }}
+              className="relative w-full flex items-center justify-center rounded-lg overflow-hidden"
+              style={{ 
+                background: '#e8dcc8',
+                height: '500px',
+              }}
               data-testid="container-preview"
             >
-              <canvas
-                ref={previewCanvasRef}
-                width={400}
-                height={400}
-                className="max-w-full"
-                style={{ imageRendering: 'auto' }}
+              <div 
+                ref={threeContainerRef}
+                className="absolute inset-0 flex items-center justify-center"
+                style={{ zIndex: 1 }}
+              />
+              <img 
+                src={hempClearUrl}
+                alt="Hemp wick overlay"
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                style={{ zIndex: 2 }}
               />
             </div>
             
