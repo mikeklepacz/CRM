@@ -59,7 +59,17 @@ function CMYKColorPicker({
     onChange(newColor);
   };
   
-  const cmykValues = valueToCmyk();
+  // Parse CMYK values and convert to clean percentages
+  const cmykRaw = valueToCmyk();
+  const cmykMatch = cmykRaw.match(/cmyk\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)/);
+  const formatCmyk = () => {
+    if (!cmykMatch) return 'C: 0%  M: 0%  Y: 0%  K: 0%';
+    const c = Math.round(parseFloat(cmykMatch[1]) * 100);
+    const m = Math.round(parseFloat(cmykMatch[2]) * 100);
+    const y = Math.round(parseFloat(cmykMatch[3]) * 100);
+    const k = Math.round(parseFloat(cmykMatch[4]) * 100);
+    return `C: ${c}%  M: ${m}%  Y: ${y}%  K: ${k}%`;
+  };
   
   return (
     <div className="space-y-3">
@@ -75,7 +85,7 @@ function CMYKColorPicker({
       />
       <div className="p-2 bg-muted rounded text-xs font-mono">
         <div className="text-muted-foreground mb-1">CMYK for Print:</div>
-        <div className="text-foreground font-medium">{cmykValues}</div>
+        <div className="text-foreground font-medium">{formatCmyk()}</div>
       </div>
     </div>
   );
