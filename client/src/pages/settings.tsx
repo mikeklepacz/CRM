@@ -20,7 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug, Mail, Clock, Tag, Filter } from "lucide-react";
+import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug, Mail, Clock, Tag, Filter, LayoutGrid } from "lucide-react";
 import { Link } from "wouter";
 import { Integrations } from "@/components/integrations";
 import { TimezoneAutocomplete } from "@/components/timezone-autocomplete";
@@ -109,6 +109,7 @@ export default function Settings() {
     defaultTimezoneMode?: string;
     timeFormat?: string;
     defaultCalendarReminders?: Array<{method: 'popup' | 'email', minutes: number}>;
+    visibleModules?: Record<string, boolean>;
   }>({
     queryKey: ['/api/user/preferences'],
   });
@@ -137,6 +138,22 @@ export default function Settings() {
   // Calendar reminders state
   const [calendarReminderTimes, setCalendarReminderTimes] = useState<number[]>([0]);
   const [calendarReminderMethods, setCalendarReminderMethods] = useState<('popup' | 'email')[]>(['popup']);
+  
+  // Module visibility state - default all modules visible
+  const defaultModules: Record<string, boolean> = {
+    admin: true,
+    dashboard: true,
+    clients: true,
+    followUp: true,
+    mapSearch: true,
+    sales: true,
+    assistant: true,
+    docs: true,
+    labelDesigner: true,
+    callManager: true,
+    ehub: true,
+  };
+  const [visibleModules, setVisibleModules] = useState<Record<string, boolean>>(defaultModules);
 
   // Update state when preferences load
   useEffect(() => {
@@ -155,6 +172,9 @@ export default function Settings() {
       const methods = Array.from(new Set(userPreferences.defaultCalendarReminders.map(r => r.method))) as ('popup' | 'email')[];
       setCalendarReminderTimes(times);
       setCalendarReminderMethods(methods);
+    }
+    if (userPreferences?.visibleModules) {
+      setVisibleModules({ ...defaultModules, ...userPreferences.visibleModules });
     }
   }, [userPreferences]);
 
@@ -411,6 +431,32 @@ export default function Settings() {
     },
   });
 
+  const updateModulesMutation = useMutation({
+    mutationFn: async (data: { visibleModules: Record<string, boolean> }) => {
+      return await apiRequest("PUT", "/api/user/preferences", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      toast({
+        title: "Success",
+        description: "Module visibility updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleModuleToggle = (moduleKey: string, checked: boolean) => {
+    const newModules = { ...visibleModules, [moduleKey]: checked };
+    setVisibleModules(newModules);
+    updateModulesMutation.mutate({ visibleModules: newModules });
+  };
+
   const handleSaveTimezone = () => {
     if (!timezone) {
       toast({
@@ -506,6 +552,10 @@ export default function Settings() {
           <TabsTrigger value="crm-filter" data-testid="tab-crm-filter">
             <Filter className="mr-2 h-4 w-4" />
             CRM Filter
+          </TabsTrigger>
+          <TabsTrigger value="modules" data-testid="tab-modules">
+            <LayoutGrid className="mr-2 h-4 w-4" />
+            Modules
           </TabsTrigger>
           {user.role === 'admin' && (
             <>
@@ -963,6 +1013,129 @@ export default function Settings() {
               >
                 {updateSelectedCategoryMutation.isPending ? "Saving..." : "Save Category Filter"}
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="modules" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Module Visibility</CardTitle>
+              <CardDescription>
+                Choose which navigation modules are visible in your header. Hidden modules can still be accessed via direct URL.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {user.role === 'admin' && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-admin"
+                      checked={visibleModules.admin}
+                      onCheckedChange={(checked) => handleModuleToggle('admin', !!checked)}
+                      data-testid="checkbox-module-admin"
+                    />
+                    <Label htmlFor="module-admin" className="font-normal cursor-pointer">Admin</Label>
+                  </div>
+                )}
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="module-dashboard"
+                    checked={visibleModules.dashboard}
+                    onCheckedChange={(checked) => handleModuleToggle('dashboard', !!checked)}
+                    data-testid="checkbox-module-dashboard"
+                  />
+                  <Label htmlFor="module-dashboard" className="font-normal cursor-pointer">Dashboard</Label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="module-clients"
+                    checked={visibleModules.clients}
+                    onCheckedChange={(checked) => handleModuleToggle('clients', !!checked)}
+                    data-testid="checkbox-module-clients"
+                  />
+                  <Label htmlFor="module-clients" className="font-normal cursor-pointer">Clients</Label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="module-followUp"
+                    checked={visibleModules.followUp}
+                    onCheckedChange={(checked) => handleModuleToggle('followUp', !!checked)}
+                    data-testid="checkbox-module-followUp"
+                  />
+                  <Label htmlFor="module-followUp" className="font-normal cursor-pointer">Follow-Up</Label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="module-mapSearch"
+                    checked={visibleModules.mapSearch}
+                    onCheckedChange={(checked) => handleModuleToggle('mapSearch', !!checked)}
+                    data-testid="checkbox-module-mapSearch"
+                  />
+                  <Label htmlFor="module-mapSearch" className="font-normal cursor-pointer">Map Search</Label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="module-sales"
+                    checked={visibleModules.sales}
+                    onCheckedChange={(checked) => handleModuleToggle('sales', !!checked)}
+                    data-testid="checkbox-module-sales"
+                  />
+                  <Label htmlFor="module-sales" className="font-normal cursor-pointer">Sales</Label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="module-assistant"
+                    checked={visibleModules.assistant}
+                    onCheckedChange={(checked) => handleModuleToggle('assistant', !!checked)}
+                    data-testid="checkbox-module-assistant"
+                  />
+                  <Label htmlFor="module-assistant" className="font-normal cursor-pointer">Assistant</Label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="module-docs"
+                    checked={visibleModules.docs}
+                    onCheckedChange={(checked) => handleModuleToggle('docs', !!checked)}
+                    data-testid="checkbox-module-docs"
+                  />
+                  <Label htmlFor="module-docs" className="font-normal cursor-pointer">Docs</Label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="module-labelDesigner"
+                    checked={visibleModules.labelDesigner}
+                    onCheckedChange={(checked) => handleModuleToggle('labelDesigner', !!checked)}
+                    data-testid="checkbox-module-labelDesigner"
+                  />
+                  <Label htmlFor="module-labelDesigner" className="font-normal cursor-pointer">Label Designer</Label>
+                </div>
+                {(user.role === 'admin' || user.hasVoiceAccess) && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-callManager"
+                      checked={visibleModules.callManager}
+                      onCheckedChange={(checked) => handleModuleToggle('callManager', !!checked)}
+                      data-testid="checkbox-module-callManager"
+                    />
+                    <Label htmlFor="module-callManager" className="font-normal cursor-pointer">Call Manager</Label>
+                  </div>
+                )}
+                {user.role === 'admin' && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-ehub"
+                      checked={visibleModules.ehub}
+                      onCheckedChange={(checked) => handleModuleToggle('ehub', !!checked)}
+                      data-testid="checkbox-module-ehub"
+                    />
+                    <Label htmlFor="module-ehub" className="font-normal cursor-pointer">E-Hub</Label>
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground mt-4">
+                Changes are saved automatically.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

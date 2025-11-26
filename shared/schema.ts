@@ -282,6 +282,7 @@ export const userPreferences = pgTable("user_preferences", {
   viewAsAgent: boolean("view_as_agent").default(false), // For admins: toggle to view dashboard as an agent would see it
   splitScreenProposals: boolean("split_screen_proposals").default(false), // Split-screen mode for KB proposals (desktop only)
   blacklistCheckEnabled: boolean("blacklist_check_enabled").default(true), // Enable/disable blacklist checking (for testing)
+  visibleModules: jsonb("visible_modules").$type<Record<string, boolean>>().default(sql`'{}'::jsonb`), // Which navigation modules are visible
   followUpFilters: jsonb("follow_up_filters").$type<{
     claimedDays: [number, number];
     interestedDays: [number, number];
