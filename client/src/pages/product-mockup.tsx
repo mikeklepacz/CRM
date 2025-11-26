@@ -10,11 +10,24 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Type, Check, ChevronsUpDown, Loader2, Save, X } from 'lucide-react';
+import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, Type, Check, ChevronsUpDown, Loader2, Save, X } from 'lucide-react';
 import ColorPicker, { useColorPicker } from 'react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Red Bleed_1764162964434.png';
+
+// Simple line icons for center alignment
+const CenterVerticalLine = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="8" y1="2" x2="8" y2="14" />
+  </svg>
+);
+
+const CenterHorizontalLine = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="2" y1="8" x2="14" y2="8" />
+  </svg>
+);
 
 // Saved color swatch interface
 interface ColorSwatch {
@@ -294,7 +307,10 @@ export default function ProductMockup() {
   const [viewRotation, setViewRotation] = useState(115); // Fixed at 115° for correct tilt alignment
   const [labelRotation, setLabelRotation] = useState(0); // New rotation control using Offset X
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeCorner, setResizeCorner] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 }); // For shift-constrained movement
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
   
   // Use hardcoded defaults directly - these are "in stone"
@@ -362,11 +378,12 @@ export default function ProductMockup() {
   };
   
   // LOCKED LIGHTING SETTINGS - These are "in stone" and hidden from UI
+  // Reduced ambient to preserve true blacks on the label
   const lighting: LightingSettings = {
-    ambient: 1.4,      // Locked ambient brightness
-    front: 2.7,        // Key light intensity
-    top: 0.6,          // Fill light intensity  
-    warmth: 0.2,       // Slight warm tint
+    ambient: 0.4,      // Lower ambient to preserve blacks
+    front: 3.2,        // Slightly higher key light to compensate
+    top: 0.8,          // Fill light intensity  
+    warmth: 0.15,      // Slight warm tint
     keyAngle: 325,     // Key light angle
     keyHeight: 30,     // Key light height
     keyDistance: 2.5,  // Key light distance
@@ -470,22 +487,39 @@ export default function ProductMockup() {
         ctx.save();
         ctx.translate(selected.x, selected.y);
         ctx.rotate((selected.rotation * Math.PI) / 180);
-        ctx.scale(selected.scale, selected.scale);
         
         let w = 100, h = 50;
         if (selected.type === 'logo' && selected.image) {
-          w = selected.image.width;
-          h = selected.image.height;
+          w = selected.image.width * selected.scale;
+          h = selected.image.height * selected.scale;
         } else if (selected.type === 'text') {
           ctx.font = `bold ${selected.fontSize || 32}px ${selected.font || 'Arial Black'}`;
           const metrics = ctx.measureText(selected.content);
-          w = metrics.width + 20;
-          h = (selected.fontSize || 32) + 20;
+          w = (metrics.width + 20) * selected.scale;
+          h = ((selected.fontSize || 32) + 20) * selected.scale;
         }
         
+        // Draw selection border
         ctx.strokeStyle = '#3b82f6';
-        ctx.lineWidth = 2 / selected.scale;
+        ctx.lineWidth = 2;
         ctx.strokeRect(-w / 2 - 5, -h / 2 - 5, w + 10, h + 10);
+        
+        // Draw corner handles
+        const handleSize = 10;
+        const corners = [
+          { x: -w / 2 - 5, y: -h / 2 - 5 }, // top-left
+          { x: w / 2 + 5 - handleSize, y: -h / 2 - 5 }, // top-right
+          { x: -w / 2 - 5, y: h / 2 + 5 - handleSize }, // bottom-left
+          { x: w / 2 + 5 - handleSize, y: h / 2 + 5 - handleSize }, // bottom-right
+        ];
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        corners.forEach(corner => {
+          ctx.fillRect(corner.x, corner.y, handleSize, handleSize);
+          ctx.strokeRect(corner.x, corner.y, handleSize, handleSize);
+        });
         
         ctx.restore();
       }
@@ -836,6 +870,56 @@ export default function ProductMockup() {
     });
   };
 
+  // Helper to get element bounds
+  const getElementBounds = useCallback((el: LabelElement) => {
+    let w = 100, h = 50;
+    if (el.type === 'logo' && el.image) {
+      w = el.image.width * el.scale;
+      h = el.image.height * el.scale;
+    } else if (el.type === 'text') {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
+          const metrics = ctx.measureText(el.content);
+          w = (metrics.width + 20) * el.scale;
+          h = ((el.fontSize || 32) + 20) * el.scale;
+        }
+      }
+    }
+    return { w, h };
+  }, []);
+
+  // Check if point is on a resize handle
+  const getHandleAtPoint = useCallback((el: LabelElement, x: number, y: number): string | null => {
+    const { w, h } = getElementBounds(el);
+    const handleSize = 15; // Slightly larger hit area
+    
+    // Transform point to element's local space
+    const cos = Math.cos((-el.rotation * Math.PI) / 180);
+    const sin = Math.sin((-el.rotation * Math.PI) / 180);
+    const dx = x - el.x;
+    const dy = y - el.y;
+    const localX = dx * cos - dy * sin;
+    const localY = dx * sin + dy * cos;
+    
+    const corners = [
+      { name: 'tl', x: -w / 2 - 5, y: -h / 2 - 5 },
+      { name: 'tr', x: w / 2 + 5 - handleSize, y: -h / 2 - 5 },
+      { name: 'bl', x: -w / 2 - 5, y: h / 2 + 5 - handleSize },
+      { name: 'br', x: w / 2 + 5 - handleSize, y: h / 2 + 5 - handleSize },
+    ];
+    
+    for (const corner of corners) {
+      if (localX >= corner.x && localX <= corner.x + handleSize &&
+          localY >= corner.y && localY <= corner.y + handleSize) {
+        return corner.name;
+      }
+    }
+    return null;
+  }, [getElementBounds]);
+
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -851,14 +935,7 @@ export default function ProductMockup() {
       const el = elements[i];
       if (el.visible === false) continue;
       
-      let w = 100, h = 50;
-      if (el.type === 'logo' && el.image) {
-        w = el.image.width * el.scale;
-        h = el.image.height * el.scale;
-      } else if (el.type === 'text') {
-        w = 200 * el.scale;
-        h = (el.fontSize || 32) * el.scale;
-      }
+      const { w, h } = getElementBounds(el);
       
       if (x >= el.x - w/2 && x <= el.x + w/2 && y >= el.y - h/2 && y <= el.y + h/2) {
         found = el.id;
@@ -869,8 +946,6 @@ export default function ProductMockup() {
   };
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!selectedId) return;
-    
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -880,16 +955,51 @@ export default function ProductMockup() {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
+    // Check if clicking on a resize handle first
+    if (selectedId) {
+      const selected = elements.find(el => el.id === selectedId);
+      if (selected) {
+        const handle = getHandleAtPoint(selected, x, y);
+        if (handle) {
+          setIsResizing(true);
+          setResizeCorner(handle);
+          setDragOffset({ x, y });
+          return;
+        }
+      }
+    }
+
+    // Check for Alt/Option + click to duplicate
+    if (selectedId && (e.altKey || e.metaKey)) {
+      const selected = elements.find(el => el.id === selectedId);
+      if (selected) {
+        const newElement: LabelElement = {
+          ...selected,
+          id: `${selected.type}-${Date.now()}`,
+          x: selected.x + 20,
+          y: selected.y + 20,
+        };
+        setElements(prev => [...prev, newElement]);
+        setSelectedId(newElement.id);
+        setIsDragging(true);
+        setDragOffset({ x: x - newElement.x, y: y - newElement.y });
+        setDragStartPos({ x: newElement.x, y: newElement.y });
+        return;
+      }
+    }
+
+    // Regular drag
+    if (!selectedId) return;
+    
     const selected = elements.find(el => el.id === selectedId);
     if (selected) {
       setIsDragging(true);
       setDragOffset({ x: x - selected.x, y: y - selected.y });
+      setDragStartPos({ x: selected.x, y: selected.y });
     }
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !selectedId) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -899,15 +1009,68 @@ export default function ProductMockup() {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
+    // Handle resizing
+    if (isResizing && selectedId && resizeCorner) {
+      const selected = elements.find(el => el.id === selectedId);
+      if (selected) {
+        const { w, h } = getElementBounds(selected);
+        
+        // Calculate distance from center for new scale
+        const dx = Math.abs(x - selected.x);
+        const dy = Math.abs(y - selected.y);
+        
+        // Use the larger dimension for uniform scaling
+        const currentHalfW = w / 2;
+        const currentHalfH = h / 2;
+        
+        // Calculate scale factor based on corner drag distance
+        const newHalfW = dx;
+        const newHalfH = dy;
+        const scaleFactorW = currentHalfW > 0 ? newHalfW / currentHalfW : 1;
+        const scaleFactorH = currentHalfH > 0 ? newHalfH / currentHalfH : 1;
+        const scaleFactor = Math.max(scaleFactorW, scaleFactorH);
+        
+        const newScale = Math.max(0.1, Math.min(5, selected.scale * scaleFactor));
+        
+        setElements(prev => prev.map(el => 
+          el.id === selectedId ? { ...el, scale: newScale } : el
+        ));
+        setDragOffset({ x, y });
+      }
+      return;
+    }
+
+    // Handle dragging
+    if (!isDragging || !selectedId) return;
+
+    let newX = x - dragOffset.x;
+    let newY = y - dragOffset.y;
+
+    // Shift key constrains to horizontal or vertical movement
+    if (e.shiftKey) {
+      const deltaX = Math.abs(newX - dragStartPos.x);
+      const deltaY = Math.abs(newY - dragStartPos.y);
+      
+      if (deltaX > deltaY) {
+        // Horizontal movement
+        newY = dragStartPos.y;
+      } else {
+        // Vertical movement
+        newX = dragStartPos.x;
+      }
+    }
+
     setElements(prev => prev.map(el => 
       el.id === selectedId 
-        ? { ...el, x: x - dragOffset.x, y: y - dragOffset.y }
+        ? { ...el, x: newX, y: newY }
         : el
     ));
   };
 
   const handleCanvasMouseUp = () => {
     setIsDragging(false);
+    setIsResizing(false);
+    setResizeCorner(null);
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1416,7 +1579,7 @@ export default function ProductMockup() {
                           title="Center Horizontal"
                           data-testid="button-align-center-h"
                         >
-                          <AlignVerticalDistributeCenter className="w-4 h-4" />
+                          <CenterVerticalLine />
                         </Button>
                         <Button
                           size="icon"
@@ -1447,7 +1610,7 @@ export default function ProductMockup() {
                           title="Center Vertical"
                           data-testid="button-align-center-v"
                         >
-                          <AlignHorizontalDistributeCenter className="w-4 h-4" />
+                          <CenterHorizontalLine />
                         </Button>
                         <Button
                           size="icon"
