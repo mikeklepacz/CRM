@@ -59,6 +59,16 @@ export default function ProductMockup() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
+  
+  const getDefaultPosition = () => {
+    const saved = localStorage.getItem('cylinderPosition');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { }
+    }
+    return { x: 0, y: 0, z: 0, scale: 1, cameraZ: 0.15 };
+  };
+  
+  const [cylinderPos, setCylinderPos] = useState(getDefaultPosition);
 
   const generateKraftBase = useCallback((width: number, height: number): ImageData => {
     if (kraftBaseRef.current && kraftBaseRef.current.width === width && kraftBaseRef.current.height === height) {
@@ -254,8 +264,9 @@ export default function ProductMockup() {
 
     const scene = new THREE.Scene();
 
+    const savedPos = getDefaultPosition();
     const camera = new THREE.PerspectiveCamera(35, width / height, 0.01, 100);
-    camera.position.set(0, 0, 0.15);
+    camera.position.set(0, 0, savedPos.cameraZ);
 
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true, 
@@ -313,10 +324,11 @@ export default function ProductMockup() {
         cylinder = new THREE.Mesh(loadedGeometry, loadedMaterial);
         cylinder.rotation.x = Math.PI / 2;
         cylinder.rotation.y = (120 * Math.PI) / 180;
-        cylinder.position.y = 0;
+        cylinder.position.set(savedPos.x, savedPos.y, savedPos.z);
+        cylinder.scale.setScalar(savedPos.scale);
         scene.add(cylinder);
         
-        console.log('Cylinder added to scene at position:', cylinder.position);
+        console.log('Cylinder added to scene at position:', cylinder.position, 'scale:', savedPos.scale);
         
         threeContextRef.current = {
           scene,
@@ -343,6 +355,8 @@ export default function ProductMockup() {
         });
         
         cylinder = new THREE.Mesh(loadedGeometry, loadedMaterial);
+        cylinder.position.set(savedPos.x, savedPos.y, savedPos.z);
+        cylinder.scale.setScalar(savedPos.scale);
         scene.add(cylinder);
         
         threeContextRef.current = {
@@ -425,6 +439,19 @@ export default function ProductMockup() {
     if (!ctx || !ctx.cylinder) return;
     ctx.cylinder.rotation.y = (viewRotation * Math.PI) / 180;
   }, [viewRotation, cylinderLoaded]);
+
+  useEffect(() => {
+    const ctx = threeContextRef.current;
+    if (!ctx || !ctx.cylinder) return;
+    
+    ctx.cylinder.position.set(cylinderPos.x, cylinderPos.y, cylinderPos.z);
+    ctx.cylinder.scale.setScalar(cylinderPos.scale);
+    ctx.camera.position.z = cylinderPos.cameraZ;
+  }, [cylinderPos, cylinderLoaded]);
+
+  const savePosition = () => {
+    localStorage.setItem('cylinderPosition', JSON.stringify(cylinderPos));
+  };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -964,7 +991,7 @@ export default function ProductMockup() {
                 src={hempClearUrl}
                 alt="Hemp wick overlay"
                 className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                style={{ zIndex: 3, opacity: 0.3 }}
+                style={{ zIndex: 3 }}
               />
             </div>
             
@@ -997,6 +1024,62 @@ export default function ProductMockup() {
                   {angle}°
                 </Button>
               ))}
+            </div>
+
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">3D Position Controls</Label>
+                <Button size="sm" variant="default" onClick={savePosition} data-testid="button-save-position">
+                  Save Position
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">X: {cylinderPos.x.toFixed(3)}</Label>
+                  <Slider
+                    value={[cylinderPos.x * 1000]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, x: v / 1000 }))}
+                    min={-50}
+                    max={50}
+                    step={1}
+                    data-testid="slider-pos-x"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Y: {cylinderPos.y.toFixed(3)}</Label>
+                  <Slider
+                    value={[cylinderPos.y * 1000]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, y: v / 1000 }))}
+                    min={-50}
+                    max={50}
+                    step={1}
+                    data-testid="slider-pos-y"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Scale: {cylinderPos.scale.toFixed(2)}</Label>
+                  <Slider
+                    value={[cylinderPos.scale * 100]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, scale: v / 100 }))}
+                    min={10}
+                    max={500}
+                    step={5}
+                    data-testid="slider-scale-3d"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Zoom: {cylinderPos.cameraZ.toFixed(3)}</Label>
+                  <Slider
+                    value={[cylinderPos.cameraZ * 1000]}
+                    onValueChange={([v]) => setCylinderPos(p => ({ ...p, cameraZ: v / 1000 }))}
+                    min={50}
+                    max={500}
+                    step={5}
+                    data-testid="slider-camera-z"
+                  />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
