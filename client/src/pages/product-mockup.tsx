@@ -1054,7 +1054,9 @@ export default function ProductMockup() {
             baseHalfH,
             anchorSignX,
             anchorSignY,
-            initialScale: selected.scale
+            initialScale: selected.scale,
+            elementType: selected.type,
+            baseFontSize: (selected.fontSize || 36) * selected.scale // Visual font size at start
           };
           
           return;
@@ -1137,8 +1139,8 @@ export default function ProductMockup() {
       // Project mouse onto diagonal
       const projDist = localX * diagDirX + localY * diagDirY;
       
-      // New scale: projDist / diagLen (diagLen is full diagonal at scale=1)
-      const newScale = Math.max(0.1, Math.min(5, projDist / diagLen));
+      // New scale ratio: projDist / diagLen (diagLen is full diagonal at scale=1)
+      const scaleRatio = Math.max(0.1, Math.min(5, projDist / diagLen));
       
       // Dragged corner in local space (relative to anchor)
       const cornerLocalX = projDist * diagDirX;
@@ -1152,9 +1154,18 @@ export default function ProductMockup() {
       const newCenterX = (rs.anchorWorld.x + cornerWorldX) / 2;
       const newCenterY = (rs.anchorWorld.y + cornerWorldY) / 2;
       
-      setElements(prev => prev.map(el => 
-        el.id === selectedId ? { ...el, scale: newScale, x: newCenterX, y: newCenterY } : el
-      ));
+      // For text: update fontSize directly, keep scale at 1
+      // For logos: update scale as before
+      if (rs.elementType === 'text') {
+        const newFontSize = Math.round(rs.baseFontSize * scaleRatio);
+        setElements(prev => prev.map(el => 
+          el.id === selectedId ? { ...el, fontSize: Math.max(8, Math.min(200, newFontSize)), scale: 1, x: newCenterX, y: newCenterY } : el
+        ));
+      } else {
+        setElements(prev => prev.map(el => 
+          el.id === selectedId ? { ...el, scale: scaleRatio, x: newCenterX, y: newCenterY } : el
+        ));
+      }
       return;
     }
 
