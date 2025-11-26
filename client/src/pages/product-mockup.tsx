@@ -1026,40 +1026,35 @@ export default function ProductMockup() {
           const cos = Math.cos(rotation0);
           const sin = Math.sin(rotation0);
           
-          // Base (unscaled) half-extents
-          const baseHx = (w / selected.scale) / 2;
-          const baseHy = (h / selected.scale) / 2;
+          // Unscaled half dimensions (the base size before any scaling)
+          const baseHalfW = (w / selected.scale) / 2;
+          const baseHalfH = (h / selected.scale) / 2;
           
-          // Corner sign: determines direction from center to dragged corner
-          // and opposite direction for anchor
-          let cornerSignX = 1, cornerSignY = 1;
-          if (handle === 'tl') { cornerSignX = -1; cornerSignY = -1; }
-          else if (handle === 'tr') { cornerSignX = 1; cornerSignY = -1; }
-          else if (handle === 'bl') { cornerSignX = -1; cornerSignY = 1; }
-          // br: both positive (default)
+          // Anchor sign: which corner is fixed (opposite of dragged corner)
+          // tl=-1,-1  tr=+1,-1  bl=-1,+1  br=+1,+1
+          let anchorSignX = 1, anchorSignY = 1;
+          if (handle === 'tl') { anchorSignX = 1; anchorSignY = 1; }      // anchor=br
+          else if (handle === 'tr') { anchorSignX = -1; anchorSignY = 1; } // anchor=bl
+          else if (handle === 'bl') { anchorSignX = 1; anchorSignY = -1; } // anchor=tr
+          else { anchorSignX = -1; anchorSignY = -1; }                     // anchor=tl
           
-          // Anchor is opposite corner: negate the signs
-          const anchorLocalX = -cornerSignX * (w / 2);
-          const anchorLocalY = -cornerSignY * (h / 2);
+          // Anchor position in local space (at current scale)
+          const anchorLocalX = anchorSignX * (w / 2);
+          const anchorLocalY = anchorSignY * (h / 2);
           
           // Transform anchor to world space
           const anchorWorldX = selected.x + anchorLocalX * cos - anchorLocalY * sin;
           const anchorWorldY = selected.y + anchorLocalX * sin + anchorLocalY * cos;
           
-          // Vector from center to anchor (used to reconstruct center later)
-          const centerToAnchorX = anchorWorldX - selected.x;
-          const centerToAnchorY = anchorWorldY - selected.y;
-          
-          // Store all state in ref
+          // Store state
           resizeStateRef.current = {
             anchorWorld: { x: anchorWorldX, y: anchorWorldY },
             rotation0,
-            baseHx,
-            baseHy,
-            cornerSignX,
-            cornerSignY,
-            halfDiag0: Math.sqrt(baseHx * baseHx + baseHy * baseHy),
-            centerToAnchor: { x: centerToAnchorX, y: centerToAnchorY }
+            baseHalfW,
+            baseHalfH,
+            anchorSignX,
+            anchorSignY,
+            initialScale: selected.scale
           };
           
           return;
@@ -1126,31 +1121,34 @@ export default function ProductMockup() {
       const dx = x - rs.anchorWorld.x;
       const dy = y - rs.anchorWorld.y;
       
-      // Transform to local space (rotate back by -rotation0)
+      // Transform to local space (inverse rotation)
       const localX = dx * cos + dy * sin;
       const localY = -dx * sin + dy * cos;
       
-      // The full diagonal (from anchor to corner at scale=1) has length 2*halfDiag0
-      // Direction in local space from anchor toward dragged corner
-      const fullDiag0 = 2 * rs.halfDiag0;
-      const diagDirX = (rs.cornerSignX * rs.baseHx) / rs.halfDiag0;  // normalized
-      const diagDirY = (rs.cornerSignY * rs.baseHy) / rs.halfDiag0;
+      // The dragged corner is opposite the anchor
+      // Anchor at (anchorSign * half), so dragged corner at (-anchorSign * half)
+      // Direction from anchor to dragged corner in local space (at scale=1)
+      const dirX = -rs.anchorSignX * rs.baseHalfW * 2; // full width in this direction
+      const dirY = -rs.anchorSignY * rs.baseHalfH * 2; // full height in this direction
+      const diagLen = Math.sqrt(dirX * dirX + dirY * dirY);
+      const diagDirX = dirX / diagLen;
+      const diagDirY = dirY / diagLen;
       
-      // Project mouse position (in local space relative to anchor) onto diagonal
-      const projectedDist = localX * diagDirX + localY * diagDirY;
+      // Project mouse onto diagonal
+      const projDist = localX * diagDirX + localY * diagDirY;
       
-      // New scale: when projectedDist = fullDiag0, scale = 1
-      const newScale = Math.max(0.1, Math.min(5, projectedDist / fullDiag0));
+      // New scale: projDist / diagLen (diagLen is full diagonal at scale=1)
+      const newScale = Math.max(0.1, Math.min(5, projDist / diagLen));
       
-      // Project the mouse onto the diagonal line to get the corner position in local space
-      const cornerLocalX = projectedDist * diagDirX;
-      const cornerLocalY = projectedDist * diagDirY;
+      // Dragged corner in local space (relative to anchor)
+      const cornerLocalX = projDist * diagDirX;
+      const cornerLocalY = projDist * diagDirY;
       
-      // Transform corner position back to world space (it's relative to anchor)
+      // Transform corner to world space
       const cornerWorldX = rs.anchorWorld.x + cornerLocalX * cos - cornerLocalY * sin;
       const cornerWorldY = rs.anchorWorld.y + cornerLocalX * sin + cornerLocalY * cos;
       
-      // Center is the midpoint between anchor and corner
+      // Center is midpoint of anchor and corner
       const newCenterX = (rs.anchorWorld.x + cornerWorldX) / 2;
       const newCenterY = (rs.anchorWorld.y + cornerWorldY) / 2;
       
