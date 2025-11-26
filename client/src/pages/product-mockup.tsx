@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, Type, Check, ChevronsUpDown, Loader2, Save, X } from 'lucide-react';
-import ColorPicker, { useColorPicker } from 'react-best-gradient-color-picker';
+import ColorPicker, { useColorPicker } from '@/vendor/react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Red Bleed_1764176822191.png';
@@ -86,77 +86,10 @@ function CMYKColorPicker({
 }) {
   const [localColor, setLocalColor] = useState(color);
   const { valueToCmyk } = useColorPicker(localColor, setLocalColor);
-  const pickerRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     setLocalColor(color);
   }, [color]);
-  
-  // Auto-select CMYK mode and open Color Guide when picker mounts
-  useEffect(() => {
-    if (!pickerRef.current) return;
-    
-    let hasActivated = false;
-    
-    const activateDefaults = () => {
-      if (hasActivated || !pickerRef.current) return;
-      
-      // Find clickable icon buttons by looking for small divs with pointer cursor and SVG
-      const buttons = Array.from(pickerRef.current.querySelectorAll('div')).filter((div) => {
-        const computed = window.getComputedStyle(div);
-        const hasCursor = computed.cursor === 'pointer';
-        const hasSvg = div.querySelector('svg') !== null;
-        const rect = div.getBoundingClientRect();
-        const isIconSize = rect.width > 20 && rect.width < 45 && rect.height > 20 && rect.height < 45;
-        return hasCursor && hasSvg && isIconSize;
-      });
-      
-      if (buttons.length >= 3) {
-        hasActivated = true;
-        
-        // Button order: eyedropper, color guide, input type
-        const colorGuideBtn = buttons[1] as HTMLElement;
-        const inputTypeBtn = buttons[2] as HTMLElement;
-        
-        // Click color guide
-        colorGuideBtn?.click();
-        
-        // Click input type to open dropdown, then select CMYK
-        setTimeout(() => {
-          inputTypeBtn?.click();
-          
-          setTimeout(() => {
-            // Find CMYK in the dropdown menu
-            const menuItems = document.querySelectorAll('div');
-            for (const item of menuItems) {
-              const text = item.textContent?.trim();
-              const rect = item.getBoundingClientRect();
-              if (text === 'CMYK' && rect.height > 0 && rect.height < 35) {
-                (item as HTMLElement).click();
-                break;
-              }
-            }
-          }, 80);
-        }, 80);
-      }
-    };
-    
-    // Use MutationObserver to detect when picker is fully rendered
-    const observer = new MutationObserver(() => {
-      activateDefaults();
-    });
-    
-    observer.observe(pickerRef.current, { childList: true, subtree: true });
-    
-    // Also try immediately and after a delay
-    activateDefaults();
-    const timer = setTimeout(activateDefaults, 200);
-    
-    return () => {
-      observer.disconnect();
-      clearTimeout(timer);
-    };
-  }, []);
   
   const handleChange = (newColor: string) => {
     setLocalColor(newColor);
@@ -178,7 +111,7 @@ function CMYKColorPicker({
   const cmykString = formatCmyk();
   
   return (
-    <div className="space-y-3" ref={pickerRef}>
+    <div className="space-y-3">
       <ColorPicker
         value={localColor}
         onChange={handleChange}

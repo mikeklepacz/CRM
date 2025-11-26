@@ -1,0 +1,105 @@
+import React, { useRef, useState, useEffect } from 'react'
+import { usePicker } from '../context.js'
+import usePaintHue from '../hooks/usePaintHue.js'
+import { getHandleValue } from '../utils/utils.js'
+import tinycolor from 'tinycolor2'
+
+const Hue = () => {
+  const barRef = useRef<HTMLCanvasElement>(null)
+  const { config, handleChange, squareWidth, hc, setHc, pickerIdSuffix } = usePicker()
+  const [dragging, setDragging] = useState(false)
+  const { barSize } = config
+  usePaintHue(barRef, squareWidth)
+
+  const stopDragging = () => {
+    setDragging(false)
+  }
+
+  const handleDown = () => {
+    setDragging(true)
+  }
+
+  const handleHue = (e: any) => {
+    const newHue = getHandleValue(e, barSize) * 3.6
+    const tinyHsv = tinycolor({ h: newHue, s: hc?.s, v: hc?.v })
+    const { r, g, b } = tinyHsv.toRgb()
+    handleChange(`rgba(${r}, ${g}, ${b}, ${hc.a})`)
+    setHc({ ...hc, h: newHue })
+  }
+
+  const handleMove = (e: any) => {
+    if (dragging) {
+      handleHue(e)
+    }
+  }
+
+  const handleClick = (e: any) => {
+    if (!dragging) {
+      handleHue(e)
+    }
+  }
+
+  useEffect(() => {
+    const handleUp = () => {
+      stopDragging()
+    }
+
+    window.addEventListener('mouseup', handleUp)
+
+    return () => {
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [])
+
+  return (
+    <div
+      style={{
+        height: 14,
+        marginTop: 17,
+        marginBottom: 4,
+        cursor: 'ew-resize',
+        position: 'relative',
+      }}
+      onMouseMove={(e) => handleMove(e)}
+      id={`rbgcp-hue-wrap${pickerIdSuffix}`}
+      // className="rbgcp-hue-wrap"
+    >
+      <div
+        tabIndex={0}
+        role="button"
+        // className="rbgcp-handle rbgcp-handle-hue"
+        style={{
+          border: '2px solid white',
+          borderRadius: '50%',
+          boxShadow: '0px 0px 3px rgba(0, 0, 0, 0.5)',
+          width: '18px',
+          height: '18px',
+          zIndex: 1000,
+          transition: 'all 10ms linear',
+          position: 'absolute',
+          left: hc?.h * ((squareWidth - 18) / 360),
+          top: -2,
+          cursor: 'ew-resize',
+          boxSizing: 'border-box',
+        }}
+        onMouseDown={handleDown}
+        id={`rbgcp-hue-handle${pickerIdSuffix}`}
+      />
+      <canvas
+        ref={barRef}
+        height="14px"
+        // className="rbgcp-hue-bar"
+        width={`${squareWidth}px`}
+        onClick={(e) => handleClick(e)}
+        id={`rbgcp-hue-bar${pickerIdSuffix}`}
+        style={{
+          borderRadius: 14,
+          position: 'relative',
+          verticalAlign: 'top',
+        }}
+      />
+    </div>
+  )
+}
+
+export default Hue
