@@ -86,10 +86,77 @@ function CMYKColorPicker({
 }) {
   const [localColor, setLocalColor] = useState(color);
   const { valueToCmyk } = useColorPicker(localColor, setLocalColor);
+  const pickerRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     setLocalColor(color);
   }, [color]);
+  
+  // Auto-select CMYK mode and open Color Guide when picker mounts
+  useEffect(() => {
+    if (!pickerRef.current) return;
+    
+    let hasActivated = false;
+    
+    const activateDefaults = () => {
+      if (hasActivated || !pickerRef.current) return;
+      
+      // Find clickable icon buttons by looking for small divs with pointer cursor and SVG
+      const buttons = Array.from(pickerRef.current.querySelectorAll('div')).filter((div) => {
+        const computed = window.getComputedStyle(div);
+        const hasCursor = computed.cursor === 'pointer';
+        const hasSvg = div.querySelector('svg') !== null;
+        const rect = div.getBoundingClientRect();
+        const isIconSize = rect.width > 20 && rect.width < 45 && rect.height > 20 && rect.height < 45;
+        return hasCursor && hasSvg && isIconSize;
+      });
+      
+      if (buttons.length >= 3) {
+        hasActivated = true;
+        
+        // Button order: eyedropper, color guide, input type
+        const colorGuideBtn = buttons[1] as HTMLElement;
+        const inputTypeBtn = buttons[2] as HTMLElement;
+        
+        // Click color guide
+        colorGuideBtn?.click();
+        
+        // Click input type to open dropdown, then select CMYK
+        setTimeout(() => {
+          inputTypeBtn?.click();
+          
+          setTimeout(() => {
+            // Find CMYK in the dropdown menu
+            const menuItems = document.querySelectorAll('div');
+            for (const item of menuItems) {
+              const text = item.textContent?.trim();
+              const rect = item.getBoundingClientRect();
+              if (text === 'CMYK' && rect.height > 0 && rect.height < 35) {
+                (item as HTMLElement).click();
+                break;
+              }
+            }
+          }, 80);
+        }, 80);
+      }
+    };
+    
+    // Use MutationObserver to detect when picker is fully rendered
+    const observer = new MutationObserver(() => {
+      activateDefaults();
+    });
+    
+    observer.observe(pickerRef.current, { childList: true, subtree: true });
+    
+    // Also try immediately and after a delay
+    activateDefaults();
+    const timer = setTimeout(activateDefaults, 200);
+    
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, []);
   
   const handleChange = (newColor: string) => {
     setLocalColor(newColor);
@@ -111,7 +178,7 @@ function CMYKColorPicker({
   const cmykString = formatCmyk();
   
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" ref={pickerRef}>
       <ColorPicker
         value={localColor}
         onChange={handleChange}
