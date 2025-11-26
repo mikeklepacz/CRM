@@ -1321,6 +1321,10 @@ export default function ProductMockup() {
                     data-testid="slider-scale-y"
                   />
                 </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Center X: {textureMapping.centerX.toFixed(3)}</Label>
                     <div className="flex gap-1">
                       <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => setTextureMapping(t => ({ ...t, centerX: t.centerX - 0.001 }))} disabled={textureMappingLocked} data-testid="btn-center-x-minus">
                         <Minus className="w-3 h-3" />
