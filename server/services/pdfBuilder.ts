@@ -208,7 +208,7 @@ export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<
         
         // Write CMYK color command directly to PDF stream
         (doc as any).addContent(cmykFillCmd);
-        doc.text(`"${element.content}"`, margin, yPos);
+        doc.text(element.content, margin, yPos);
         yPos += sampleFontSize + 8;
         
         // Color swatch (CMYK)
