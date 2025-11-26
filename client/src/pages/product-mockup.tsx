@@ -14,7 +14,7 @@ import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, E
 import ColorPicker, { useColorPicker } from 'react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
-import bleedOverlayUrl from '@assets/Red Bleed_1764162964434.png';
+import bleedOverlayUrl from '@assets/Red Bleed_1764176822191.png';
 
 // Simple line icons for center alignment
 const CenterVerticalLine = () => (
