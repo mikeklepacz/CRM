@@ -936,6 +936,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       reorderDays: z.tuple([z.number(), z.number()])
     }).optional(),
     visibleModules: z.record(z.boolean()).optional(),
+    cylinderPos: z.object({
+      x: z.number(),
+      y: z.number(),
+      z: z.number(),
+      scale: z.number(),
+      cameraZ: z.number(),
+      rotX: z.number(),
+      rotY: z.number()
+    }).optional(),
+    textureMapping: z.object({
+      offsetX: z.number(),
+      offsetY: z.number(),
+      rotation: z.number(),
+      scaleX: z.number(),
+      scaleY: z.number(),
+      centerX: z.number(),
+      centerY: z.number()
+    }).optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
