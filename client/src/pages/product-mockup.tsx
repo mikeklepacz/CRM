@@ -11,8 +11,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, Lock, Unlock, AlignLeft, AlignRight, AlignCenterHorizontal, AlignStartVertical, AlignEndVertical, AlignCenterVertical } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Hemp Wick Roll Bleed _1764154739524.png';
@@ -106,71 +104,13 @@ export default function ProductMockup() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
   
-  // Fetch user preferences for 3D settings from database
-  const { data: userPrefs } = useQuery<{ cylinderPos?: CylinderPos; textureMapping?: TextureMapping }>({
-    queryKey: ['/api/user/preferences'],
-  });
-
-  // Get initial values from database preferences, falling back to defaults
-  const getInitialPosition = useCallback((): CylinderPos => {
-    if (userPrefs?.cylinderPos) return userPrefs.cylinderPos;
-    return DEFAULT_CYLINDER_POS;
-  }, [userPrefs]);
-
-  const getInitialTextureMapping = useCallback((): TextureMapping => {
-    if (userPrefs?.textureMapping) return userPrefs.textureMapping;
-    return DEFAULT_TEXTURE_MAPPING;
-  }, [userPrefs]);
-  
-  const getLockedState = () => {
-    return localStorage.getItem('cylinderPositionLocked') === 'true';
-  };
-  
-  const getTextureMappingLocked = () => {
-    return localStorage.getItem('textureMappingLocked') === 'true';
-  };
-  
+  // Use hardcoded defaults directly - these are "in stone"
   const [cylinderPos, setCylinderPos] = useState<CylinderPos>(DEFAULT_CYLINDER_POS);
-  const [positionLocked, setPositionLocked] = useState(getLockedState);
+  const [positionLocked, setPositionLocked] = useState(true); // Locked by default
   const [textureMapping, setTextureMapping] = useState<TextureMapping>(DEFAULT_TEXTURE_MAPPING);
-  const [textureMappingLocked, setTextureMappingLocked] = useState(getTextureMappingLocked);
+  const [textureMappingLocked, setTextureMappingLocked] = useState(true); // Locked by default
   const [showBleedOverlay, setShowBleedOverlay] = useState(true);
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
-  const prefsLoadedRef = useRef(false);
-
-  // Load settings from database when preferences are fetched
-  useEffect(() => {
-    if (userPrefs && !prefsLoadedRef.current) {
-      if (userPrefs.cylinderPos) {
-        setCylinderPos(userPrefs.cylinderPos);
-      }
-      if (userPrefs.textureMapping) {
-        setTextureMapping(userPrefs.textureMapping);
-      }
-      prefsLoadedRef.current = true;
-    }
-  }, [userPrefs]);
-
-  // Mutation to save 3D settings to database
-  const saveSettingsMutation = useMutation({
-    mutationFn: async (data: { cylinderPos?: CylinderPos; textureMapping?: TextureMapping }) => {
-      return await apiRequest("PUT", "/api/user/preferences", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
-      toast({
-        title: "Settings Saved",
-        description: "Your 3D settings have been saved permanently.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
   
   useEffect(() => {
     const img = new window.Image();
@@ -584,13 +524,19 @@ export default function ProductMockup() {
   }, [cylinderPos, cylinderLoaded]);
 
   const savePosition = () => {
-    // Save to database for permanent storage
-    saveSettingsMutation.mutate({ cylinderPos });
+    // Settings are hardcoded - show confirmation
+    toast({
+      title: "Settings Locked",
+      description: "3D position settings are permanently configured.",
+    });
   };
 
   const saveTextureMapping = () => {
-    // Save to database for permanent storage
-    saveSettingsMutation.mutate({ textureMapping });
+    // Settings are hardcoded - show confirmation
+    toast({
+      title: "Settings Locked", 
+      description: "Texture mapping settings are permanently configured.",
+    });
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
