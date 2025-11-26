@@ -185,23 +185,6 @@ export default function ProductMockup() {
 
     ctx.globalCompositeOperation = 'source-over';
 
-    ctx.fillStyle = 'rgba(255, 100, 100, 0.15)';
-    ctx.fillRect(0, 0, LABEL_WIDTH, OVERLAP_HEIGHT);
-    
-    ctx.setLineDash([8, 4]);
-    ctx.strokeStyle = 'rgba(200, 50, 50, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, OVERLAP_HEIGHT);
-    ctx.lineTo(LABEL_WIDTH, OVERLAP_HEIGHT);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.font = '12px sans-serif';
-    ctx.fillStyle = 'rgba(200, 50, 50, 0.8)';
-    ctx.textAlign = 'center';
-    ctx.fillText('OVERLAP ZONE - Gets covered when wrapped', LABEL_WIDTH / 2, OVERLAP_HEIGHT / 2);
-
     if (showBleedOverlay && bleedOverlayRef.current) {
       ctx.globalAlpha = 0.7;
       ctx.drawImage(bleedOverlayRef.current, 0, 0, LABEL_WIDTH, LABEL_HEIGHT);
