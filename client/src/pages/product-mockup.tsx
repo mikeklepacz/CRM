@@ -311,6 +311,7 @@ export default function ProductMockup() {
   const [resizeCorner, setResizeCorner] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 }); // For shift-constrained movement
+  const [isAltPressed, setIsAltPressed] = useState(false); // Track Alt/Option key for duplicate cursor
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
   
   // Use hardcoded defaults directly - these are "in stone"
@@ -350,6 +351,49 @@ export default function ProductMockup() {
       preloadAllFonts().then(() => setFontsLoaded(true));
     }
   }, [fontsLoaded]);
+  
+  // Keyboard shortcuts: Delete/Backspace to delete, Alt/Option for copy cursor
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Track Alt/Option key for duplicate cursor
+      if (e.altKey) {
+        setIsAltPressed(true);
+      }
+      
+      // Delete selected element with Delete or Backspace
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        // Don't delete if user is typing in an input field
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return;
+        }
+        e.preventDefault();
+        setElements(prev => prev.filter(el => el.id !== selectedId));
+        setSelectedId(null);
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (!e.altKey) {
+        setIsAltPressed(false);
+      }
+    };
+    
+    // Reset Alt state if window loses focus (prevents stuck cursor after Alt+Tab)
+    const handleBlur = () => {
+      setIsAltPressed(false);
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [selectedId]);
   
   // Save project info to localStorage
   const handleProjectSubmit = () => {
@@ -1451,7 +1495,7 @@ export default function ProductMockup() {
                     ref={canvasRef}
                     width={LABEL_WIDTH}
                     height={LABEL_HEIGHT}
-                    className="w-full h-full cursor-move"
+                    className={`w-full h-full ${isAltPressed && selectedId ? 'cursor-copy' : 'cursor-move'}`}
                     onClick={handleCanvasClick}
                     onMouseDown={handleCanvasMouseDown}
                     onMouseMove={handleCanvasMouseMove}
@@ -1801,6 +1845,10 @@ export default function ProductMockup() {
                     <strong>Kraft Paper:</strong> Colors blend with brown paper. White becomes paper color.
                   </p>
                 </div>
+                
+                <p className="text-[10px] text-muted-foreground/70 text-center leading-relaxed">
+                  <span className="font-medium">Shortcuts:</span> Delete/Backspace removes selection • Alt/Option+drag duplicates • Shift+drag constrains to axis
+                </p>
               </div>
             </div>
           </CardContent>
