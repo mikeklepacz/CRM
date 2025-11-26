@@ -1035,6 +1035,134 @@ export default function ProductMockup() {
     overlayImg.src = hempClearUrl;
   };
 
+  // Export project: generates ZIP download and uploads to Google Drive
+  const [isExporting, setIsExporting] = useState(false);
+  
+  const handleExportProject = async () => {
+    if (!projectName || !projectEmail) {
+      toast({
+        title: "Project info required",
+        description: "Please set project name and email first.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (elements.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "Add some text or logos to your design first.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsExporting(true);
+    
+    try {
+      // Get canvas as base64
+      const canvas = canvasRef.current;
+      if (!canvas) throw new Error("Canvas not found");
+      const designPng = canvas.toDataURL('image/png').split(',')[1];
+      
+      // Get 3D mockup as base64
+      const threeContainer = threeContainerRef.current;
+      const mockupCanvas = document.createElement('canvas');
+      mockupCanvas.width = 400;
+      mockupCanvas.height = 600;
+      const mockupCtx = mockupCanvas.getContext('2d')!;
+      
+      // Draw background
+      mockupCtx.fillStyle = '#e8dcc8';
+      mockupCtx.fillRect(0, 0, 400, 600);
+      
+      // Draw 3D canvas
+      const threeCanvas = threeContainer?.querySelector('canvas');
+      if (threeCanvas) {
+        mockupCtx.drawImage(threeCanvas, 0, 0, 400, 600);
+      }
+      
+      // Draw overlay
+      const overlayImg = new window.Image();
+      overlayImg.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve) => {
+        overlayImg.onload = () => {
+          mockupCtx.drawImage(overlayImg, 0, 0, 400, 600);
+          resolve();
+        };
+        overlayImg.src = hempClearUrl;
+      });
+      
+      const mockupPng = mockupCanvas.toDataURL('image/png').split(',')[1];
+      
+      // Prepare elements data for export
+      const exportElements = elements.map(el => ({
+        type: el.type,
+        content: el.content,
+        font: el.font,
+        fontSize: el.fontSize,
+        color: el.color,
+        x: el.x,
+        y: el.y,
+        scale: el.scale,
+        rotation: el.rotation,
+      }));
+      
+      // Prepare assets
+      const exportAssets = elements
+        .filter(el => el.type === 'logo' && el.originalAsset)
+        .map(el => el.originalAsset!);
+      
+      // Call export API
+      const response = await fetch('/api/label-projects/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectName,
+          projectEmail,
+          designPng,
+          mockupPng,
+          elements: exportElements,
+          savedSwatches,
+          assets: exportAssets,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+      
+      // Download ZIP
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${projectName.replace(/[^a-z0-9]/gi, '_')}_project.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      // Check for Drive folder URL
+      const driveFolderUrl = response.headers.get('X-Drive-Folder-Url');
+      
+      toast({
+        title: "Project exported!",
+        description: driveFolderUrl 
+          ? "ZIP downloaded and backed up to Google Drive." 
+          : "ZIP downloaded successfully.",
+      });
+      
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export failed",
+        description: "There was an error exporting your project. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const selectedElement = elements.find(el => el.id === selectedId);
 
   return (
@@ -1519,14 +1647,30 @@ export default function ProductMockup() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-base">Product Preview</CardTitle>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={handleDownload}
-                data-testid="button-download"
-              >
-                <Download className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={handleExportProject}
+                  disabled={isExporting || elements.length === 0}
+                  data-testid="button-save-project"
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-1" />
+                  )}
+                  {isExporting ? 'Saving...' : 'Save'}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={handleDownload}
+                  data-testid="button-download"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">

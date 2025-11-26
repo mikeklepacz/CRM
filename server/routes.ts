@@ -50,6 +50,8 @@ import { notifyNewTicket, notifyTicketReply } from "./gmail";
 import { format } from "date-fns";
 import { computeHash, getCached, setCache } from "./services/sheetCache";
 import { eventGateway } from "./services/events/gateway";
+import { generateProjectSpecsPdf, type TextElement, type ColorSwatch } from "./services/pdfBuilder";
+import JSZip from "jszip";
 
 // ============================================================================
 // Micro-Batching Helper for OpenAI Assistants
@@ -21663,6 +21665,130 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error nuking test data:', error);
       res.status(500).json({ message: error.message || 'Failed to delete test data' });
+    }
+  });
+
+  // ============================================================================
+  // Label Projects Export API
+  // ============================================================================
+  
+  // Export label project as ZIP with PDF specs and upload to Google Drive
+  app.post('/api/label-projects/export', async (req, res) => {
+    try {
+      const { 
+        projectName, 
+        projectEmail, 
+        designPng, 
+        mockupPng, 
+        elements = [], 
+        savedSwatches = [], 
+        assets = [] 
+      } = req.body;
+
+      // Validate required fields
+      if (!projectName || !projectEmail) {
+        return res.status(400).json({ 
+          message: 'Project name and email are required' 
+        });
+      }
+
+      if (!designPng || !mockupPng) {
+        return res.status(400).json({ 
+          message: 'Design and mockup images are required' 
+        });
+      }
+
+      console.log(`[Label Export] Starting export for project: ${projectName}`);
+
+      // Generate PDF with project specs
+      const pdfBuffer = await generateProjectSpecsPdf({
+        projectName,
+        projectEmail,
+        designPng,
+        mockupPng,
+        elements: elements as TextElement[],
+        savedSwatches: savedSwatches as ColorSwatch[]
+      });
+
+      console.log(`[Label Export] PDF generated, size: ${pdfBuffer.length} bytes`);
+
+      // Create ZIP file
+      const zip = new JSZip();
+      
+      // Add design PNG
+      const designData = designPng.replace(/^data:image\/\w+;base64,/, '');
+      zip.file('design.png', designData, { base64: true });
+      
+      // Add 3D mockup PNG
+      const mockupData = mockupPng.replace(/^data:image\/\w+;base64,/, '');
+      zip.file('3d-mockup.png', mockupData, { base64: true });
+      
+      // Add project specs PDF
+      zip.file('project-specs.pdf', pdfBuffer);
+      
+      // Add original assets in assets folder
+      if (assets && assets.length > 0) {
+        const assetsFolder = zip.folder('assets');
+        if (assetsFolder) {
+          for (const asset of assets) {
+            if (asset.name && asset.data) {
+              const assetData = asset.data.replace(/^data:[^;]+;base64,/, '');
+              assetsFolder.file(asset.name, assetData, { base64: true });
+            }
+          }
+        }
+      }
+
+      console.log(`[Label Export] ZIP created with ${3 + (assets?.length || 0)} files`);
+
+      // Generate ZIP buffer
+      const zipBuffer = await zip.generateAsync({ 
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+
+      console.log(`[Label Export] ZIP generated, size: ${zipBuffer.length} bytes`);
+
+      // Upload to Google Drive
+      let driveUrl = '';
+      try {
+        const pdfBase64 = pdfBuffer.toString('base64');
+        const driveResult = await googleDrive.uploadProjectToDrive(
+          projectName,
+          projectEmail,
+          {
+            designPng: designData,
+            mockupPng: mockupData,
+            specsPdf: pdfBase64,
+            assets: assets || []
+          }
+        );
+        driveUrl = driveResult.folderUrl;
+        console.log(`[Label Export] Uploaded to Google Drive: ${driveUrl}`);
+      } catch (driveError: any) {
+        console.error('[Label Export] Google Drive upload failed:', driveError.message);
+        // Continue without Drive upload - still return the ZIP
+      }
+
+      // Set response headers for ZIP download
+      const filename = `${projectName.replace(/[^a-zA-Z0-9-_]/g, '_')}_label_project.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      if (driveUrl) {
+        res.setHeader('X-Drive-Folder-Url', driveUrl);
+      }
+      res.setHeader('Content-Length', zipBuffer.length);
+
+      // Send ZIP file
+      res.send(zipBuffer);
+      
+      console.log(`[Label Export] Export complete for project: ${projectName}`);
+    } catch (error: any) {
+      console.error('[Label Export] Export failed:', error);
+      res.status(500).json({ 
+        message: error.message || 'Failed to export project' 
+      });
     }
   });
 
