@@ -240,11 +240,12 @@ export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<
         ? data.designPng 
         : `data:image/png;base64,${data.designPng}`;
       
-      const maxWidth = 80;
-      const maxHeight = 100;
+      // Use 3:4 ratio (75×100mm) to match the 450×600px canvas exactly
+      const designWidth = 75;
+      const designHeight = 100;
       
-      doc.addImage(imgData, 'PNG', margin, yPos, maxWidth, maxHeight);
-      yPos += maxHeight + 10;
+      doc.addImage(imgData, 'PNG', margin, yPos, designWidth, designHeight);
+      yPos += designHeight + 10;
     } catch (error) {
       console.error('Failed to add design image to PDF:', error);
       doc.setFontSize(10);
@@ -265,11 +266,36 @@ export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<
         ? data.mockupPng 
         : `data:image/png;base64,${data.mockupPng}`;
       
-      const maxWidth = 80;
-      const maxHeight = 80;
+      // Parse PNG dimensions from header to preserve actual aspect ratio
+      const base64Data = data.mockupPng.replace(/^data:image\/\w+;base64,/, '');
+      const pngBuffer = Buffer.from(base64Data, 'base64');
       
-      doc.addImage(imgData, 'PNG', margin, yPos, maxWidth, maxHeight);
-      yPos += maxHeight + 10;
+      // PNG header: bytes 16-19 = width, bytes 20-23 = height (big endian)
+      let imgWidth = 400;  // fallback
+      let imgHeight = 400; // fallback
+      if (pngBuffer.length > 24 && pngBuffer[0] === 0x89 && pngBuffer[1] === 0x50) {
+        imgWidth = pngBuffer.readUInt32BE(16);
+        imgHeight = pngBuffer.readUInt32BE(20);
+      }
+      
+      // Calculate dimensions to fit in max 80mm while preserving aspect ratio
+      const maxSize = 80;
+      const aspectRatio = imgWidth / imgHeight;
+      let mockupWidth: number;
+      let mockupHeight: number;
+      
+      if (aspectRatio > 1) {
+        // Wider than tall
+        mockupWidth = maxSize;
+        mockupHeight = maxSize / aspectRatio;
+      } else {
+        // Taller than wide or square
+        mockupHeight = maxSize;
+        mockupWidth = maxSize * aspectRatio;
+      }
+      
+      doc.addImage(imgData, 'PNG', margin, yPos, mockupWidth, mockupHeight);
+      yPos += mockupHeight + 10;
     } catch (error) {
       console.error('Failed to add mockup image to PDF:', error);
       doc.setFontSize(10);
