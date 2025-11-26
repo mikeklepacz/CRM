@@ -1224,6 +1224,44 @@ export default function ProductMockup() {
                 </div>
               </div>
               
+              {!textureMappingLocked && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTextureMapping({ offsetX: 0, offsetY: 0, rotation: 0, scaleX: 1, scaleY: 1, centerX: 0.5, centerY: 0.5 })}
+                    data-testid="button-texture-reset"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />
+                    Reset
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTextureMapping(t => ({ ...t, scaleX: 1.6, scaleY: 1.17, rotation: 90 }))}
+                    data-testid="button-texture-preset-wrap"
+                  >
+                    Wrap Fit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTextureMapping(t => ({ ...t, scaleX: 2, scaleY: 1.5 }))}
+                    data-testid="button-texture-preset-tile"
+                  >
+                    Tile 2x
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTextureMapping(t => ({ ...t, scaleX: 1, scaleY: 1, rotation: 90 }))}
+                    data-testid="button-texture-preset-rotated"
+                  >
+                    90° Fit
+                  </Button>
+                </div>
+              )}
+              
               <div className="space-y-3">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
