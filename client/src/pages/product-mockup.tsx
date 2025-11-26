@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import html2canvas from 'html2canvas';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -297,6 +298,7 @@ export default function ProductMockup() {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const threeContainerRef = useRef<HTMLDivElement>(null);
+  const productPreviewRef = useRef<HTMLDivElement>(null);
   const threeContextRef = useRef<ThreeContext | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const kraftBaseRef = useRef<ImageData | null>(null);
@@ -1421,41 +1423,20 @@ export default function ProductMockup() {
       
       const designPng = cleanCanvas.toDataURL('image/png').split(',')[1];
       
-      // Get 3D mockup as base64 - use actual canvas dimensions to avoid distortion
-      const threeContainer = threeContainerRef.current;
-      const threeCanvas = threeContainer?.querySelector('canvas') as HTMLCanvasElement | null;
-      
+      // Get 3D mockup as screenshot of the Product Preview container
       let mockupPng = '';
-      if (threeCanvas) {
-        // Use actual Three.js canvas dimensions
-        const actualWidth = threeCanvas.width;
-        const actualHeight = threeCanvas.height;
-        
-        const mockupCanvas = document.createElement('canvas');
-        mockupCanvas.width = actualWidth;
-        mockupCanvas.height = actualHeight;
-        const mockupCtx = mockupCanvas.getContext('2d')!;
-        
-        // Draw background
-        mockupCtx.fillStyle = '#e8dcc8';
-        mockupCtx.fillRect(0, 0, actualWidth, actualHeight);
-        
-        // Draw 3D canvas at actual size (no distortion)
-        mockupCtx.drawImage(threeCanvas, 0, 0);
-        
-        // Draw overlay at actual size
-        const overlayImg = new window.Image();
-        overlayImg.crossOrigin = 'anonymous';
-        await new Promise<void>((resolve) => {
-          overlayImg.onload = () => {
-            mockupCtx.drawImage(overlayImg, 0, 0, actualWidth, actualHeight);
-            resolve();
-          };
-          overlayImg.onerror = () => resolve(); // Continue even if overlay fails
-          overlayImg.src = hempClearUrl;
-        });
-        
-        mockupPng = mockupCanvas.toDataURL('image/png').split(',')[1];
+      if (productPreviewRef.current) {
+        try {
+          const canvas = await html2canvas(productPreviewRef.current, {
+            backgroundColor: '#e8dcc8',
+            useCORS: true,
+            allowTaint: true,
+            scale: 2, // Higher quality
+          });
+          mockupPng = canvas.toDataURL('image/png').split(',')[1];
+        } catch (err) {
+          console.error('html2canvas failed:', err);
+        }
       }
       
       // Prepare elements data for export with visual size and CMYK
@@ -2048,6 +2029,7 @@ export default function ProductMockup() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div 
+              ref={productPreviewRef}
               className="relative w-full flex items-center justify-center rounded-lg overflow-hidden"
               style={{ 
                 background: '#e8dcc8',
