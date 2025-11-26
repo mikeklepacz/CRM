@@ -254,8 +254,8 @@ export default function ProductMockup() {
 
     const scene = new THREE.Scene();
 
-    const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 0.12);
+    const camera = new THREE.PerspectiveCamera(35, width / height, 0.01, 100);
+    camera.position.set(0, 0, 0.15);
 
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true, 
@@ -265,6 +265,10 @@ export default function ProductMockup() {
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
+    renderer.domElement.style.position = 'absolute';
+    renderer.domElement.style.top = '50%';
+    renderer.domElement.style.left = '50%';
+    renderer.domElement.style.transform = 'translate(-50%, -50%)';
     container.appendChild(renderer.domElement);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -286,13 +290,24 @@ export default function ProductMockup() {
     loader.load(
       '/attached_assets/HempWick%20Roll%20Object_1764118046566.obj',
       (obj) => {
+        console.log('OBJ loaded successfully:', obj);
+        console.log('Children:', obj.children);
+        
+        if (obj.children.length === 0 || !(obj.children[0] as THREE.Mesh).geometry) {
+          console.error('No valid geometry in OBJ');
+          return;
+        }
+        
         loadedGeometry = (obj.children[0] as THREE.Mesh).geometry;
+        loadedGeometry.computeBoundingBox();
+        console.log('Geometry bounding box:', loadedGeometry.boundingBox);
         
         const labelTexture = createLabelTexture();
         loadedMaterial = new THREE.MeshStandardMaterial({
           map: labelTexture,
           roughness: 0.7,
           metalness: 0.05,
+          side: THREE.DoubleSide,
         });
         
         cylinder = new THREE.Mesh(loadedGeometry, loadedMaterial);
@@ -300,6 +315,8 @@ export default function ProductMockup() {
         cylinder.rotation.y = (120 * Math.PI) / 180;
         cylinder.position.y = 0;
         scene.add(cylinder);
+        
+        console.log('Cylinder added to scene at position:', cylinder.position);
         
         threeContextRef.current = {
           scene,
@@ -940,14 +957,14 @@ export default function ProductMockup() {
             >
               <div 
                 ref={threeContainerRef}
-                className="absolute inset-0 flex items-center justify-center"
-                style={{ zIndex: 1 }}
+                className="absolute inset-0"
+                style={{ zIndex: 2 }}
               />
               <img 
                 src={hempClearUrl}
                 alt="Hemp wick overlay"
                 className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                style={{ zIndex: 2 }}
+                style={{ zIndex: 3, opacity: 0.3 }}
               />
             </div>
             
