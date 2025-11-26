@@ -1,6 +1,16 @@
 import OpenAI from 'openai';
 import { storage } from '../storage';
 
+/**
+ * Normalize smart/curly quotes to standard ASCII quotes
+ * Prevents encoding issues like "Ã¢Â€Â™" appearing instead of apostrophes
+ */
+function normalizeQuotes(text: string): string {
+  return text
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")  // Single curly quotes → straight
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"'); // Double curly quotes → straight
+}
+
 export interface EmailGenerationOptions {
   recipientName: string;
   recipientEmail: string;
@@ -57,8 +67,9 @@ Return ONLY the subject line, no quotes, no explanation.`;
 
   const subject = completion.choices[0]?.message?.content?.trim() || 'Quick Question';
   
-  // Remove quotes if AI added them
-  return subject.replace(/^["']|["']$/g, '');
+  // Remove quotes if AI added them, then normalize smart quotes to ASCII
+  const cleanSubject = subject.replace(/^["']|["']$/g, '');
+  return normalizeQuotes(cleanSubject);
 }
 
 /**
@@ -113,5 +124,6 @@ Return ONLY the email body text, no subject, no signature, no quotes.`;
   const body = completion.choices[0]?.message?.content?.trim() || 
     `Hi ${recipientName},\n\nI wanted to reach out with a quick question. Would you be open to a brief conversation?\n\nLooking forward to hearing from you.`;
   
-  return body;
+  // Normalize smart quotes to ASCII to prevent encoding issues
+  return normalizeQuotes(body);
 }
