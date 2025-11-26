@@ -935,6 +935,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       interestedDays: z.tuple([z.number(), z.number()]),
       reorderDays: z.tuple([z.number(), z.number()])
     }).optional(),
+    visibleModules: z.record(z.boolean()).optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
