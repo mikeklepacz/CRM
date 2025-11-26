@@ -83,17 +83,50 @@ async function findOrCreateLabelProjectsFolder(): Promise<string> {
   return folder.data.id!;
 }
 
-// Create a project folder inside Label Projects
-export async function createProjectFolder(projectName: string): Promise<string> {
+// Find or create email folder inside Label Projects
+async function findOrCreateEmailFolder(email: string): Promise<string> {
+  const drive = await getUncachableGoogleDriveClient();
+  const labelProjectsFolderId = await findOrCreateLabelProjectsFolder();
+  
+  // Search for existing email folder inside Label Projects
+  const searchResponse = await drive.files.list({
+    q: `name='${email}' and mimeType='application/vnd.google-apps.folder' and '${labelProjectsFolderId}' in parents and trashed=false`,
+    fields: 'files(id, name)',
+    spaces: 'drive'
+  });
+  
+  if (searchResponse.data.files && searchResponse.data.files.length > 0) {
+    console.log(`[GoogleDrive] Found existing folder for ${email}`);
+    return searchResponse.data.files[0].id!;
+  }
+  
+  // Create new email folder
+  console.log(`[GoogleDrive] Creating new folder for ${email}`);
+  const folderMetadata = {
+    name: email,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: [labelProjectsFolderId]
+  };
+
+  const folder = await drive.files.create({
+    requestBody: folderMetadata,
+    fields: 'id'
+  });
+
+  return folder.data.id!;
+}
+
+// Create a project folder inside the email folder
+export async function createProjectFolder(projectName: string, email: string): Promise<string> {
   const drive = await getUncachableGoogleDriveClient();
   
-  // Get or create the parent Label Projects folder
-  const labelProjectsFolderId = await findOrCreateLabelProjectsFolder();
+  // Get or create the email folder
+  const emailFolderId = await findOrCreateEmailFolder(email);
   
   const folderMetadata = {
     name: projectName,
     mimeType: 'application/vnd.google-apps.folder',
-    parents: [labelProjectsFolderId]
+    parents: [emailFolderId]
   };
 
   const folder = await drive.files.create({
@@ -163,9 +196,9 @@ export async function uploadProjectToDrive(
     assets: { name: string; data: string; mimeType: string }[]; // original uploads
   }
 ): Promise<{ folderId: string; folderUrl: string }> {
-  // Create project folder with name and email
-  const folderName = `${projectName} - ${email}`;
-  const projectFolderId = await createProjectFolder(folderName);
+  // Create project folder inside email folder
+  // Structure: Label Projects / email / projectName
+  const projectFolderId = await createProjectFolder(projectName, email);
   
   // Create assets subfolder
   const assetsFolderId = await createAssetsFolder(projectFolderId);
