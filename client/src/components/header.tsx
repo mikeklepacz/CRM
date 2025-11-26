@@ -106,12 +106,6 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   Documents
                 </Button>
               </Link>
-              <Link href="/product-mockup">
-                <Button variant="ghost" size="sm" data-testid="nav-product-mockup">
-                  <Palette className="mr-2 h-4 w-4" />
-                  Label Designer
-                </Button>
-              </Link>
               {(user.role === 'admin' || user.hasVoiceAccess) && (
                 <Link href="/call-manager">
                   <Button variant="ghost" size="sm" data-testid="nav-call-manager">
