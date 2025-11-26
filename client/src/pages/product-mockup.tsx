@@ -312,6 +312,18 @@ export default function ProductMockup() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 }); // For shift-constrained movement
   const [isAltPressed, setIsAltPressed] = useState(false); // Track Alt/Option key for duplicate cursor
+  const [hoveredHandle, setHoveredHandle] = useState<string | null>(null); // Track which resize handle is hovered
+  // Resize state - all values captured at resize start and held constant during drag
+  const resizeStateRef = useRef<{
+    anchorWorld: { x: number; y: number };
+    rotation0: number; // radians
+    baseHx: number; // unscaled half-width
+    baseHy: number; // unscaled half-height  
+    cornerSignX: number; // +1 or -1 based on corner
+    cornerSignY: number;
+    halfDiag0: number; // sqrt(hx^2 + hy^2)
+    centerToAnchor: { x: number; y: number }; // vector from center to anchor
+  } | null>(null);
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
   
   // Use hardcoded defaults directly - these are "in stone"
@@ -1007,7 +1019,49 @@ export default function ProductMockup() {
         if (handle) {
           setIsResizing(true);
           setResizeCorner(handle);
-          setDragOffset({ x, y });
+          
+          // Calculate all initial state for anchor-based resize
+          const { w, h } = getElementBounds(selected);
+          const rotation0 = (selected.rotation * Math.PI) / 180;
+          const cos = Math.cos(rotation0);
+          const sin = Math.sin(rotation0);
+          
+          // Base (unscaled) half-extents
+          const baseHx = (w / selected.scale) / 2;
+          const baseHy = (h / selected.scale) / 2;
+          
+          // Corner sign: determines direction from center to dragged corner
+          // and opposite direction for anchor
+          let cornerSignX = 1, cornerSignY = 1;
+          if (handle === 'tl') { cornerSignX = -1; cornerSignY = -1; }
+          else if (handle === 'tr') { cornerSignX = 1; cornerSignY = -1; }
+          else if (handle === 'bl') { cornerSignX = -1; cornerSignY = 1; }
+          // br: both positive (default)
+          
+          // Anchor is opposite corner: negate the signs
+          const anchorLocalX = -cornerSignX * (w / 2);
+          const anchorLocalY = -cornerSignY * (h / 2);
+          
+          // Transform anchor to world space
+          const anchorWorldX = selected.x + anchorLocalX * cos - anchorLocalY * sin;
+          const anchorWorldY = selected.y + anchorLocalX * sin + anchorLocalY * cos;
+          
+          // Vector from center to anchor (used to reconstruct center later)
+          const centerToAnchorX = anchorWorldX - selected.x;
+          const centerToAnchorY = anchorWorldY - selected.y;
+          
+          // Store all state in ref
+          resizeStateRef.current = {
+            anchorWorld: { x: anchorWorldX, y: anchorWorldY },
+            rotation0,
+            baseHx,
+            baseHy,
+            cornerSignX,
+            cornerSignY,
+            halfDiag0: Math.sqrt(baseHx * baseHx + baseHy * baseHy),
+            centerToAnchor: { x: centerToAnchorX, y: centerToAnchorY }
+          };
+          
           return;
         }
       }
@@ -1053,34 +1107,56 @@ export default function ProductMockup() {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
-    // Handle resizing
-    if (isResizing && selectedId && resizeCorner) {
+    // Check for hovered handle (for cursor changes) when not actively dragging/resizing
+    if (!isDragging && !isResizing && selectedId) {
       const selected = elements.find(el => el.id === selectedId);
       if (selected) {
-        const { w, h } = getElementBounds(selected);
-        
-        // Calculate distance from center for new scale
-        const dx = Math.abs(x - selected.x);
-        const dy = Math.abs(y - selected.y);
-        
-        // Use the larger dimension for uniform scaling
-        const currentHalfW = w / 2;
-        const currentHalfH = h / 2;
-        
-        // Calculate scale factor based on corner drag distance
-        const newHalfW = dx;
-        const newHalfH = dy;
-        const scaleFactorW = currentHalfW > 0 ? newHalfW / currentHalfW : 1;
-        const scaleFactorH = currentHalfH > 0 ? newHalfH / currentHalfH : 1;
-        const scaleFactor = Math.max(scaleFactorW, scaleFactorH);
-        
-        const newScale = Math.max(0.1, Math.min(5, selected.scale * scaleFactor));
-        
-        setElements(prev => prev.map(el => 
-          el.id === selectedId ? { ...el, scale: newScale } : el
-        ));
-        setDragOffset({ x, y });
+        const handle = getHandleAtPoint(selected, x, y);
+        setHoveredHandle(handle);
       }
+    }
+
+    // Handle resizing with anchor-based logic (opposite corner stays fixed)
+    if (isResizing && selectedId && resizeCorner && resizeStateRef.current) {
+      const rs = resizeStateRef.current;
+      const cos = Math.cos(rs.rotation0);
+      const sin = Math.sin(rs.rotation0);
+      
+      // Vector from anchor to mouse in world space
+      const dx = x - rs.anchorWorld.x;
+      const dy = y - rs.anchorWorld.y;
+      
+      // Transform to local space (rotate back by -rotation0)
+      const localX = dx * cos + dy * sin;
+      const localY = -dx * sin + dy * cos;
+      
+      // The full diagonal (from anchor to corner at scale=1) has length 2*halfDiag0
+      // Direction in local space from anchor toward dragged corner
+      const fullDiag0 = 2 * rs.halfDiag0;
+      const diagDirX = (rs.cornerSignX * rs.baseHx) / rs.halfDiag0;  // normalized
+      const diagDirY = (rs.cornerSignY * rs.baseHy) / rs.halfDiag0;
+      
+      // Project mouse position (in local space relative to anchor) onto diagonal
+      const projectedDist = localX * diagDirX + localY * diagDirY;
+      
+      // New scale: when projectedDist = fullDiag0, scale = 1
+      const newScale = Math.max(0.1, Math.min(5, projectedDist / fullDiag0));
+      
+      // Project the mouse onto the diagonal line to get the corner position in local space
+      const cornerLocalX = projectedDist * diagDirX;
+      const cornerLocalY = projectedDist * diagDirY;
+      
+      // Transform corner position back to world space (it's relative to anchor)
+      const cornerWorldX = rs.anchorWorld.x + cornerLocalX * cos - cornerLocalY * sin;
+      const cornerWorldY = rs.anchorWorld.y + cornerLocalX * sin + cornerLocalY * cos;
+      
+      // Center is the midpoint between anchor and corner
+      const newCenterX = (rs.anchorWorld.x + cornerWorldX) / 2;
+      const newCenterY = (rs.anchorWorld.y + cornerWorldY) / 2;
+      
+      setElements(prev => prev.map(el => 
+        el.id === selectedId ? { ...el, scale: newScale, x: newCenterX, y: newCenterY } : el
+      ));
       return;
     }
 
@@ -1115,6 +1191,7 @@ export default function ProductMockup() {
     setIsDragging(false);
     setIsResizing(false);
     setResizeCorner(null);
+    resizeStateRef.current = null;
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1495,12 +1572,16 @@ export default function ProductMockup() {
                     ref={canvasRef}
                     width={LABEL_WIDTH}
                     height={LABEL_HEIGHT}
-                    className={`w-full h-full ${isAltPressed && selectedId ? 'cursor-copy' : 'cursor-move'}`}
+                    className={`w-full h-full ${
+                      hoveredHandle === 'tl' || hoveredHandle === 'br' ? 'cursor-nwse-resize' :
+                      hoveredHandle === 'tr' || hoveredHandle === 'bl' ? 'cursor-nesw-resize' :
+                      isAltPressed && selectedId ? 'cursor-copy' : 'cursor-move'
+                    }`}
                     onClick={handleCanvasClick}
                     onMouseDown={handleCanvasMouseDown}
                     onMouseMove={handleCanvasMouseMove}
                     onMouseUp={handleCanvasMouseUp}
-                    onMouseLeave={handleCanvasMouseUp}
+                    onMouseLeave={() => { handleCanvasMouseUp(); setHoveredHandle(null); }}
                     data-testid="canvas-label"
                   />
                 </div>
