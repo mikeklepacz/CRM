@@ -6,7 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Download, Upload, RotateCcw, Image, Type, Move } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Download, Upload, RotateCcw, Image, Type, Move, Palette } from 'lucide-react';
+import { HexColorPicker } from 'react-colorful';
 
 const LABEL_WIDTH = 628;
 const LABEL_HEIGHT = 600;
@@ -22,6 +24,7 @@ interface LabelElement {
   content: string;
   font?: string;
   fontSize?: number;
+  color?: string;
   image?: HTMLImageElement;
 }
 
@@ -103,7 +106,7 @@ export default function ProductMockup() {
           ctx.drawImage(el.image, -w / 2, -h / 2, w, h);
         } else if (el.type === 'text') {
           ctx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
-          ctx.fillStyle = '#1a1a1a';
+          ctx.fillStyle = el.color || '#1a1a1a';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(el.content, 0, 0);
@@ -162,9 +165,14 @@ export default function ProductMockup() {
 
   const createCylinderTexture = useCallback((): THREE.CanvasTexture => {
     const canvas = document.createElement('canvas');
-    canvas.width = LABEL_WIDTH;
-    canvas.height = LABEL_HEIGHT;
+    canvas.width = LABEL_HEIGHT;
+    canvas.height = LABEL_WIDTH;
     const ctx = canvas.getContext('2d')!;
+
+    ctx.save();
+    ctx.translate(LABEL_HEIGHT / 2, LABEL_WIDTH / 2);
+    ctx.rotate(Math.PI / 2);
+    ctx.translate(-LABEL_WIDTH / 2, -LABEL_HEIGHT / 2);
 
     generateKraftTexture(ctx, LABEL_WIDTH, LABEL_HEIGHT);
     ctx.globalCompositeOperation = 'multiply';
@@ -187,7 +195,7 @@ export default function ProductMockup() {
           ctx.drawImage(el.image, -w / 2, -h / 2, w, h);
         } else if (el.type === 'text') {
           ctx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
-          ctx.fillStyle = '#1a1a1a';
+          ctx.fillStyle = el.color || '#1a1a1a';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(el.content, 0, 0);
@@ -198,6 +206,7 @@ export default function ProductMockup() {
     }
 
     ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
@@ -486,6 +495,7 @@ export default function ProductMockup() {
       content: 'Your Text',
       font: 'Arial Black',
       fontSize: 36,
+      color: '#1a1a1a',
     };
     setElements(prev => [...prev, newElement]);
     setSelectedId(newElement.id);
@@ -655,13 +665,48 @@ export default function ProductMockup() {
                 </div>
                 
                 {selectedElement.type === 'text' && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Input
                       value={selectedElement.content}
                       onChange={(e) => updateSelectedElement({ content: e.target.value })}
                       placeholder="Enter text"
                       data-testid="input-text-content"
                     />
+                    
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs w-16">Color:</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start gap-2"
+                            data-testid="button-color-picker"
+                          >
+                            <div 
+                              className="w-5 h-5 rounded border border-border"
+                              style={{ backgroundColor: selectedElement.color || '#1a1a1a' }}
+                            />
+                            <span className="text-xs font-mono">{selectedElement.color || '#1a1a1a'}</span>
+                            <Palette className="h-4 w-4 ml-auto" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-3" align="start">
+                          <HexColorPicker
+                            color={selectedElement.color || '#1a1a1a'}
+                            onChange={(color) => updateSelectedElement({ color })}
+                          />
+                          <Input
+                            value={selectedElement.color || '#1a1a1a'}
+                            onChange={(e) => updateSelectedElement({ color: e.target.value })}
+                            className="mt-2 font-mono text-sm"
+                            placeholder="#000000"
+                            data-testid="input-color-hex"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    
                     <div className="flex items-center gap-2">
                       <Label className="text-xs w-16">Size:</Label>
                       <Slider
