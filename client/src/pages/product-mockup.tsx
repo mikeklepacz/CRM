@@ -122,7 +122,7 @@ export default function ProductMockup() {
   const [logoImage, setLogoImage] = useState<HTMLImageElement | null>(null);
   const [logoScale, setLogoScale] = useState(100);
   const [logoY, setLogoY] = useState(30);
-  const [isAutoRotating, setIsAutoRotating] = useState(true);
+  const [isAutoRotating, setIsAutoRotating] = useState(false);
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -156,7 +156,7 @@ export default function ProductMockup() {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.autoRotate = true;
+    controls.autoRotate = false;
     controls.autoRotateSpeed = 2;
     controls.minDistance = 2;
     controls.maxDistance = 10;
