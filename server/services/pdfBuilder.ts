@@ -7,7 +7,9 @@ export interface TextElement {
   content: string;
   font?: string;
   fontSize?: number;
+  visualSize?: number; // Calculated as fontSize × scale
   color?: string;
+  cmyk?: string; // CMYK color string for print
   x: number;
   y: number;
   rotation: number;
@@ -296,58 +298,42 @@ export async function generateProjectSpecsPdf(data: ProjectExportData): Promise<
     yPos += 8;
   } else {
     for (const element of textElements) {
-      if (yPos > pageHeight - 30) {
+      if (yPos > pageHeight - 50) {
         doc.addPage();
         yPos = margin;
       }
       
       const fontFamily = element.font || 'Arial';
-      const fontSize = element.fontSize || 24;
+      const visualSize = element.visualSize || (element.fontSize || 24) * element.scale;
       const color = parseColorToRgb(element.color || '#000000');
+      const cmykStr = element.cmyk || 'C: 0% M: 0% Y: 0% K: 100%';
       
-      let usedVectorPath = false;
+      // Draw text content
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(color.r, color.g, color.b);
+      doc.text(`"${element.content}"`, margin, yPos);
+      doc.setTextColor(0, 0, 0);
+      yPos += 6;
       
-      if (!isSystemFont(fontFamily)) {
-        try {
-          const font = await loadFont(fontFamily);
-          if (font) {
-            const pdfFontSize = fontSize * 0.3;
-            // Use SVG path data as industry-standard intermediate format
-            const svgPathData = getTextSvgPathData(font, element.content, 0, 0, pdfFontSize);
-            const commands = parseSvgPathData(svgPathData);
-            
-            if (commands.length > 0) {
-              drawPathOnPdf(doc, commands, margin, yPos + pdfFontSize, 1, color);
-              usedVectorPath = true;
-              
-              doc.setFontSize(8);
-              doc.setFont('helvetica', 'normal');
-              doc.setTextColor(128, 128, 128);
-              doc.text(`Font: ${fontFamily}, Size: ${fontSize}pt`, margin + 100, yPos + pdfFontSize/2);
-              doc.setTextColor(0, 0, 0);
-              
-              yPos += pdfFontSize + 8;
-            }
-          }
-        } catch (error) {
-          console.warn(`Could not render vector path for ${fontFamily}:`, error);
-        }
-      }
+      // Draw font info
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Font: ${fontFamily}`, margin + 5, yPos);
+      yPos += 4;
+      doc.text(`Size: ${visualSize}pt`, margin + 5, yPos);
+      yPos += 4;
       
-      if (!usedVectorPath) {
-        doc.setFontSize(Math.min(fontSize * 0.5, 14));
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(color.r, color.g, color.b);
-        doc.text(element.content, margin, yPos);
-        doc.setTextColor(0, 0, 0);
-        
-        doc.setFontSize(8);
-        doc.setTextColor(128, 128, 128);
-        doc.text(`  (${fontFamily}, ${fontSize}pt)`, margin + doc.getTextWidth(element.content) + 2, yPos);
-        doc.setTextColor(0, 0, 0);
-        
-        yPos += 8;
-      }
+      // Draw CMYK color swatch and info
+      const swatchSize = 4;
+      doc.setFillColor(color.r, color.g, color.b);
+      doc.setDrawColor(100, 100, 100);
+      doc.rect(margin + 5, yPos - 3, swatchSize, swatchSize, 'FD');
+      doc.text(`Color: ${cmykStr}`, margin + 5 + swatchSize + 2, yPos);
+      doc.setTextColor(0, 0, 0);
+      
+      yPos += 10;
     }
   }
   

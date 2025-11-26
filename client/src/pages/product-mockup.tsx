@@ -1317,6 +1317,39 @@ export default function ProductMockup() {
     overlayImg.src = hempClearUrl;
   };
 
+  // Helper function to convert hex/rgba to CMYK
+  const colorToCmyk = (colorStr: string): string => {
+    let r = 0, g = 0, b = 0;
+    
+    if (colorStr.startsWith('#')) {
+      const hex = colorStr.replace('#', '');
+      r = parseInt(hex.slice(0, 2), 16);
+      g = parseInt(hex.slice(2, 4), 16);
+      b = parseInt(hex.slice(4, 6), 16);
+    } else {
+      const match = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (match) {
+        r = parseInt(match[1]);
+        g = parseInt(match[2]);
+        b = parseInt(match[3]);
+      }
+    }
+    
+    const rNorm = r / 255;
+    const gNorm = g / 255;
+    const bNorm = b / 255;
+    
+    const k = 1 - Math.max(rNorm, gNorm, bNorm);
+    if (k === 1) return 'C: 0% M: 0% Y: 0% K: 100%';
+    
+    const c = Math.round(((1 - rNorm - k) / (1 - k)) * 100);
+    const m = Math.round(((1 - gNorm - k) / (1 - k)) * 100);
+    const y = Math.round(((1 - bNorm - k) / (1 - k)) * 100);
+    const kPct = Math.round(k * 100);
+    
+    return `C: ${c}% M: ${m}% Y: ${y}% K: ${kPct}%`;
+  };
+
   // Export project: generates ZIP download and uploads to Google Drive
   const [isExporting, setIsExporting] = useState(false);
   
@@ -1342,48 +1375,87 @@ export default function ProductMockup() {
     setIsExporting(true);
     
     try {
-      // Get canvas as base64
-      const canvas = canvasRef.current;
-      if (!canvas) throw new Error("Canvas not found");
-      const designPng = canvas.toDataURL('image/png').split(',')[1];
+      // Create clean design canvas WITHOUT bleed overlay and selection handles
+      const cleanCanvas = document.createElement('canvas');
+      cleanCanvas.width = LABEL_WIDTH;
+      cleanCanvas.height = LABEL_HEIGHT;
+      const cleanCtx = cleanCanvas.getContext('2d')!;
       
-      // Get 3D mockup as base64
+      // Draw kraft paper base
+      applyKraftBase(cleanCtx, LABEL_WIDTH, LABEL_HEIGHT);
+      cleanCtx.globalCompositeOperation = 'multiply';
+      
+      // Draw all visible elements (no bleed, no selection)
+      elements.filter(el => el.visible !== false).forEach(el => {
+        cleanCtx.save();
+        cleanCtx.translate(el.x, el.y);
+        cleanCtx.rotate((el.rotation * Math.PI) / 180);
+        cleanCtx.scale(el.scale, el.scale);
+
+        if (el.type === 'logo' && el.image) {
+          const w = el.image.width;
+          const h = el.image.height;
+          cleanCtx.drawImage(el.image, -w / 2, -h / 2, w, h);
+        } else if (el.type === 'text') {
+          cleanCtx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial'}`;
+          cleanCtx.fillStyle = el.color || '#1a1a1a';
+          cleanCtx.textAlign = 'center';
+          cleanCtx.textBaseline = 'middle';
+          cleanCtx.fillText(el.content, 0, 0);
+        }
+
+        cleanCtx.restore();
+      });
+      cleanCtx.globalCompositeOperation = 'source-over';
+      
+      const designPng = cleanCanvas.toDataURL('image/png').split(',')[1];
+      
+      // Get 3D mockup as base64 - use actual canvas dimensions to avoid distortion
       const threeContainer = threeContainerRef.current;
-      const mockupCanvas = document.createElement('canvas');
-      mockupCanvas.width = 400;
-      mockupCanvas.height = 600;
-      const mockupCtx = mockupCanvas.getContext('2d')!;
+      const threeCanvas = threeContainer?.querySelector('canvas') as HTMLCanvasElement | null;
       
-      // Draw background
-      mockupCtx.fillStyle = '#e8dcc8';
-      mockupCtx.fillRect(0, 0, 400, 600);
-      
-      // Draw 3D canvas
-      const threeCanvas = threeContainer?.querySelector('canvas');
+      let mockupPng = '';
       if (threeCanvas) {
-        mockupCtx.drawImage(threeCanvas, 0, 0, 400, 600);
+        // Use actual Three.js canvas dimensions
+        const actualWidth = threeCanvas.width;
+        const actualHeight = threeCanvas.height;
+        
+        const mockupCanvas = document.createElement('canvas');
+        mockupCanvas.width = actualWidth;
+        mockupCanvas.height = actualHeight;
+        const mockupCtx = mockupCanvas.getContext('2d')!;
+        
+        // Draw background
+        mockupCtx.fillStyle = '#e8dcc8';
+        mockupCtx.fillRect(0, 0, actualWidth, actualHeight);
+        
+        // Draw 3D canvas at actual size (no distortion)
+        mockupCtx.drawImage(threeCanvas, 0, 0);
+        
+        // Draw overlay at actual size
+        const overlayImg = new window.Image();
+        overlayImg.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve) => {
+          overlayImg.onload = () => {
+            mockupCtx.drawImage(overlayImg, 0, 0, actualWidth, actualHeight);
+            resolve();
+          };
+          overlayImg.onerror = () => resolve(); // Continue even if overlay fails
+          overlayImg.src = hempClearUrl;
+        });
+        
+        mockupPng = mockupCanvas.toDataURL('image/png').split(',')[1];
       }
       
-      // Draw overlay
-      const overlayImg = new window.Image();
-      overlayImg.crossOrigin = 'anonymous';
-      await new Promise<void>((resolve) => {
-        overlayImg.onload = () => {
-          mockupCtx.drawImage(overlayImg, 0, 0, 400, 600);
-          resolve();
-        };
-        overlayImg.src = hempClearUrl;
-      });
-      
-      const mockupPng = mockupCanvas.toDataURL('image/png').split(',')[1];
-      
-      // Prepare elements data for export
+      // Prepare elements data for export with visual size and CMYK
       const exportElements = elements.map(el => ({
         type: el.type,
         content: el.content,
-        font: el.font,
-        fontSize: el.fontSize,
-        color: el.color,
+        font: el.font || 'Arial',
+        fontSize: el.fontSize || 36,
+        visualSize: Math.round((el.fontSize || 36) * el.scale * 10) / 10, // Visual size with 1 decimal
+        color: el.color || '#1a1a1a',
+        cmyk: colorToCmyk(el.color || '#1a1a1a'),
         x: el.x,
         y: el.y,
         scale: el.scale,
