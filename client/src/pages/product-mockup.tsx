@@ -10,7 +10,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Type, Check, ChevronsUpDown } from 'lucide-react';
-import ColorPicker, { useColorPicker } from 'react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Red Bleed_1764162964434.png';
@@ -39,7 +38,30 @@ const LABEL_WIDTH = 450;  // 3:4 ratio (60mm wide)
 const LABEL_HEIGHT = 600; // 3:4 ratio (80mm tall)
 const OVERLAP_HEIGHT = 60;
 
-// CMYK Color Picker Component
+// CMYK utilities
+function hexToCmyk(hex: string): { c: number; m: number; y: number; k: number } {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  
+  const k = 1 - Math.max(r, g, b);
+  if (k === 1) return { c: 0, m: 0, y: 0, k: 100 };
+  
+  const c = ((1 - r - k) / (1 - k)) * 100;
+  const m = ((1 - g - k) / (1 - k)) * 100;
+  const y = ((1 - b - k) / (1 - k)) * 100;
+  
+  return { c, m, y, k: k * 100 };
+}
+
+function cmykToHex(c: number, m: number, y: number, k: number): string {
+  const r = Math.round(255 * (1 - c / 100) * (1 - k / 100));
+  const g = Math.round(255 * (1 - m / 100) * (1 - k / 100));
+  const b = Math.round(255 * (1 - y / 100) * (1 - k / 100));
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+// Clean CMYK-only Color Picker
 function CMYKColorPicker({ 
   color, 
   onChange 
@@ -47,35 +69,80 @@ function CMYKColorPicker({
   color: string; 
   onChange: (color: string) => void;
 }) {
-  const [localColor, setLocalColor] = useState(color);
-  const { valueToCmyk } = useColorPicker(localColor, setLocalColor);
+  const cmyk = hexToCmyk(color || '#1a1a1a');
+  const [values, setValues] = useState(cmyk);
   
   useEffect(() => {
-    setLocalColor(color);
+    setValues(hexToCmyk(color || '#1a1a1a'));
   }, [color]);
   
-  const handleChange = (newColor: string) => {
-    setLocalColor(newColor);
-    onChange(newColor);
+  const handleChange = (channel: 'c' | 'm' | 'y' | 'k', value: number) => {
+    const newValues = { ...values, [channel]: value };
+    setValues(newValues);
+    onChange(cmykToHex(newValues.c, newValues.m, newValues.y, newValues.k));
   };
   
-  const cmykValues = valueToCmyk();
+  const formatPercent = (val: number) => val.toFixed(1).padStart(4, ' ') + '%';
   
   return (
-    <div className="space-y-3">
-      <ColorPicker
-        value={localColor}
-        onChange={handleChange}
-        hideColorTypeBtns
-        hideAdvancedSliders
-        hidePresets
-        hideOpacity
-        width={220}
-        height={150}
+    <div className="space-y-3 w-48">
+      <div 
+        className="h-8 rounded border border-border"
+        style={{ backgroundColor: cmykToHex(values.c, values.m, values.y, values.k) }}
       />
-      <div className="p-2 bg-muted rounded text-xs font-mono">
-        <div className="text-muted-foreground mb-1">CMYK for Print:</div>
-        <div className="text-foreground font-medium">{cmykValues}</div>
+      
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold w-4 text-cyan-500">C</span>
+          <Slider
+            value={[values.c]}
+            onValueChange={([v]) => handleChange('c', v)}
+            min={0}
+            max={100}
+            step={0.1}
+            className="flex-1"
+          />
+          <span className="text-xs font-mono w-12 text-right">{formatPercent(values.c)}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold w-4 text-pink-500">M</span>
+          <Slider
+            value={[values.m]}
+            onValueChange={([v]) => handleChange('m', v)}
+            min={0}
+            max={100}
+            step={0.1}
+            className="flex-1"
+          />
+          <span className="text-xs font-mono w-12 text-right">{formatPercent(values.m)}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold w-4 text-yellow-500">Y</span>
+          <Slider
+            value={[values.y]}
+            onValueChange={([v]) => handleChange('y', v)}
+            min={0}
+            max={100}
+            step={0.1}
+            className="flex-1"
+          />
+          <span className="text-xs font-mono w-12 text-right">{formatPercent(values.y)}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold w-4">K</span>
+          <Slider
+            value={[values.k]}
+            onValueChange={([v]) => handleChange('k', v)}
+            min={0}
+            max={100}
+            step={0.1}
+            className="flex-1"
+          />
+          <span className="text-xs font-mono w-12 text-right">{formatPercent(values.k)}</span>
+        </div>
       </div>
     </div>
   );
