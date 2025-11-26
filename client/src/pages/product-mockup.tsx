@@ -2015,14 +2015,6 @@ export default function ProductMockup() {
                   )}
                   {isExporting ? 'Saving...' : 'Save'}
                 </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={handleDownload}
-                  data-testid="button-download"
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           </CardHeader>
