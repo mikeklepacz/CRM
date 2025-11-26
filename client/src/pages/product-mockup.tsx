@@ -121,7 +121,6 @@ function CMYKColorPicker({
         hideOpacity
         width={220}
         height={150}
-        showColorGuide
       />
       <div className="p-2 bg-muted rounded text-xs font-mono">
         <div className="text-muted-foreground mb-1">CMYK for Print:</div>
