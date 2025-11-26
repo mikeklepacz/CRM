@@ -77,7 +77,7 @@ export default function ProductMockup() {
     if (saved) {
       try { return JSON.parse(saved); } catch { }
     }
-    return { offsetX: 0, offsetY: 0, rotation: 90, centerX: 0.5, centerY: 0.5 };
+    return { offsetX: 0, offsetY: 0, rotation: 0, centerX: 0.5, centerY: 0.5 };
   };
   
   const getTextureMappingLocked = () => {
@@ -219,45 +219,57 @@ export default function ProductMockup() {
   }, [elements, selectedId, mode, uploadedLabel, applyKraftBase]);
 
   const createLabelTexture = useCallback((): THREE.CanvasTexture => {
-    const canvas = document.createElement('canvas');
-    canvas.width = LABEL_WIDTH;
-    canvas.height = LABEL_HEIGHT;
-    const ctx = canvas.getContext('2d')!;
+    // First create the flat label canvas
+    const flatCanvas = document.createElement('canvas');
+    flatCanvas.width = LABEL_WIDTH;
+    flatCanvas.height = LABEL_HEIGHT;
+    const flatCtx = flatCanvas.getContext('2d')!;
 
-    applyKraftBase(ctx, LABEL_WIDTH, LABEL_HEIGHT);
-    ctx.globalCompositeOperation = 'multiply';
+    applyKraftBase(flatCtx, LABEL_WIDTH, LABEL_HEIGHT);
+    flatCtx.globalCompositeOperation = 'multiply';
 
     if (mode === 'upload' && uploadedLabel) {
       const scale = Math.min(LABEL_WIDTH / uploadedLabel.width, LABEL_HEIGHT / uploadedLabel.height);
       const w = uploadedLabel.width * scale;
       const h = uploadedLabel.height * scale;
-      ctx.drawImage(uploadedLabel, (LABEL_WIDTH - w) / 2, (LABEL_HEIGHT - h) / 2, w, h);
+      flatCtx.drawImage(uploadedLabel, (LABEL_WIDTH - w) / 2, (LABEL_HEIGHT - h) / 2, w, h);
     } else {
       elements.filter(el => el.visible !== false).forEach(el => {
-        ctx.save();
-        ctx.translate(el.x, el.y);
-        ctx.rotate((el.rotation * Math.PI) / 180);
-        ctx.scale(el.scale, el.scale);
+        flatCtx.save();
+        flatCtx.translate(el.x, el.y);
+        flatCtx.rotate((el.rotation * Math.PI) / 180);
+        flatCtx.scale(el.scale, el.scale);
 
         if (el.type === 'logo' && el.image) {
           const w = el.image.width;
           const h = el.image.height;
-          ctx.drawImage(el.image, -w / 2, -h / 2, w, h);
+          flatCtx.drawImage(el.image, -w / 2, -h / 2, w, h);
         } else if (el.type === 'text') {
-          ctx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
-          ctx.fillStyle = el.color || '#1a1a1a';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(el.content, 0, 0);
+          flatCtx.font = `bold ${el.fontSize || 32}px ${el.font || 'Arial Black'}`;
+          flatCtx.fillStyle = el.color || '#1a1a1a';
+          flatCtx.textAlign = 'center';
+          flatCtx.textBaseline = 'middle';
+          flatCtx.fillText(el.content, 0, 0);
         }
 
-        ctx.restore();
+        flatCtx.restore();
       });
     }
 
-    ctx.globalCompositeOperation = 'source-over';
+    flatCtx.globalCompositeOperation = 'source-over';
 
-    const texture = new THREE.CanvasTexture(canvas);
+    // Now create a rotated canvas for the 3D texture (rotate 90° CCW)
+    // This maps: flat canvas LEFT → cylinder TOP, flat canvas BOTTOM → cylinder wrap start
+    const textureCanvas = document.createElement('canvas');
+    textureCanvas.width = LABEL_HEIGHT;  // Swapped
+    textureCanvas.height = LABEL_WIDTH;  // Swapped
+    const texCtx = textureCanvas.getContext('2d')!;
+    
+    texCtx.translate(0, textureCanvas.height);
+    texCtx.rotate(-Math.PI / 2);
+    texCtx.drawImage(flatCanvas, 0, 0);
+
+    const texture = new THREE.CanvasTexture(textureCanvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
     texture.rotation = (textureMapping.rotation * Math.PI) / 180;
