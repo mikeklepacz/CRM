@@ -6,10 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Download, Upload, RotateCcw, Image, Type, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter } from 'lucide-react';
+import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
@@ -789,13 +788,13 @@ export default function ProductMockup() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold" data-testid="text-page-title">Hemp Wick Label Designer</h1>
-        <p className="text-muted-foreground">Design your label and preview how it wraps around the product</p>
+        <p className="text-muted-foreground text-sm">Design your label and preview how it wraps around the product</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <Card className="lg:col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-base">Label Design</CardTitle>
@@ -810,20 +809,9 @@ export default function ProductMockup() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Tabs value={mode} onValueChange={(v) => setMode(v as 'build' | 'upload')}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="build" data-testid="tab-build">
-                  <Type className="h-4 w-4 mr-2" />
-                  Build Label
-                </TabsTrigger>
-                <TabsTrigger value="upload" data-testid="tab-upload">
-                  <Image className="h-4 w-4 mr-2" />
-                  Upload Label
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="build" className="space-y-3">
+          <CardContent>
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-3">
                 <div className="flex gap-2 flex-wrap">
                   <Button
                     size="sm"
@@ -843,6 +831,15 @@ export default function ProductMockup() {
                     <Plus className="h-4 w-4 mr-1" />
                     Add Text
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={showBleedOverlay ? "default" : "outline"}
+                    onClick={() => setShowBleedOverlay(!showBleedOverlay)}
+                    data-testid="button-toggle-bleed"
+                  >
+                    {showBleedOverlay ? <Eye className="w-3 h-3 mr-1" /> : <EyeOff className="w-3 h-3 mr-1" />}
+                    Bleed
+                  </Button>
                 </div>
                 <input
                   ref={fileInputRef}
@@ -852,13 +849,31 @@ export default function ProductMockup() {
                   onChange={handleLogoUpload}
                 />
 
+                <div 
+                  className="relative border rounded-lg overflow-hidden bg-muted"
+                  style={{ aspectRatio: `${LABEL_WIDTH}/${LABEL_HEIGHT}` }}
+                >
+                  <canvas
+                    ref={canvasRef}
+                    width={LABEL_WIDTH}
+                    height={LABEL_HEIGHT}
+                    className="w-full h-full cursor-move"
+                    onClick={handleCanvasClick}
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                    data-testid="canvas-label"
+                  />
+                </div>
+
                 {elements.length > 0 && (
                   <div className="border rounded-lg">
                     <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b">
                       <Layers className="h-4 w-4" />
                       <span className="text-sm font-medium">Layers ({elements.length})</span>
                     </div>
-                    <ScrollArea className="max-h-40">
+                    <ScrollArea className="max-h-32">
                       <div className="divide-y">
                         {[...elements].reverse().map((el, idx) => (
                           <div
@@ -922,390 +937,222 @@ export default function ProductMockup() {
                     </ScrollArea>
                   </div>
                 )}
-              </TabsContent>
-              
-              <TabsContent value="upload" className="space-y-3">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => labelInputRef.current?.click()}
-                  data-testid="button-upload-label"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {uploadedLabel ? 'Change Label Image' : 'Upload Complete Label'}
-                </Button>
-                <input
-                  ref={labelInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={handleLabelUpload}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Upload a pre-designed label image (recommended: ~630×600px)
+
+                <p className="text-xs text-muted-foreground text-center">
+                  Click to select, drag to move
                 </p>
-              </TabsContent>
-            </Tabs>
+              </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Canvas (60mm × 80mm)</span>
-              <Button
-                size="sm"
-                variant={showBleedOverlay ? "default" : "outline"}
-                onClick={() => setShowBleedOverlay(!showBleedOverlay)}
-                data-testid="button-toggle-bleed"
-              >
-                {showBleedOverlay ? <Eye className="w-3 h-3 mr-1" /> : <EyeOff className="w-3 h-3 mr-1" />}
-                Bleed Guide
-              </Button>
-            </div>
-
-            <div 
-              className="relative border rounded-lg overflow-hidden bg-muted"
-              style={{ aspectRatio: `${LABEL_WIDTH}/${LABEL_HEIGHT}` }}
-            >
-              <canvas
-                ref={canvasRef}
-                width={LABEL_WIDTH}
-                height={LABEL_HEIGHT}
-                className="w-full h-full cursor-move"
-                onClick={handleCanvasClick}
-                onMouseDown={handleCanvasMouseDown}
-                onMouseMove={handleCanvasMouseMove}
-                onMouseUp={handleCanvasMouseUp}
-                onMouseLeave={handleCanvasMouseUp}
-                data-testid="canvas-label"
-              />
-            </div>
-
-            <p className="text-xs text-muted-foreground text-center">
-              Click to select, drag to move • Click "Add Text" for more text lines
-            </p>
-
-            {selectedElement && mode === 'build' && (
-              <div className="p-3 bg-muted rounded-lg space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Move className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">
-                      {selectedElement.type === 'text' ? 'Edit Text' : 'Edit Logo'}
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => deleteElement(selectedId!)}
-                    data-testid="button-delete"
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    Delete
-                  </Button>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-xs">Align on Canvas:</Label>
-                  <div className="flex gap-1 flex-wrap">
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      onClick={() => updateElement(selectedId!, { x: 50 })}
-                      title="Align Left"
-                      data-testid="button-align-left"
-                    >
-                      <ArrowLeftToLine className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      onClick={() => updateElement(selectedId!, { x: LABEL_WIDTH / 2 })}
-                      title="Center Horizontal"
-                      data-testid="button-align-center-h"
-                    >
-                      <AlignVerticalDistributeCenter className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      onClick={() => updateElement(selectedId!, { x: LABEL_WIDTH - 50 })}
-                      title="Align Right"
-                      data-testid="button-align-right"
-                    >
-                      <ArrowRightToLine className="w-4 h-4" />
-                    </Button>
-                    <div className="w-px bg-border mx-1" />
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      onClick={() => updateElement(selectedId!, { y: 50 })}
-                      title="Align Top"
-                      data-testid="button-align-top"
-                    >
-                      <ArrowUpToLine className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      onClick={() => updateElement(selectedId!, { y: LABEL_HEIGHT / 2 })}
-                      title="Center Vertical"
-                      data-testid="button-align-center-v"
-                    >
-                      <AlignHorizontalDistributeCenter className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      onClick={() => updateElement(selectedId!, { y: LABEL_HEIGHT - 50 })}
-                      title="Align Bottom"
-                      data-testid="button-align-bottom"
-                    >
-                      <ArrowDownToLine className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-                
-                {selectedElement.type === 'text' && (
-                  <div className="space-y-3">
-                    <Input
-                      value={selectedElement.content}
-                      onChange={(e) => updateElement(selectedId!, { content: e.target.value })}
-                      placeholder="Enter text"
-                      data-testid="input-text-content"
-                    />
+              <div className="w-56 space-y-3">
+                {selectedElement ? (
+                  <div className="p-3 bg-muted rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Move className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">
+                          {selectedElement.type === 'text' ? 'Edit Text' : 'Edit Logo'}
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => deleteElement(selectedId!)}
+                        data-testid="button-delete"
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
                     
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs w-14">Color:</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 justify-start gap-2"
-                            data-testid="button-color-picker"
-                          >
-                            <div 
-                              className="w-5 h-5 rounded border border-border"
-                              style={{ backgroundColor: selectedElement.color || '#1a1a1a' }}
-                            />
-                            <span className="text-xs font-mono">{selectedElement.color || '#1a1a1a'}</span>
-                            <Palette className="h-4 w-4 ml-auto" />
+                    <div className="space-y-2">
+                      <Label className="text-xs">Align on Canvas:</Label>
+                      <div className="flex gap-1 flex-wrap">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          onClick={() => updateElement(selectedId!, { x: 50 })}
+                          title="Align Left"
+                          data-testid="button-align-left"
+                        >
+                          <ArrowLeftToLine className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          onClick={() => updateElement(selectedId!, { x: LABEL_WIDTH / 2 })}
+                          title="Center Horizontal"
+                          data-testid="button-align-center-h"
+                        >
+                          <AlignVerticalDistributeCenter className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          onClick={() => updateElement(selectedId!, { x: LABEL_WIDTH - 50 })}
+                          title="Align Right"
+                          data-testid="button-align-right"
+                        >
+                          <ArrowRightToLine className="w-4 h-4" />
+                        </Button>
+                        <div className="w-px bg-border mx-1" />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          onClick={() => updateElement(selectedId!, { y: 50 })}
+                          title="Align Top"
+                          data-testid="button-align-top"
+                        >
+                          <ArrowUpToLine className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          onClick={() => updateElement(selectedId!, { y: LABEL_HEIGHT / 2 })}
+                          title="Center Vertical"
+                          data-testid="button-align-center-v"
+                        >
+                          <AlignHorizontalDistributeCenter className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          onClick={() => updateElement(selectedId!, { y: LABEL_HEIGHT - 50 })}
+                          title="Align Bottom"
+                          data-testid="button-align-bottom"
+                        >
+                          <ArrowDownToLine className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {selectedElement.type === 'text' && (
+                      <div className="space-y-3">
+                        <Input
+                          value={selectedElement.content}
+                          onChange={(e) => updateElement(selectedId!, { content: e.target.value })}
+                          placeholder="Enter text"
+                          data-testid="input-text-content"
+                        />
+                        
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs w-12">Color:</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 justify-start gap-2"
+                                data-testid="button-color-picker"
+                              >
+                                <div 
+                                  className="w-5 h-5 rounded border border-border"
+                                  style={{ backgroundColor: selectedElement.color || '#1a1a1a' }}
+                                />
+                                <span className="text-xs font-mono">{selectedElement.color || '#1a1a1a'}</span>
+                                <Palette className="h-4 w-4 ml-auto" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-3" align="start">
+                              <HexColorPicker
+                                color={selectedElement.color || '#1a1a1a'}
+                                onChange={(color) => updateElement(selectedId!, { color })}
+                              />
+                              <Input
+                                value={selectedElement.color || '#1a1a1a'}
+                                onChange={(e) => updateElement(selectedId!, { color: e.target.value })}
+                                className="mt-2 font-mono text-sm"
+                                placeholder="#000000"
+                                data-testid="input-color-hex"
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs w-12">Size:</Label>
+                          <Slider
+                            value={[selectedElement.fontSize || 32]}
+                            onValueChange={([v]) => updateElement(selectedId!, { fontSize: v })}
+                            min={12}
+                            max={80}
+                            step={2}
+                            className="flex-1"
+                            data-testid="slider-text-size"
+                          />
+                          <span className="text-xs w-8 text-right">{selectedElement.fontSize}px</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Scale: {(selectedElement.scale * 100).toFixed(1)}%</Label>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateElement(selectedId!, { scale: selectedElement.scale - 0.001 })} data-testid="btn-scale-minus">
+                            <Minus className="w-3 h-3" />
                           </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-3" align="start">
-                          <HexColorPicker
-                            color={selectedElement.color || '#1a1a1a'}
-                            onChange={(color) => updateElement(selectedId!, { color })}
-                          />
-                          <Input
-                            value={selectedElement.color || '#1a1a1a'}
-                            onChange={(e) => updateElement(selectedId!, { color: e.target.value })}
-                            className="mt-2 font-mono text-sm"
-                            placeholder="#000000"
-                            data-testid="input-color-hex"
-                          />
-                        </PopoverContent>
-                      </Popover>
+                          <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateElement(selectedId!, { scale: selectedElement.scale + 0.001 })} data-testid="btn-scale-plus">
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      <Slider
+                        value={[selectedElement.scale * 1000]}
+                        onValueChange={([v]) => updateElement(selectedId!, { scale: v / 1000 })}
+                        min={100}
+                        max={3000}
+                        step={1}
+                        data-testid="slider-scale"
+                      />
                     </div>
                     
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs w-14">Size:</Label>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Rotate: {selectedElement.rotation.toFixed(1)}°</Label>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateElement(selectedId!, { rotation: selectedElement.rotation - 0.1 })} data-testid="btn-rotate-minus">
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateElement(selectedId!, { rotation: selectedElement.rotation + 0.1 })} data-testid="btn-rotate-plus">
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
                       <Slider
-                        value={[selectedElement.fontSize || 32]}
-                        onValueChange={([v]) => updateElement(selectedId!, { fontSize: v })}
-                        min={12}
-                        max={80}
-                        step={2}
-                        className="flex-1"
-                        data-testid="slider-text-size"
+                        value={[selectedElement.rotation * 10]}
+                        onValueChange={([v]) => updateElement(selectedId!, { rotation: v / 10 })}
+                        min={0}
+                        max={3600}
+                        step={1}
+                        data-testid="slider-rotation"
                       />
-                      <span className="text-xs w-10 text-right">{selectedElement.fontSize}px</span>
                     </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground text-center">
+                      Add a logo or text, then select it to edit
+                    </p>
                   </div>
                 )}
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Scale: {(selectedElement.scale * 100).toFixed(1)}%</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateElement(selectedId!, { scale: selectedElement.scale - 0.001 })} data-testid="btn-scale-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateElement(selectedId!, { scale: selectedElement.scale + 0.001 })} data-testid="btn-scale-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[selectedElement.scale * 1000]}
-                    onValueChange={([v]) => updateElement(selectedId!, { scale: v / 1000 })}
-                    min={100}
-                    max={3000}
-                    step={1}
-                    data-testid="slider-scale"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Rotate: {selectedElement.rotation.toFixed(1)}°</Label>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateElement(selectedId!, { rotation: selectedElement.rotation - 0.1 })} data-testid="btn-rotate-minus">
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateElement(selectedId!, { rotation: selectedElement.rotation + 0.1 })} data-testid="btn-rotate-plus">
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[selectedElement.rotation * 10]}
-                    onValueChange={([v]) => updateElement(selectedId!, { rotation: v / 10 })}
-                    min={0}
-                    max={3600}
-                    step={1}
-                    data-testid="slider-rotation"
-                  />
+
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
+                    <strong>Kraft Paper:</strong> Colors blend with brown paper. White becomes paper color.
+                  </p>
                 </div>
               </div>
-            )}
-
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                <strong>Kraft Paper Printing:</strong> Colors blend with the brown paper. 
-                White areas become paper color (no white ink).
-              </p>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-1">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Lighting</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Ambient: {lighting.ambient.toFixed(1)}</Label>
-              <Slider
-                value={[lighting.ambient * 10]}
-                onValueChange={([v]) => setLighting(l => ({ ...l, ambient: v / 10 }))}
-                min={0}
-                max={30}
-                step={1}
-                data-testid="slider-ambient"
-              />
-            </div>
-            
-            <div className="pt-2 border-t">
-              <Label className="text-xs font-medium text-muted-foreground">Key Light</Label>
-            </div>
-            
-            <div className="space-y-1">
-              <Label className="text-xs">Intensity: {lighting.front.toFixed(1)}</Label>
-              <Slider
-                value={[lighting.front * 10]}
-                onValueChange={([v]) => setLighting(l => ({ ...l, front: v / 10 }))}
-                min={0}
-                max={30}
-                step={1}
-                data-testid="slider-key-intensity"
-              />
-            </div>
-            
-            <div className="space-y-1">
-              <Label className="text-xs">Angle: {lighting.keyAngle}°</Label>
-              <Slider
-                value={[lighting.keyAngle]}
-                onValueChange={([v]) => setLighting(l => ({ ...l, keyAngle: v }))}
-                min={0}
-                max={360}
-                step={5}
-                data-testid="slider-key-angle"
-              />
-            </div>
-            
-            <div className="space-y-1">
-              <Label className="text-xs">Height: {lighting.keyHeight}°</Label>
-              <Slider
-                value={[lighting.keyHeight]}
-                onValueChange={([v]) => setLighting(l => ({ ...l, keyHeight: v }))}
-                min={-45}
-                max={90}
-                step={5}
-                data-testid="slider-key-height"
-              />
-            </div>
-            
-            <div className="space-y-1">
-              <Label className="text-xs">Distance: {lighting.keyDistance.toFixed(1)}</Label>
-              <Slider
-                value={[lighting.keyDistance * 10]}
-                onValueChange={([v]) => setLighting(l => ({ ...l, keyDistance: v / 10 }))}
-                min={5}
-                max={50}
-                step={1}
-                data-testid="slider-key-distance"
-              />
-            </div>
-            
-            <div className="pt-2 border-t">
-              <Label className="text-xs font-medium text-muted-foreground">Fill Light</Label>
-            </div>
-            
-            <div className="space-y-1">
-              <Label className="text-xs">Intensity: {lighting.top.toFixed(1)}</Label>
-              <Slider
-                value={[lighting.top * 10]}
-                onValueChange={([v]) => setLighting(l => ({ ...l, top: v / 10 }))}
-                min={0}
-                max={20}
-                step={1}
-                data-testid="slider-fill-intensity"
-              />
-            </div>
-            
-            <div className="pt-2 border-t">
-              <Label className="text-xs font-medium text-muted-foreground">Color</Label>
-            </div>
-            
-            <div className="space-y-1">
-              <Label className="text-xs">Warmth: {lighting.warmth > 0 ? `+${lighting.warmth.toFixed(1)}` : lighting.warmth.toFixed(1)}</Label>
-              <Slider
-                value={[lighting.warmth * 10]}
-                onValueChange={([v]) => setLighting(l => ({ ...l, warmth: v / 10 }))}
-                min={-10}
-                max={10}
-                step={1}
-                data-testid="slider-warmth"
-              />
-            </div>
-            
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full mt-2"
-              onClick={() => setLighting({ 
-                ambient: 1.2, 
-                front: 0.8, 
-                top: 0.4, 
-                warmth: 0.3,
-                keyAngle: 45,
-                keyHeight: 30,
-                keyDistance: 2,
-              })}
-              data-testid="button-reset-lighting"
-            >
-              <RotateCcw className="w-3 h-3 mr-1" />
-              Reset
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-base">Product Preview</CardTitle>
