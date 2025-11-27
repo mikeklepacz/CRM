@@ -552,10 +552,14 @@ async function start() {
     // Load background audio first
     await loadBackgroundAudio();
     
+    // Sync settings from Replit if available
+    await syncSettingsFromReplit();
+    
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
     console.log(`[VoiceProxy] Server running on port ${PORT}`);
     console.log(`[VoiceProxy] Background audio: ${backgroundAudioBuffer ? 'loaded' : 'not configured'}`);
-    console.log(`[VoiceProxy] Background volume: ${BACKGROUND_VOLUME_DB}dB`);
+    console.log(`[VoiceProxy] Background volume: ${backgroundVolumeDb}dB`);
+    console.log(`[VoiceProxy] Audio source: ${audioSourceUrl || 'none'}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
