@@ -100,3 +100,114 @@ Complete column schema for Store Database Google Sheet:
 - **Google Cloud Pub/Sub**: For Gmail push notifications (topic: `gmail-inbox-push`). Used by E-Hub for real-time reply detection without polling.
 - **Google Calendar API**: Per-user OAuth for creating calendar events.
 - **ElevenLabs API**: For AI Voice Calling.
+
+---
+
+## Future Development: Multi-Tenancy / Super CRM
+
+### Vision
+Transform the Hemp Wick CRM into a multi-tenant "Super CRM" platform that serves multiple customers (organizations) with isolated data, customizable modules, and per-tenant configurations. Each customer (tenant) operates independently while sharing the same underlying platform.
+
+### Use Cases Supported
+1. **Sales CRM** (current NMU use case): Find businesses → AI calls to qualify/pitch → Close sale → Track commissions
+2. **Lead Qualification/Intake** (legal, insurance, settlements): List of potential claimants → AI calls to interview/qualify → Determine eligibility → Enroll qualified ones
+
+The core machinery is identical—what differs is the script, data fields, and pipeline stages.
+
+### Architecture: Super Admin + Organizations
+
+**Super Admin (Platform Level)**
+- Master Twilio account credentials (buy numbers, assign to tenants)
+- Platform-wide settings and configurations
+- Create/manage organizations, assign modules, assign users to orgs
+- View all tenants and usage analytics
+- Per-number Twilio cost tracking and reporting
+
+**Organization Admin (Per-Tenant)**
+- Their own OpenAI API key (separate OpenAI project = separate billing)
+- Assigned Twilio phone number(s) from master pool
+- Their own ElevenLabs agent configurations
+- Their own knowledge base, scripts, email templates
+- Their own Google Sheets connections
+
+**Credential & Billing Model:**
+- **Twilio**: Platform owns master account, assigns numbers to orgs. Orgs tracked by assigned phone number. You can report usage per-number.
+- **OpenAI**: Each org provides their own API key. They manage their own OpenAI project. Direct billing relationship between org and OpenAI.
+- **ElevenLabs**: Each org manages their own agents. Can use per-tenant API key if needed or shared key with usage tracking.
+
+### Core Building Blocks
+
+1. **Organizations Table**
+   - `id`, `name`, `industry_type` (sales/qualification), `enabled_modules[]`, `is_active`, `created_at`, `updated_at`
+   - Stores per-org settings and configuration
+
+2. **Link Users to Organizations**
+   - Add `organizationId` to users table
+   - Each user belongs to exactly one organization
+
+3. **Super Admin Role**
+   - New role above "admin" 
+   - Can see ALL organizations, create orgs, manage cross-org settings
+   - Regular admins only see their own org
+
+4. **Organization Credentials Storage**
+   - New table: `organization_credentials`
+   - Fields: `organizationId`, `openai_api_key`, `assigned_twilio_phone_numbers[]`, `elevenlabs_agent_ids[]`, `created_at`, `updated_at`
+
+5. **Scope All Data to Organizations**
+   - Add `organizationId` to: `clients`, `notes`, `templates`, `kbFiles`, `kbFileVersions`, `kbChangeProposals`, `googleSheets`, `sequences`, `sequenceRecipients`, `callSessions`, `callTranscripts`, `emailBlacklist`, `projects`, `conversations`, `userTags`, `ehubSettings`, `callCampaigns`, `openaiAssistants`, `backgroundAudioSettings`, etc.
+   - All queries automatically filter by user's organization
+
+6. **Migration Script**
+   - Create "NMU" as organization #1
+   - Tag all existing users, data, and settings with `organizationId = 'nmu-org-1'`
+
+7. **API Route Filtering**
+   - Every API route extracts organizationId from authenticated user
+   - All storage layer queries append WHERE clause `organizationId = ?`
+   - Queries to external APIs (Twilio, OpenAI) use org-specific credentials
+
+8. **Super Admin Panel**
+   - New page for super admin: Organization Management
+   - Create new organizations, configure industry type, enable/disable modules
+   - Assign users to organizations, promote admins
+   - Assign Twilio numbers to orgs
+   - View usage and analytics per organization
+   - Manage platform-level settings
+
+9. **Org-Specific Settings**
+   - Move module visibility, dashboard type, AI prompts, colors to organization level
+   - Each org can customize their own settings
+   - Inherit platform defaults for new orgs
+
+### Module-by-Module Notes
+
+| Module | Considerations |
+|--------|---|
+| **Admin Panel** | Super Admin panel for org management. Regular Admin can create users within their org, manage roles, assign modules. |
+| **Dashboard** | Two modes per org: Sales Dashboard vs Qualification Dashboard. Super Admin assigns mode when creating org. |
+| **Clients** | Super Admin helps design default table structure when org created. Sales orgs: Store DB + Commission Tracker (dual Google Sheets). Qualification orgs: SQL primary + Google Sheets backup. |
+| **Map Search** | Per-org categories. Some universal defaults (restaurants, retail). Org-specific categories managed by org admin. |
+| **E-Hub** | Already flexible. Per-org AI prompt injection, keyword bin, sending settings. Templates per-user (already scoped). Sequences per-org. |
+| **Call Manager** | Each org has own ElevenLabs agents. Build agents/prompts FROM platform using org's OpenAI key. KB per-org. Twilio numbers assigned to org. |
+| **AI Chat (Wick Coach)** | Per-org setup, uses org's OpenAI key. Can help design qualification criteria. |
+| **Settings** | Module visibility, API integrations all moved to organization level. Super Admin configures platform defaults. |
+
+### Build Sequence (When Ready)
+
+1. **Organizations table + user relationship** (foundation)
+2. **Super admin role** (so you can manage orgs)
+3. **Migration script** (assign NMU to org #1)
+4. **Filter data by organization** (security layer)
+5. **Super admin panel** (UX for org management)
+6. **Credential storage & per-org APIs** (so each org can use own keys)
+7. **Per-module adaptations** (dashboards, KB, templates, etc.)
+
+### Notes for Implementation
+
+- Each organization is completely data-isolated—queries automatically scope to organization
+- No shared data between organizations except platform-level settings
+- Super Admin has special bypass permissions to view cross-org analytics
+- New tenant onboarding: Create org → Create admin user → Auto-create Google Sheets → Configure modules → Ready to use
+- Existing data (NMU) becomes tenant #1 with no data loss
+- All future bug fixes and features work across all tenants automatically

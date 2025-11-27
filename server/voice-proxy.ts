@@ -117,7 +117,7 @@ class VoiceProxyServer {
 
     // Retrieve basePrompt from call session metadata (not from TwiML due to 4000 char limit)
     const callSession = await storage.getCallSessionByCallSid(callSid);
-    const basePrompt = callSession?.metadata?.combinedPrompt || '';
+    const basePrompt = (callSession as any)?.metadata?.combinedPrompt || '';
 
 
     // Create session in database
@@ -151,8 +151,8 @@ class VoiceProxyServer {
 
     // Connect to ElevenLabs with all parameters (including IVR behavior via basePrompt)
     const { ws: elevenLabsWs, conversationId } = await this.connectToElevenLabs({
-      agentId,
-      phoneNumberId,
+      agentId: agentId || '',
+      phoneNumberId: phoneNumberId || '',
       dynamicVariables,
       clientData,
       basePrompt, // This already includes IVR instructions appended by CallDispatcher
@@ -174,8 +174,8 @@ class VoiceProxyServer {
     const session: SessionState = {
       streamSid,
       callSid,
-      agentId,
-      phoneNumberId,
+      agentId: agentId || '',
+      phoneNumberId: phoneNumberId || '',
       conversationId,
       twilioWs: ws,
       elevenLabsWs,
