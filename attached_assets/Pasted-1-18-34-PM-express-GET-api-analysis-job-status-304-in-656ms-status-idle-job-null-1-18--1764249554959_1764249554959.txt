@@ -1,0 +1,39 @@
+1:18:34 PM [express] GET /api/analysis/job-status 304 in 656ms :: {"status":"idle","job":null}
+1:18:34 PM [express] GET /api/elevenlabs/agents 304 in 787ms :: [{"id":"3f3982fe-7438-42ea-8075-8870…
+1:18:34 PM [express] GET /api/elevenlabs/call-queue 304 in 924ms :: {"activeCalls":1,"queuedCalls":0…
+1:18:34 PM [express] GET /api/elevenlabs/insights-history 304 in 1013ms :: {"history":[{"id":"2087c6…
+1:18:35 PM [express] GET /api/elevenlabs/call-analytics 304 in 326ms :: {"calls":[{"session":{"id":"…
+1:18:36 PM [express] GET /api/elevenlabs/eligible-stores/cold_calls 304 in 2380ms :: [{"link":"https…
+1:18:42 PM [express] POST /api/elevenlabs/batch-call 200 in 533ms :: {"campaignId":"b428e180-ac94-46…
+1:18:43 PM [express] GET /api/elevenlabs/call-queue 200 in 593ms :: {"activeCalls":1,"queuedCalls":1…
+1:18:44 PM [express] GET /api/elevenlabs/eligible-stores/cold_calls 304 in 1702ms :: [{"link":"https…
+[CallDispatcher] Error cleaning up stale targets: error: syntax error at or near "<"
+    at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async NeonPreparedQuery.execute (/home/runner/workspace/node_modules/src/neon-serverless/session.ts:102:18)
+    at async DatabaseStorage.getStaleInProgressTargets (/home/runner/workspace/server/storage.ts:2990:12)
+    at async CallDispatcher.cleanupStaleTargets (/home/runner/workspace/server/call_dispatcher.ts:31:28)
+    at async CallDispatcher.processQueuedCalls (/home/runner/workspace/server/call_dispatcher.ts:65:7) {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '272',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1244',
+  routine: 'scanner_yyerror'
+}
+1:19:00 PM [express] POST /api/twilio/call-status 200 in 68ms
+1:19:02 PM [express] POST /api/twilio/call-status 200 in 68ms
+1:19:04 PM [express] POST /api/twilio/call-status 200 in 198ms
+[Twilio Webhook] Call CAf96c7312c0a0b5c31c6f1df54f577ae0 completed with 0 seconds - marking as no-answer
+1:19:04 PM [express] POST /api/twilio/call-status 200 in 394ms

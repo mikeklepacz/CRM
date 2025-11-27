@@ -38,6 +38,7 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   const wsProtocol = replitDomain.includes('localhost') ? 'ws' : 'wss';
   const wsUrl = `${wsProtocol}://${replitDomain}/media-stream`;
   
+  console.log(`[Twilio] Generating TwiML with WebSocket URL: ${wsUrl}`);
   
   // Connect to our WebSocket proxy
   const connect = response.connect();

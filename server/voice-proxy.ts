@@ -62,10 +62,14 @@ class VoiceProxyServer {
 
     this.wss.on('connection', (ws: WSClient, req) => {
       this.connectionAttempts++;
+      console.log(`[VoiceProxy] New WebSocket connection (attempt #${this.connectionAttempts}), path: ${req.url}`);
 
       ws.on('message', async (data: Buffer) => {
         try {
           const message: TwilioMediaMessage = JSON.parse(data.toString());
+          if (message.event === 'start') {
+            console.log(`[VoiceProxy] Stream START event - callSid: ${message.start?.callSid}`);
+          }
           await this.handleTwilioMessage(ws, message);
         } catch (error) {
           console.error('[VoiceProxy] Error handling message:', error);
@@ -73,6 +77,7 @@ class VoiceProxyServer {
       });
 
       ws.on('close', () => {
+        console.log(`[VoiceProxy] WebSocket closed`);
         const session = this.findSessionByTwilioWs(ws);
         if (session) {
           this.endSession(session.streamSid);
