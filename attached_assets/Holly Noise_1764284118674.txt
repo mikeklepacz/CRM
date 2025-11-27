@@ -1,0 +1,7 @@
+<Response>
+  <Connect>
+    <Stream url="wss://api.us.elevenlabs.io/v1/convai/stream">
+      <Parameter name="conference" value="HollyAgentConference" />
+    </Stream>
+  </Connect>
+</Response>

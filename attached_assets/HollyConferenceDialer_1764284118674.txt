@@ -1,0 +1,14 @@
+<Response>
+  <Dial>
+    <Conference
+      beep="false"
+      startConferenceOnEnter="true"
+      endConferenceOnExit="true"
+      waitUrl="https://handler.twilio.com/twiml/EH_HempWickPlaylist"
+      statusCallbackEvent="start end join leave"
+      statusCallback="https://handler.twilio.com/twiml/EH_HollyNoise"
+    >
+      HollyAgentConference
+    </Conference>
+  </Dial>
+</Response>
