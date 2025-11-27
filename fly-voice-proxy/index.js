@@ -14,8 +14,8 @@ const __dirname = path.dirname(__filename);
 // Configuration from environment
 const PORT = process.env.PORT || 8080;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const BACKGROUND_AUDIO_URL = process.env.BACKGROUND_AUDIO_URL;
-const BACKGROUND_VOLUME_DB = parseFloat(process.env.BACKGROUND_VOLUME_DB || '-25');
+const FLY_PROXY_SECRET = process.env.FLY_PROXY_SECRET || 'hemp-voice-proxy-secret-2024';
+const REPLIT_CRM_URL = process.env.REPLIT_CRM_URL; // e.g., https://your-app.replit.app
 
 // Audio constants
 const SAMPLE_RATE_TWILIO = 8000;
@@ -25,51 +25,100 @@ const FRAME_SIZE_MS = 20;
 // Session state
 const sessions = new Map();
 
-// Background audio cache
+// Background audio state (dynamically configurable)
 let backgroundAudioBuffer = null;
-let backgroundVolumeScalar = Math.pow(10, BACKGROUND_VOLUME_DB / 20);
+let backgroundVolumeDb = parseFloat(process.env.BACKGROUND_VOLUME_DB || '-25');
+let backgroundVolumeScalar = Math.pow(10, backgroundVolumeDb / 20);
+let audioSourceUrl = null;
+
+// Update volume setting
+function updateVolume(volumeDb) {
+  backgroundVolumeDb = volumeDb;
+  backgroundVolumeScalar = Math.pow(10, volumeDb / 20);
+  console.log(`[VoiceProxy] Volume updated to ${volumeDb}dB (scalar: ${backgroundVolumeScalar.toFixed(4)})`);
+}
+
+// Load background audio from URL (Replit CRM)
+async function loadBackgroundAudioFromUrl(url) {
+  try {
+    console.log('[VoiceProxy] Loading background audio from URL:', url);
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${FLY_PROXY_SECRET}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const wav = new WaveFile(buffer);
+    
+    const samples = wav.getSamples(false, Int16Array);
+    backgroundAudioBuffer = samples instanceof Int16Array ? samples : new Int16Array(samples);
+    audioSourceUrl = url;
+    
+    console.log('[VoiceProxy] Background audio loaded from URL:', backgroundAudioBuffer.length, 'samples');
+    return true;
+  } catch (error) {
+    console.error('[VoiceProxy] Error loading background audio from URL:', error);
+    return false;
+  }
+}
 
 // Load background audio on startup
 async function loadBackgroundAudio() {
-  // Try bundled file first, then URL
+  // Try Replit CRM URL first if configured
+  if (REPLIT_CRM_URL) {
+    const url = `${REPLIT_CRM_URL}/api/voice-proxy/background-audio/public`;
+    const success = await loadBackgroundAudioFromUrl(url);
+    if (success) return;
+  }
+  
+  // Fallback to bundled file
   const bundledPath = path.join(__dirname, 'background.wav');
   
   try {
-    // Check if bundled file exists
     if (fs.existsSync(bundledPath)) {
-      console.log('[VoiceProxy] Loading bundled background audio');
+      console.log('[VoiceProxy] Loading bundled background audio (fallback)');
       const buffer = fs.readFileSync(bundledPath);
       const wav = new WaveFile(buffer);
       
       const samples = wav.getSamples(false, Int16Array);
       backgroundAudioBuffer = samples instanceof Int16Array ? samples : new Int16Array(samples);
+      audioSourceUrl = 'bundled';
       
       console.log('[VoiceProxy] Background audio loaded:', backgroundAudioBuffer.length, 'samples');
-      return;
-    }
-    
-    // Fallback to URL if configured
-    if (BACKGROUND_AUDIO_URL) {
-      console.log('[VoiceProxy] Loading background audio from URL:', BACKGROUND_AUDIO_URL);
-      const response = await fetch(BACKGROUND_AUDIO_URL);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.statusText}`);
-      }
-      
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const wav = new WaveFile(buffer);
-      
-      const samples = wav.getSamples(false, Int16Array);
-      backgroundAudioBuffer = samples instanceof Int16Array ? samples : new Int16Array(samples);
-      
-      console.log('[VoiceProxy] Background audio loaded from URL:', backgroundAudioBuffer.length, 'samples');
       return;
     }
     
     console.log('[VoiceProxy] No background audio configured');
   } catch (error) {
     console.error('[VoiceProxy] Error loading background audio:', error);
+  }
+}
+
+// Fetch current settings from Replit CRM
+async function syncSettingsFromReplit() {
+  if (!REPLIT_CRM_URL) return;
+  
+  try {
+    const response = await fetch(`${REPLIT_CRM_URL}/api/voice-proxy/background-audio/settings-public`, {
+      headers: {
+        'Authorization': `Bearer ${FLY_PROXY_SECRET}`
+      }
+    });
+    
+    if (response.ok) {
+      const settings = await response.json();
+      if (settings.volumeDb !== undefined) {
+        updateVolume(settings.volumeDb);
+      }
+    }
+  } catch (error) {
+    console.error('[VoiceProxy] Error syncing settings:', error);
   }
 }
 
@@ -275,7 +324,53 @@ await fastify.register(websocket);
 
 // Health check endpoint
 fastify.get('/health', async (request, reply) => {
-  return { status: 'ok', sessions: sessions.size };
+  return { 
+    status: 'ok', 
+    sessions: sessions.size,
+    audioLoaded: !!backgroundAudioBuffer,
+    audioSource: audioSourceUrl,
+    volumeDb: backgroundVolumeDb,
+  };
+});
+
+// Config update endpoint (called by Replit when settings change)
+fastify.post('/config', async (request, reply) => {
+  // Verify auth
+  const authHeader = request.headers.authorization;
+  if (!authHeader || authHeader !== `Bearer ${FLY_PROXY_SECRET}`) {
+    return reply.status(401).send({ error: 'Unauthorized' });
+  }
+  
+  const { action, volumeDb, audioUrl } = request.body || {};
+  
+  const result = { success: true, actions: [] };
+  
+  // Update volume
+  if (volumeDb !== undefined) {
+    updateVolume(volumeDb);
+    result.actions.push(`Volume set to ${volumeDb}dB`);
+  }
+  
+  // Reload audio from URL
+  if (action === 'reload-audio' || audioUrl) {
+    const url = audioUrl || (REPLIT_CRM_URL ? `${REPLIT_CRM_URL}/api/voice-proxy/background-audio/public` : null);
+    if (url) {
+      const success = await loadBackgroundAudioFromUrl(url);
+      result.actions.push(success ? 'Audio reloaded' : 'Audio reload failed');
+      result.audioReloadSuccess = success;
+    } else {
+      result.actions.push('No audio URL available');
+    }
+  }
+  
+  // Sync all settings from Replit
+  if (action === 'sync') {
+    await syncSettingsFromReplit();
+    result.actions.push('Settings synced');
+  }
+  
+  console.log('[VoiceProxy] Config updated:', result);
+  return result;
 });
 
 // TwiML endpoint for Replit to redirect calls here

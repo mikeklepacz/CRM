@@ -2314,6 +2314,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedAt: new Date(),
       });
 
+      // Notify Fly.io of volume change (non-blocking)
+      notifyFlyProxy({ volumeDb }).catch(() => {});
+
       res.json(settings);
     } catch (error: any) {
       console.error('Error updating background audio volume:', error);
@@ -2344,6 +2347,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         uploadedAt: new Date(),
       });
 
+      // Notify Fly.io to reload audio file (non-blocking)
+      notifyFlyProxy({ action: 'reload-audio', volumeDb: -25 }).catch(() => {});
+
       res.json(settings);
     } catch (error: any) {
       console.error('Error uploading background audio:', error);
@@ -2369,6 +2375,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error streaming background audio:', error);
       res.status(500).json({ error: error.message || 'Failed to load audio file' });
+    }
+  });
+
+  // Public endpoint for Fly.io voice proxy to fetch audio (uses secret key)
+  const FLY_PROXY_SECRET = process.env.FLY_PROXY_SECRET || 'hemp-voice-proxy-secret-2024';
+  const FLY_VOICE_PROXY_CONFIG_URL = process.env.FLY_VOICE_PROXY_CONFIG_URL || 'https://hemp-voice-proxy.fly.dev/config';
+  
+  // Helper to notify Fly.io of config changes
+  async function notifyFlyProxy(config: { action?: string; volumeDb?: number; audioUrl?: string }) {
+    try {
+      const response = await fetch(FLY_VOICE_PROXY_CONFIG_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${FLY_PROXY_SECRET}`,
+        },
+        body: JSON.stringify(config),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[VoiceProxy] Fly.io notified:', result);
+        return result;
+      } else {
+        console.error('[VoiceProxy] Failed to notify Fly.io:', response.status);
+        return null;
+      }
+    } catch (error) {
+      console.error('[VoiceProxy] Error notifying Fly.io:', error);
+      return null;
+    }
+  }
+  
+  app.get('/api/voice-proxy/background-audio/public', async (req: any, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || authHeader !== `Bearer ${FLY_PROXY_SECRET}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      
+      const settings = await storage.getBackgroundAudioSettings();
+      
+      if (!settings?.filePath) {
+        return res.status(404).json({ error: 'No background audio file uploaded' });
+      }
+
+      const { audioConverter } = await import('./audio-converter.js');
+      const audioBuffer = await audioConverter.loadAudioFile(settings.filePath);
+      
+      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Content-Disposition', `inline; filename="${settings.fileName || 'background-audio.wav'}"`);
+      res.send(audioBuffer);
+    } catch (error: any) {
+      console.error('Error streaming public background audio:', error);
+      res.status(500).json({ error: error.message || 'Failed to load audio file' });
+    }
+  });
+
+  // Public endpoint to get audio settings (for Fly.io)
+  app.get('/api/voice-proxy/background-audio/settings-public', async (req: any, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || authHeader !== `Bearer ${FLY_PROXY_SECRET}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      
+      const settings = await storage.getBackgroundAudioSettings();
+      res.json({
+        volumeDb: settings?.volumeDb ?? -25,
+        hasAudioFile: !!settings?.filePath,
+        fileName: settings?.fileName || null,
+      });
+    } catch (error: any) {
+      console.error('Error fetching public settings:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
 
