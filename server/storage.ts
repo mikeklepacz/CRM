@@ -2987,13 +2987,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStaleInProgressTargets(beforeDate: Date): Promise<any[]> {
+    // Note: callCampaignTargets doesn't have updatedAt, using createdAt as fallback
     return await db
       .select()
       .from(callCampaignTargets)
       .where(
         and(
           eq(callCampaignTargets.targetStatus, 'in-progress'),
-          lt(callCampaignTargets.updatedAt, beforeDate)
+          lte(callCampaignTargets.createdAt, beforeDate)
         )
       );
   }

@@ -3,7 +3,8 @@ import { Server as HTTPServer } from 'http';
 import { storage } from './storage.js';
 import { audioConverter } from './audio-converter.js';
 import alawmulaw from 'alawmulaw';
-import WaveFile from 'wavefile';
+import wavefile from 'wavefile';
+const { WaveFile } = wavefile;
 
 const SAMPLE_RATE_TWILIO = 8000; // Twilio uses 8kHz mulaw
 const SAMPLE_RATE_ELEVENLABS = 16000; // ElevenLabs uses 16kHz PCM
