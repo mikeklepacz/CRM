@@ -184,7 +184,15 @@ class VoiceProxyServer {
 
     // If ElevenLabs connection failed, end the call
     if (!elevenLabsWs) {
-      console.error(`[VoiceProxy] Failed to connect to ElevenLabs for ${streamSid}`);
+      console.error(`[VoiceProxy] CRITICAL: Failed to connect to ElevenLabs for ${streamSid}`);
+      console.error(`[VoiceProxy] Failed connection details:`, {
+        streamSid,
+        callSid,
+        agentId,
+        phoneNumberId,
+        hasBasePrompt: !!basePrompt,
+        basePromptLength: basePrompt?.length || 0,
+      });
       await storage.createVoiceProxySession({
         streamSid,
         callSid,
@@ -252,6 +260,14 @@ class VoiceProxyServer {
     basePrompt?: string;
   }): Promise<{ ws: WSClient | null; conversationId: string | null }> {
     try {
+      console.log('[VoiceProxy] Attempting ElevenLabs connection with params:', {
+        agentId: params.agentId,
+        phoneNumberId: params.phoneNumberId,
+        hasBasePrompt: !!params.basePrompt,
+        hasDynamicVars: !!params.dynamicVariables,
+        hasClientData: !!params.clientData,
+      });
+      
       // Fetch API key from database (consistent with rest of codebase)
       const elevenLabsConfig = await storage.getElevenLabsConfig();
       if (!elevenLabsConfig?.apiKey) {
@@ -259,6 +275,7 @@ class VoiceProxyServer {
         return { ws: null, conversationId: null };
       }
       const apiKey = elevenLabsConfig.apiKey;
+      console.log('[VoiceProxy] ElevenLabs API key found');
 
       // Build request payload with all parameters
       const payload: any = {
@@ -323,20 +340,23 @@ class VoiceProxyServer {
 
 
       const ws = new WSClient(signed_url);
+      console.log('[VoiceProxy] Created WebSocket to ElevenLabs, waiting for connection...');
 
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
+          console.error('[VoiceProxy] ElevenLabs WebSocket connection timeout (10s)');
           reject(new Error('WebSocket connection timeout'));
         }, 10000); // 10 second timeout
 
         ws.on('open', () => {
           clearTimeout(timeout);
+          console.log('[VoiceProxy] ElevenLabs WebSocket connected successfully');
           resolve({ ws, conversationId: conversation_id });
         });
 
         ws.on('error', (error) => {
           clearTimeout(timeout);
-          console.error('[VoiceProxy] ElevenLabs connection error:', error);
+          console.error('[VoiceProxy] ElevenLabs WebSocket error:', error);
           reject(error);
         });
       });
