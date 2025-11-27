@@ -17,6 +17,34 @@ interface CallTarget {
   nextAttemptAt: Date | null;
   externalConversationId: string | null;
   lastError: string | null;
+
+  private async cleanupStaleTargets(): Promise<void> {
+    try {
+      const staleThresholdMinutes = 10;
+      const staleDate = new Date(Date.now() - staleThresholdMinutes * 60 * 1000);
+      
+      // Find targets stuck in 'in-progress' status for too long
+      const staleTargets = await storage.getStaleInProgressTargets(staleDate);
+      
+      if (staleTargets.length > 0) {
+        console.log(`[CallDispatcher] Found ${staleTargets.length} stale in-progress targets, marking as failed`);
+        
+        for (const target of staleTargets) {
+          await storage.updateCallCampaignTarget(target.id, {
+            targetStatus: 'failed',
+            lastError: `Timeout: No status update received after ${staleThresholdMinutes} minutes`,
+          });
+          
+          // Update campaign stats
+          await storage.incrementCampaignCalls(target.campaignId, 'failed');
+        }
+      }
+    } catch (error) {
+      console.error('[CallDispatcher] Error cleaning up stale targets:', error);
+    }
+  }
+
+
 }
 
 export class CallDispatcher {
@@ -34,6 +62,9 @@ export class CallDispatcher {
       if (!config?.apiKey) {
         return;
       }
+
+      // Cleanup stale in-progress targets (older than 10 minutes)
+      await this.cleanupStaleTargets();
 
       const targets = await storage.getCallTargetsReadyForCalling();
       
