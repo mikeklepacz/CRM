@@ -1,0 +1,71 @@
+what would case the twilio/elevenlabs call to fail as soon as I answer the call (I am having it call me)
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 10 files
+Looking at your Twilio/ElevenLabs integration, there are several potential causes for calls failing immediately upon answer:
+
+Most Likely Issues
+1. WebSocket Connection Failure
+The voice proxy WebSocket endpoint might not be accepting connections. From the logs, I see the WebSocket server is initialized, but Twilio needs to successfully connect to it when the call is answered.
+
+Check:
+
+The REPLIT_DOMAINS environment variable must match your actual Replit domain exactly
+The WebSocket URL in the TwiML must be publicly accessible
+Current logs show: wss://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/media-stream
+2. ElevenLabs Connection Failure
+When the voice proxy receives the Twilio stream start, it attempts to connect to ElevenLabs. If that fails, the call will drop.
+
+In voice-proxy.ts, the code shows:
+
+// If ElevenLabs connection failed, end the call
+if (!elevenLabsWs) {
+  console.error(`[VoiceProxy] Failed to connect to ElevenLabs for ${streamSid}`);
+  await storage.createVoiceProxySession({
+    streamSid,
+    callSid,
+    agentId,
+    status: 'failed',
+  });
+  ws.close();
+  return;
+}
+This will cause immediate call termination if:
+
+ElevenLabs API key is missing/invalid
+Agent ID is invalid
+Phone number ID is missing/invalid
+ElevenLabs signed URL request fails
+3. Missing Call Session in Database
+The voice proxy uses getCallSessionWithRetry() to look up the call session by callSid. If the session isn't found after retries, the basePrompt will be empty, but the call should still proceed. However, this could cause issues.
+
+Debug Steps
+Add enhanced logging to identify the exact failure point:
+
+server/voice-proxy.ts
++23
+-3
+Add detailed failure logging, Log ElevenLabs connection attempts, Log WebSocket connection lifecycle
+Check Your Configuration
+Run this query to verify your ElevenLabs settings:
+
+echo "SELECT * FROM elevenlabs_config;" | sqlite3 .data/sqlite.db
+
+
+Run
+And verify your agent configuration:
+
+echo "SELECT agent_id, name, phone_number_id FROM elevenlabs_agents;" | sqlite3 .data/sqlite.db
+
+
+Run
+Common Fixes
+Missing Phone Number ID - Outbound calls require phoneNumberId to be configured
+Invalid Agent ID - The agent must exist in your ElevenLabs account
+API Key Issues - Verify the key has permissions for ConvAI agents
+WebSocket URL - Ensure REPLIT_DOMAINS matches your actual deployment URL
+After adding the logging, make another test call and check the console output. The detailed logs will show exactly where the connection fails.
