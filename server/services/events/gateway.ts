@@ -38,7 +38,8 @@ export type EventType =
   | 'matrix:assigned'
   | 'calls:queueChanged'
   | 'gmail:newMessage'
-  | 'calendar:eventChanged';
+  | 'calendar:eventChanged'
+  | 'call:debug';  // Real-time call debugging events for Chrome DevTools
 
 export interface AppEvent {
   type: EventType;

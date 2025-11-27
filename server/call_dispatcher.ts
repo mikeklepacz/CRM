@@ -239,14 +239,40 @@ export class CallDispatcher {
     ivrBehavior?: string;
     basePrompt?: string;
   }): Promise<{ success: boolean; message: string; conversation_id: string | null; callSid: string | null }> {
+    // Helper to mask phone numbers for security
+    const maskPhone = (phone: string) => phone.length > 4 ? `***${phone.slice(-4)}` : '****';
+    
+    // Emit debug event for call initiation (with masked phone)
+    eventGateway.emit('call:debug', {
+      stage: 'dispatcher',
+      message: 'Initiating outbound call',
+      details: { 
+        toNumber: maskPhone(params.toNumber), 
+        agentId: params.agentId,
+      },
+      level: 'info',
+    });
+
     // Check if Twilio is configured
     if (!isTwilioConfigured()) {
+      eventGateway.emit('call:debug', {
+        stage: 'dispatcher',
+        message: 'Twilio credentials not configured',
+        details: {},
+        level: 'error',
+      });
       throw new Error('Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN environment variables.');
     }
 
     // Get the Twilio phone number from ElevenLabs config
     const config = await storage.getElevenLabsConfig();
     if (!config?.twilioNumber) {
+      eventGateway.emit('call:debug', {
+        stage: 'dispatcher',
+        message: 'Twilio phone number not configured',
+        details: {},
+        level: 'error',
+      });
       throw new Error('Twilio phone number not configured in Voice settings. Please configure a phone number.');
     }
 
@@ -269,11 +295,27 @@ export class CallDispatcher {
       basePrompt: params.basePrompt || '',
     });
 
+    eventGateway.emit('call:debug', {
+      stage: 'dispatcher',
+      message: 'TwiML generated, calling Twilio',
+      details: { from: maskPhone(config.twilioNumber), to: maskPhone(params.toNumber) },
+      level: 'info',
+    });
+
     // Initiate the call using Twilio SDK
     const result = await twilioInitiateCall({
       from: config.twilioNumber,
       to: params.toNumber,
       twiml: twiml,
+    });
+
+    // Mask call SID for security
+    const maskedSid = result.callSid ? `${result.callSid.slice(0, 4)}...${result.callSid.slice(-4)}` : 'N/A';
+    eventGateway.emit('call:debug', {
+      stage: 'dispatcher',
+      message: 'Twilio call initiated',
+      details: { callSid: maskedSid, success: result.success },
+      level: 'info',
     });
 
     return {

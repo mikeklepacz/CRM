@@ -50,7 +50,8 @@ type EventType =
   | 'matrix:assigned'
   | 'calls:queueChanged'
   | 'gmail:newMessage'
-  | 'calendar:eventChanged';
+  | 'calendar:eventChanged'
+  | 'call:debug';  // Real-time call debugging events
 
 interface EventPayload {
   type: EventType;
@@ -99,6 +100,7 @@ const EVENT_TO_QUERY_KEYS: Record<EventType, string[][]> = {
     ['/api/reminders'],
     ['/api/calendar/events'],
   ],
+  'call:debug': [], // No cache invalidation - just for console logging
 };
 
 interface EventStreamProviderProps {
@@ -135,6 +137,23 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
 
       if (data.type === 'error') {
         return;
+      }
+
+      // Log call:debug events to Chrome DevTools console for debugging
+      if (data.type === 'call:debug') {
+        const payload = data.payload || {};
+        const level = payload.level || 'info';
+        const message = `[Call Debug] ${payload.stage || 'unknown'}: ${payload.message || 'No message'}`;
+        const details = payload.details || {};
+        
+        if (level === 'error') {
+          console.error(message, details);
+        } else if (level === 'warn') {
+          console.warn(message, details);
+        } else {
+          console.log(`%c${message}`, 'color: #00bcd4; font-weight: bold;', details);
+        }
+        return; // Don't set as lastEvent or invalidate queries
       }
 
       const eventPayload: EventPayload = {

@@ -2,9 +2,41 @@ import { WebSocketServer, WebSocket as WSClient } from 'ws';
 import { Server as HTTPServer } from 'http';
 import { storage } from './storage.js';
 import { audioConverter } from './audio-converter.js';
+import { eventGateway } from './services/events/gateway.js';
 import alawmulaw from 'alawmulaw';
 import wavefile from 'wavefile';
 const { WaveFile } = wavefile;
+
+// Helper to mask sensitive data in debug output
+function maskPhone(phone: string | undefined): string {
+  if (!phone) return 'N/A';
+  return phone.length > 4 ? `***${phone.slice(-4)}` : '****';
+}
+
+function maskSid(sid: string | undefined): string {
+  if (!sid) return 'N/A';
+  return sid.length > 8 ? `${sid.slice(0, 4)}...${sid.slice(-4)}` : sid;
+}
+
+// Helper to emit debug events to browser for real-time debugging
+// Note: Only emits to users with admin role via SSE (scoped by tenant in production)
+function emitDebug(stage: string, message: string, details: Record<string, any> = {}, level: 'info' | 'warn' | 'error' = 'info') {
+  // Mask sensitive fields before emitting
+  const sanitizedDetails = { ...details };
+  if (sanitizedDetails.toNumber) sanitizedDetails.toNumber = maskPhone(sanitizedDetails.toNumber);
+  if (sanitizedDetails.phoneNumber) sanitizedDetails.phoneNumber = maskPhone(sanitizedDetails.phoneNumber);
+  if (sanitizedDetails.callSid) sanitizedDetails.callSid = maskSid(sanitizedDetails.callSid);
+  if (sanitizedDetails.streamSid) sanitizedDetails.streamSid = maskSid(sanitizedDetails.streamSid);
+  
+  console.log(`[VoiceProxy Debug] ${stage}: ${message}`, sanitizedDetails);
+  eventGateway.emit('call:debug', {
+    stage,
+    message,
+    details: sanitizedDetails,
+    level,
+    timestamp: new Date().toISOString(),
+  });
+}
 
 const SAMPLE_RATE_TWILIO = 8000; // Twilio uses 8kHz mulaw
 const SAMPLE_RATE_ELEVENLABS = 16000; // ElevenLabs uses 16kHz PCM
@@ -62,30 +94,34 @@ class VoiceProxyServer {
 
     this.wss.on('connection', (ws: WSClient, req) => {
       this.connectionAttempts++;
-      console.log(`[VoiceProxy] New WebSocket connection (attempt #${this.connectionAttempts}), path: ${req.url}`);
+      emitDebug('websocket', `New WebSocket connection #${this.connectionAttempts}`, { path: req.url });
 
       ws.on('message', async (data: Buffer) => {
         try {
           const message: TwilioMediaMessage = JSON.parse(data.toString());
           if (message.event === 'start') {
-            console.log(`[VoiceProxy] Stream START event - callSid: ${message.start?.callSid}`);
+            emitDebug('twilio', `Stream START event received`, { 
+              callSid: message.start?.callSid,
+              streamSid: message.start?.streamSid,
+              hasCustomParams: !!message.start?.customParameters,
+            });
           }
           await this.handleTwilioMessage(ws, message);
-        } catch (error) {
-          console.error('[VoiceProxy] Error handling message:', error);
+        } catch (error: any) {
+          emitDebug('twilio', `Error handling Twilio message`, { error: error?.message }, 'error');
         }
       });
 
       ws.on('close', () => {
-        console.log(`[VoiceProxy] WebSocket closed`);
+        emitDebug('websocket', `Twilio WebSocket closed`);
         const session = this.findSessionByTwilioWs(ws);
         if (session) {
           this.endSession(session.streamSid);
         }
       });
 
-      ws.on('error', (error) => {
-        console.error('[VoiceProxy] Twilio WebSocket error:', error);
+      ws.on('error', (error: any) => {
+        emitDebug('websocket', `Twilio WebSocket error`, { error: error?.message }, 'error');
       });
     });
   }
@@ -174,6 +210,7 @@ class VoiceProxyServer {
     }
 
     // Connect to ElevenLabs with all parameters (including IVR behavior via basePrompt)
+    emitDebug('elevenlabs', 'Connecting to ElevenLabs...', { agentId, phoneNumberId });
     const { ws: elevenLabsWs, conversationId } = await this.connectToElevenLabs({
       agentId: agentId || '',
       phoneNumberId: phoneNumberId || '',
@@ -184,15 +221,14 @@ class VoiceProxyServer {
 
     // If ElevenLabs connection failed, end the call
     if (!elevenLabsWs) {
-      console.error(`[VoiceProxy] CRITICAL: Failed to connect to ElevenLabs for ${streamSid}`);
-      console.error(`[VoiceProxy] Failed connection details:`, {
+      emitDebug('elevenlabs', 'CRITICAL: Failed to connect to ElevenLabs', {
         streamSid,
         callSid,
         agentId,
         phoneNumberId,
         hasBasePrompt: !!basePrompt,
         basePromptLength: basePrompt?.length || 0,
-      });
+      }, 'error');
       await storage.createVoiceProxySession({
         streamSid,
         callSid,
@@ -202,6 +238,8 @@ class VoiceProxyServer {
       ws.close();
       return;
     }
+    
+    emitDebug('elevenlabs', 'Successfully connected to ElevenLabs', { conversationId });
 
     const session: SessionState = {
       streamSid,
@@ -260,7 +298,7 @@ class VoiceProxyServer {
     basePrompt?: string;
   }): Promise<{ ws: WSClient | null; conversationId: string | null }> {
     try {
-      console.log('[VoiceProxy] Attempting ElevenLabs connection with params:', {
+      emitDebug('elevenlabs', 'Attempting ElevenLabs API connection', {
         agentId: params.agentId,
         phoneNumberId: params.phoneNumberId,
         hasBasePrompt: !!params.basePrompt,
@@ -271,11 +309,11 @@ class VoiceProxyServer {
       // Fetch API key from database (consistent with rest of codebase)
       const elevenLabsConfig = await storage.getElevenLabsConfig();
       if (!elevenLabsConfig?.apiKey) {
-        console.error('[VoiceProxy] ElevenLabs API key not configured in settings');
+        emitDebug('elevenlabs', 'ElevenLabs API key not configured in settings', {}, 'error');
         return { ws: null, conversationId: null };
       }
       const apiKey = elevenLabsConfig.apiKey;
-      console.log('[VoiceProxy] ElevenLabs API key found');
+      emitDebug('elevenlabs', 'ElevenLabs API key found', { keyPrefix: apiKey.substring(0, 8) + '...' });
 
       // Build request payload with all parameters
       const payload: any = {
@@ -325,7 +363,7 @@ class VoiceProxyServer {
       // Check for HTTP errors
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[VoiceProxy] ElevenLabs API error (${response.status}):`, errorText);
+        emitDebug('elevenlabs', `ElevenLabs API error (${response.status})`, { error: errorText }, 'error');
         return { ws: null, conversationId: null };
       }
 
@@ -334,13 +372,12 @@ class VoiceProxyServer {
 
       // Validate that we got the required data
       if (!signed_url) {
-        console.error('[VoiceProxy] No signed_url in ElevenLabs response:', data);
+        emitDebug('elevenlabs', 'No signed_url in ElevenLabs response', { data }, 'error');
         return { ws: null, conversationId: null };
       }
 
-
+      emitDebug('elevenlabs', 'Got signed URL, connecting WebSocket...', { conversationId: conversation_id });
       const ws = new WSClient(signed_url);
-      console.log('[VoiceProxy] Created WebSocket to ElevenLabs, waiting for connection...');
 
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {

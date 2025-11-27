@@ -1,4 +1,5 @@
 import twilio from 'twilio';
+import { eventGateway } from './services/events/gateway';
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -39,6 +40,18 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   const wsUrl = `${wsProtocol}://${replitDomain}/media-stream`;
   
   console.log(`[Twilio] Generating TwiML with WebSocket URL: ${wsUrl}`);
+  
+  // Emit debug event so user can see the WebSocket URL in Chrome DevTools
+  eventGateway.emit('call:debug', {
+    stage: 'twiml',
+    message: 'Generated TwiML with WebSocket URL',
+    details: { 
+      wsUrl, 
+      replitDomain,
+      isDevDomain: replitDomain.includes('kirk.replit.dev'),
+    },
+    level: replitDomain.includes('kirk.replit.dev') ? 'warn' : 'info',
+  });
   
   // Connect to our WebSocket proxy
   const connect = response.connect();
