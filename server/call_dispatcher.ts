@@ -25,18 +25,29 @@ export class CallDispatcher {
 
   // Process immediately - marks for immediate run (will be picked up when current run finishes)
   async processImmediately(): Promise<void> {
+    const startTime = Date.now();
+    console.log('[CallDispatcher][DEBUG] ========== PROCESS IMMEDIATELY CALLED ==========');
+    console.log('[CallDispatcher][DEBUG] Timestamp:', new Date().toISOString());
+    console.log('[CallDispatcher][DEBUG] isRunning:', this.isRunning);
+    console.log('[CallDispatcher][DEBUG] pendingImmediateRun:', this.pendingImmediateRun);
+    
     // If already running, mark that we need another run after this one
     if (this.isRunning) {
       this.pendingImmediateRun = true;
-      console.log('[CallDispatcher] Dispatcher busy, will process immediately after current run');
+      console.log('[CallDispatcher][DEBUG] Dispatcher busy, setting pendingImmediateRun=true');
       return;
     }
     
     // Not running, process now
+    console.log('[CallDispatcher][DEBUG] Dispatcher idle, processing now...');
     await this.processQueuedCalls();
+    console.log(`[CallDispatcher][DEBUG] processImmediately completed in ${Date.now() - startTime}ms`);
   }
 
   private async cleanupStaleTargets(): Promise<void> {
+    const cleanupStart = Date.now();
+    console.log('[CallDispatcher][DEBUG] Starting stale target cleanup at', new Date().toISOString());
+    
     try {
       const staleThresholdMinutes = 10;
       const staleDate = new Date(Date.now() - staleThresholdMinutes * 60 * 1000);
@@ -45,9 +56,10 @@ export class CallDispatcher {
       const staleTargets = await storage.getStaleInProgressTargets(staleDate);
       
       if (staleTargets.length > 0) {
-        console.log(`[CallDispatcher] Found ${staleTargets.length} stale in-progress targets, marking as failed`);
+        console.log(`[CallDispatcher][DEBUG] Found ${staleTargets.length} stale in-progress targets, marking as failed`);
         
         for (const target of staleTargets) {
+          console.log(`[CallDispatcher][DEBUG] Marking stale target as failed: targetId=${target.id}, campaignId=${target.campaignId}, callSessionId=${target.callSessionId || 'none'}`);
           await storage.updateCallCampaignTarget(target.id, {
             targetStatus: 'failed',
             lastError: `Timeout: No status update received after ${staleThresholdMinutes} minutes`,
@@ -56,35 +68,53 @@ export class CallDispatcher {
           // Update campaign stats
           await storage.incrementCampaignCalls(target.campaignId, 'failed');
         }
+      } else {
+        console.log('[CallDispatcher][DEBUG] No stale targets found');
       }
+      
+      console.log(`[CallDispatcher][DEBUG] Stale target cleanup completed in ${Date.now() - cleanupStart}ms`);
     } catch (error) {
-      console.error('[CallDispatcher] Error cleaning up stale targets:', error);
+      console.error('[CallDispatcher][DEBUG] *** ERROR cleaning up stale targets ***');
+      console.error('[CallDispatcher][DEBUG] Error:', error);
     }
   }
 
   async processQueuedCalls(): Promise<void> {
+    const cycleStart = Date.now();
+    console.log('[CallDispatcher][DEBUG] ========== PROCESS QUEUED CALLS ==========');
+    console.log('[CallDispatcher][DEBUG] Cycle start:', new Date().toISOString());
+    
     if (this.isRunning) {
+      console.log('[CallDispatcher][DEBUG] Already running, skipping');
       return;
     }
 
     try {
       this.isRunning = true;
+      console.log('[CallDispatcher][DEBUG] Set isRunning=true');
 
       const config = await storage.getElevenLabsConfig();
       if (!config?.apiKey) {
+        console.log('[CallDispatcher][DEBUG] No API key configured, skipping');
         return;
       }
+      console.log('[CallDispatcher][DEBUG] API key found, twilioNumber:', config.twilioNumber ? 'configured' : 'NOT SET');
 
       // Cleanup stale in-progress targets (older than 10 minutes)
       await this.cleanupStaleTargets();
 
+      console.log('[CallDispatcher][DEBUG] Fetching targets ready for calling...');
       const targets = await storage.getCallTargetsReadyForCalling();
+      console.log(`[CallDispatcher][DEBUG] Found ${targets.length} targets ready for calling`);
       
       if (targets.length === 0) {
+        console.log('[CallDispatcher][DEBUG] No targets to process');
         return;
       }
 
-      for (const target of targets) {
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        console.log(`[CallDispatcher][DEBUG] Processing target ${i + 1}/${targets.length}: ${target.id}`);
         await this.processCallTarget(target, config.apiKey);
       }
       
@@ -93,19 +123,23 @@ export class CallDispatcher {
         processed: targets.length,
         timestamp: new Date().toISOString(),
       });
+      
+      console.log(`[CallDispatcher][DEBUG] Cycle completed in ${Date.now() - cycleStart}ms`);
     } catch (error) {
-      console.error('[CallDispatcher] Error in processing cycle:', error);
+      console.error('[CallDispatcher][DEBUG] *** ERROR IN PROCESSING CYCLE ***');
+      console.error('[CallDispatcher][DEBUG] Error:', error);
     } finally {
       this.isRunning = false;
+      console.log('[CallDispatcher][DEBUG] Set isRunning=false');
       
       // Check if an immediate run was requested while we were processing
       if (this.pendingImmediateRun) {
         this.pendingImmediateRun = false;
-        console.log('[CallDispatcher] Processing pending immediate run');
+        console.log('[CallDispatcher][DEBUG] pendingImmediateRun was true, scheduling another run');
         // Use setImmediate to avoid potential stack overflow with recursive calls
         setImmediate(() => {
           this.processQueuedCalls().catch(err => {
-            console.error('[CallDispatcher] Error in pending immediate run:', err);
+            console.error('[CallDispatcher][DEBUG] Error in pending immediate run:', err);
           });
         });
       }
@@ -113,33 +147,48 @@ export class CallDispatcher {
   }
 
   private async processCallTarget(target: any, apiKey: string): Promise<void> {
+    const targetStart = Date.now();
+    console.log('[CallDispatcher][DEBUG] ========== PROCESS CALL TARGET ==========');
+    console.log('[CallDispatcher][DEBUG] Target ID:', target.id);
+    console.log('[CallDispatcher][DEBUG] Client ID:', target.clientId);
+    console.log('[CallDispatcher][DEBUG] Campaign ID:', target.campaignId);
+    console.log('[CallDispatcher][DEBUG] Attempt count:', target.attemptCount);
+    
     try {
+      console.log('[CallDispatcher][DEBUG] Updating target status to in-progress...');
       await storage.updateCallCampaignTarget(target.id, {
         targetStatus: 'in-progress',
         attemptCount: target.attemptCount + 1,
       });
 
+      console.log('[CallDispatcher][DEBUG] Fetching client...');
       const client = await storage.getClient(target.clientId);
       if (!client) {
         throw new Error(`Client not found: ${target.clientId}`);
       }
+      console.log('[CallDispatcher][DEBUG] Client found:', client.uniqueIdentifier);
 
       const clientData = client.data as any;
       const phoneNumber = clientData?.Phone || clientData?.phone;
+      console.log('[CallDispatcher][DEBUG] Phone number:', phoneNumber ? `***${phoneNumber.slice(-4)}` : 'NOT FOUND');
       
       if (!phoneNumber) {
         throw new Error(`No phone number found for client ${target.clientId}`);
       }
 
+      console.log('[CallDispatcher][DEBUG] Fetching campaign...');
       const campaign = await storage.getCallCampaign(target.campaignId);
       if (!campaign) {
         throw new Error(`Campaign not found: ${target.campaignId}`);
       }
+      console.log('[CallDispatcher][DEBUG] Campaign found:', campaign.name, 'agentId:', campaign.agentId);
 
+      console.log('[CallDispatcher][DEBUG] Fetching agent...');
       const agent = await storage.getElevenLabsAgent(campaign.agentId);
       if (!agent) {
         throw new Error(`Agent not found: ${campaign.agentId}`);
       }
+      console.log('[CallDispatcher][DEBUG] Agent found:', agent.name, 'agentId:', agent.agentId);
 
       // Fetch agent's current prompt from ElevenLabs API to append IVR instructions
       let agentPrompt = '';
@@ -192,6 +241,7 @@ export class CallDispatcher {
       // Create call session BEFORE initiating Twilio call
       // This ensures voice proxy can find it immediately when stream starts
       // Store prompt data in storeSnapshot since metadata field doesn't exist in schema
+      console.log('[CallDispatcher][DEBUG] Creating call session...');
       const callSession = await storage.createCallSession({
         callSid: null, // Will be updated after Twilio call creation
         agentId: agent.agentId,
@@ -207,8 +257,11 @@ export class CallDispatcher {
           link: client.uniqueIdentifier,
         } as Record<string, any>,
       });
+      console.log('[CallDispatcher][DEBUG] Call session created:', callSession.id);
 
       try {
+        console.log('[CallDispatcher][DEBUG] Initiating outbound call...');
+        const callStart = Date.now();
         const result = await this.initiateOutboundCall({
           apiKey,
           agentId: agent.agentId,
@@ -226,30 +279,42 @@ export class CallDispatcher {
           ivrBehavior: ivrBehaviorSetting,
           basePrompt: combinedPrompt,
         });
+        console.log(`[CallDispatcher][DEBUG] Outbound call initiated in ${Date.now() - callStart}ms`);
+        console.log('[CallDispatcher][DEBUG] Call SID:', result.callSid);
+        console.log('[CallDispatcher][DEBUG] Success:', result.success);
 
         // Update call session with Twilio SID
+        console.log('[CallDispatcher][DEBUG] Updating call session with callSid...');
         await storage.updateCallSession(callSession.id, {
           callSid: result.callSid,
         });
 
+        console.log('[CallDispatcher][DEBUG] Updating campaign target...');
         await storage.updateCallCampaignTarget(target.id, {
           externalConversationId: result.callSid || null,
           callSessionId: callSession.id,
           lastError: null,
         });
+        
+        console.log(`[CallDispatcher][DEBUG] Target ${target.id} processed successfully in ${Date.now() - targetStart}ms`);
       } catch (twilioError: any) {
         // Clean up orphaned call session if Twilio call creation fails
-        console.error(`[CallDispatcher] Twilio call failed for target ${target.id}, cleaning up orphaned session:`, twilioError);
+        console.error(`[CallDispatcher][DEBUG] *** TWILIO CALL FAILED ***`);
+        console.error(`[CallDispatcher][DEBUG] Target: ${target.id}`);
+        console.error(`[CallDispatcher][DEBUG] Error:`, twilioError);
+        console.error(`[CallDispatcher][DEBUG] Cleaning up orphaned session: ${callSession.id}`);
         try {
           await storage.deleteCallSession(callSession.id);
-          console.log(`[CallDispatcher] Deleted orphaned call session ${callSession.id}`);
+          console.log(`[CallDispatcher][DEBUG] Deleted orphaned call session ${callSession.id}`);
         } catch (cleanupError) {
-          console.error(`[CallDispatcher] Failed to delete orphaned session ${callSession.id}:`, cleanupError);
+          console.error(`[CallDispatcher][DEBUG] Failed to delete orphaned session ${callSession.id}:`, cleanupError);
         }
         throw twilioError; // Re-throw to trigger handleCallFailure
       }
     } catch (error: any) {
-      console.error(`[CallDispatcher] Error processing call target ${target.id}:`, error);
+      console.error(`[CallDispatcher][DEBUG] *** PROCESS CALL TARGET FAILED ***`);
+      console.error(`[CallDispatcher][DEBUG] Target: ${target.id}`);
+      console.error(`[CallDispatcher][DEBUG] Error:`, error);
       await this.handleCallFailure(target, error);
     }
   }

@@ -1418,8 +1418,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Webhook receiver for ElevenLabs post-call transcription
   app.post('/api/elevenlabs/webhook', async (req: any, res) => {
+    const receiveTime = Date.now();
+    
     try {
       const payload = req.body;
+
+      // ========== COMPREHENSIVE DEBUG LOGGING ==========
+      console.log('[ElevenLabs Webhook][DEBUG] ========== INCOMING WEBHOOK ==========');
+      console.log('[ElevenLabs Webhook][DEBUG] Timestamp:', new Date().toISOString());
+      console.log('[ElevenLabs Webhook][DEBUG] Webhook type:', payload.type);
+      console.log('[ElevenLabs Webhook][DEBUG] Data keys:', Object.keys(payload.data || {}));
+      if (payload.data?.conversation_id) {
+        console.log('[ElevenLabs Webhook][DEBUG] Conversation ID:', payload.data.conversation_id);
+      }
+      if (payload.data?.metadata) {
+        console.log('[ElevenLabs Webhook][DEBUG] Metadata:', JSON.stringify(payload.data.metadata, null, 2));
+      }
+      console.log('[ElevenLabs Webhook][DEBUG] =====================');
 
       // SECURITY: Validate webhook signature
       const config = await storage.getElevenLabsConfig();
@@ -1428,15 +1443,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const rawBody = (req as any).rawBody;
         
         if (!rawBody) {
-          console.error('Raw body not available for signature validation');
+          console.error('[ElevenLabs Webhook][DEBUG] Raw body not available for signature validation');
           return res.status(500).json({ error: 'Server configuration error' });
         }
         
         const isValid = validateElevenLabsSignature(signature, rawBody, config.webhookSecret);
         if (!isValid) {
-          console.error('Invalid webhook signature - rejecting request');
+          console.error('[ElevenLabs Webhook][DEBUG] *** SIGNATURE VALIDATION FAILED ***');
           return res.status(401).json({ error: 'Invalid signature' });
         }
+        console.log('[ElevenLabs Webhook][DEBUG] Signature validated OK');
       }
 
       // Handle different webhook types
@@ -1444,24 +1460,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const webhookType = payload.type;
       
       if (webhookType === 'call_initiation_failure') {
+        console.log('[ElevenLabs Webhook][DEBUG] *** CALL INITIATION FAILURE ***');
         // Handle call initiation failure (e.g., invalid phone number, network error)
         const data = payload.data;
         const conversationId = data.conversation_id;
         const clientData = data.conversation_initiation_client_data || {};
         
+        console.log('[ElevenLabs Webhook][DEBUG] Failure details:', JSON.stringify(data, null, 2));
+        
         // Update session status to failed if it exists
         const session = await storage.getCallSessionByConversationId(conversationId);
         if (session) {
+          console.log('[ElevenLabs Webhook][DEBUG] Found session, marking as failed:', session.id);
           await storage.updateCallSessionByConversationId(conversationId, {
             status: 'failed',
             endedAt: new Date(),
           });
+        } else {
+          console.log('[ElevenLabs Webhook][DEBUG] No session found for conversation:', conversationId);
         }
         
         // Update campaign target if applicable
         if (clientData.campaignTargetId) {
           const target = await storage.getCallCampaignTarget(clientData.campaignTargetId);
           if (target && target.targetStatus === 'in-progress') {
+            console.log('[ElevenLabs Webhook][DEBUG] Marking campaign target as failed:', clientData.campaignTargetId);
             await storage.updateCallCampaignTarget(clientData.campaignTargetId, {
               targetStatus: 'failed',
             });
@@ -1469,18 +1492,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
+        console.log(`[ElevenLabs Webhook][DEBUG] Processed in ${Date.now() - receiveTime}ms`);
         return res.status(200).json({ status: 'processed', type: 'call_initiation_failure' });
       }
       
       if (webhookType === 'post_call_audio') {
+        console.log('[ElevenLabs Webhook][DEBUG] Post-call audio notification');
         // Early notification that call ended (before transcription)
         // We can update status but won't have transcript/analysis yet
         const data = payload.data;
         const conversationId = data.conversation_id;
         const metadata = data.metadata || {};
         
+        console.log('[ElevenLabs Webhook][DEBUG] Call duration:', metadata.call_duration_secs, 'seconds');
+        console.log('[ElevenLabs Webhook][DEBUG] Cost:', metadata.cost);
+        
         const session = await storage.getCallSessionByConversationId(conversationId);
         if (session) {
+          console.log('[ElevenLabs Webhook][DEBUG] Found session, updating to processing:', session.id);
           const endedAt = (metadata.start_time_unix_secs && metadata.call_duration_secs)
             ? new Date((metadata.start_time_unix_secs + metadata.call_duration_secs) * 1000)
             : new Date();
@@ -1491,14 +1520,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             costCredits: metadata.cost || null,
             endedAt,
           });
+        } else {
+          console.log('[ElevenLabs Webhook][DEBUG] No session found for conversation:', conversationId);
         }
         
+        console.log(`[ElevenLabs Webhook][DEBUG] Processed in ${Date.now() - receiveTime}ms`);
         return res.status(200).json({ status: 'processed', type: 'post_call_audio' });
       }
       
       if (webhookType !== 'post_call_transcription') {
+        console.log('[ElevenLabs Webhook][DEBUG] Unknown webhook type, ignoring:', webhookType);
         return res.status(200).json({ status: 'ignored', reason: `Unknown webhook type: ${webhookType}` });
       }
+      
+      console.log('[ElevenLabs Webhook][DEBUG] Processing post_call_transcription...');
       
       // Continue processing post_call_transcription webhook...
 
@@ -2860,6 +2895,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         healthy: false,
         error: error.message,
       });
+    }
+  });
+
+  // Debug endpoint: Get full call trace for debugging
+  app.get('/api/debug/call-trace/:callSid', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { callSid } = req.params;
+      console.log('[Debug][DEBUG] Fetching call trace for:', callSid);
+      
+      // Get session by callSid
+      const session = await storage.getCallSessionByCallSid(callSid);
+      
+      // Get call events
+      let events: any[] = [];
+      if (session?.conversationId) {
+        events = await storage.getCallEvents(session.conversationId);
+      }
+      
+      // Try to find campaign target using conversationId
+      let campaignTarget = null;
+      if (session?.conversationId) {
+        const targets = await storage.getCallTargetsBySession(session.conversationId);
+        if (targets.length > 0) {
+          campaignTarget = targets[0];
+        }
+      }
+      
+      // Get Fly.io proxy status
+      let flyioStatus = null;
+      try {
+        const flyResponse = await fetch('https://hemp-voice-proxy.fly.dev/sessions', {
+          headers: { 'Authorization': `Bearer ${process.env.FLY_PROXY_SECRET || 'hemp-voice-proxy-secret-2024'}` }
+        });
+        if (flyResponse.ok) {
+          flyioStatus = await flyResponse.json();
+        }
+      } catch (e) {
+        flyioStatus = { error: 'Failed to fetch Fly.io status' };
+      }
+      
+      res.json({
+        callSid,
+        session: session || null,
+        events,
+        campaignTarget,
+        flyioProxySessions: flyioStatus,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error('[Debug][DEBUG] Error fetching call trace:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 

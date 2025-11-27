@@ -1433,9 +1433,29 @@ export default function CallManager() {
   // Batch call mutation
   const batchCallMutation = useMutation({
     mutationFn: async (data: { agent_record_id: string; agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean }) => {
-      return apiRequest('POST', '/api/elevenlabs/batch-call', data);
+      console.log('[CallManager][DEBUG] ========== BATCH CALL INITIATED ==========');
+      console.log('[CallManager][DEBUG] Timestamp:', new Date().toISOString());
+      console.log('[CallManager][DEBUG] Agent ID:', data.agent_id);
+      console.log('[CallManager][DEBUG] Store count:', data.stores.length);
+      console.log('[CallManager][DEBUG] Scenario:', data.scenario);
+      console.log('[CallManager][DEBUG] Scheduled for:', data.scheduled_for || 'immediate');
+      console.log('[CallManager][DEBUG] Auto schedule:', data.auto_schedule);
+      
+      const startTime = Date.now();
+      try {
+        const result = await apiRequest('POST', '/api/elevenlabs/batch-call', data);
+        console.log(`[CallManager][DEBUG] API response in ${Date.now() - startTime}ms`);
+        console.log('[CallManager][DEBUG] Response:', result);
+        return result;
+      } catch (error: any) {
+        console.error('[CallManager][DEBUG] *** API ERROR ***');
+        console.error('[CallManager][DEBUG] Error:', error);
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('[CallManager][DEBUG] ========== BATCH CALL SUCCESS ==========');
+      console.log('[CallManager][DEBUG] Response data:', data);
       toast({
         title: "Calls Queued",
         description: `${selectedStores.size} calls have been queued successfully.`,
@@ -1445,6 +1465,8 @@ export default function CallManager() {
       refetchStores();
     },
     onError: (error: any) => {
+      console.error('[CallManager][DEBUG] ========== BATCH CALL ERROR ==========');
+      console.error('[CallManager][DEBUG] Error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to queue calls",

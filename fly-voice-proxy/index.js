@@ -144,16 +144,24 @@ function resample16to8(input) {
 
 // Connect to ElevenLabs
 async function connectToElevenLabs(params) {
+  const connectStart = Date.now();
   const { agentId, phoneNumberId, dynamicVariables, clientData, basePrompt } = params;
 
+  console.log('[VoiceProxy][DEBUG] ========== CONNECTING TO ELEVENLABS ==========');
+  console.log('[VoiceProxy][DEBUG] Timestamp:', new Date().toISOString());
+  console.log('[VoiceProxy][DEBUG] Agent ID:', agentId);
+  console.log('[VoiceProxy][DEBUG] Phone Number ID:', phoneNumberId);
+  console.log('[VoiceProxy][DEBUG] Has dynamic variables:', !!dynamicVariables);
+  console.log('[VoiceProxy][DEBUG] Has client data:', !!clientData);
+  console.log('[VoiceProxy][DEBUG] Has base prompt:', !!basePrompt);
+
   if (!ELEVENLABS_API_KEY) {
-    console.error('[VoiceProxy] ELEVENLABS_API_KEY not configured');
+    console.error('[VoiceProxy][DEBUG] *** ELEVENLABS_API_KEY NOT CONFIGURED ***');
     return { ws: null, conversationId: null };
   }
+  console.log('[VoiceProxy][DEBUG] API key configured: yes (length:', ELEVENLABS_API_KEY.length, ')');
 
   try {
-    console.log('[VoiceProxy] Connecting to ElevenLabs agent:', agentId);
-
     const payload = { agent_id: agentId };
 
     if (phoneNumberId) {
@@ -176,6 +184,10 @@ async function connectToElevenLabs(params) {
       };
     }
 
+    console.log('[VoiceProxy][DEBUG] Payload keys:', Object.keys(payload));
+    console.log('[VoiceProxy][DEBUG] Calling ElevenLabs get-signed-url API...');
+    
+    const apiStart = Date.now();
     const response = await fetch(
       `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`,
       {
@@ -187,43 +199,58 @@ async function connectToElevenLabs(params) {
         body: JSON.stringify(payload),
       }
     );
+    console.log(`[VoiceProxy][DEBUG] API response in ${Date.now() - apiStart}ms`);
+    console.log('[VoiceProxy][DEBUG] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[VoiceProxy] ElevenLabs API error:', response.status, errorText);
+      console.error('[VoiceProxy][DEBUG] *** ELEVENLABS API ERROR ***');
+      console.error('[VoiceProxy][DEBUG] Status:', response.status);
+      console.error('[VoiceProxy][DEBUG] Response:', errorText);
       return { ws: null, conversationId: null };
     }
 
     const data = await response.json();
+    console.log('[VoiceProxy][DEBUG] API response data keys:', Object.keys(data));
+    
     const { signed_url, conversation_id } = data;
 
     if (!signed_url) {
-      console.error('[VoiceProxy] No signed_url in response');
+      console.error('[VoiceProxy][DEBUG] *** NO SIGNED_URL IN RESPONSE ***');
+      console.error('[VoiceProxy][DEBUG] Full response:', JSON.stringify(data, null, 2));
       return { ws: null, conversationId: null };
     }
 
-    console.log('[VoiceProxy] Got signed URL, connecting WebSocket...');
+    console.log('[VoiceProxy][DEBUG] Got signed URL (length:', signed_url.length, ')');
+    console.log('[VoiceProxy][DEBUG] Conversation ID:', conversation_id);
+    console.log('[VoiceProxy][DEBUG] Connecting ElevenLabs WebSocket...');
+    
     const ws = new WebSocket(signed_url);
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
+        console.error('[VoiceProxy][DEBUG] *** ELEVENLABS WEBSOCKET TIMEOUT (10s) ***');
         reject(new Error('WebSocket connection timeout'));
       }, 10000);
 
       ws.on('open', () => {
         clearTimeout(timeout);
-        console.log('[VoiceProxy] ElevenLabs WebSocket connected');
+        console.log('[VoiceProxy][DEBUG] ========== ELEVENLABS WEBSOCKET CONNECTED ==========');
+        console.log(`[VoiceProxy][DEBUG] Total connection time: ${Date.now() - connectStart}ms`);
         resolve({ ws, conversationId: conversation_id });
       });
 
       ws.on('error', (error) => {
         clearTimeout(timeout);
-        console.error('[VoiceProxy] ElevenLabs WebSocket error:', error);
+        console.error('[VoiceProxy][DEBUG] *** ELEVENLABS WEBSOCKET ERROR ***');
+        console.error('[VoiceProxy][DEBUG] Error:', error);
         reject(error);
       });
     });
   } catch (error) {
-    console.error('[VoiceProxy] Error connecting to ElevenLabs:', error);
+    console.error('[VoiceProxy][DEBUG] *** ELEVENLABS CONNECTION EXCEPTION ***');
+    console.error('[VoiceProxy][DEBUG] Error:', error);
+    console.error('[VoiceProxy][DEBUG] Stack:', error.stack);
     return { ws: null, conversationId: null };
   }
 }
@@ -396,20 +423,57 @@ fastify.all('/twiml', async (request, reply) => {
   reply.type('text/xml').send(twiml);
 });
 
+// Debug: List active sessions
+fastify.get('/sessions', async (request, reply) => {
+  const sessionList = [];
+  for (const [streamSid, session] of sessions.entries()) {
+    sessionList.push({
+      streamSid,
+      callSid: session.callSid,
+      agentId: session.agentId,
+      conversationId: session.conversationId,
+      isActive: session.isActive,
+      backgroundAudioPosition: session.backgroundAudioPosition,
+      outputBufferSize: session.outputBuffer?.length || 0,
+      elevenLabsConnected: session.elevenLabsWs?.readyState === WebSocket.OPEN,
+    });
+  }
+  return { 
+    activeSessions: sessions.size,
+    sessions: sessionList,
+    backgroundAudioLoaded: !!backgroundAudioBuffer,
+    volumeDb: backgroundVolumeDb,
+  };
+});
+
 // WebSocket endpoint for Twilio media streams
 fastify.register(async function (fastify) {
   fastify.get('/media-stream', { websocket: true }, (ws, req) => {
-    console.log('[VoiceProxy] Twilio WebSocket connected');
+    const connectTime = Date.now();
+    console.log('[VoiceProxy][DEBUG] ========== TWILIO WEBSOCKET CONNECTED ==========');
+    console.log('[VoiceProxy][DEBUG] Connection time:', new Date().toISOString());
+    console.log('[VoiceProxy][DEBUG] Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[VoiceProxy][DEBUG] Request URL:', req.url);
 
     let session = null;
+    let messageCount = 0;
+    let firstMediaReceived = false;
 
     ws.on('message', async (data) => {
       try {
         const message = JSON.parse(data.toString());
+        messageCount++;
+
+        // Log every message type for debugging
+        if (message.event !== 'media') {
+          console.log(`[VoiceProxy][DEBUG] Message #${messageCount} event: ${message.event}`);
+        }
 
         switch (message.event) {
           case 'start':
-            console.log('[VoiceProxy] Stream started:', message.start?.streamSid);
+            console.log('[VoiceProxy][DEBUG] ========== STREAM START EVENT ==========');
+            console.log('[VoiceProxy][DEBUG] Stream started:', message.start?.streamSid);
+            console.log('[VoiceProxy][DEBUG] Full start message:', JSON.stringify(message.start, null, 2));
             
             const { streamSid, callSid, customParameters } = message.start || {};
             
@@ -455,17 +519,34 @@ fastify.register(async function (fastify) {
             sessions.set(streamSid, session);
 
             // Handle ElevenLabs messages
+            let elevenLabsMessageCount = 0;
             elevenLabsWs.on('message', (data) => {
+              elevenLabsMessageCount++;
+              if (elevenLabsMessageCount <= 5 || elevenLabsMessageCount % 100 === 0) {
+                try {
+                  const msg = JSON.parse(data.toString());
+                  console.log(`[VoiceProxy][DEBUG] ElevenLabs message #${elevenLabsMessageCount} type: ${msg.type}`);
+                } catch (e) {}
+              }
               handleElevenLabsMessage(session, data);
             });
 
-            elevenLabsWs.on('close', () => {
-              console.log('[VoiceProxy] ElevenLabs disconnected');
+            elevenLabsWs.on('close', (code, reason) => {
+              console.log('[VoiceProxy][DEBUG] ========== ELEVENLABS DISCONNECTED ==========');
+              console.log('[VoiceProxy][DEBUG] Timestamp:', new Date().toISOString());
+              console.log('[VoiceProxy][DEBUG] Correlation: streamSid=' + session.streamSid + ', callSid=' + session.callSid + ', conversationId=' + session.conversationId);
+              console.log('[VoiceProxy][DEBUG] Close code:', code);
+              console.log('[VoiceProxy][DEBUG] Close reason:', reason?.toString() || 'none');
+              console.log('[VoiceProxy][DEBUG] Messages received:', elevenLabsMessageCount);
+              console.log('[VoiceProxy][DEBUG] Connection duration:', Date.now() - connectTime, 'ms');
               session.isActive = false;
             });
 
             elevenLabsWs.on('error', (error) => {
-              console.error('[VoiceProxy] ElevenLabs error:', error);
+              console.error('[VoiceProxy][DEBUG] *** ELEVENLABS WEBSOCKET ERROR ***');
+              console.error('[VoiceProxy][DEBUG] Timestamp:', new Date().toISOString());
+              console.error('[VoiceProxy][DEBUG] Correlation: streamSid=' + session?.streamSid + ', callSid=' + session?.callSid + ', conversationId=' + session?.conversationId);
+              console.error('[VoiceProxy][DEBUG] Error:', error);
             });
 
             // Start mixing loop
@@ -493,6 +574,14 @@ fastify.register(async function (fastify) {
           case 'media':
             if (!session || !session.isActive) return;
 
+            // Log first media frame
+            if (!firstMediaReceived) {
+              firstMediaReceived = true;
+              console.log('[VoiceProxy][DEBUG] ========== FIRST MEDIA FRAME RECEIVED ==========');
+              console.log('[VoiceProxy][DEBUG] Time since connect:', Date.now() - connectTime, 'ms');
+              console.log('[VoiceProxy][DEBUG] Payload length:', message.media?.payload?.length);
+            }
+
             // Decode mulaw to PCM16
             const mulawData = Buffer.from(message.media.payload, 'base64');
             const pcm8k = alawmulaw.mulaw.decode(mulawData);
@@ -504,17 +593,26 @@ fastify.register(async function (fastify) {
               session.elevenLabsWs.send(JSON.stringify({
                 user_audio_chunk: base64Audio,
               }));
+            } else if (messageCount % 50 === 0) {
+              console.log('[VoiceProxy][DEBUG] ElevenLabs WS not open, state:', session.elevenLabsWs?.readyState);
             }
             break;
 
           case 'stop':
-            console.log('[VoiceProxy] Stream stopped:', message.streamSid);
+            console.log('[VoiceProxy][DEBUG] ========== STREAM STOP EVENT ==========');
+            console.log('[VoiceProxy][DEBUG] Stream SID:', message.streamSid);
+            console.log('[VoiceProxy][DEBUG] Time since connect:', Date.now() - connectTime, 'ms');
+            console.log('[VoiceProxy][DEBUG] Total messages processed:', messageCount);
+            console.log('[VoiceProxy][DEBUG] First media received:', firstMediaReceived);
             if (session) {
+              console.log('[VoiceProxy][DEBUG] Session was active:', session.isActive);
+              console.log('[VoiceProxy][DEBUG] Conversation ID:', session.conversationId);
               session.isActive = false;
               if (session.mixInterval) {
                 clearInterval(session.mixInterval);
               }
               if (session.elevenLabsWs) {
+                console.log('[VoiceProxy][DEBUG] Closing ElevenLabs WebSocket');
                 session.elevenLabsWs.close();
               }
               sessions.delete(session.streamSid);
@@ -526,14 +624,26 @@ fastify.register(async function (fastify) {
       }
     });
 
-    ws.on('close', () => {
-      console.log('[VoiceProxy] Twilio WebSocket closed');
+    ws.on('close', (code, reason) => {
+      console.log('[VoiceProxy][DEBUG] ========== TWILIO WEBSOCKET CLOSED ==========');
+      console.log('[VoiceProxy][DEBUG] Timestamp:', new Date().toISOString());
+      console.log('[VoiceProxy][DEBUG] Correlation: streamSid=' + (session?.streamSid || 'N/A') + ', callSid=' + (session?.callSid || 'N/A') + ', conversationId=' + (session?.conversationId || 'N/A'));
+      console.log('[VoiceProxy][DEBUG] Close code:', code);
+      console.log('[VoiceProxy][DEBUG] Close reason:', reason?.toString() || 'none');
+      console.log('[VoiceProxy][DEBUG] Total messages received:', messageCount);
+      console.log('[VoiceProxy][DEBUG] First media received:', firstMediaReceived);
+      console.log('[VoiceProxy][DEBUG] Session existed:', !!session);
+      console.log('[VoiceProxy][DEBUG] Connection duration:', Date.now() - connectTime, 'ms');
+      
       if (session) {
+        console.log('[VoiceProxy][DEBUG] Cleaning up session:', session.streamSid);
+        console.log('[VoiceProxy][DEBUG] Session was active:', session.isActive);
         session.isActive = false;
         if (session.mixInterval) {
           clearInterval(session.mixInterval);
         }
         if (session.elevenLabsWs) {
+          console.log('[VoiceProxy][DEBUG] Closing ElevenLabs WebSocket from Twilio close handler');
           session.elevenLabsWs.close();
         }
         sessions.delete(session.streamSid);
@@ -541,7 +651,10 @@ fastify.register(async function (fastify) {
     });
 
     ws.on('error', (error) => {
-      console.error('[VoiceProxy] Twilio WebSocket error:', error);
+      console.error('[VoiceProxy][DEBUG] *** TWILIO WEBSOCKET ERROR ***');
+      console.error('[VoiceProxy][DEBUG] Timestamp:', new Date().toISOString());
+      console.error('[VoiceProxy][DEBUG] Correlation: streamSid=' + (session?.streamSid || 'N/A') + ', callSid=' + (session?.callSid || 'N/A'));
+      console.error('[VoiceProxy][DEBUG] Error:', error);
     });
   });
 });
