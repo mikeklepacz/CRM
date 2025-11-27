@@ -1,0 +1,6 @@
+<Response>
+  <Play loop="0">https://hempwick.eu/wp-content/uploads/2025/11/Low-flame-high-blessing.mp3</Play>
+  <Play loop="0">https://hempwick.eu/wp-content/uploads/2025/11/Hemp-Wick-Hits-the-Spot.mp3</Play>
+  <Play loop="0">https://hempwick.eu/wp-content/uploads/2025/11/Wick-Lit.mp3</Play>
+  <Play loop="0">https://hempwick.eu/wp-content/uploads/2025/11/Butane-Buds.mp3</Play>
+</Response>

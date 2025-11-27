@@ -10,7 +10,6 @@ const SAMPLE_RATE_TWILIO = 8000; // Twilio uses 8kHz mulaw
 const SAMPLE_RATE_ELEVENLABS = 16000; // ElevenLabs uses 16kHz PCM
 const FRAME_SIZE_MS = 20;
 const JITTER_BUFFER_MS = 50;
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 
 interface TwilioMediaMessage {
   event: string;
@@ -253,10 +252,13 @@ class VoiceProxyServer {
     basePrompt?: string;
   }): Promise<{ ws: WSClient | null; conversationId: string | null }> {
     try {
-      if (!ELEVENLABS_API_KEY) {
-        console.error('[VoiceProxy] ElevenLabs API key not configured');
+      // Fetch API key from database (consistent with rest of codebase)
+      const elevenLabsConfig = await storage.getElevenLabsConfig();
+      if (!elevenLabsConfig?.apiKey) {
+        console.error('[VoiceProxy] ElevenLabs API key not configured in settings');
         return { ws: null, conversationId: null };
       }
+      const apiKey = elevenLabsConfig.apiKey;
 
       // Build request payload with all parameters
       const payload: any = {
@@ -296,7 +298,7 @@ class VoiceProxyServer {
         {
           method: 'POST',
           headers: {
-            'xi-api-key': ELEVENLABS_API_KEY,
+            'xi-api-key': apiKey,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(payload),
