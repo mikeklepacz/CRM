@@ -460,9 +460,43 @@ fastify.get('/sessions', async (request, reply) => {
   };
 });
 
+// Simple WebSocket test endpoint - for debugging connectivity
+fastify.register(async function (fastify) {
+  fastify.get('/ws-test', { websocket: true }, (connection, req) => {
+    const ws = connection.socket; // In @fastify/websocket, connection.socket is the actual WebSocket
+    console.log('[VoiceProxy][DEBUG] ========== WS-TEST CONNECTION ==========');
+    console.log('[VoiceProxy][DEBUG] Timestamp:', new Date().toISOString());
+    console.log('[VoiceProxy][DEBUG] Headers:', JSON.stringify(req.headers, null, 2));
+    
+    ws.send(JSON.stringify({ 
+      event: 'connected', 
+      message: 'WebSocket test endpoint working!',
+      timestamp: new Date().toISOString()
+    }));
+    
+    ws.on('message', (data) => {
+      console.log('[VoiceProxy][DEBUG] WS-TEST received:', data.toString());
+      ws.send(JSON.stringify({ 
+        event: 'echo', 
+        data: data.toString(),
+        timestamp: new Date().toISOString()
+      }));
+    });
+    
+    ws.on('close', (code, reason) => {
+      console.log('[VoiceProxy][DEBUG] WS-TEST closed. Code:', code, 'Reason:', reason?.toString());
+    });
+    
+    ws.on('error', (error) => {
+      console.error('[VoiceProxy][DEBUG] WS-TEST error:', error);
+    });
+  });
+});
+
 // WebSocket endpoint for Twilio media streams
 fastify.register(async function (fastify) {
-  fastify.get('/media-stream', { websocket: true }, (ws, req) => {
+  fastify.get('/media-stream', { websocket: true }, (connection, req) => {
+    const ws = connection.socket; // In @fastify/websocket, connection.socket is the actual WebSocket
     const connectTime = Date.now();
     console.log('[VoiceProxy][DEBUG] ========== TWILIO WEBSOCKET CONNECTED ==========');
     console.log('[VoiceProxy][DEBUG] Connection time:', new Date().toISOString());
