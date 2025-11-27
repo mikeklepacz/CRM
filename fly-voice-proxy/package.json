@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "ws": "^8.16.0",
-    "alawmulaw": "^0.2.0",
+    "alawmulaw": "^6.0.0",
     "wavefile": "^11.0.0",
     "fastify": "^4.25.0",
     "@fastify/websocket": "^9.0.0"
