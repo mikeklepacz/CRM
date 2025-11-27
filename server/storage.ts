@@ -453,6 +453,9 @@ export interface IStorage {
   updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget>;
   incrementCampaignCalls(campaignId: string, type: 'successful' | 'failed'): Promise<void>;
 
+  // Nuke call test data (for testing)
+  nukeAllCallData(): Promise<{ sessionsDeleted: number; historyDeleted: number; transcriptsDeleted: number; eventsDeleted: number; targetsDeleted: number; campaignsDeleted: number }>;
+
   // AI Insights operations
   saveAiInsight(insight: InsertAiInsight, objections: InsertAiInsightObjection[], patterns: InsertAiInsightPattern[], recommendations: InsertAiInsightRecommendation[]): Promise<AiInsight>;
   getAiInsightById(id: string): Promise<(AiInsight & { objections: AiInsightObjection[]; patterns: AiInsightPattern[]; recommendations: AiInsightRecommendation[] }) | undefined>;
@@ -2469,6 +2472,35 @@ export class DatabaseStorage implements IStorage {
       deletedInsights: deletedInsights.length,
       deletedProposals: deletedProposals.length,
       resetCalls: resetCalls.length,
+    };
+  }
+
+  async nukeAllCallData(): Promise<{ sessionsDeleted: number; historyDeleted: number; transcriptsDeleted: number; eventsDeleted: number; targetsDeleted: number; campaignsDeleted: number }> {
+    // Delete all call campaign targets first (they reference campaigns)
+    const deletedTargets = await db.delete(callCampaignTargets).returning();
+    
+    // Delete all call campaigns
+    const deletedCampaigns = await db.delete(callCampaigns).returning();
+    
+    // Delete all call events
+    const deletedEvents = await db.delete(callEvents).returning();
+    
+    // Delete all call transcripts
+    const deletedTranscripts = await db.delete(callTranscripts).returning();
+    
+    // Delete all call history
+    const deletedHistory = await db.delete(callHistory).returning();
+    
+    // Delete all call sessions
+    const deletedSessions = await db.delete(callSessions).returning();
+    
+    return {
+      sessionsDeleted: deletedSessions.length,
+      historyDeleted: deletedHistory.length,
+      transcriptsDeleted: deletedTranscripts.length,
+      eventsDeleted: deletedEvents.length,
+      targetsDeleted: deletedTargets.length,
+      campaignsDeleted: deletedCampaigns.length,
     };
   }
 

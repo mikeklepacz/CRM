@@ -1219,6 +1219,7 @@ export default function CallManager() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [callToDelete, setCallToDelete] = useState<string | null>(null);
   const [isNukeDialogOpen, setIsNukeDialogOpen] = useState(false);
+  const [isNukeCallDataDialogOpen, setIsNukeCallDataDialogOpen] = useState(false);
   
   // AI Insights state
   const [insightsDateRange, setInsightsDateRange] = useState<'7days' | '30days' | 'custom'>('30days');
@@ -1794,6 +1795,30 @@ export default function CallManager() {
     },
   });
 
+  // Mutation to nuke all call test data (sessions, history, transcripts, events, campaign targets)
+  const nukeCallDataMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', '/api/elevenlabs/nuke-call-data', {});
+    },
+    onSuccess: (data: any) => {
+      setIsNukeCallDataDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/call-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/call-analytics'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
+      toast({
+        title: "Call Data Cleared",
+        description: data?.message || "All call test data has been deleted.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Nuke Failed",
+        description: error.message || "Failed to clear call data",
+      });
+    },
+  });
+
   // Query for historical insights
   const { data: insightsHistory, isLoading: isLoadingHistory } = useQuery({
     queryKey: ['/api/elevenlabs/insights-history', insightsAgentFilter],
@@ -1958,18 +1983,33 @@ export default function CallManager() {
 
         {/* Top-level tabs: Voice Hub, AI Call Analytics, and AI Insights */}
         <Tabs defaultValue="voice-hub" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
-            <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
-            <TabsTrigger value="call-history" data-testid="tab-call-history">Call History</TabsTrigger>
+          <div className="flex items-center justify-between gap-4">
+            <TabsList>
+              <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
+              <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
+              <TabsTrigger value="call-history" data-testid="tab-call-history">Call History</TabsTrigger>
+              {user?.role === 'admin' && (
+                <>
+                  <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
+                  <TabsTrigger value="aligner-chat" data-testid="tab-aligner-chat">Aligner Chat</TabsTrigger>
+                  <TabsTrigger value="kb-library" data-testid="tab-kb-library">KB Library</TabsTrigger>
+                </>
+              )}
+            </TabsList>
+            
+            {/* Nuke Call Data Button - for testing */}
             {user?.role === 'admin' && (
-              <>
-                <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
-                <TabsTrigger value="aligner-chat" data-testid="tab-aligner-chat">Aligner Chat</TabsTrigger>
-                <TabsTrigger value="kb-library" data-testid="tab-kb-library">KB Library</TabsTrigger>
-              </>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setIsNukeCallDataDialogOpen(true)}
+                data-testid="button-nuke-call-data"
+              >
+                <Bomb className="h-4 w-4 mr-2" />
+                Nuke Call Data
+              </Button>
             )}
-          </TabsList>
+          </div>
 
           <TabsContent value="voice-hub" className="space-y-6">
             {/* Real-time Queue Stats */}
@@ -3947,6 +3987,55 @@ export default function CallManager() {
               data-testid="button-confirm-nuke"
             >
               {nukeAnalysisMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Nuking...
+                </>
+              ) : (
+                <>
+                  <Bomb className="h-4 w-4 mr-2" />
+                  NUKE IT
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* NUKE Call Data Confirmation Dialog */}
+      <AlertDialog open={isNukeCallDataDialogOpen} onOpenChange={setIsNukeCallDataDialogOpen}>
+        <AlertDialogContent data-testid="dialog-nuke-call-data-confirmation">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Bomb className="h-5 w-5" />
+              Clear All Call Test Data?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 pt-2">
+              <p>This will permanently delete:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>All call sessions (active, queued, completed)</li>
+                <li>All call history records</li>
+                <li>All call transcripts</li>
+                <li>All call events</li>
+                <li>All campaign targets</li>
+                <li>Conversations from ElevenLabs (via API)</li>
+              </ul>
+              <p className="font-semibold text-destructive pt-2">
+                This action cannot be undone!
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-nuke-call-data">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => nukeCallDataMutation.mutate()}
+              disabled={nukeCallDataMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-nuke-call-data"
+            >
+              {nukeCallDataMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Nuking...

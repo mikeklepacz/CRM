@@ -3702,6 +3702,76 @@ Ready to receive calls?`;
     }
   });
 
+  // NUKE all call test data (sessions, history, transcripts, events, campaign targets)
+  app.post('/api/elevenlabs/nuke-call-data', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      console.log('[NUKE CALL DATA] Clearing all call test data...');
+      
+      // Get ElevenLabs config for API calls
+      const config = await storage.getElevenLabsConfig();
+      
+      // 1. Get all call sessions to delete from ElevenLabs
+      let elevenLabsDeletedCount = 0;
+      let elevenLabsErrors: string[] = [];
+      
+      if (config?.apiKey) {
+        // Get all unique conversation IDs from call history
+        const callHistory = await storage.getAllCallHistory();
+        const conversationIds = [...new Set(callHistory.map(c => c.conversationId).filter(Boolean))];
+        
+        console.log(`[NUKE CALL DATA] Found ${conversationIds.length} conversations to delete from ElevenLabs`);
+        
+        // Delete each conversation from ElevenLabs
+        for (const conversationId of conversationIds) {
+          try {
+            const response = await fetch(
+              `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}`,
+              {
+                method: 'DELETE',
+                headers: {
+                  'xi-api-key': config.apiKey,
+                },
+              }
+            );
+            
+            if (response.ok || response.status === 404) {
+              elevenLabsDeletedCount++;
+            } else {
+              const errorText = await response.text();
+              console.error(`[NUKE CALL DATA] Failed to delete conversation ${conversationId}:`, errorText);
+              elevenLabsErrors.push(conversationId);
+            }
+          } catch (error: any) {
+            console.error(`[NUKE CALL DATA] Error deleting conversation ${conversationId}:`, error.message);
+            elevenLabsErrors.push(conversationId);
+          }
+        }
+      }
+      
+      // 2. Delete all local call data from database
+      const result = await storage.nukeAllCallData();
+      
+      console.log('[NUKE CALL DATA] Call data cleared successfully:', {
+        ...result,
+        elevenLabsDeletedCount,
+        elevenLabsErrors: elevenLabsErrors.length,
+      });
+      
+      res.json({
+        success: true,
+        message: `Deleted ${result.sessionsDeleted} sessions, ${result.historyDeleted} history records, ${result.transcriptsDeleted} transcripts, ${result.eventsDeleted} events, ${result.targetsDeleted} campaign targets. Also removed ${elevenLabsDeletedCount} conversations from ElevenLabs.`,
+        ...result,
+        elevenLabsDeletedCount,
+        elevenLabsErrors: elevenLabsErrors.length > 0 ? elevenLabsErrors : undefined,
+      });
+    } catch (error: any) {
+      console.error('[NUKE CALL DATA] Error clearing call data:', error);
+      res.status(500).json({ 
+        error: error.message || 'Failed to clear call data'
+      });
+    }
+  });
+
   // ===== ALIGNER CHAT ENDPOINTS =====
   // Chat with the Aligner assistant about calls, insights, and KB improvements
   app.post('/api/aligner/chat', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
