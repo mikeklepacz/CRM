@@ -346,6 +346,20 @@ function startMixingLoop(session) {
 // Create Fastify server
 const fastify = Fastify({ logger: true });
 
+// Log ALL incoming requests at the lowest level
+fastify.addHook('onRequest', async (request, reply) => {
+  const isUpgrade = request.headers.upgrade?.toLowerCase() === 'websocket';
+  console.log(`[VoiceProxy][DEBUG] === INCOMING REQUEST ===`);
+  console.log(`[VoiceProxy][DEBUG] Timestamp: ${new Date().toISOString()}`);
+  console.log(`[VoiceProxy][DEBUG] Method: ${request.method}`);
+  console.log(`[VoiceProxy][DEBUG] URL: ${request.url}`);
+  console.log(`[VoiceProxy][DEBUG] Is WebSocket Upgrade: ${isUpgrade}`);
+  if (isUpgrade) {
+    console.log(`[VoiceProxy][DEBUG] *** WEBSOCKET UPGRADE REQUEST DETECTED ***`);
+    console.log(`[VoiceProxy][DEBUG] Headers:`, JSON.stringify(request.headers, null, 2));
+  }
+});
+
 // Register WebSocket plugin
 await fastify.register(websocket);
 
