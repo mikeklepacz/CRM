@@ -31,7 +31,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Automated Status Updates**: Commission Tracker status updates automatically when email drafts are created via Gmail integration.
 - **Sales Assistant Page**: UI powered by an OpenAI-driven assistant for sales scripts, product info, and objection handling.
 - **Document Browser**: Simplified Google Drive integration.
-- **ElevenLabs AI Voice Calling**: Automated outbound AI voice calling with multi-agent support and queue management.
+- **ElevenLabs AI Voice Calling**: Automated outbound AI voice calling with multi-agent support and queue management. Uses hybrid architecture with Fly.io voice-proxy (`hemp-voice-proxy.fly.dev`) handling WebSocket connections from Twilio, with background office ambient audio mixing directly controlled from Replit UI.
 - **AI Insights (Admin-Only)**: OpenAI-powered analysis of call performance data.
 - **Self-Evolving Knowledge Base System**: KB management with version control and AI-powered improvements.
 - **E-Hub: Email Campaign System (Admin-Only)**: AI-powered cold outreach automation with automated follow-up sequences, reply detection, and CRM synchronization.
@@ -67,3 +67,5 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Google Cloud Pub/Sub**: For Gmail push notifications.
 - **Google Calendar API**: Per-user OAuth for creating calendar events.
 - **ElevenLabs API**: For AI Voice Calling.
+- **Twilio API**: For outbound call origination; TwiML routes to Fly.io WebSocket endpoint.
+- **Fly.io Voice Proxy**: Standalone Node.js service (`fly-voice-proxy/`) hosting WebSocket server at `wss://hemp-voice-proxy.fly.dev/media-stream`. Receives audio from Replit's public endpoint and accepts runtime config updates (volume, audio URL) via POST `/config`. Architecture solves Replit's reverse proxy blocking inbound Twilio WebSockets.
