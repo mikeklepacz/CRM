@@ -12,7 +12,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
   }
   const callSid = payload.CallSid;
   const callStatus = payload.CallStatus; // 'initiated', 'ringing', 'in-progress', 'completed', 'busy', 'no-answer', 'failed', 'canceled'
-  
+  const callDuration = parseInt(payload.CallDuration || '0', 10); // Duration in seconds from Twilio
   
   try {
     // Find the call session by callSid
@@ -37,12 +37,19 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
         newStatus = 'in-progress';
         break;
       case 'completed':
-        newStatus = 'completed';
+        // If call completed with 0 seconds, it means the call never connected (e.g., blocked, rejected)
+        // Mark as "no-answer" instead of "completed"
+        if (callDuration === 0) {
+          newStatus = 'failed';
+          console.log(`[Twilio Webhook] Call ${callSid} completed with 0 seconds - marking as no-answer`);
+        } else {
+          newStatus = 'completed';
+        }
         await storage.updateCallSession(session.id, {
           status: newStatus,
           endedAt: now,
         });
-          return;
+        return;
       case 'busy':
       case 'no-answer':
       case 'failed':
