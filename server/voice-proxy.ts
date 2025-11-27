@@ -524,7 +524,7 @@ class VoiceProxyServer {
   }
 
   private findSessionByTwilioWs(ws: WSClient): SessionState | undefined {
-    for (const session of this.sessions.values()) {
+    for (const session of Array.from(this.sessions.values())) {
       if (session.twilioWs === ws) {
         return session;
       }
