@@ -3,37 +3,36 @@ primary_region = "iad"
 
 [build]
 
-# Use [[services]] format for proper WebSocket support
-# WebSocket upgrades require HTTP/1.1, not HTTP/2
-[[services]]
+# Use [http_service] for WebSocket support
+# Fly.io handles WebSocket upgrades correctly with this approach
+[http_service]
   internal_port = 8080
-  protocol = "tcp"
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
   
-  # HTTP port (redirects to HTTPS)
-  [[services.ports]]
-    handlers = ["http"]
-    port = 80
-    force_https = true
+  # CRITICAL: Enable WebSocket proxying for Twilio streams
+  websocket = true
   
-  # HTTPS port - TLS terminated at edge, app receives plain HTTP
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
+  # Disable HTTP/2 backend - WebSockets require HTTP/1.1
+  [http_service.http_options]
+    h2_backend = false
   
   # Connection-based concurrency for WebSocket
-  [services.concurrency]
+  [http_service.concurrency]
     type = "connections"
     hard_limit = 100
     soft_limit = 50
-  
-  # Health check
-  [[services.http_checks]]
-    interval = 10000
-    grace_period = "5s"
-    method = "get"
-    path = "/health"
-    protocol = "http"
-    timeout = 2000
+
+# Health check configuration
+[[http_service.checks]]
+  interval = "10s"
+  grace_period = "5s"
+  method = "get"
+  path = "/health"
+  protocol = "http"
+  timeout = "2s"
 
 [[vm]]
   memory = "256mb"
