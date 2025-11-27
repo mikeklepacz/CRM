@@ -17,6 +17,10 @@ interface CallTarget {
   nextAttemptAt: Date | null;
   externalConversationId: string | null;
   lastError: string | null;
+}
+
+export class CallDispatcher {
+  private isRunning = false;
 
   private async cleanupStaleTargets(): Promise<void> {
     try {
@@ -43,12 +47,6 @@ interface CallTarget {
       console.error('[CallDispatcher] Error cleaning up stale targets:', error);
     }
   }
-
-
-}
-
-export class CallDispatcher {
-  private isRunning = false;
 
   async processQueuedCalls(): Promise<void> {
     if (this.isRunning) {

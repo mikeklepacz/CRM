@@ -497,21 +497,10 @@ export interface IStorage {
   markAsNotDuplicate(link1: string, link2: string, userId: string): Promise<NonDuplicate>;
   isMarkedAsNotDuplicate(link1: string, link2: string): Promise<boolean>;
   getAllNonDuplicates(): Promise<NonDuplicate[]>;
-
-  async getStaleInProgressTargets(beforeDate: Date): Promise<any[]> {
-    return await db
-      .select()
-      .from(callCampaignTargets)
-      .where(
-        and(
-          eq(callCampaignTargets.targetStatus, 'in-progress'),
-          sql`${callCampaignTargets.updatedAt} < ${beforeDate}`
-        )
-      );
-  }
-
-
   removeNonDuplicateMark(link1: string, link2: string): Promise<void>;
+
+  // Stale target cleanup
+  getStaleInProgressTargets(beforeDate: Date): Promise<any[]>;
 
   // Background Audio Settings operations
   getBackgroundAudioSettings(): Promise<BackgroundAudioSettings | undefined>;
@@ -2961,6 +2950,18 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(nonDuplicates.link1, first),
           eq(nonDuplicates.link2, second)
+        )
+      );
+  }
+
+  async getStaleInProgressTargets(beforeDate: Date): Promise<any[]> {
+    return await db
+      .select()
+      .from(callCampaignTargets)
+      .where(
+        and(
+          eq(callCampaignTargets.targetStatus, 'in-progress'),
+          sql`${callCampaignTargets.updatedAt} < ${beforeDate}`
         )
       );
   }
