@@ -19,38 +19,31 @@ interface TwiMLStreamParams {
   basePrompt?: string;
 }
 
+// Fly.io voice proxy URL - this handles WebSocket connections that Replit can't
+const FLY_VOICE_PROXY_URL = process.env.FLY_VOICE_PROXY_URL || 'wss://hemp-voice-proxy.fly.dev/media-stream';
+
 /**
- * Generates TwiML that connects to our WebSocket voice proxy
+ * Generates TwiML that connects to our WebSocket voice proxy on Fly.io
  * The proxy handles ElevenLabs connection, audio mixing, and background audio
  */
 export function generateStreamTwiML(params: TwiMLStreamParams): string {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const response = new VoiceResponse();
   
-  // Get the WebSocket URL for our voice proxy
-  // Use REPLIT_DOMAINS for production, fall back to dev domain
-  let replitDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
-  
-  if (!replitDomain) {
-    // Fallback to dev domain if REPLIT_DOMAINS not set
-    replitDomain = process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
-  }
-  
-  const wsProtocol = replitDomain.includes('localhost') ? 'ws' : 'wss';
-  const wsUrl = `${wsProtocol}://${replitDomain}/media-stream`;
+  // Use Fly.io WebSocket URL (Replit's proxy doesn't support inbound WebSocket from Twilio)
+  const wsUrl = FLY_VOICE_PROXY_URL;
   
   console.log(`[Twilio] Generating TwiML with WebSocket URL: ${wsUrl}`);
   
   // Emit debug event so user can see the WebSocket URL in Chrome DevTools
   eventGateway.emit('call:debug', {
     stage: 'twiml',
-    message: 'Generated TwiML with WebSocket URL',
+    message: 'Generated TwiML with Fly.io WebSocket URL',
     details: { 
       wsUrl, 
-      replitDomain,
-      isDevDomain: replitDomain.includes('kirk.replit.dev'),
+      isFlyio: true,
     },
-    level: replitDomain.includes('kirk.replit.dev') ? 'warn' : 'info',
+    level: 'info',
   });
   
   // Connect to our WebSocket proxy
