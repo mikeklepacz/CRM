@@ -2993,7 +2993,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(callCampaignTargets.targetStatus, 'in-progress'),
-          sql`${callCampaignTargets.updatedAt} < ${beforeDate}`
+          lt(callCampaignTargets.updatedAt, beforeDate)
         )
       );
   }

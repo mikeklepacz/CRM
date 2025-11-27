@@ -1531,7 +1531,7 @@ export default function CallManager() {
     const agent = agents.find(a => a.id === selectedAgent);
     if (!agent) return;
 
-    // Build payload with store links for auto-scheduling
+    // Build payload with store links
     const selectedStoreData = eligibleStores.filter(store => selectedStores.has(store.link));
 
     const payload: { agent_record_id: string; agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean; ivr_behavior?: string } = {
@@ -1541,12 +1541,12 @@ export default function CallManager() {
       stores: Array.from(selectedStores),
       scenario: activeScenario,
       ivr_behavior: ivrBehavior,
+      store_data: selectedStoreData,
     };
 
-    // Include full store data for auto-scheduling
+    // Configure scheduling mode
     if (schedulingMode === 'auto') {
       payload.auto_schedule = true;
-      payload.store_data = selectedStoreData;
     } else if (schedulingMode === 'scheduled' && scheduledTime) {
       payload.scheduled_for = new Date(scheduledTime).toISOString();
     }
