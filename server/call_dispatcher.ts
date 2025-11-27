@@ -21,6 +21,20 @@ interface CallTarget {
 
 export class CallDispatcher {
   private isRunning = false;
+  private pendingImmediateRun = false;
+
+  // Process immediately - marks for immediate run (will be picked up when current run finishes)
+  async processImmediately(): Promise<void> {
+    // If already running, mark that we need another run after this one
+    if (this.isRunning) {
+      this.pendingImmediateRun = true;
+      console.log('[CallDispatcher] Dispatcher busy, will process immediately after current run');
+      return;
+    }
+    
+    // Not running, process now
+    await this.processQueuedCalls();
+  }
 
   private async cleanupStaleTargets(): Promise<void> {
     try {
@@ -83,6 +97,18 @@ export class CallDispatcher {
       console.error('[CallDispatcher] Error in processing cycle:', error);
     } finally {
       this.isRunning = false;
+      
+      // Check if an immediate run was requested while we were processing
+      if (this.pendingImmediateRun) {
+        this.pendingImmediateRun = false;
+        console.log('[CallDispatcher] Processing pending immediate run');
+        // Use setImmediate to avoid potential stack overflow with recursive calls
+        setImmediate(() => {
+          this.processQueuedCalls().catch(err => {
+            console.error('[CallDispatcher] Error in pending immediate run:', err);
+          });
+        });
+      }
     }
   }
 

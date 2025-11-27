@@ -52,6 +52,36 @@ import { computeHash, getCached, setCache } from "./services/sheetCache";
 import { eventGateway } from "./services/events/gateway";
 import { generateProjectSpecsPdf, type TextElement, type ColorSwatch } from "./services/pdfBuilder";
 import JSZip from "jszip";
+import { callDispatcher } from "./call_dispatcher";
+
+const FLY_VOICE_PROXY_HEALTH_URL = process.env.FLY_VOICE_PROXY_HEALTH_URL || 'https://hemp-voice-proxy.fly.dev/health';
+
+async function checkFlyVoiceProxyHealth(): Promise<{ healthy: boolean; details?: any }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(FLY_VOICE_PROXY_HEALTH_URL, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      return { healthy: false, details: { error: `HTTP ${response.status}` } };
+    }
+    
+    const data = await response.json();
+    return { 
+      healthy: data.status === 'ok', 
+      details: data 
+    };
+  } catch (error: any) {
+    return { 
+      healthy: false, 
+      details: { error: error.message || 'Connection failed' } 
+    };
+  }
+}
 
 // ============================================================================
 // Micro-Batching Helper for OpenAI Assistants
@@ -2659,6 +2689,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Agent record ID, agent ID, and stores array required' });
       }
 
+      // Check Fly.io voice proxy health for immediate calls (not scheduled/auto-scheduled)
+      const isImmediateCall = !scheduled_for && !auto_schedule;
+      if (isImmediateCall) {
+        const proxyHealth = await checkFlyVoiceProxyHealth();
+        if (!proxyHealth.healthy) {
+          return res.status(503).json({ 
+            error: 'Voice service temporarily unavailable. Please try again in a few moments.',
+            details: proxyHealth.details
+          });
+        }
+      }
+
       // Verify agent exists and has required fields using the database record ID
       const agent = await storage.getElevenLabsAgent(agent_record_id);
       if (!agent) {
@@ -2777,17 +2819,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // For immediate calls, trigger the dispatcher right away instead of waiting for the 30-second interval
+      if (isImmediateCall && createdTargets > 0) {
+        console.log(`[BatchCall] Triggering immediate dispatch for ${createdTargets} targets`);
+        // Use processImmediately which waits for any current run to finish
+        // Don't await - let it process in background so response returns fast
+        callDispatcher.processImmediately().catch(err => {
+          console.error('[BatchCall] Error in immediate dispatch:', err);
+        });
+      }
+
       res.json({
         campaignId: campaign.id,
         totalStores: stores.length,
         createdTargets,
         skippedStores,
-        status: 'queued',
+        status: isImmediateCall ? 'processing' : 'queued',
         autoScheduled: !!auto_schedule,
+        immediate: isImmediateCall,
       });
     } catch (error: any) {
       console.error('Error creating batch call campaign:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Voice proxy health status - for UI indicator
+  app.get('/api/voice-proxy/status', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const health = await checkFlyVoiceProxyHealth();
+      res.json({
+        healthy: health.healthy,
+        audioLoaded: health.details?.audioLoaded ?? false,
+        volumeDb: health.details?.volumeDb ?? null,
+        sessions: health.details?.sessions ?? 0,
+        error: health.healthy ? null : health.details?.error,
+      });
+    } catch (error: any) {
+      res.json({
+        healthy: false,
+        error: error.message,
+      });
     }
   });
 

@@ -1336,6 +1336,14 @@ export default function CallManager() {
 
   const runningJob = jobStatus?.status === 'running' ? jobStatus.job : null;
 
+  // Voice proxy health status (for indicator)
+  const { data: voiceProxyStatus } = useQuery<{ healthy: boolean; audioLoaded: boolean; volumeDb: number | null; sessions: number; error?: string }>({
+    queryKey: ['/api/voice-proxy/status'],
+    enabled: hasAccess,
+    refetchInterval: 30000, // Check every 30 seconds
+    staleTime: 15000,
+  });
+
   // Mutation to update preferences
   const updatePreferencesMutation = useMutation({
     mutationFn: async (updates: { autoKbAnalysis?: boolean; kbAnalysisThreshold?: number }) => {
@@ -1997,18 +2005,38 @@ export default function CallManager() {
               )}
             </TabsList>
             
-            {/* Nuke Call Data Button - for testing */}
-            {user?.role === 'admin' && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setIsNukeCallDataDialogOpen(true)}
-                data-testid="button-nuke-call-data"
+            <div className="flex items-center gap-3">
+              {/* Voice Proxy Status Indicator */}
+              <div 
+                className="flex items-center gap-1.5"
+                title={voiceProxyStatus?.healthy 
+                  ? `Voice service online${voiceProxyStatus.sessions > 0 ? ` (${voiceProxyStatus.sessions} active)` : ''}`
+                  : `Voice service offline${voiceProxyStatus?.error ? `: ${voiceProxyStatus.error}` : ''}`
+                }
+                data-testid="indicator-voice-proxy"
               >
-                <Bomb className="h-4 w-4 mr-2" />
-                Nuke Call Data
-              </Button>
-            )}
+                <div 
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    voiceProxyStatus?.healthy 
+                      ? 'bg-green-500' 
+                      : 'bg-red-500'
+                  }`}
+                />
+              </div>
+              
+              {/* Nuke Call Data Button - for testing */}
+              {user?.role === 'admin' && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setIsNukeCallDataDialogOpen(true)}
+                  data-testid="button-nuke-call-data"
+                >
+                  <Bomb className="h-4 w-4 mr-2" />
+                  Nuke Call Data
+                </Button>
+              )}
+            </div>
           </div>
 
           <TabsContent value="voice-hub" className="space-y-6">
