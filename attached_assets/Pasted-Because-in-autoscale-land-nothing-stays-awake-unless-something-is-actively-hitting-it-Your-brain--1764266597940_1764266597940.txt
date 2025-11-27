@@ -1,0 +1,54 @@
+Because in autoscale land nothing “stays awake” unless something is actively hitting it.
+Your brain is assuming a long-running process; autoscale gives you short bursts.
+
+Let’s strip the stack down:
+	•	You have three network actors:
+	1.	Your backend (Replit)
+	2.	Twilio (phone + media)
+	3.	ElevenLabs (AI voice)
+	•	The “voice brain” (ElevenLabs) only matters after Twilio has a stable audio stream to your proxy.
+
+Right now the order is:
+	1.	Your backend wakes up, calls Twilio REST, then goes idle.
+	2.	Some seconds later, Twilio tries to open a WebSocket to /media-stream.
+	3.	Your container may already be spinning down or fully dead.
+	4.	Twilio times out → call dies.
+	5.	ElevenLabs never even enters the picture.
+
+Your question:
+
+“If we are listening for ElevenLabs to give call status then why can’t the right things stay awake until that comes in??”
+
+Because in this architecture:
+	•	“Listening for ElevenLabs” = a Node process with an open WebSocket to ElevenLabs.
+	•	That Node process lives inside the same container that Twilio has to connect to.
+	•	On autoscale, that container is not guaranteed to exist between:
+	•	“We told Twilio to start a call”
+	•	“Twilio is now trying to open the media stream”
+
+Autoscale doesn’t have a rule like:
+
+“Hey Replit, keep this container alive until Twilio and ElevenLabs are done talking.”
+
+It only has:
+
+“Spin this thing up when an HTTP request comes in, and kill it after a bit of idle time.”
+
+So:
+	•	The bit of code that would “stay awake and listen for ElevenLabs status”
+is the same long-running Node event loop that Twilio must hit over WebSocket.
+	•	When autoscale kills that process, there is no listener, no WebSocket, no bridge.
+There is literally nothing to “wait for a status.”
+
+To get what you think you have (a process that stays alive during the whole call), you need:
+	•	A long-lived process: Reserved VM, VPS, Fly.io app, small EC2, whatever.
+	•	That process:
+	•	Listens on /media-stream for Twilio 24/7
+	•	When Twilio connects, opens its own WebSocket to ElevenLabs
+	•	Bridges audio until the call is done
+	•	Then just waits for the next one
+
+Autoscale is stateless burst mode.
+Call bridging is stateful, real-time, long-lived.
+
+Two different worlds.

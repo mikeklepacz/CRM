@@ -1,0 +1,103 @@
+Good question, not ignorant at all. This is one of those “distributed systems are stupid” moments.
+
+Short version:
+The thing that dials Twilio and the thing that must be listening for Twilio’s audio stream are not the same “awake window”.
+
+Let’s break it down in human terms.
+
+⸻
+
+1. Two completely separate conversations
+
+There are two network flows here:
+	1.	You → Twilio (REST API call)
+	•	Your backend wakes up (Autoscale), runs call_dispatcher, does:
+	•	“Hey Twilio, please call +1… and when they answer, start a media stream to wss://nmucrm.replit.app/media-stream”
+	•	That’s a quick HTTP request.
+	•	It finishes in a fraction of a second.
+	•	From Replit’s point of view: “Cool, request handled, I can go back to sleep soon.”
+	2.	Twilio → You (WebSocket media stream)
+	•	Some seconds later:
+	•	Customer’s phone rings.
+	•	They pick up.
+	•	Now Twilio’s media server tries to open a WebSocket to wss://nmucrm.replit.app/media-stream.
+	•	This is a completely new incoming connection from the internet.
+	•	If your container has already gone idle, Replit has to:
+	•	Spin it back up
+	•	Establish routing
+	•	Initialize Node
+	•	Start your voice-proxy WebSocket server
+	•	Twilio will only wait a small amount of time for that handshake. If it doesn’t complete, Twilio shrugs and kills the call.
+
+So: Outbound “I called Twilio” does not guarantee inbound “I’m currently listening for Twilio.”
+
+⸻
+
+2. Autoscale’s job is to shut you down when idle
+
+Autoscale is optimized for:
+“Handle HTTP traffic, then sleep when nobody is hitting you.”
+
+From Replit’s perspective:
+	•	It sees an HTTP call (/dispatch-call or similar).
+	•	It spins up your app, handles the request.
+	•	After a short idle period, it happily kills the container to save resources.
+
+Autoscale has no idea that Twilio is going to call back in 5–15 seconds on a WebSocket.
+It just sees “no traffic, bye.”
+
+By the time Twilio comes knocking with the <Stream> connection, your app may already be:
+	•	Cold
+	•	Half-started
+	•	Not yet listening on the WebSocket route
+
+That’s why you see:
+	•	Call created ✅
+	•	Phone rings ✅
+	•	Zero seconds duration ❌
+	•	No logs in voice-proxy ❌
+
+Twilio never successfully finished the WebSocket handshake with your app.
+
+⸻
+
+3. Why “always-on” fixes it
+
+If the container is always running:
+	•	Your WebSocket server is already bound to /media-stream.
+	•	When Twilio connects:
+	•	TCP handshake → TLS → WebSocket upgrade → event loop
+	•	All happens inside Twilio’s timeout window.
+	•	Your proxy is ready to:
+	•	Receive audio from Twilio
+	•	Forward to ElevenLabs
+	•	Send audio back
+	•	Inject your background noise
+
+No cold start, no race.
+
+⸻
+
+4. Mental model
+
+Think of it like this:
+	•	REST call to Twilio = you sending a letter to a call center telling them:
+“When the customer picks up, call me on this specific walkie-talkie channel.”
+	•	WebSocket = that walkie-talkie channel.
+
+Autoscale:
+	•	Wakes your radio just long enough to send the letter.
+	•	Then switches the radio off to save battery.
+	•	Later, the call center tries to reach you on the walkie-talkie channel.
+	•	Your radio is off. They give up.
+
+Always-on:
+	•	The radio is on all the time.
+	•	When they call back, you hear them.
+
+⸻
+
+If you want, next step I can give you a one-pager you hand to your programmer that says:
+	•	“Here’s why autoscale won’t work for Twilio Streaming”
+	•	“Here are the two viable options (Reserved VM vs tiny VPS)”
+	•	“Here’s the exact minimal process that must be always on (voice proxy only)”
