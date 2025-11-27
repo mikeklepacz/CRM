@@ -136,48 +136,63 @@ export class CallDispatcher {
 
       // Create call session BEFORE initiating Twilio call
       // This ensures voice proxy can find it immediately when stream starts
+      // Store prompt data in storeSnapshot since metadata field doesn't exist in schema
       const callSession = await storage.createCallSession({
         callSid: null, // Will be updated after Twilio call creation
         agentId: agent.agentId,
         phoneNumber,
         clientId: target.clientId,
         status: 'initiated',
-        scenario: campaign.scenario || 'custom',
-        metadata: {
+        storeSnapshot: {
           combinedPrompt: combinedPrompt,
           ivrBehavior: ivrBehaviorSetting,
           dynamicVariables: dynamicVariables,
-        },
-      });
-
-      const result = await this.initiateOutboundCall({
-        apiKey,
-        agentId: agent.agentId,
-        phoneNumberId: agent.phoneNumberId || '',
-        toNumber: phoneNumber,
-        userId,
-        dynamicVariables,
-        clientData: {
-          campaignTargetId: target.id,
+          scenario: campaign.scenario || 'custom',
           businessName: clientData?.Name || clientData?.name,
           link: client.uniqueIdentifier,
-          scenario: campaign.scenario || 'custom',
-          clientId: target.clientId,
-        },
-        ivrBehavior: ivrBehaviorSetting,
-        basePrompt: combinedPrompt,
+        } as Record<string, any>,
       });
 
-      // Update call session with Twilio SID
-      await storage.updateCallSession(callSession.id, {
-        callSid: result.callSid,
-      });
+      try {
+        const result = await this.initiateOutboundCall({
+          apiKey,
+          agentId: agent.agentId,
+          phoneNumberId: agent.phoneNumberId || '',
+          toNumber: phoneNumber,
+          userId,
+          dynamicVariables,
+          clientData: {
+            campaignTargetId: target.id,
+            businessName: clientData?.Name || clientData?.name,
+            link: client.uniqueIdentifier,
+            scenario: campaign.scenario || 'custom',
+            clientId: target.clientId,
+          },
+          ivrBehavior: ivrBehaviorSetting,
+          basePrompt: combinedPrompt,
+        });
 
-      await storage.updateCallCampaignTarget(target.id, {
-        externalConversationId: result.callSid || null,
-        callSessionId: callSession.id,
-        lastError: null,
-      });
+        // Update call session with Twilio SID
+        await storage.updateCallSession(callSession.id, {
+          callSid: result.callSid,
+        });
+
+        await storage.updateCallCampaignTarget(target.id, {
+          externalConversationId: result.callSid || null,
+          callSessionId: callSession.id,
+          lastError: null,
+        });
+      } catch (twilioError: any) {
+        // Clean up orphaned call session if Twilio call creation fails
+        console.error(`[CallDispatcher] Twilio call failed for target ${target.id}, cleaning up orphaned session:`, twilioError);
+        try {
+          await storage.deleteCallSession(callSession.id);
+          console.log(`[CallDispatcher] Deleted orphaned call session ${callSession.id}`);
+        } catch (cleanupError) {
+          console.error(`[CallDispatcher] Failed to delete orphaned session ${callSession.id}:`, cleanupError);
+        }
+        throw twilioError; // Re-throw to trigger handleCallFailure
+      }
     } catch (error: any) {
       console.error(`[CallDispatcher] Error processing call target ${target.id}:`, error);
       await this.handleCallFailure(target, error);

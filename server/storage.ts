@@ -418,6 +418,7 @@ export interface IStorage {
   getCallSessions(filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]>;
   updateCallSession(id: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
   updateCallSessionByConversationId(conversationId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
+  deleteCallSession(id: string): Promise<void>;
 
   // Call Transcripts operations
   createCallTranscript(transcript: InsertCallTranscript): Promise<CallTranscript>;
@@ -2358,6 +2359,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(callSessions.conversationId, conversationId))
       .returning();
     return updated;
+  }
+
+  async deleteCallSession(id: string): Promise<void> {
+    await db.delete(callSessions).where(eq(callSessions.id, id));
   }
 
   // Call Transcripts operations

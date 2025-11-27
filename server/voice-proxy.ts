@@ -99,6 +99,24 @@ class VoiceProxyServer {
     }
   }
 
+  // Helper to retry session lookup with short delays (handles race condition with database commit)
+  private async getCallSessionWithRetry(callSid: string, maxRetries: number = 5, delayMs: number = 100): Promise<any> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const session = await storage.getCallSessionByCallSid(callSid);
+      if (session) {
+        if (attempt > 0) {
+          console.log(`[VoiceProxy] Found call session on attempt ${attempt + 1} for callSid ${callSid}`);
+        }
+        return session;
+      }
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    console.warn(`[VoiceProxy] Call session not found after ${maxRetries} attempts for callSid ${callSid}`);
+    return null;
+  }
+
   private async handleStreamStart(ws: WSClient, message: TwilioMediaMessage): Promise<void> {
     if (!message.start) return;
 
@@ -115,9 +133,10 @@ class VoiceProxyServer {
       ? JSON.parse(customParameters.clientData)
       : {};
 
-    // Retrieve basePrompt from call session metadata (not from TwiML due to 4000 char limit)
-    const callSession = await storage.getCallSessionByCallSid(callSid);
-    const basePrompt = (callSession as any)?.metadata?.combinedPrompt || '';
+    // Retrieve basePrompt from call session storeSnapshot (not from TwiML due to 4000 char limit)
+    // Use retry logic to handle race condition where session might not be committed yet
+    const callSession = await this.getCallSessionWithRetry(callSid);
+    const basePrompt = (callSession as any)?.storeSnapshot?.combinedPrompt || '';
 
 
     // Create session in database

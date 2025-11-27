@@ -288,6 +288,47 @@ export function VoiceSettings() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Client-side validation for file size (max 10MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: "File Too Large",
+        description: `File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the 10MB limit`,
+        variant: "destructive",
+      });
+      event.target.value = '';
+      return;
+    }
+
+    // Client-side validation for audio format
+    const ALLOWED_AUDIO_TYPES = [
+      'audio/mpeg',      // .mp3
+      'audio/mp3',       // .mp3 (alternative MIME)
+      'audio/wav',       // .wav
+      'audio/wave',      // .wav (alternative MIME)
+      'audio/x-wav',     // .wav (alternative MIME)
+      'audio/mp4',       // .m4a
+      'audio/x-m4a',     // .m4a (alternative MIME)
+      'audio/aac',       // .aac
+      'audio/ogg',       // .ogg
+      'audio/flac',      // .flac
+      'audio/webm',      // .webm
+    ];
+    
+    // Also check file extension as a fallback (some browsers don't report MIME correctly)
+    const ALLOWED_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.webm'];
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    
+    if (!ALLOWED_AUDIO_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      toast({
+        title: "Invalid File Format",
+        description: "Please upload an audio file (MP3, WAV, M4A, AAC, OGG, FLAC, or WebM)",
+        variant: "destructive",
+      });
+      event.target.value = '';
+      return;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 

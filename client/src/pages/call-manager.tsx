@@ -1260,6 +1260,9 @@ export default function CallManager() {
     open: boolean;
     row: any;
   } | null>(null);
+  
+  // Loading state for store details fetch
+  const [storeDetailsLoading, setStoreDetailsLoading] = useState<string | null>(null);
 
   // Clear selections when scenario changes
   useEffect(() => {
@@ -1320,10 +1323,14 @@ export default function CallManager() {
   });
 
   // Poll for analysis job status (for progress indicator)
+  // Only poll frequently when a job is actually running to reduce server load
   const { data: jobStatus } = useQuery<{ status: 'idle' | 'running'; job: any }>({
     queryKey: ['/api/analysis/job-status'],
     enabled: hasAccess,
-    refetchInterval: 10000, // Poll every 10 seconds (reduced from 2s)
+    refetchInterval: (query) => {
+      // Poll every 5 seconds when job is running, otherwise only check every 60 seconds
+      return query.state.data?.status === 'running' ? 5000 : 60000;
+    },
   });
 
   const runningJob = jobStatus?.status === 'running' ? jobStatus.job : null;
@@ -3027,9 +3034,9 @@ export default function CallManager() {
                                     </Badge>
                                   </div>
                                   <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                                    <span className="text-green-600">+{insight.sentimentPositive}%</span>
-                                    <span className="text-yellow-600">~{insight.sentimentNeutral}%</span>
-                                    <span className="text-red-600">-{insight.sentimentNegative}%</span>
+                                    <span className="text-green-600">+{insight.sentimentPositive ?? 0}%</span>
+                                    <span className="text-yellow-600">~{insight.sentimentNeutral ?? 0}%</span>
+                                    <span className="text-red-600">-{insight.sentimentNegative ?? 0}%</span>
                                   </div>
                                 </div>
                                 <div className="text-xs text-muted-foreground">
@@ -3702,6 +3709,9 @@ export default function CallManager() {
                                             return;
                                           }
                                           
+                                          // Set loading state for this specific row
+                                          setStoreDetailsLoading(row.id);
+                                          
                                           try {
                                             // Fetch full store row from Google Sheets
                                             const response = await fetch(
@@ -3734,11 +3744,18 @@ export default function CallManager() {
                                               description: error.message || "Failed to load store details",
                                               variant: "destructive",
                                             });
+                                          } finally {
+                                            // Always clear loading state
+                                            setStoreDetailsLoading(null);
                                           }
                                         }}
-                                        className="text-primary hover:underline text-left"
+                                        className="text-primary hover:underline text-left inline-flex items-center gap-1"
+                                        disabled={storeDetailsLoading === row.id}
                                         data-testid={`store-link-${idx}`}
                                       >
+                                        {storeDetailsLoading === row.id && (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        )}
                                         {row.storeName}
                                       </button>
                                     </TableCell>
