@@ -1,0 +1,20 @@
+{
+  "name": "fly-voice-proxy",
+  "version": "1.0.0",
+  "description": "Standalone voice proxy for Twilio-ElevenLabs bridge with background audio mixing",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "alawmulaw": "^0.2.0",
+    "wavefile": "^11.0.0",
+    "fastify": "^4.25.0",
+    "@fastify/websocket": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
