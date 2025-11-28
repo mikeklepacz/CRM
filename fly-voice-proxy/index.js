@@ -755,6 +755,12 @@ async function start() {
     console.log(`[VoiceProxy] Background audio: ${backgroundAudioBuffer ? 'loaded' : 'not configured'}`);
     console.log(`[VoiceProxy] Background volume: ${backgroundVolumeDb}dB`);
     console.log(`[VoiceProxy] Audio source: ${audioSourceUrl || 'none'}`);
+    
+    // Start periodic sync every 30 seconds to detect audio/settings changes
+    setInterval(async () => {
+      await syncSettingsFromReplit();
+    }, 30000);
+    console.log('[VoiceProxy] Periodic settings sync enabled (every 30s)');
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
