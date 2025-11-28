@@ -59,11 +59,12 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
     level: 'info',
   });
   
-  // Connect to our WebSocket proxy
+  // Connect to our WebSocket proxy (bidirectional stream)
+  // Note: For <Connect><Stream> (bidirectional), track attribute must be omitted or 'inbound_track'
+  // We receive caller audio via WebSocket and send audio back via WebSocket 'media' messages
   const connect = response.connect();
   const stream = connect.stream({
-    url: wsUrl,
-    track: 'both_tracks' // Send and receive audio
+    url: wsUrl
   });
   
   // Pass parameters to the voice proxy via TwiML parameters
