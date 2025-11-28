@@ -162,41 +162,16 @@ async function connectToElevenLabs(params) {
   console.log('[VoiceProxy][DEBUG] API key configured: yes (length:', ELEVENLABS_API_KEY.length, ')');
 
   try {
-    const payload = { agent_id: agentId };
-
-    if (phoneNumberId) {
-      payload.agent_phone_number_id = phoneNumberId;
-    }
-
-    if (dynamicVariables && Object.keys(dynamicVariables).length > 0) {
-      payload.dynamic_variables = dynamicVariables;
-    }
-
-    if (clientData) {
-      payload.conversation_initiation_client_data = clientData;
-    }
-
-    if (basePrompt) {
-      payload.conversation_config_override = {
-        agent: {
-          prompt: { prompt: basePrompt }
-        }
-      };
-    }
-
-    console.log('[VoiceProxy][DEBUG] Payload keys:', Object.keys(payload));
-    console.log('[VoiceProxy][DEBUG] Calling ElevenLabs get-signed-url API...');
+    console.log('[VoiceProxy][DEBUG] Calling ElevenLabs get-signed-url API (GET)...');
     
     const apiStart = Date.now();
     const response = await fetch(
       `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`,
       {
-        method: 'POST',
+        method: 'GET',
         headers: {
           'xi-api-key': ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
       }
     );
     console.log(`[VoiceProxy][DEBUG] API response in ${Date.now() - apiStart}ms`);
@@ -213,7 +188,7 @@ async function connectToElevenLabs(params) {
     const data = await response.json();
     console.log('[VoiceProxy][DEBUG] API response data keys:', Object.keys(data));
     
-    const { signed_url, conversation_id } = data;
+    const { signed_url } = data;
 
     if (!signed_url) {
       console.error('[VoiceProxy][DEBUG] *** NO SIGNED_URL IN RESPONSE ***');
@@ -222,10 +197,36 @@ async function connectToElevenLabs(params) {
     }
 
     console.log('[VoiceProxy][DEBUG] Got signed URL (length:', signed_url.length, ')');
-    console.log('[VoiceProxy][DEBUG] Conversation ID:', conversation_id);
     console.log('[VoiceProxy][DEBUG] Connecting ElevenLabs WebSocket...');
     
     const ws = new WebSocket(signed_url);
+
+    // Build conversation_initiation_client_data message to send after WebSocket opens
+    const initMessage = {
+      type: 'conversation_initiation_client_data'
+    };
+
+    // Add dynamic variables if present
+    if (dynamicVariables && Object.keys(dynamicVariables).length > 0) {
+      initMessage.dynamic_variables = dynamicVariables;
+      console.log('[VoiceProxy][DEBUG] Will send dynamic_variables:', Object.keys(dynamicVariables));
+    }
+
+    // Add conversation config override for prompt if present
+    if (basePrompt) {
+      initMessage.conversation_config_override = {
+        agent: {
+          prompt: { prompt: basePrompt }
+        }
+      };
+      console.log('[VoiceProxy][DEBUG] Will send prompt override (length:', basePrompt.length, ')');
+    }
+
+    // Add custom client data for tracking
+    if (clientData) {
+      initMessage.custom_llm_extra_body = clientData;
+      console.log('[VoiceProxy][DEBUG] Will send client data:', Object.keys(clientData));
+    }
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -237,7 +238,16 @@ async function connectToElevenLabs(params) {
         clearTimeout(timeout);
         console.log('[VoiceProxy][DEBUG] ========== ELEVENLABS WEBSOCKET CONNECTED ==========');
         console.log(`[VoiceProxy][DEBUG] Total connection time: ${Date.now() - connectStart}ms`);
-        resolve({ ws, conversationId: conversation_id });
+        
+        // Send conversation_initiation_client_data message with dynamic variables
+        const hasDataToSend = initMessage.dynamic_variables || initMessage.conversation_config_override || initMessage.custom_llm_extra_body;
+        if (hasDataToSend) {
+          console.log('[VoiceProxy][DEBUG] Sending conversation_initiation_client_data...');
+          ws.send(JSON.stringify(initMessage));
+          console.log('[VoiceProxy][DEBUG] conversation_initiation_client_data sent');
+        }
+        
+        resolve({ ws, conversationId: null });
       });
 
       ws.on('error', (error) => {
