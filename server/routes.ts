@@ -2507,10 +2507,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const settings = await storage.getBackgroundAudioSettings();
+      
+      // Generate a simple hash from fileName + updatedAt for change detection
+      let audioHash = null;
+      if (settings?.fileName && settings?.updatedAt) {
+        const hashInput = `${settings.fileName}-${settings.updatedAt.getTime()}`;
+        audioHash = Buffer.from(hashInput).toString('base64').slice(0, 16);
+      }
+      
       res.json({
         volumeDb: settings?.volumeDb ?? -25,
         hasAudioFile: !!settings?.filePath,
         fileName: settings?.fileName || null,
+        audioHash: audioHash,
       });
     } catch (error: any) {
       console.error('Error fetching public settings:', error);

@@ -30,6 +30,7 @@ let backgroundAudioBuffer = null;
 let backgroundVolumeDb = parseFloat(process.env.BACKGROUND_VOLUME_DB || '-25');
 let backgroundVolumeScalar = Math.pow(10, backgroundVolumeDb / 20);
 let audioSourceUrl = null;
+let currentAudioHash = null; // Track audio file hash for change detection
 
 // Update volume setting
 function updateVolume(volumeDb) {
@@ -100,7 +101,7 @@ async function loadBackgroundAudio() {
   }
 }
 
-// Fetch current settings from Replit CRM
+// Fetch current settings from Replit CRM and reload audio if changed
 async function syncSettingsFromReplit() {
   if (!REPLIT_CRM_URL) return;
   
@@ -113,8 +114,27 @@ async function syncSettingsFromReplit() {
     
     if (response.ok) {
       const settings = await response.json();
+      
+      // Update volume if changed
       if (settings.volumeDb !== undefined) {
         updateVolume(settings.volumeDb);
+      }
+      
+      // Check if audio file changed (hash comparison)
+      if (settings.audioHash && settings.audioHash !== currentAudioHash) {
+        console.log(`[VoiceProxy] Audio hash changed: ${currentAudioHash} -> ${settings.audioHash}`);
+        console.log('[VoiceProxy] Reloading background audio...');
+        
+        const audioUrl = `${REPLIT_CRM_URL}/api/voice-proxy/background-audio/public`;
+        const success = await loadBackgroundAudioFromUrl(audioUrl);
+        
+        if (success) {
+          currentAudioHash = settings.audioHash;
+          console.log('[VoiceProxy] Background audio reloaded successfully');
+        }
+      } else if (!currentAudioHash && settings.audioHash) {
+        // First time setting the hash
+        currentAudioHash = settings.audioHash;
       }
     }
   } catch (error) {
@@ -271,7 +291,11 @@ function handleElevenLabsMessage(session, data) {
     const message = JSON.parse(data.toString());
 
     if (message.type === 'audio' && message.audio) {
-      const audioBase64 = message.audio.chunk || message.audio.audio_base_64;
+      // ElevenLabs sends audio directly as a base64 string in message.audio
+      // (not nested in message.audio.chunk or message.audio.audio_base_64)
+      const audioBase64 = typeof message.audio === 'string' 
+        ? message.audio 
+        : (message.audio.chunk || message.audio.audio_base_64);
       if (audioBase64) {
         const audioData = Buffer.from(audioBase64, 'base64');
         const pcm16k = new Int16Array(audioData.buffer, audioData.byteOffset, audioData.byteLength / 2);
