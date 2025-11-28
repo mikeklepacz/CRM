@@ -47,6 +47,24 @@ interface EmailOptions {
   references?: string;
 }
 
+/**
+ * Encode a string for email headers using MIME encoded-word format (RFC 2047)
+ * Required for non-ASCII characters like smart quotes to display correctly
+ */
+function mimeEncodeSubject(subject: string): string {
+  // Check if subject contains any non-ASCII characters
+  const hasNonAscii = /[^\x00-\x7F]/.test(subject);
+  
+  if (!hasNonAscii) {
+    return subject; // ASCII-only, no encoding needed
+  }
+  
+  // Use MIME encoded-word format: =?charset?encoding?encoded_text?=
+  // B = Base64 encoding
+  const encoded = Buffer.from(subject, 'utf8').toString('base64');
+  return `=?UTF-8?B?${encoded}?=`;
+}
+
 interface EmailResponse {
   success: boolean;
   messageId?: string;
@@ -126,7 +144,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
 
     const headers: string[] = [
       `To: ${options.to}`,
-      `Subject: ${options.subject}`,
+      `Subject: ${mimeEncodeSubject(options.subject)}`,
       "Content-Type: text/html; charset=utf-8",
     ];
 

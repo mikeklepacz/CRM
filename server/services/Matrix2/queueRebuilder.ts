@@ -81,7 +81,9 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       sr.state,
       sr.status,
       sr.last_step_sent_at,
-      s.step_delays,
+      (SELECT array_agg(ss.delay_days ORDER BY ss.step_number) 
+       FROM sequence_steps ss 
+       WHERE ss.sequence_id = s.id) as step_delays,
       s.status as sequence_status
     FROM sequence_recipients sr
     LEFT JOIN sequences s ON sr.sequence_id = s.id

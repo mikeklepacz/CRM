@@ -22,7 +22,9 @@ export async function getEligibleRecipientsForAssignment() {
       sr.state,
       sr.status,
       sr.last_step_sent_at,
-      s.step_delays,
+      (SELECT array_agg(ss.delay_days ORDER BY ss.step_number) 
+       FROM sequence_steps ss 
+       WHERE ss.sequence_id = s.id) as step_delays,
       s.status as sequence_status,
       s.is_system
     FROM sequence_recipients sr
@@ -82,7 +84,9 @@ export async function getScheduledRecipientsFromDate(dateIso: string) {
       sr.status,
       sr.last_step_sent_at,
       dss.slot_time_utc,
-      s.step_delays,
+      (SELECT array_agg(ss.delay_days ORDER BY ss.step_number) 
+       FROM sequence_steps ss 
+       WHERE ss.sequence_id = s.id) as step_delays,
       s.status as sequence_status
     FROM sequence_recipients sr
     INNER JOIN daily_send_slots dss ON sr.id = dss.recipient_id::varchar
