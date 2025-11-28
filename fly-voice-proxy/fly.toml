@@ -3,38 +3,27 @@ primary_region = "iad"
 
 [build]
 
-# Use [[services]] format for WebSocket support
-# This is the recommended approach for WebSocket apps
-[[services]]
+[env]
+  PORT = "8080"
+
+[http_service]
   internal_port = 8080
-  protocol = "tcp"
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
   
-  # HTTP port (redirects to HTTPS)
-  [[services.ports]]
-    handlers = ["http"]
-    port = 80
-    force_https = true
-  
-  # HTTPS port - use http handler for WebSocket upgrades
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
-  
-  # Connection-based concurrency for WebSocket
-  [services.concurrency]
+  [http_service.concurrency]
     type = "connections"
     hard_limit = 100
     soft_limit = 50
-  
-  # Disable HTTP/2 backend - WebSockets require HTTP/1.1
-  [services.http_options]
-    h2_backend = false
-  
-  # Health check using tcp_checks for reliability
-  [[services.tcp_checks]]
-    interval = "10s"
-    grace_period = "5s"
-    timeout = "2s"
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
 
 [[vm]]
   memory = "256mb"

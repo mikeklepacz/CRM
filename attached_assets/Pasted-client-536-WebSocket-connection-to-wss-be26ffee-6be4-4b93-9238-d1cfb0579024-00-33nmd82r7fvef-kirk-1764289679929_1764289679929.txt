@@ -1,0 +1,27 @@
+client:536 WebSocket connection to 'wss://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/?token=9P73EF3g0peJ' failed: 
+setupWebSocket @ client:536
+(anonymous) @ client:531
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=9P73EF3g0peJ' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+setupWebSocket @ client:536
+fallback @ client:509
+(anonymous) @ client:555
+chunk-NFC5BX5N.js?v=47226f1d:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+call-manager.tsx:2124 [CallManager] Agent selected: 4e19ea3c-28c3-45b1-8b96-8648700fa075
+call-manager.tsx:1436 [CallManager][DEBUG] ========== BATCH CALL INITIATED ==========
+call-manager.tsx:1437 [CallManager][DEBUG] Timestamp: 2025-11-28T00:27:38.614Z
+call-manager.tsx:1438 [CallManager][DEBUG] Agent ID: agent_7201k8xa9cshfmqvkd8tx3xf2j7a
+call-manager.tsx:1439 [CallManager][DEBUG] Store count: 1
+call-manager.tsx:1440 [CallManager][DEBUG] Scenario: cold_calls
+call-manager.tsx:1441 [CallManager][DEBUG] Scheduled for: immediate
+call-manager.tsx:1442 [CallManager][DEBUG] Auto schedule: undefined
+call-manager.tsx:1447 [CallManager][DEBUG] API response in 910ms
+call-manager.tsx:1448 [CallManager][DEBUG] Response: {campaignId: 'db600f56-16bb-497e-bb80-3fbcbf952fa6', totalStores: 1, createdTargets: 1, skippedStores: 0, status: 'processing', …}
+call-manager.tsx:1457 [CallManager][DEBUG] ========== BATCH CALL SUCCESS ==========
+call-manager.tsx:1458 [CallManager][DEBUG] Response data: {campaignId: 'db600f56-16bb-497e-bb80-3fbcbf952fa6', totalStores: 1, createdTargets: 1, skippedStores: 0, status: 'processing', …}
+eventStream.tsx:154 [Call Debug] dispatcher: Initiating outbound call {toNumber: '***3530', agentId: 'agent_7201k8xa9cshfmqvkd8tx3xf2j7a'}
+eventStream.tsx:154 [Call Debug] twiml: Generated TwiML with Fly.io WebSocket URL {wsUrl: 'wss://hemp-voice-proxy.fly.dev/media-stream', isFlyio: true}
+eventStream.tsx:154 [Call Debug] dispatcher: TwiML generated, calling Twilio {from: '***4367', to: '***3530'}
+eventStream.tsx:154 [Call Debug] dispatcher: Twilio call initiated {callSid: 'CA64...36d4', success: true}

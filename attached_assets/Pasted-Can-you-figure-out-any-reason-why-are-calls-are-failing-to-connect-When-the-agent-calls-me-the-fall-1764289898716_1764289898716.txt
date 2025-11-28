@@ -1,0 +1,49 @@
+Can you figure out any reason why are calls are failing to connect? When the agent calls me the fall fails. And even the missed call is not showing up in eleven labs.
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 8 files
+Looking at your codebase, I can see the issue. Your system is configured to use a Fly.io voice proxy for WebSocket connections (at wss://hemp-voice-proxy.fly.dev/media-stream), but there are several potential failure points:
+
+Key Issues Found
+1. Fly.io Voice Proxy May Be Down
+The code shows you're routing through Fly.io instead of Replit's WebSocket endpoint:
+
+// server/twilio-service.ts line 13
+const FLY_VOICE_PROXY_URL = process.env.FLY_VOICE_PROXY_URL || 'wss://hemp-voice-proxy.fly.dev/media-stream';
+The Fly.io proxy must be running for calls to work. If it's asleep or crashed, calls will fail silently.
+
+2. Missing ElevenLabs API Key in Fly.io Proxy
+The Fly.io proxy (fly-voice-proxy/index.js) needs the ElevenLabs API key as an environment variable:
+
+// fly-voice-proxy/index.js line 7
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+If this isn't set in Fly.io, the proxy can't connect to ElevenLabs.
+
+3. Call Session Created Before Twilio Call
+The dispatcher creates a call session before the Twilio call is initiated. If Twilio fails, you get orphaned sessions.
+
+Diagnostic Steps
+Check the Fly.io proxy health:
+
+curl -I https://hemp-voice-proxy.fly.dev/
+
+
+Run
+Check if the proxy is configured correctly:
+
+fly status
+
+
+Run
+Recommended Fix
+Since you're on Replit, you should use Replit's WebSocket endpoint instead of relying on an external Fly.io service that may be down. Here's how to fix it:
+
+server/twilio-service.ts
++8
+-6
+Use Replit's WebSocket endpoint instead of Fly.io, Update WebSocket URL reference, Update debug event message
+After making this change, test a call. If it still fails, check the server logs for WebSocket connection errors. The issue is likely that your Fly.io proxy is down/misconfigured, and Replit's built-in WebSocket support should work fine for your use case.
