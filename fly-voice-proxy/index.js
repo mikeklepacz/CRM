@@ -290,16 +290,15 @@ function handleElevenLabsMessage(session, data) {
   try {
     const message = JSON.parse(data.toString());
 
-    if (message.type === 'audio' && message.audio) {
-      // ElevenLabs sends audio directly as a base64 string in message.audio
-      // (not nested in message.audio.chunk or message.audio.audio_base_64)
-      const audioBase64 = typeof message.audio === 'string' 
-        ? message.audio 
-        : (message.audio.chunk || message.audio.audio_base_64);
+    if (message.type === 'audio' && message.audio_event) {
+      // ElevenLabs Conversational AI sends audio in audio_event.audio_base_64
+      const audioBase64 = message.audio_event.audio_base_64;
       if (audioBase64) {
         const audioData = Buffer.from(audioBase64, 'base64');
+        // ElevenLabs sends PCM 16-bit at 16kHz
         const pcm16k = new Int16Array(audioData.buffer, audioData.byteOffset, audioData.byteLength / 2);
         session.outputBuffer.push(pcm16k);
+        console.log('[VoiceProxy][DEBUG] Received audio chunk:', pcm16k.length, 'samples');
       }
     }
 
