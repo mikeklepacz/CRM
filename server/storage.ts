@@ -245,7 +245,7 @@ export interface IStorage {
   acceptTenantInvite(token: string, userId: string): Promise<void>;
 
   // Pipeline operations
-  listPipelines(tenantId: string): Promise<Pipeline[]>;
+  listPipelines(tenantId: string, projectId?: string): Promise<Pipeline[]>;
   getPipelineById(pipelineId: string, tenantId: string): Promise<Pipeline | undefined>;
   getPipelineBySlug(slug: string, tenantId: string): Promise<Pipeline | undefined>;
   createPipeline(data: InsertPipeline): Promise<Pipeline>;
@@ -489,7 +489,7 @@ export interface IStorage {
   upsertElevenLabsPhoneNumber(phoneData: InsertElevenLabsPhoneNumber): Promise<ElevenLabsPhoneNumber>;
   deleteElevenLabsPhoneNumber(phoneNumberId: string, tenantId: string): Promise<void>;
 
-  getAllElevenLabsAgents(tenantId: string): Promise<ElevenLabsAgent[]>;
+  getAllElevenLabsAgents(tenantId: string, projectId?: string): Promise<ElevenLabsAgent[]>;
   getElevenLabsAgent(id: string, tenantId: string): Promise<ElevenLabsAgent | undefined>;
   getDefaultElevenLabsAgent(tenantId: string): Promise<ElevenLabsAgent | undefined>;
   createElevenLabsAgent(agent: InsertElevenLabsAgent): Promise<ElevenLabsAgent>;
@@ -549,7 +549,7 @@ export interface IStorage {
   getAiInsightsHistory(filters?: { agentId?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Array<AiInsight & { objections: AiInsightObjection[]; patterns: AiInsightPattern[]; recommendations: AiInsightRecommendation[] }>>;
 
   // KB Management operations
-  getAllKbFiles(tenantId: string): Promise<KbFile[]>;
+  getAllKbFiles(tenantId: string, projectId?: string): Promise<KbFile[]>;
   getKbFileById(id: string, tenantId: string): Promise<KbFile | undefined>;
   getKbFileByFilename(filename: string, tenantId: string): Promise<KbFile | undefined>;
   getKbFileByElevenLabsDocId(docId: string, tenantId: string): Promise<KbFile | undefined>;
@@ -611,7 +611,7 @@ export interface IStorage {
   // E-Hub Sequence operations
   createSequence(sequence: InsertSequence): Promise<Sequence>;
   getSequence(id: string, tenantId: string): Promise<Sequence | undefined>;
-  listSequences(tenantId: string, filters?: { createdBy?: string; status?: string }): Promise<Sequence[]>;
+  listSequences(tenantId: string, filters?: { createdBy?: string; status?: string; projectId?: string }): Promise<Sequence[]>;
   updateSequence(id: string, tenantId: string, updates: Partial<InsertSequence>): Promise<Sequence | undefined>;
   deleteSequence(id: string, tenantId: string): Promise<boolean>;
   updateSequenceStats(id: string, tenantId: string, stats: { sentCount?: number; failedCount?: number; repliedCount?: number; lastSentAt?: Date }): Promise<Sequence>;
@@ -1123,11 +1123,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Pipeline operations
-  async listPipelines(tenantId: string): Promise<Pipeline[]> {
+  async listPipelines(tenantId: string, projectId?: string): Promise<Pipeline[]> {
+    const conditions = [eq(pipelines.tenantId, tenantId)];
+    if (projectId) {
+      conditions.push(eq(pipelines.projectId, projectId));
+    }
     return await db
       .select()
       .from(pipelines)
-      .where(eq(pipelines.tenantId, tenantId))
+      .where(and(...conditions))
       .orderBy(pipelines.name);
   }
 
@@ -2983,8 +2987,12 @@ export class DatabaseStorage implements IStorage {
     await db.delete(elevenLabsPhoneNumbers).where(and(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneNumberId), eq(elevenLabsPhoneNumbers.tenantId, tenantId)));
   }
 
-  async getAllElevenLabsAgents(tenantId: string): Promise<ElevenLabsAgent[]> {
-    return await db.select().from(elevenLabsAgents).where(eq(elevenLabsAgents.tenantId, tenantId));
+  async getAllElevenLabsAgents(tenantId: string, projectId?: string): Promise<ElevenLabsAgent[]> {
+    const conditions = [eq(elevenLabsAgents.tenantId, tenantId)];
+    if (projectId) {
+      conditions.push(eq(elevenLabsAgents.projectId, projectId));
+    }
+    return await db.select().from(elevenLabsAgents).where(and(...conditions));
   }
 
   async getElevenLabsAgent(id: string, tenantId: string): Promise<ElevenLabsAgent | undefined> {
@@ -3414,8 +3422,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // KB Management operations
-  async getAllKbFiles(tenantId: string): Promise<KbFile[]> {
-    return await db.select().from(kbFiles).where(eq(kbFiles.tenantId, tenantId)).orderBy(kbFiles.filename);
+  async getAllKbFiles(tenantId: string, projectId?: string): Promise<KbFile[]> {
+    const conditions = [eq(kbFiles.tenantId, tenantId)];
+    if (projectId) {
+      conditions.push(eq(kbFiles.projectId, projectId));
+    }
+    return await db.select().from(kbFiles).where(and(...conditions)).orderBy(kbFiles.filename);
   }
 
   async getKbFileById(id: string, tenantId: string): Promise<KbFile | undefined> {
@@ -3859,13 +3871,16 @@ export class DatabaseStorage implements IStorage {
     return sequence;
   }
 
-  async listSequences(tenantId: string, filters?: { createdBy?: string; status?: string }): Promise<Sequence[]> {
+  async listSequences(tenantId: string, filters?: { createdBy?: string; status?: string; projectId?: string }): Promise<Sequence[]> {
     const conditions = [eq(sequences.tenantId, tenantId)];
     if (filters?.createdBy) {
       conditions.push(eq(sequences.createdBy, filters.createdBy));
     }
     if (filters?.status) {
       conditions.push(eq(sequences.status, filters.status));
+    }
+    if (filters?.projectId) {
+      conditions.push(eq(sequences.projectId, filters.projectId));
     }
 
     return await db.select().from(sequences).where(and(...conditions)).orderBy(desc(sequences.createdAt));

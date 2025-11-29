@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useOptionalProject } from "@/contexts/project-context";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -309,6 +310,8 @@ export default function OrgAdmin() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   const [activeTab, setActiveTab] = useState("team");
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [userToRemove, setUserToRemove] = useState<TenantUser | null>(null);
@@ -362,7 +365,16 @@ export default function OrgAdmin() {
   });
 
   const { data: pipelinesData, isLoading: pipelinesLoading } = useQuery<{ pipelines: Pipeline[] }>({
-    queryKey: ['/api/org-admin/pipelines'],
+    queryKey: ['/api/org-admin/pipelines', currentProject?.id],
+    queryFn: async () => {
+      const url = new URL('/api/org-admin/pipelines', window.location.origin);
+      if (currentProject?.id) {
+        url.searchParams.set('projectId', currentProject.id);
+      }
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch pipelines');
+      return response.json();
+    },
     enabled: canAccessAdminFeatures(user),
   });
 
@@ -372,7 +384,16 @@ export default function OrgAdmin() {
   });
 
   const { data: voiceAgentsData } = useQuery<{ agents: ElevenLabsAgent[] }>({
-    queryKey: ['/api/elevenlabs/agents'],
+    queryKey: ['/api/elevenlabs/agents', currentProject?.id],
+    queryFn: async () => {
+      const url = new URL('/api/elevenlabs/agents', window.location.origin);
+      if (currentProject?.id) {
+        url.searchParams.set('projectId', currentProject.id);
+      }
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch agents');
+      return response.json();
+    },
     enabled: canAccessAdminFeatures(user),
   });
 

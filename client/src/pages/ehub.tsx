@@ -27,6 +27,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
 import { TestTube2, RefreshCw, Reply } from "lucide-react";
+import { useOptionalProject } from "@/contexts/project-context";
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
@@ -154,6 +155,8 @@ interface PausedRecipient {
 }
 
 function SentHistoryView() {
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedSequence, setSelectedSequence] = useState<string>('all');
@@ -169,7 +172,16 @@ function SentHistoryView() {
 
   // Fetch all sequences for filter dropdown
   const { data: sequences } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ['/api/sequences'],
+    queryKey: ['/api/sequences', currentProject?.id],
+    queryFn: async () => {
+      const url = new URL('/api/sequences', window.location.origin);
+      if (currentProject?.id) {
+        url.searchParams.set('projectId', currentProject.id);
+      }
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch sequences');
+      return response.json();
+    },
   });
 
   // Fetch sent history
@@ -1469,6 +1481,8 @@ function QueueView() {
 export default function EHub() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedSequenceId, setSelectedSequenceId] = useState<string | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -1581,7 +1595,16 @@ export default function EHub() {
 
   // Fetch sequences
   const { data: sequences, isLoading } = useQuery<Sequence[]>({
-    queryKey: ['/api/sequences'],
+    queryKey: ['/api/sequences', currentProject?.id],
+    queryFn: async () => {
+      const url = new URL('/api/sequences', window.location.origin);
+      if (currentProject?.id) {
+        url.searchParams.set('projectId', currentProject.id);
+      }
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch sequences');
+      return response.json();
+    },
   });
 
   // Fetch user preferences for blacklist toggle

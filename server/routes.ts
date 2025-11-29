@@ -2135,7 +2135,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
-      const agents = await storage.getAllElevenLabsAgents(req.user.tenantId);
+      const { projectId } = req.query;
+      const agents = await storage.getAllElevenLabsAgents(req.user.tenantId, projectId as string | undefined);
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(req.user.tenantId);
       
       // Create a map of phone number IDs to phone numbers for quick lookup
@@ -5482,7 +5483,8 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.get('/api/kb/files', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const tenantId = (req.user as any).tenantId;
-      const files = await storage.getAllKbFiles(tenantId);
+      const { projectId } = req.query;
+      const files = await storage.getAllKbFiles(tenantId, projectId as string | undefined);
       res.json({ files });
     } catch (error: any) {
       console.error('[KB] Error fetching files:', error);
@@ -20677,8 +20679,8 @@ Use this store information to provide context-aware responses. When helping draf
   // List all sequences (admin only)
   app.get('/api/sequences', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const { status } = req.query;
-      const sequences = await storage.listSequences(req.user.tenantId, { status });
+      const { status, projectId } = req.query;
+      const sequences = await storage.listSequences(req.user.tenantId, { status, projectId: projectId as string | undefined });
       res.json(sequences);
     } catch (error: any) {
       console.error('Error listing sequences:', error);
@@ -22716,7 +22718,8 @@ ${conversationContext}`;
   app.get('/api/org-admin/pipelines', requireOrgAdmin, async (req: any, res) => {
     try {
       const tenantId = req.user.tenantId;
-      const pipelinesList = await storage.listPipelines(tenantId);
+      const { projectId } = req.query;
+      const pipelinesList = await storage.listPipelines(tenantId, projectId as string | undefined);
       res.json({ pipelines: pipelinesList });
     } catch (error: any) {
       console.error('Error listing pipelines:', error);

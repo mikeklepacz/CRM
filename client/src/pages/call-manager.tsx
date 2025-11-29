@@ -27,6 +27,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { ProposalDiffViewer } from "@/components/proposal-diff-viewer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AlignerChat } from "@/components/aligner-chat";
+import { useOptionalProject } from "@/contexts/project-context";
 
 interface ElevenLabsAgent {
   id: string;
@@ -141,6 +142,8 @@ interface CallHistoryComplete {
 // KB Library Tab Component
 function KBLibraryTab() {
   const { toast } = useToast();
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
@@ -201,7 +204,16 @@ function KBLibraryTab() {
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
-    queryKey: ['/api/kb/files'],
+    queryKey: ['/api/kb/files', currentProject?.id],
+    queryFn: async () => {
+      const url = new URL('/api/kb/files', window.location.origin);
+      if (currentProject?.id) {
+        url.searchParams.set('projectId', currentProject.id);
+      }
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch KB files');
+      return response.json();
+    },
   });
 
   const kbFiles = kbData?.files || [];
@@ -1205,6 +1217,8 @@ export default function CallManager() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   
   const [activeScenario, setActiveScenario] = useState<CallScenario>('cold_calls');
   const [selectedStores, setSelectedStores] = useState<Set<string>>(new Set());
@@ -1285,7 +1299,16 @@ export default function CallManager() {
 
   // Fetch available agents
   const { data: agents = [], isLoading: agentsLoading } = useQuery<ElevenLabsAgent[]>({
-    queryKey: ['/api/elevenlabs/agents'],
+    queryKey: ['/api/elevenlabs/agents', currentProject?.id],
+    queryFn: async () => {
+      const url = new URL('/api/elevenlabs/agents', window.location.origin);
+      if (currentProject?.id) {
+        url.searchParams.set('projectId', currentProject.id);
+      }
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch agents');
+      return response.json();
+    },
     enabled: hasAccess,
   });
 
