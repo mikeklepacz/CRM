@@ -29,6 +29,7 @@ import CallManager from "@/pages/call-manager";
 import FollowUpCenter from "@/pages/follow-up-center";
 import EHub from "@/pages/ehub";
 import ProductMockup from "@/pages/product-mockup";
+import SuperAdmin from "@/pages/super-admin";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -72,6 +73,7 @@ function Router() {
           <main className="flex-1 overflow-auto">
             <Switch>
               <Route path="/admin" component={Admin} />
+              <Route path="/super-admin" component={SuperAdmin} />
               <Route path="/settings" component={Settings} />
               <Route path="/clients" component={ClientDashboard} />
               <Route path="/documents" component={Documents} />
