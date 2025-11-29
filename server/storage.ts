@@ -184,6 +184,12 @@ import {
   ignoredHolidays,
   type IgnoredHoliday,
   type InsertIgnoredHoliday,
+  pipelines,
+  pipelineStages,
+  type Pipeline,
+  type InsertPipeline,
+  type PipelineStage,
+  type InsertPipelineStage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
@@ -231,6 +237,22 @@ export interface IStorage {
   getTenantInviteByToken(token: string): Promise<TenantUserInvite | undefined>;
   cancelTenantInvite(inviteId: string, tenantId: string): Promise<void>;
   acceptTenantInvite(token: string, userId: string): Promise<void>;
+
+  // Pipeline operations
+  listPipelines(tenantId: string): Promise<Pipeline[]>;
+  getPipelineById(pipelineId: string, tenantId: string): Promise<Pipeline | undefined>;
+  getPipelineBySlug(slug: string, tenantId: string): Promise<Pipeline | undefined>;
+  createPipeline(data: InsertPipeline): Promise<Pipeline>;
+  updatePipeline(pipelineId: string, tenantId: string, updates: Partial<InsertPipeline>): Promise<Pipeline>;
+  deletePipeline(pipelineId: string, tenantId: string): Promise<void>;
+  
+  // Pipeline stage operations
+  listPipelineStages(pipelineId: string, tenantId: string): Promise<PipelineStage[]>;
+  getPipelineStageById(stageId: string, tenantId: string): Promise<PipelineStage | undefined>;
+  createPipelineStage(data: InsertPipelineStage): Promise<PipelineStage>;
+  updatePipelineStage(stageId: string, tenantId: string, updates: Partial<InsertPipelineStage>): Promise<PipelineStage>;
+  deletePipelineStage(stageId: string, tenantId: string): Promise<void>;
+  reorderPipelineStages(pipelineId: string, tenantId: string, stageIds: string[]): Promise<void>;
 
   // System integrations operations
   getSystemIntegration(provider: string): Promise<SystemIntegration | undefined>;
@@ -1073,6 +1095,108 @@ export class DatabaseStorage implements IStorage {
       .update(tenantUserInvites)
       .set({ status: 'accepted', acceptedAt: new Date() })
       .where(eq(tenantUserInvites.id, invite.id));
+  }
+
+  // Pipeline operations
+  async listPipelines(tenantId: string): Promise<Pipeline[]> {
+    return await db
+      .select()
+      .from(pipelines)
+      .where(eq(pipelines.tenantId, tenantId))
+      .orderBy(pipelines.name);
+  }
+
+  async getPipelineById(pipelineId: string, tenantId: string): Promise<Pipeline | undefined> {
+    const [pipeline] = await db
+      .select()
+      .from(pipelines)
+      .where(and(eq(pipelines.id, pipelineId), eq(pipelines.tenantId, tenantId)));
+    return pipeline;
+  }
+
+  async getPipelineBySlug(slug: string, tenantId: string): Promise<Pipeline | undefined> {
+    const [pipeline] = await db
+      .select()
+      .from(pipelines)
+      .where(and(eq(pipelines.slug, slug), eq(pipelines.tenantId, tenantId)));
+    return pipeline;
+  }
+
+  async createPipeline(data: InsertPipeline): Promise<Pipeline> {
+    const [pipeline] = await db
+      .insert(pipelines)
+      .values(data)
+      .returning();
+    return pipeline;
+  }
+
+  async updatePipeline(pipelineId: string, tenantId: string, updates: Partial<InsertPipeline>): Promise<Pipeline> {
+    const [updated] = await db
+      .update(pipelines)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(pipelines.id, pipelineId), eq(pipelines.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deletePipeline(pipelineId: string, tenantId: string): Promise<void> {
+    await db
+      .delete(pipelines)
+      .where(and(eq(pipelines.id, pipelineId), eq(pipelines.tenantId, tenantId)));
+  }
+
+  // Pipeline stage operations
+  async listPipelineStages(pipelineId: string, tenantId: string): Promise<PipelineStage[]> {
+    return await db
+      .select()
+      .from(pipelineStages)
+      .where(and(eq(pipelineStages.pipelineId, pipelineId), eq(pipelineStages.tenantId, tenantId)))
+      .orderBy(pipelineStages.stageOrder);
+  }
+
+  async getPipelineStageById(stageId: string, tenantId: string): Promise<PipelineStage | undefined> {
+    const [stage] = await db
+      .select()
+      .from(pipelineStages)
+      .where(and(eq(pipelineStages.id, stageId), eq(pipelineStages.tenantId, tenantId)));
+    return stage;
+  }
+
+  async createPipelineStage(data: InsertPipelineStage): Promise<PipelineStage> {
+    const [stage] = await db
+      .insert(pipelineStages)
+      .values(data)
+      .returning();
+    return stage;
+  }
+
+  async updatePipelineStage(stageId: string, tenantId: string, updates: Partial<InsertPipelineStage>): Promise<PipelineStage> {
+    const [updated] = await db
+      .update(pipelineStages)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(pipelineStages.id, stageId), eq(pipelineStages.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deletePipelineStage(stageId: string, tenantId: string): Promise<void> {
+    await db
+      .delete(pipelineStages)
+      .where(and(eq(pipelineStages.id, stageId), eq(pipelineStages.tenantId, tenantId)));
+  }
+
+  async reorderPipelineStages(pipelineId: string, tenantId: string, stageIds: string[]): Promise<void> {
+    // Update stage order in a transaction
+    for (let i = 0; i < stageIds.length; i++) {
+      await db
+        .update(pipelineStages)
+        .set({ stageOrder: i + 1, updatedAt: new Date() })
+        .where(and(
+          eq(pipelineStages.id, stageIds[i]),
+          eq(pipelineStages.pipelineId, pipelineId),
+          eq(pipelineStages.tenantId, tenantId)
+        ));
+    }
   }
 
   async updateUser(id: string, updates: Partial<UpsertUser>): Promise<User> {
