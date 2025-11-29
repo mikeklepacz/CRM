@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -26,7 +27,7 @@ export default function Admin() {
 
   // Redirect non-admins to dashboard
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && !canAccessAdminFeatures(user)) {
       setLocation('/');
     }
   }, [user, setLocation]);
@@ -34,7 +35,7 @@ export default function Admin() {
   if (authLoading) return null;
 
   // Check if user has access
-  const hasAccess = user?.role === 'admin';
+  const hasAccess = canAccessAdminFeatures(user);
 
   if (!hasAccess) {
     return null; // Will redirect via useEffect

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLocation } from "wouter";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -160,7 +161,7 @@ function StatusEditorPopover({
   const [isSaving, setIsSaving] = useState(false);
   const [statusManagementOpen, setStatusManagementOpen] = useState(false);
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = canAccessAdminFeatures(currentUser);
 
   // Update local state when props change
   useEffect(() => {
@@ -851,7 +852,7 @@ export default function ClientDashboard() {
 
   const handleCellUpdate = (row: MergedDataRow, column: string, value: any) => {
     // Only admins can edit CRM table cells - sales agents must use Store Details dialog
-    if (currentUser?.role !== 'admin') {
+    if (!canAccessAdminFeatures(currentUser)) {
       toast({
         title: "Editing Restricted",
         description: "Please use the Store Details popup to make changes.",
@@ -998,7 +999,7 @@ export default function ClientDashboard() {
   });
 
   // Check if user is admin - only admins can edit CRM table directly
-  const isRealAdmin = currentUser?.role === 'admin';
+  const isRealAdmin = canAccessAdminFeatures(currentUser);
   
   // View mode: admins can toggle to view as agent
   const [viewAsAgent, setViewAsAgent] = useState(userPreferences?.viewAsAgent || false);
@@ -1041,7 +1042,7 @@ export default function ClientDashboard() {
       const isAgentColumn = (col: string) =>
         col.toLowerCase() === 'agent' || col.toLowerCase() === 'agent name';
       const shouldHideColumn = (col: string) => {
-        if (isAgentColumn(col) && currentUser?.role !== 'admin') {
+        if (isAgentColumn(col) && !canAccessAdminFeatures(currentUser)) {
           return true;
         }
         return hiddenColumns.includes(col.toLowerCase());
@@ -1090,12 +1091,12 @@ export default function ClientDashboard() {
           const newColumns = headers.filter((h: string) => !savedOrder.includes(h));
           // Filter out Agent column for non-admin users
           const finalOrder = [...savedOrder, ...newColumns].filter((col: string) =>
-            currentUser?.role === 'admin' || !isAgentColumn(col)
+            canAccessAdminFeatures(currentUser) || !isAgentColumn(col)
           );
           setColumnOrder(finalOrder);
         } else {
           const finalOrder = headers.filter((col: string) =>
-            currentUser?.role === 'admin' || !isAgentColumn(col)
+            canAccessAdminFeatures(currentUser) || !isAgentColumn(col)
           );
           setColumnOrder(finalOrder);
         }
@@ -1156,7 +1157,7 @@ export default function ClientDashboard() {
         });
         setVisibleColumns(currentVisible);
         const finalOrder = headers.filter((col: string) =>
-          currentUser?.role === 'admin' || !isAgentColumn(col)
+          canAccessAdminFeatures(currentUser) || !isAgentColumn(col)
         );
         setColumnOrder(finalOrder);
         setColumnWidths(currentWidths);
@@ -1174,7 +1175,7 @@ export default function ClientDashboard() {
         if (newHeaders.length > 0) {
           // Add new headers to column order (filtering out Agent for non-admins)
           const headersToAdd = newHeaders.filter((col: string) =>
-            currentUser?.role === 'admin' || !isAgentColumn(col)
+            canAccessAdminFeatures(currentUser) || !isAgentColumn(col)
           );
           setColumnOrder([...currentOrder, ...headersToAdd]);
 
@@ -1719,7 +1720,7 @@ export default function ClientDashboard() {
 
   const handleCellEdit = (row: any, column: string, value: string) => {
     // Only admins can edit CRM table cells - sales agents must use Store Details dialog
-    if (currentUser?.role !== 'admin') {
+    if (!canAccessAdminFeatures(currentUser)) {
       toast({
         title: "Editing Restricted",
         description: "Please use the Store Details popup to make changes.",

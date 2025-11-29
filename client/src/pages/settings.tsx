@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,7 +95,7 @@ export default function Settings() {
   // Fetch Google OAuth settings (admin only)
   const { data: googleSettings } = useQuery<GoogleOAuthSettings>({
     queryKey: ["/api/auth/google/sheets/settings"],
-    enabled: user?.role === 'admin',
+    enabled: canAccessAdminFeatures(user),
   });
 
   // Fetch integration status (all users)
@@ -515,7 +516,7 @@ export default function Settings() {
 
   if (!user) return null;
 
-  const dashboardPath = user.role === 'admin' ? '/admin' : '/agent';
+  const dashboardPath = canAccessAdminFeatures(user) ? '/admin' : '/agent';
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -557,7 +558,7 @@ export default function Settings() {
             <LayoutGrid className="mr-2 h-4 w-4" />
             Modules
           </TabsTrigger>
-          {user.role === 'admin' && (
+          {canAccessAdminFeatures(user) && (
             <>
               <TabsTrigger value="woocommerce" data-testid="tab-woocommerce">
                 <ShoppingCart className="mr-2 h-4 w-4" />
@@ -1027,7 +1028,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {user.role === 'admin' && (
+                {canAccessAdminFeatures(user) && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-admin"
@@ -1110,7 +1111,7 @@ export default function Settings() {
                   />
                   <Label htmlFor="module-labelDesigner" className="font-normal cursor-pointer">Label Designer</Label>
                 </div>
-                {(user.role === 'admin' || user.hasVoiceAccess) && (
+                {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-callManager"
@@ -1121,7 +1122,7 @@ export default function Settings() {
                     <Label htmlFor="module-callManager" className="font-normal cursor-pointer">Call Manager</Label>
                   </div>
                 )}
-                {user.role === 'admin' && (
+                {canAccessAdminFeatures(user) && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-ehub"
@@ -1140,7 +1141,7 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        {user.role === 'admin' && (
+        {canAccessAdminFeatures(user) && (
           <>
             <TabsContent value="woocommerce">
               <Card>

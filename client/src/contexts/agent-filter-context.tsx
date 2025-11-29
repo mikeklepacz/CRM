@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { canAccessAdminFeatures } from '@/lib/authUtils';
 
 interface User {
   id: string;
@@ -30,7 +31,7 @@ export function AgentFilterProvider({ children }: { children: React.ReactNode })
   // Fetch all users (for admin to see available agents)
   const { data: usersData, isLoading: isLoadingAgents } = useQuery<{ users: User[] }>({
     queryKey: ['/api/users'],
-    enabled: currentUser?.role === 'admin',
+    enabled: canAccessAdminFeatures(currentUser),
   });
 
   const availableAgents = usersData?.users || [];

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,7 +52,7 @@ export default function AdminDashboard() {
   }, [userPreferences]);
 
   useEffect(() => {
-    if (!authLoading && user && user.role !== 'admin') {
+    if (!authLoading && user && !canAccessAdminFeatures(user)) {
       toast({
         title: "Unauthorized",
         description: "You are logged out. Logging in again...",

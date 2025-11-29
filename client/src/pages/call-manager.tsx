@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1274,13 +1275,13 @@ export default function CallManager() {
 
   // Redirect if user doesn't have voice access
   useEffect(() => {
-    if (user && user.role !== 'admin' && !user.hasVoiceAccess) {
+    if (user && !canAccessAdminFeatures(user) && !user.hasVoiceAccess) {
       setLocation('/');
     }
   }, [user, setLocation]);
 
   // Check if user should have access
-  const hasAccess = user?.role === 'admin' || user?.hasVoiceAccess;
+  const hasAccess = canAccessAdminFeatures(user) || user?.hasVoiceAccess;
 
   // Fetch available agents
   const { data: agents = [], isLoading: agentsLoading } = useQuery<ElevenLabsAgent[]>({
@@ -1320,7 +1321,7 @@ export default function CallManager() {
   // Fetch user preferences for auto-trigger settings
   const { data: preferences } = useQuery<{ autoKbAnalysis?: boolean; kbAnalysisThreshold?: number }>({
     queryKey: ['/api/user/preferences'],
-    enabled: user?.role === 'admin',
+    enabled: canAccessAdminFeatures(user),
   });
 
   // Poll for analysis job status (for progress indicator)
@@ -1864,7 +1865,7 @@ export default function CallManager() {
       const data = await response.json();
       return data.history || [];
     },
-    enabled: user?.role === 'admin',
+    enabled: canAccessAdminFeatures(user),
   });
 
   // Auto-load most recent insight when history loads
@@ -2018,7 +2019,7 @@ export default function CallManager() {
               <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
               <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
               <TabsTrigger value="call-history" data-testid="tab-call-history">Call History</TabsTrigger>
-              {user?.role === 'admin' && (
+              {canAccessAdminFeatures(user) && (
                 <>
                   <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
                   <TabsTrigger value="aligner-chat" data-testid="tab-aligner-chat">Aligner Chat</TabsTrigger>
@@ -2047,7 +2048,7 @@ export default function CallManager() {
               </div>
               
               {/* Nuke Call Data Button - for testing */}
-              {user?.role === 'admin' && (
+              {canAccessAdminFeatures(user) && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -2832,7 +2833,7 @@ export default function CallManager() {
         </Card>
           </TabsContent>
 
-          {user?.role === 'admin' && (
+          {canAccessAdminFeatures(user) && (
             <TabsContent value="ai-insights" className="space-y-6">
               {/* AI Insights Section */}
               <Card data-testid="card-ai-insights">
@@ -2939,7 +2940,7 @@ export default function CallManager() {
                     )}
                   </Button>
 
-                  {user?.role === 'admin' && (
+                  {canAccessAdminFeatures(user) && (
                     <div className="flex items-center gap-2">
                       <Checkbox 
                         id="auto-kb-analysis"
@@ -3500,7 +3501,7 @@ export default function CallManager() {
           )}
 
           {/* Aligner Chat Tab */}
-          {user?.role === 'admin' && (
+          {canAccessAdminFeatures(user) && (
             <TabsContent value="aligner-chat" className="space-y-6">
               <Card data-testid="card-aligner-chat">
                 <CardHeader>
@@ -3522,7 +3523,7 @@ export default function CallManager() {
           )}
 
           {/* KB Library Tab */}
-          {user?.role === 'admin' && (
+          {canAccessAdminFeatures(user) && (
             <TabsContent value="kb-library" className="space-y-6">
               <KBLibraryTab />
             </TabsContent>

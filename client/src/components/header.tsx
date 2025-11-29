@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -49,7 +50,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
   // Get unread ticket count (admin only)
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ['/api/tickets/unread-count'],
-    enabled: user?.role === 'admin',
+    enabled: canAccessAdminFeatures(user),
   });
 
   // Fetch user preferences for module visibility
@@ -91,7 +92,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
         
         {/* Full Navigation - Shows on md+, wraps naturally */}
         <nav className="hidden md:flex items-center gap-0 flex-wrap flex-1">
-          {user.role === 'admin' && visibleModules.admin && (
+          {canAccessAdminFeatures(user) && visibleModules.admin && (
             <Link href="/admin">
               <Button variant="ghost" size="sm" data-testid="nav-admin">
                 <ShieldCheck className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -163,7 +164,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {(user.role === 'admin' || user.hasVoiceAccess) && visibleModules.callManager && (
+          {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && visibleModules.callManager && (
             <Link href="/call-manager">
               <Button variant="ghost" size="sm" data-testid="nav-call-manager">
                 <Phone className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -171,7 +172,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {user.role === 'admin' && visibleModules.ehub && (
+          {canAccessAdminFeatures(user) && visibleModules.ehub && (
             <Link href="/ehub">
               <Button variant="ghost" size="sm" data-testid="nav-ehub">
                 <Mail className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -191,7 +192,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              {user.role === 'admin' && visibleModules.admin && (
+              {canAccessAdminFeatures(user) && visibleModules.admin && (
                 <DropdownMenuItem onClick={() => { setLocation('/admin'); setMobileMenuOpen(false); }}>
                   <ShieldCheck className="mr-2 h-4 w-4" />
                   Admin
@@ -245,13 +246,13 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   Label Designer
                 </DropdownMenuItem>
               )}
-              {(user.role === 'admin' || user.hasVoiceAccess) && visibleModules.callManager && (
+              {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && visibleModules.callManager && (
                 <DropdownMenuItem onClick={() => { setLocation('/call-manager'); setMobileMenuOpen(false); }}>
                   <Phone className="mr-2 h-4 w-4" />
                   Call Manager
                 </DropdownMenuItem>
               )}
-              {user.role === 'admin' && visibleModules.ehub && (
+              {canAccessAdminFeatures(user) && visibleModules.ehub && (
                 <DropdownMenuItem onClick={() => { setLocation('/ehub'); setMobileMenuOpen(false); }}>
                   <Mail className="mr-2 h-4 w-4" />
                   E-Hub
@@ -274,7 +275,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   <Badge variant="destructive" className="ml-auto">{unreadCount}</Badge>
                 )}
               </DropdownMenuItem>
-              {user.role === 'admin' && (
+              {canAccessAdminFeatures(user) && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs text-muted-foreground">Admin Tools</DropdownMenuLabel>

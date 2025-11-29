@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PhoneCall, Clock, Users, BarChart3 } from "lucide-react";
@@ -11,13 +12,13 @@ export default function Voice() {
 
   // Redirect if user doesn't have voice access
   useEffect(() => {
-    if (user && user.role !== 'admin' && !user.hasVoiceAccess) {
+    if (user && !canAccessAdminFeatures(user) && !user.hasVoiceAccess) {
       setLocation('/');
     }
   }, [user, setLocation]);
 
   // Check if user should have access (admin always has access, agents need hasVoiceAccess)
-  const hasAccess = user?.role === 'admin' || user?.hasVoiceAccess;
+  const hasAccess = canAccessAdminFeatures(user) || user?.hasVoiceAccess;
 
   if (!hasAccess) {
     return null; // Will redirect via useEffect
