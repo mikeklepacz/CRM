@@ -1,7 +1,31 @@
-# Hemp Wick CRM & Commission Tracker
+# Hemp Wick CRM & Commission Tracker → Super CRM Platform
 
 ## Overview
-This project is a Google Sheets-powered CRM and commission tracking system designed to streamline sales processes, manage client interactions, and accurately track agent commissions for hemp wick sales teams. It features a dual-sheet system (Store Database and Commission Tracker), inline editing, role-based access control, and automated WooCommerce order syncing. The system provides a unified platform for sales operations, offering insights into team performance and facilitating accurate payout reporting. The project aims to enhance sales operations through AI-powered tools for sales assistance, automated voice calling, and email campaigns, alongside robust knowledge base management. Future ambitions include transforming this into a multi-tenant "Super CRM" platform to serve various industries like sales and lead qualification, offering isolated data, customizable modules, and per-tenant configurations for multiple organizations.
+This project started as a Google Sheets-powered CRM for hemp wick sales teams and is now being transformed into a multi-tenant "Super CRM" platform serving multiple organizations with isolated data, customizable workflows, and per-tenant configurations.
+
+## Multi-Tenant Transformation Progress (Active)
+**Goal**: Convert single-tenant NMU Hemp Wick CRM into a multi-tenant platform.
+
+### Completed Phases:
+- **Phase 1**: Created foundation tables (tenants, user_tenants, tenant_integrations, pipelines, pipeline_stages)
+- **Phase 2**: Added tenant_id column to all 67 business tables
+- **Phase 3**: Created NMU tenant, backfilled 1500+ records with tenant_id = 'nmu-hemp-wick'
+- **Phase 4**: Enforced tenant isolation
+  - Made tenant_id NOT NULL on all tables with composite indexes
+  - Added tenant context to auth (req.user.tenantId, req.user.roleInTenant)
+  - Updated storage layer methods to filter by tenantId (clients, orders, statuses, categories, reminders, notifications, templates, calls, notes, commissions, knowledge base, AI/ElevenLabs, sequences)
+  - Routes inject tenantId from req.user for all CRUD operations
+
+### Pending Phases:
+- **Phase 5**: Expand role system (super_admin/org_admin/agent)
+- **Phase 6**: Build Super Admin dashboard
+- **Phase 7**: Build Org Admin features
+- **Phase 8**: Build Pipelines system (workflow definitions, stages, AI prompts)
+
+### Architecture Decisions:
+- **Row-level multi-tenancy**: Same database, tenant_id separation (not separate databases)
+- **Role hierarchy**: super_admin > org_admin > agent (replacing admin/agent)
+- **Tenant context**: Available on req.user after authentication via user_tenants table
 
 ## User Preferences
 - All preferences automatically save to the database and sync across devices.
