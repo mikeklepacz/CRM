@@ -122,6 +122,7 @@ export async function setupAuth(app: Express) {
           ...user, 
           role: fullUser.role,
           hasVoiceAccess: fullUser.hasVoiceAccess ?? false,
+          isSuperAdmin: fullUser.isSuperAdmin ?? false,
           tenantId: tenantContext?.tenantId,
           roleInTenant: tenantContext?.roleInTenant,
           skipTokenCheck: true 
@@ -141,6 +142,7 @@ export async function setupAuth(app: Express) {
             ...user, 
             role: fullUser.role,
             hasVoiceAccess: fullUser.hasVoiceAccess ?? false,
+            isSuperAdmin: fullUser.isSuperAdmin ?? false,
             tenantId: tenantContext?.tenantId,
             roleInTenant: tenantContext?.roleInTenant
           });
@@ -182,6 +184,11 @@ export async function setupAuth(app: Express) {
   });
 }
 
+// Role hierarchy: super_admin > org_admin > agent
+// super_admin: Platform-wide access (isSuperAdmin flag on user)
+// org_admin: Tenant-level admin (roleInTenant = 'org_admin')
+// agent: Regular user (roleInTenant = 'agent')
+
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
@@ -219,4 +226,53 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
+};
+
+// Route guard: Requires super admin (platform-wide access)
+export const requireSuperAdmin: RequestHandler = (req, res, next) => {
+  const user = req.user as any;
+  if (!user?.isSuperAdmin) {
+    return res.status(403).json({ message: "Forbidden: Super admin access required" });
+  }
+  return next();
+};
+
+// Route guard: Requires org admin or higher (tenant-level admin)
+export const requireOrgAdmin: RequestHandler = (req, res, next) => {
+  const user = req.user as any;
+  // Super admins can access org admin routes
+  if (user?.isSuperAdmin) {
+    return next();
+  }
+  // Check tenant-level role
+  if (user?.roleInTenant !== 'org_admin') {
+    return res.status(403).json({ message: "Forbidden: Organization admin access required" });
+  }
+  return next();
+};
+
+// Route guard: Requires agent or higher (any authenticated user in tenant)
+// This is essentially the same as isAuthenticated but validates tenant context
+export const requireAgent: RequestHandler = (req, res, next) => {
+  const user = req.user as any;
+  // Super admins can access all agent routes
+  if (user?.isSuperAdmin) {
+    return next();
+  }
+  // Check that user has valid tenant context
+  if (!user?.tenantId || !user?.roleInTenant) {
+    return res.status(403).json({ message: "Forbidden: No valid tenant context" });
+  }
+  return next();
+};
+
+// Helper to check if user can access admin features (org_admin or super_admin)
+export const canAccessAdminFeatures = (user: any): boolean => {
+  if (!user) return false;
+  return user.isSuperAdmin || user.roleInTenant === 'org_admin' || user.role === 'admin';
+};
+
+// Helper to check if user is super admin
+export const isSuperAdmin = (user: any): boolean => {
+  return user?.isSuperAdmin === true;
 };
