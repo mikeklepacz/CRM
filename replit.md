@@ -15,9 +15,15 @@ This project started as a Google Sheets-powered CRM for hemp wick sales teams an
   - Added tenant context to auth (req.user.tenantId, req.user.roleInTenant)
   - Updated storage layer methods to filter by tenantId (clients, orders, statuses, categories, reminders, notifications, templates, calls, notes, commissions, knowledge base, AI/ElevenLabs, sequences)
   - Routes inject tenantId from req.user for all CRUD operations
+- **Phase 5**: Role system expansion (super_admin/org_admin/agent)
+  - Added isSuperAdmin boolean to users table (platform-wide role)
+  - Designated michael@naturalmaterials.eu as super_admin
+  - Created route guards: requireSuperAdmin, requireOrgAdmin, requireAgent (with built-in auth checks)
+  - Created client/src/lib/authUtils.ts with canAccessAdminFeatures() and isSuperAdmin() helpers
+  - Updated 9 frontend files to use centralized role checking
+  - Backward compatible with legacy 'admin' role during transition
 
 ### Pending Phases:
-- **Phase 5**: Expand role system (super_admin/org_admin/agent)
 - **Phase 6**: Build Super Admin dashboard
 - **Phase 7**: Build Org Admin features
 - **Phase 8**: Build Pipelines system (workflow definitions, stages, AI prompts)
