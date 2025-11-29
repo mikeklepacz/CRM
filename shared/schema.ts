@@ -2038,6 +2038,96 @@ export const insertTenantSchema = createInsertSchema(tenants).omit({
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type Tenant = typeof tenants.$inferSelect;
 
+// Tenant Projects - Campaigns, cases, or initiatives within a tenant
+// Each project has its own AI assistants, KB files, pipelines, sequences, keyword bins
+// Note: Distinct from 'projects' table which organizes AI conversations
+export const tenantProjects = pgTable("tenant_projects", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: varchar("name", { length: 255 }).notNull(), // "Hemp Wick Sales", "Tire Litigation", "Dieselgate Case"
+  slug: varchar("slug", { length: 100 }).notNull(), // URL-friendly within tenant
+  projectType: varchar("project_type", { length: 50 }).notNull().default('campaign'), // 'campaign', 'case', 'initiative', 'custom'
+  status: varchar("status", { length: 50 }).notNull().default('active'), // 'active', 'paused', 'archived'
+  description: text("description"),
+  
+  // Project-specific settings that override tenant defaults
+  settings: jsonb("settings").$type<{
+    // E-Hub overrides (project-level content, not corporate policy)
+    keywordBin?: string; // Project-specific keywords for AI
+    // Voice agent configuration
+    defaultVoiceAgentId?: string; // Default ElevenLabs agent for this project
+    // Email sequence defaults
+    defaultSequenceId?: string;
+    // Custom fields for this project type
+    [key: string]: any;
+  }>().default(sql`'{}'::jsonb`),
+  
+  // Lifecycle metadata
+  isDefault: boolean("is_default").default(false), // Default project for this tenant (auto-selected)
+  archivedAt: timestamp("archived_at"), // When project was archived (for mothballing)
+  archivedBy: varchar("archived_by").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_tenant_projects_tenant").on(table.tenantId),
+  index("idx_tenant_projects_status").on(table.tenantId, table.status),
+  uniqueIndex("idx_tenant_projects_tenant_slug").on(table.tenantId, table.slug),
+]);
+
+export const insertTenantProjectSchema = createInsertSchema(tenantProjects).omit({
+  id: true,
+  archivedAt: true,
+  archivedBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTenantProject = z.infer<typeof insertTenantProjectSchema>;
+export type TenantProject = typeof tenantProjects.$inferSelect;
+
+// Assistant Blueprints - Reusable AI assistant templates (e.g., "Aligner", "Wick Coach")
+// These are tenant-level templates that can be instantiated per-project
+export const assistantBlueprints = pgTable("assistant_blueprints", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: varchar("name", { length: 255 }).notNull(), // "Sales Aligner", "Legal Intake Bot"
+  slug: varchar("slug", { length: 100 }).notNull(), // URL-friendly within tenant
+  blueprintType: varchar("blueprint_type", { length: 50 }).notNull().default('general'), // 'voice', 'email', 'analysis', 'general'
+  description: text("description"),
+  
+  // Base configuration that project instances inherit
+  baseConfig: jsonb("base_config").$type<{
+    // OpenAI configuration
+    openaiModel?: string; // 'gpt-4o', 'gpt-4o-mini', etc.
+    systemPrompt?: string; // Base system prompt (corporate tone/guidelines)
+    temperature?: number;
+    // ElevenLabs configuration (for voice blueprints)
+    voiceId?: string;
+    voiceSettings?: Record<string, any>;
+    // Other AI provider configs
+    [key: string]: any;
+  }>().default(sql`'{}'::jsonb`),
+  
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_assistant_blueprints_tenant").on(table.tenantId),
+  index("idx_assistant_blueprints_type").on(table.tenantId, table.blueprintType),
+  uniqueIndex("idx_assistant_blueprints_tenant_slug").on(table.tenantId, table.slug),
+]);
+
+export const insertAssistantBlueprintSchema = createInsertSchema(assistantBlueprints).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertAssistantBlueprint = z.infer<typeof insertAssistantBlueprintSchema>;
+export type AssistantBlueprint = typeof assistantBlueprints.$inferSelect;
+
 // User Tenants - Maps users to tenants (many-to-many, allows super admin to access all)
 export const userTenants = pgTable("user_tenants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
