@@ -45,6 +45,7 @@ export const users = pgTable("users", {
   referredBy: varchar("referred_by").references(() => users.id), // MLM: who referred this user
   isActive: boolean("is_active").notNull().default(true), // Active/Inactive status for deactivating agents
   hasVoiceAccess: boolean("has_voice_access").notNull().default(false), // Access to Voice AI calling features (admins always have access)
+  isSuperAdmin: boolean("is_super_admin").notNull().default(false), // Platform-wide super admin (can access all tenants)
   signature: text("signature"), // Custom email signature for AI-generated emails
   gmailLabels: text("gmail_labels").array(), // Gmail labels to auto-apply to drafts
   emailPreference: varchar("email_preference", { length: 20 }).default('mailto'), // 'gmail_draft' or 'mailto'
@@ -2042,7 +2043,7 @@ export const userTenants = pgTable("user_tenants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  roleInTenant: varchar("role_in_tenant", { length: 50 }).notNull().default('agent'), // 'org_admin', 'agent'
+  roleInTenant: varchar("role_in_tenant", { length: 50 }).notNull().default('agent'), // 'super_admin', 'org_admin', 'agent'
   isDefault: boolean("is_default").default(false), // Which tenant to load by default for this user
   joinedAt: timestamp("joined_at").defaultNow(),
 }, (table) => [
