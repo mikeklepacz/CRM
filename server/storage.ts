@@ -144,6 +144,8 @@ import {
   type InsertNonDuplicate,
   type Tenant,
   type InsertTenant,
+  tenantUserInvites,
+  type TenantUserInvite,
   backgroundAudioSettings,
   voiceProxySessions,
   type BackgroundAudioSettings,
@@ -216,6 +218,19 @@ export interface IStorage {
   addUserToTenant(userId: string, tenantId: string, roleInTenant: string, isDefault?: boolean): Promise<void>;
   removeUserFromTenant(userId: string, tenantId: string): Promise<void>;
   getPlatformMetrics(): Promise<{ totalTenants: number; totalUsers: number; totalClients: number; activeTenants: number }>;
+
+  // Org Admin operations
+  listTenantUsers(tenantId: string): Promise<Array<User & { roleInTenant: string; joinedAt: Date | null }>>;
+  updateUserRoleInTenant(userId: string, tenantId: string, newRole: string): Promise<void>;
+  getTenantSettings(tenantId: string): Promise<Tenant['settings']>;
+  updateTenantSettings(tenantId: string, settings: Partial<Tenant['settings']>): Promise<Tenant>;
+
+  // Tenant invite operations
+  createTenantInvite(tenantId: string, email: string, role: string, invitedBy: string, expiresAt: Date): Promise<TenantUserInvite>;
+  listTenantInvites(tenantId: string): Promise<TenantUserInvite[]>;
+  getTenantInviteByToken(token: string): Promise<TenantUserInvite | undefined>;
+  cancelTenantInvite(inviteId: string, tenantId: string): Promise<void>;
+  acceptTenantInvite(token: string, userId: string): Promise<void>;
 
   // System integrations operations
   getSystemIntegration(provider: string): Promise<SystemIntegration | undefined>;
@@ -935,6 +950,129 @@ export class DatabaseStorage implements IStorage {
       totalClients: totalClientsResult?.count || 0,
       activeTenants: activeTenantsResult?.count || 0,
     };
+  }
+
+  // Org Admin operations
+  async listTenantUsers(tenantId: string): Promise<Array<User & { roleInTenant: string; joinedAt: Date | null }>> {
+    const memberships = await db
+      .select({
+        userId: userTenants.userId,
+        roleInTenant: userTenants.roleInTenant,
+        joinedAt: userTenants.joinedAt,
+      })
+      .from(userTenants)
+      .where(eq(userTenants.tenantId, tenantId));
+
+    if (memberships.length === 0) return [];
+
+    const userIds = memberships.map(m => m.userId);
+    const tenantUsers = await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, userIds));
+
+    const membershipMap = new Map(memberships.map(m => [m.userId, m]));
+    return tenantUsers.map(user => ({
+      ...user,
+      roleInTenant: membershipMap.get(user.id)?.roleInTenant || 'agent',
+      joinedAt: membershipMap.get(user.id)?.joinedAt || null,
+    }));
+  }
+
+  async updateUserRoleInTenant(userId: string, tenantId: string, newRole: string): Promise<void> {
+    await db
+      .update(userTenants)
+      .set({ roleInTenant: newRole })
+      .where(and(
+        eq(userTenants.userId, userId),
+        eq(userTenants.tenantId, tenantId)
+      ));
+  }
+
+  async getTenantSettings(tenantId: string): Promise<Tenant['settings']> {
+    const [tenant] = await db
+      .select({ settings: tenants.settings })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+    return tenant?.settings || {};
+  }
+
+  async updateTenantSettings(tenantId: string, settings: Partial<Tenant['settings']>): Promise<Tenant> {
+    const existing = await this.getTenantSettings(tenantId);
+    const merged = { ...existing, ...settings };
+    const [updated] = await db
+      .update(tenants)
+      .set({ settings: merged, updatedAt: new Date() })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+    return updated;
+  }
+
+  // Tenant invite operations
+  async createTenantInvite(tenantId: string, email: string, role: string, invitedBy: string, expiresAt: Date): Promise<TenantUserInvite> {
+    const inviteToken = uuidv4().replace(/-/g, '') + uuidv4().replace(/-/g, '').substring(0, 32);
+    const [invite] = await db
+      .insert(tenantUserInvites)
+      .values({
+        tenantId,
+        email: email.toLowerCase(),
+        role,
+        inviteToken,
+        invitedBy,
+        expiresAt,
+        status: 'pending',
+      })
+      .returning();
+    return invite;
+  }
+
+  async listTenantInvites(tenantId: string): Promise<TenantUserInvite[]> {
+    return await db
+      .select()
+      .from(tenantUserInvites)
+      .where(eq(tenantUserInvites.tenantId, tenantId))
+      .orderBy(desc(tenantUserInvites.createdAt));
+  }
+
+  async getTenantInviteByToken(token: string): Promise<TenantUserInvite | undefined> {
+    const [invite] = await db
+      .select()
+      .from(tenantUserInvites)
+      .where(eq(tenantUserInvites.inviteToken, token));
+    return invite;
+  }
+
+  async cancelTenantInvite(inviteId: string, tenantId: string): Promise<void> {
+    await db
+      .update(tenantUserInvites)
+      .set({ status: 'cancelled' })
+      .where(and(
+        eq(tenantUserInvites.id, inviteId),
+        eq(tenantUserInvites.tenantId, tenantId)
+      ));
+  }
+
+  async acceptTenantInvite(token: string, userId: string): Promise<void> {
+    const invite = await this.getTenantInviteByToken(token);
+    if (!invite || invite.status !== 'pending') {
+      throw new Error('Invalid or expired invite');
+    }
+    if (new Date() > invite.expiresAt) {
+      await db
+        .update(tenantUserInvites)
+        .set({ status: 'expired' })
+        .where(eq(tenantUserInvites.id, invite.id));
+      throw new Error('Invite has expired');
+    }
+
+    // Add user to tenant
+    await this.addUserToTenant(userId, invite.tenantId, invite.role);
+
+    // Mark invite as accepted
+    await db
+      .update(tenantUserInvites)
+      .set({ status: 'accepted', acceptedAt: new Date() })
+      .where(eq(tenantUserInvites.id, invite.id));
   }
 
   async updateUser(id: string, updates: Partial<UpsertUser>): Promise<User> {
