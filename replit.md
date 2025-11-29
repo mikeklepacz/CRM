@@ -56,9 +56,20 @@ This project started as a Google Sheets-powered CRM for hemp wick sales teams an
   - Frontend: Status badges with colors (active=green, paused=yellow, archived=gray)
   - Migration: Created default NMU project ('nmu-default-project'), backfilled 25+ records with project_id
   - Migration: Created 2 assistant blueprints (Aligner, Wick Coach) for NMU tenant
+- **Phase 10**: Global Project Context & Switcher (Chrome Profiles UX)
+  - Schema: Added `accentColor` field to `tenant_projects` for color-coded header bars
+  - Frontend: `client/src/contexts/project-context.tsx` - Global project state with localStorage persistence
+  - Frontend: Header displays color-coded project bar with project name and status badge
+  - Frontend: Project switcher dropdown in header for quick switching between active projects
+  - Frontend: Color picker in project create/edit form with 12 preset colors
+  - Storage layer: Updated listPipelines, listSequences, getAllKbFiles, getAllElevenLabsAgents to support optional projectId filter
+  - API: All listing endpoints (/api/org-admin/pipelines, /api/sequences, /api/kb/files, /api/elevenlabs/agents) accept projectId query param
+  - Frontend: All resource pages (org-admin pipelines, call-manager KB/agents, ehub sequences) filter by current project
+  - Frontend: All creation mutations auto-associate new items with current project
+  - UX: Prevents human error when working across multiple projects (similar to Chrome Profiles)
 
-### Pending Phases:
-- **Phase 10**: Project switcher in Org Admin UI, scoped KB/Pipeline/Voice pages per project
+### All Multi-Tenant Phases Complete
+The multi-tenant transformation is now complete with full project isolation and a Chrome Profiles-style UX for switching between projects.
 
 ### Architecture Decisions:
 - **Row-level multi-tenancy**: Same database, tenant_id separation (not separate databases)
