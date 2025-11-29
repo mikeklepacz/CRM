@@ -22536,6 +22536,227 @@ ${conversationContext}`;
     }
   });
 
+  // ============================================================================
+  // ORG ADMIN ROUTES - Tenant-scoped management for org admins
+  // ============================================================================
+
+  // GET /api/org-admin/users - List users in current tenant
+  app.get('/api/org-admin/users', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const users = await storage.listTenantUsers(tenantId);
+      res.json({ users });
+    } catch (error: any) {
+      console.error('Error listing tenant users:', error);
+      res.status(500).json({ message: error.message || 'Failed to list users' });
+    }
+  });
+
+  // PATCH /api/org-admin/users/:userId/role - Update user's role in current tenant
+  app.patch('/api/org-admin/users/:userId/role', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const { role } = req.body;
+      const tenantId = req.user.tenantId;
+
+      if (!role || !['org_admin', 'agent'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role. Must be org_admin or agent' });
+      }
+
+      // Prevent demoting self
+      if (userId === req.user.id && role !== 'org_admin') {
+        return res.status(400).json({ message: 'Cannot demote yourself' });
+      }
+
+      await storage.updateUserRoleInTenant(userId, tenantId, role);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating user role:', error);
+      res.status(500).json({ message: error.message || 'Failed to update user role' });
+    }
+  });
+
+  // DELETE /api/org-admin/users/:userId - Remove user from current tenant
+  app.delete('/api/org-admin/users/:userId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const tenantId = req.user.tenantId;
+
+      // Prevent removing self
+      if (userId === req.user.id) {
+        return res.status(400).json({ message: 'Cannot remove yourself from the organization' });
+      }
+
+      await storage.removeUserFromTenant(userId, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error removing user from tenant:', error);
+      res.status(500).json({ message: error.message || 'Failed to remove user' });
+    }
+  });
+
+  // GET /api/org-admin/settings - Get tenant settings
+  app.get('/api/org-admin/settings', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const tenant = await storage.getTenantById(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ message: 'Tenant not found' });
+      }
+      res.json({ tenant });
+    } catch (error: any) {
+      console.error('Error getting tenant settings:', error);
+      res.status(500).json({ message: error.message || 'Failed to get settings' });
+    }
+  });
+
+  // PATCH /api/org-admin/settings - Update tenant settings
+  app.patch('/api/org-admin/settings', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { settings } = req.body;
+
+      if (!settings || typeof settings !== 'object') {
+        return res.status(400).json({ message: 'Invalid settings object' });
+      }
+
+      const updated = await storage.updateTenantSettings(tenantId, settings);
+      res.json({ tenant: updated });
+    } catch (error: any) {
+      console.error('Error updating tenant settings:', error);
+      res.status(500).json({ message: error.message || 'Failed to update settings' });
+    }
+  });
+
+  // GET /api/org-admin/stats - Get tenant stats
+  app.get('/api/org-admin/stats', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const stats = await storage.getTenantStats(tenantId);
+      res.json(stats);
+    } catch (error: any) {
+      console.error('Error getting tenant stats:', error);
+      res.status(500).json({ message: error.message || 'Failed to get stats' });
+    }
+  });
+
+  // GET /api/org-admin/invites - List pending invites for current tenant
+  app.get('/api/org-admin/invites', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const invites = await storage.listTenantInvites(tenantId);
+      res.json({ invites });
+    } catch (error: any) {
+      console.error('Error listing invites:', error);
+      res.status(500).json({ message: error.message || 'Failed to list invites' });
+    }
+  });
+
+  // POST /api/org-admin/invites - Create a new invite
+  app.post('/api/org-admin/invites', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { email, role } = req.body;
+
+      if (!email || !role) {
+        return res.status(400).json({ message: 'Missing required fields: email, role' });
+      }
+
+      if (!['org_admin', 'agent'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role. Must be org_admin or agent' });
+      }
+
+      // Check if user is already a member
+      const existingUsers = await storage.listTenantUsers(tenantId);
+      const alreadyMember = existingUsers.some(u => u.email?.toLowerCase() === email.toLowerCase());
+      if (alreadyMember) {
+        return res.status(400).json({ message: 'User is already a member of this organization' });
+      }
+
+      // Check for existing pending invite
+      const existingInvites = await storage.listTenantInvites(tenantId);
+      const pendingInvite = existingInvites.find(
+        i => i.email.toLowerCase() === email.toLowerCase() && i.status === 'pending'
+      );
+      if (pendingInvite) {
+        return res.status(400).json({ message: 'An invite is already pending for this email' });
+      }
+
+      // Create invite with 7-day expiry
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      const invite = await storage.createTenantInvite(tenantId, email, role, req.user.id, expiresAt);
+      res.json({ invite });
+    } catch (error: any) {
+      console.error('Error creating invite:', error);
+      res.status(500).json({ message: error.message || 'Failed to create invite' });
+    }
+  });
+
+  // DELETE /api/org-admin/invites/:inviteId - Cancel an invite
+  app.delete('/api/org-admin/invites/:inviteId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { inviteId } = req.params;
+      const tenantId = req.user.tenantId;
+
+      await storage.cancelTenantInvite(inviteId, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error cancelling invite:', error);
+      res.status(500).json({ message: error.message || 'Failed to cancel invite' });
+    }
+  });
+
+  // POST /api/invites/:token/accept - Accept an invite (authenticated user)
+  app.post('/api/invites/:token/accept', requireAuth, async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      const userId = req.user.id;
+
+      await storage.acceptTenantInvite(token, userId);
+      res.json({ success: true, message: 'Successfully joined the organization' });
+    } catch (error: any) {
+      console.error('Error accepting invite:', error);
+      res.status(400).json({ message: error.message || 'Failed to accept invite' });
+    }
+  });
+
+  // GET /api/invites/:token - Get invite details (for invite page)
+  app.get('/api/invites/:token', async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      const invite = await storage.getTenantInviteByToken(token);
+
+      if (!invite) {
+        return res.status(404).json({ message: 'Invite not found' });
+      }
+
+      if (invite.status !== 'pending') {
+        return res.status(400).json({ message: `Invite has been ${invite.status}` });
+      }
+
+      if (new Date() > invite.expiresAt) {
+        return res.status(400).json({ message: 'Invite has expired' });
+      }
+
+      // Get tenant info
+      const tenant = await storage.getTenantById(invite.tenantId);
+
+      res.json({
+        invite: {
+          email: invite.email,
+          role: invite.role,
+          expiresAt: invite.expiresAt,
+          tenantName: tenant?.name || 'Unknown Organization',
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting invite details:', error);
+      res.status(500).json({ message: error.message || 'Failed to get invite details' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
