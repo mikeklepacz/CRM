@@ -49,6 +49,7 @@ import {
   openaiAssistants,
   openaiAssistantFiles,
   nonDuplicates,
+  userTenants,
   type User,
   type UpsertUser,
   type Ticket,
@@ -198,6 +199,9 @@ export interface IStorage {
   deleteUser(id: string): Promise<void>;
   getAgents(): Promise<User[]>;
 
+  // Tenant operations
+  getUserDefaultTenant(userId: string): Promise<{ tenantId: string; roleInTenant: string } | undefined>;
+
   // System integrations operations
   getSystemIntegration(provider: string): Promise<SystemIntegration | undefined>;
   updateSystemIntegration(provider: string, updates: Partial<InsertSystemIntegration>): Promise<SystemIntegration>;
@@ -217,12 +221,12 @@ export interface IStorage {
   setSelectedCategory(userId: string, category: string): Promise<UserPreferences>;
 
   // Client operations
-  getAllClients(): Promise<Client[]>;
-  getClientsByAgent(agentId: string): Promise<Client[]>;
-  getFilteredClients(filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string }): Promise<Client[]>;
-  getClient(id: string): Promise<Client | undefined>;
+  getAllClients(tenantId: string): Promise<Client[]>;
+  getClientsByAgent(agentId: string, tenantId: string): Promise<Client[]>;
+  getFilteredClients(tenantId: string, filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string }): Promise<Client[]>;
+  getClient(id: string, tenantId: string): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
-  updateClient(id: string, updates: Partial<InsertClient>): Promise<Client>;
+  updateClient(id: string, tenantId: string, updates: Partial<InsertClient>): Promise<Client>;
   claimClient(clientId: string, agentId: string): Promise<Client>;
   unclaimClient(clientId: string): Promise<Client>;
   findClientByUniqueKey(key: string, value: string): Promise<Client | undefined>;
@@ -237,7 +241,7 @@ export interface IStorage {
   getOrderById(id: string): Promise<Order | undefined>;
   updateOrder(id: string, updates: Partial<InsertOrder>): Promise<Order>;
   deleteOrder(id: string): Promise<void>;
-  getAllOrders(): Promise<Order[]>;
+  getAllOrders(tenantId: string): Promise<Order[]>;
 
   // Commission operations
   createCommission(commission: InsertCommission): Promise<Commission>;
@@ -267,19 +271,19 @@ export interface IStorage {
   getOrdersByClient(clientId: string): Promise<Order[]>;
 
   // Reminder operations
-  getRemindersByUser(userId: string): Promise<Reminder[]>;
-  getRemindersByClient(clientId: string): Promise<Reminder[]>;
-  getReminderById(id: string): Promise<Reminder | undefined>;
+  getRemindersByUser(userId: string, tenantId: string): Promise<Reminder[]>;
+  getRemindersByClient(clientId: string, tenantId: string): Promise<Reminder[]>;
+  getReminderById(id: string, tenantId: string): Promise<Reminder | undefined>;
   createReminder(reminder: InsertReminder): Promise<Reminder>;
-  updateReminder(id: string, updates: Partial<InsertReminder>): Promise<Reminder>;
-  deleteReminder(id: string): Promise<void>;
+  updateReminder(id: string, tenantId: string, updates: Partial<InsertReminder>): Promise<Reminder>;
+  deleteReminder(id: string, tenantId: string): Promise<void>;
 
   // Notification operations
-  getNotificationsByUser(userId: string): Promise<Notification[]>;
-  getNotificationById(id: string): Promise<Notification | undefined>;
-  markNotificationAsRead(id: string): Promise<Notification>;
-  markNotificationAsResolved(id: string): Promise<Notification>;
-  deleteNotification(id: string): Promise<void>;
+  getNotificationsByUser(userId: string, tenantId: string): Promise<Notification[]>;
+  getNotificationById(id: string, tenantId: string): Promise<Notification | undefined>;
+  markNotificationAsRead(id: string, tenantId: string): Promise<Notification>;
+  markNotificationAsResolved(id: string, tenantId: string): Promise<Notification>;
+  deleteNotification(id: string, tenantId: string): Promise<void>;
 
   // Widget layout operations
   getWidgetLayout(userId: string, dashboardType: string): Promise<WidgetLayout | undefined>;
@@ -318,12 +322,12 @@ export interface IStorage {
   moveConversationToProject(conversationId: string, projectId: string | null): Promise<Conversation>;
 
   // Template operations
-  getUserTemplates(userId: string): Promise<Template[]>;  // Per-user templates
-  getTemplate(id: string): Promise<Template | undefined>;
+  getUserTemplates(userId: string, tenantId: string): Promise<Template[]>;  // Per-user templates
+  getTemplate(id: string, tenantId: string): Promise<Template | undefined>;
   createTemplate(template: InsertTemplate): Promise<Template>;
-  updateTemplate(id: string, updates: Partial<InsertTemplate>): Promise<Template>;
-  deleteTemplate(id: string): Promise<void>;
-  getAllTemplateTags(): Promise<string[]>; // Get all unique tags across all templates
+  updateTemplate(id: string, tenantId: string, updates: Partial<InsertTemplate>): Promise<Template>;
+  deleteTemplate(id: string, tenantId: string): Promise<void>;
+  getAllTemplateTags(tenantId: string): Promise<string[]>; // Get all unique tags across all templates
 
   // User Tag operations
   getUserTags(userId: string): Promise<UserTag[]>;
@@ -332,8 +336,8 @@ export interface IStorage {
   removeUserTagById(userId: string, id: string): Promise<void>;
 
   // Category operations
-  getAllCategories(): Promise<Category[]>;
-  getActiveCategories(): Promise<Category[]>;
+  getAllCategories(tenantId: string): Promise<Category[]>;
+  getActiveCategories(tenantId: string): Promise<Category[]>;
   getCategory(id: string): Promise<Category | undefined>;
   createCategory(category: InsertCategory): Promise<Category>;
   updateCategory(id: string, updates: Partial<InsertCategory>): Promise<Category>;
@@ -356,8 +360,8 @@ export interface IStorage {
   updateUserActiveExclusions(userId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences>;
 
   // Status operations
-  getAllStatuses(): Promise<Status[]>;
-  getActiveStatuses(): Promise<Status[]>;
+  getAllStatuses(tenantId: string): Promise<Status[]>;
+  getActiveStatuses(tenantId: string): Promise<Status[]>;
   getStatus(id: string): Promise<Status | undefined>;
   createStatus(status: InsertStatus): Promise<Status>;
   updateStatus(id: string, updates: Partial<InsertStatus>): Promise<Status>;
@@ -380,8 +384,8 @@ export interface IStorage {
 
   // Call History operations
   createCallHistory(callData: InsertCallHistory): Promise<CallHistory>;
-  getUserCallHistory(userId: string): Promise<CallHistory[]>;
-  getAllCallHistory(agentId?: string): Promise<CallHistory[]>;
+  getUserCallHistory(userId: string, tenantId: string): Promise<CallHistory[]>;
+  getAllCallHistory(tenantId: string, agentId?: string): Promise<CallHistory[]>;
 
   // Drive Folder operations
   getAllDriveFolders(): Promise<DriveFolder[]>;
@@ -418,10 +422,10 @@ export interface IStorage {
 
   // Voice AI Call Sessions operations
   createCallSession(session: InsertCallSession): Promise<CallSession>;
-  getCallSession(id: string): Promise<CallSession | undefined>;
+  getCallSession(id: string, tenantId: string): Promise<CallSession | undefined>;
   getCallSessionByConversationId(conversationId: string): Promise<CallSession | undefined>;
   getCallSessionByCallSid(callSid: string): Promise<CallSession | undefined>;
-  getCallSessions(filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]>;
+  getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]>;
   updateCallSession(id: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
   updateCallSessionByConversationId(conversationId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
   deleteCallSession(id: string): Promise<void>;
@@ -446,8 +450,8 @@ export interface IStorage {
 
   // Call Campaigns operations
   createCallCampaign(campaign: InsertCallCampaign): Promise<CallCampaign>;
-  getCallCampaign(id: string): Promise<CallCampaign | undefined>;
-  getCallCampaigns(filters?: { createdByUserId?: string; status?: string }): Promise<CallCampaign[]>;
+  getCallCampaign(id: string, tenantId: string): Promise<CallCampaign | undefined>;
+  getCallCampaigns(tenantId: string, filters?: { createdByUserId?: string; status?: string }): Promise<CallCampaign[]>;
   updateCallCampaign(id: string, updates: Partial<InsertCallCampaign>): Promise<CallCampaign>;
 
   // Call Campaign Targets operations
@@ -705,6 +709,27 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users).where(eq(users.role, 'agent'));
   }
 
+  async getUserDefaultTenant(userId: string): Promise<{ tenantId: string; roleInTenant: string } | undefined> {
+    // First try to find the default tenant for the user
+    const [defaultTenant] = await db
+      .select({ tenantId: userTenants.tenantId, roleInTenant: userTenants.roleInTenant })
+      .from(userTenants)
+      .where(and(eq(userTenants.userId, userId), eq(userTenants.isDefault, true)));
+
+    if (defaultTenant) {
+      return defaultTenant;
+    }
+
+    // If no default is set, return the first tenant the user belongs to
+    const [firstTenant] = await db
+      .select({ tenantId: userTenants.tenantId, roleInTenant: userTenants.roleInTenant })
+      .from(userTenants)
+      .where(eq(userTenants.userId, userId))
+      .orderBy(userTenants.joinedAt);
+
+    return firstTenant;
+  }
+
   async updateUser(id: string, updates: Partial<UpsertUser>): Promise<User> {
     const [updated] = await db
       .update(users)
@@ -912,21 +937,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Client operations
-  async getAllClients(): Promise<Client[]> {
-    return await db.select().from(clients).orderBy(clients.createdAt);
+  async getAllClients(tenantId: string): Promise<Client[]> {
+    return await db.select().from(clients).where(eq(clients.tenantId, tenantId)).orderBy(clients.createdAt);
   }
 
-  async getClientsByAgent(agentId: string): Promise<Client[]> {
+  async getClientsByAgent(agentId: string, tenantId: string): Promise<Client[]> {
     return await db
       .select()
       .from(clients)
-      .where(eq(clients.assignedAgent, agentId))
+      .where(and(eq(clients.assignedAgent, agentId), eq(clients.tenantId, tenantId)))
       .orderBy(clients.createdAt);
   }
 
-  async getFilteredClients(filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string }): Promise<Client[]> {
+  async getFilteredClients(tenantId: string, filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string }): Promise<Client[]> {
     let query = db.select().from(clients);
-    const conditions: any[] = [];
+    const conditions: any[] = [eq(clients.tenantId, tenantId)];
 
     // Filter by agent (for agents seeing only their clients or when showMyStoresOnly is enabled)
     if (filters.agentId || filters.showMyStoresOnly) {
@@ -1014,8 +1039,8 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async getClient(id: string): Promise<Client | undefined> {
-    const [client] = await db.select().from(clients).where(eq(clients.id, id));
+  async getClient(id: string, tenantId: string): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)));
     return client;
   }
 
@@ -1024,11 +1049,11 @@ export class DatabaseStorage implements IStorage {
     return newClient;
   }
 
-  async updateClient(id: string, updates: Partial<InsertClient>): Promise<Client> {
+  async updateClient(id: string, tenantId: string, updates: Partial<InsertClient>): Promise<Client> {
     const [updated] = await db
       .update(clients)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(clients.id, id))
+      .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
       .returning();
     return updated;
   }
@@ -1127,8 +1152,8 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getAllOrders(): Promise<Order[]> {
-    return await db.select().from(orders).orderBy(orders.orderDate);
+  async getAllOrders(tenantId: string): Promise<Order[]> {
+    return await db.select().from(orders).where(eq(orders.tenantId, tenantId)).orderBy(orders.orderDate);
   }
 
   async deleteOrder(id: string): Promise<void> {
@@ -1290,27 +1315,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Reminder operations
-  async getRemindersByUser(userId: string): Promise<Reminder[]> {
+  async getRemindersByUser(userId: string, tenantId: string): Promise<Reminder[]> {
     return await db
       .select()
       .from(reminders)
-      .where(eq(reminders.userId, userId))
+      .where(and(eq(reminders.userId, userId), eq(reminders.tenantId, tenantId)))
       .orderBy(desc(reminders.nextTrigger));
   }
 
-  async getRemindersByClient(clientId: string): Promise<Reminder[]> {
+  async getRemindersByClient(clientId: string, tenantId: string): Promise<Reminder[]> {
     return await db
       .select()
       .from(reminders)
-      .where(eq(reminders.clientId, clientId))
+      .where(and(eq(reminders.clientId, clientId), eq(reminders.tenantId, tenantId)))
       .orderBy(desc(reminders.nextTrigger));
   }
 
-  async getReminderById(id: string): Promise<Reminder | undefined> {
+  async getReminderById(id: string, tenantId: string): Promise<Reminder | undefined> {
     const [reminder] = await db
       .select()
       .from(reminders)
-      .where(eq(reminders.id, id));
+      .where(and(eq(reminders.id, id), eq(reminders.tenantId, tenantId)));
     return reminder;
   }
 
@@ -1322,60 +1347,60 @@ export class DatabaseStorage implements IStorage {
     return newReminder;
   }
 
-  async updateReminder(id: string, updates: Partial<InsertReminder>): Promise<Reminder> {
+  async updateReminder(id: string, tenantId: string, updates: Partial<InsertReminder>): Promise<Reminder> {
     const [updated] = await db
       .update(reminders)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(reminders.id, id))
+      .where(and(eq(reminders.id, id), eq(reminders.tenantId, tenantId)))
       .returning();
     return updated;
   }
 
-  async deleteReminder(id: string): Promise<void> {
+  async deleteReminder(id: string, tenantId: string): Promise<void> {
     await db
       .delete(reminders)
-      .where(eq(reminders.id, id));
+      .where(and(eq(reminders.id, id), eq(reminders.tenantId, tenantId)));
   }
 
   // Notification operations
-  async getNotificationsByUser(userId: string): Promise<Notification[]> {
+  async getNotificationsByUser(userId: string, tenantId: string): Promise<Notification[]> {
     return await db
       .select()
       .from(notifications)
-      .where(eq(notifications.userId, userId))
+      .where(and(eq(notifications.userId, userId), eq(notifications.tenantId, tenantId)))
       .orderBy(desc(notifications.createdAt));
   }
 
-  async getNotificationById(id: string): Promise<Notification | undefined> {
+  async getNotificationById(id: string, tenantId: string): Promise<Notification | undefined> {
     const [notification] = await db
       .select()
       .from(notifications)
-      .where(eq(notifications.id, id));
+      .where(and(eq(notifications.id, id), eq(notifications.tenantId, tenantId)));
     return notification;
   }
 
-  async markNotificationAsRead(id: string): Promise<Notification> {
+  async markNotificationAsRead(id: string, tenantId: string): Promise<Notification> {
     const [updated] = await db
       .update(notifications)
       .set({ isRead: true })
-      .where(eq(notifications.id, id))
+      .where(and(eq(notifications.id, id), eq(notifications.tenantId, tenantId)))
       .returning();
     return updated;
   }
 
-  async markNotificationAsResolved(id: string): Promise<Notification> {
+  async markNotificationAsResolved(id: string, tenantId: string): Promise<Notification> {
     const [updated] = await db
       .update(notifications)
       .set({ isResolved: true, resolvedAt: new Date() })
-      .where(eq(notifications.id, id))
+      .where(and(eq(notifications.id, id), eq(notifications.tenantId, tenantId)))
       .returning();
     return updated;
   }
 
-  async deleteNotification(id: string): Promise<void> {
+  async deleteNotification(id: string, tenantId: string): Promise<void> {
     await db
       .delete(notifications)
-      .where(eq(notifications.id, id));
+      .where(and(eq(notifications.id, id), eq(notifications.tenantId, tenantId)));
   }
 
   // Widget layout operations
@@ -1639,19 +1664,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Template operations
-  async getUserTemplates(userId: string): Promise<Template[]> {
+  async getUserTemplates(userId: string, tenantId: string): Promise<Template[]> {
     return await db
       .select()
       .from(templates)
-      .where(eq(templates.userId, userId))
+      .where(and(eq(templates.userId, userId), eq(templates.tenantId, tenantId)))
       .orderBy(desc(templates.createdAt));
   }
 
-  async getTemplate(id: string): Promise<Template | undefined> {
+  async getTemplate(id: string, tenantId: string): Promise<Template | undefined> {
     const [template] = await db
       .select()
       .from(templates)
-      .where(eq(templates.id, id));
+      .where(and(eq(templates.id, id), eq(templates.tenantId, tenantId)));
     return template;
   }
 
@@ -1663,23 +1688,23 @@ export class DatabaseStorage implements IStorage {
     return newTemplate;
   }
 
-  async updateTemplate(id: string, updates: Partial<InsertTemplate>): Promise<Template> {
+  async updateTemplate(id: string, tenantId: string, updates: Partial<InsertTemplate>): Promise<Template> {
     const [updated] = await db
       .update(templates)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(templates.id, id))
+      .where(and(eq(templates.id, id), eq(templates.tenantId, tenantId)))
       .returning();
     return updated;
   }
 
-  async deleteTemplate(id: string): Promise<void> {
+  async deleteTemplate(id: string, tenantId: string): Promise<void> {
     await db
       .delete(templates)
-      .where(eq(templates.id, id));
+      .where(and(eq(templates.id, id), eq(templates.tenantId, tenantId)));
   }
 
-  async getAllTemplateTags(): Promise<string[]> {
-    const allTemplates = await db.select().from(templates);
+  async getAllTemplateTags(tenantId: string): Promise<string[]> {
+    const allTemplates = await db.select().from(templates).where(eq(templates.tenantId, tenantId));
     const tagsSet = new Set<string>();
 
     allTemplates.forEach(template => {
@@ -1737,18 +1762,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Category operations
-  async getAllCategories(): Promise<Category[]>{
+  async getAllCategories(tenantId: string): Promise<Category[]>{
     return await db
       .select()
       .from(categories)
+      .where(eq(categories.tenantId, tenantId))
       .orderBy(categories.displayOrder, categories.name);
   }
 
-  async getActiveCategories(): Promise<Category[]> {
+  async getActiveCategories(tenantId: string): Promise<Category[]> {
     return await db
       .select()
       .from(categories)
-      .where(eq(categories.isActive, true))
+      .where(and(eq(categories.isActive, true), eq(categories.tenantId, tenantId)))
       .orderBy(categories.displayOrder, categories.name);
   }
 
@@ -1942,19 +1968,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Status operations
-  async getAllStatuses(): Promise<Status[]> {
+  async getAllStatuses(tenantId: string): Promise<Status[]> {
     const allStatuses = await db
       .select()
       .from(statuses)
+      .where(eq(statuses.tenantId, tenantId))
       .orderBy(statuses.displayOrder);
     return allStatuses;
   }
 
-  async getActiveStatuses(): Promise<Status[]> {
+  async getActiveStatuses(tenantId: string): Promise<Status[]> {
     const activeStatuses = await db
       .select()
       .from(statuses)
-      .where(eq(statuses.isActive, true))
+      .where(and(eq(statuses.isActive, true), eq(statuses.tenantId, tenantId)))
       .orderBy(statuses.displayOrder);
     return activeStatuses;
   }
@@ -2111,25 +2138,26 @@ export class DatabaseStorage implements IStorage {
     return newCall;
   }
 
-  async getUserCallHistory(userId: string): Promise<CallHistory[]> {
+  async getUserCallHistory(userId: string, tenantId: string): Promise<CallHistory[]> {
     return await db
       .select()
       .from(callHistory)
-      .where(eq(callHistory.agentId, userId))
+      .where(and(eq(callHistory.agentId, userId), eq(callHistory.tenantId, tenantId)))
       .orderBy(desc(callHistory.calledAt));
   }
 
-  async getAllCallHistory(agentId?: string): Promise<CallHistory[]> {
+  async getAllCallHistory(tenantId: string, agentId?: string): Promise<CallHistory[]> {
     if (agentId) {
       return await db
         .select()
         .from(callHistory)
-        .where(eq(callHistory.agentId, agentId))
+        .where(and(eq(callHistory.agentId, agentId), eq(callHistory.tenantId, tenantId)))
         .orderBy(desc(callHistory.calledAt));
     }
     return await db
       .select()
       .from(callHistory)
+      .where(eq(callHistory.tenantId, tenantId))
       .orderBy(desc(callHistory.calledAt));
   }
 
@@ -2342,8 +2370,8 @@ export class DatabaseStorage implements IStorage {
     return newSession;
   }
 
-  async getCallSession(id: string): Promise<CallSession | undefined> {
-    const [session] = await db.select().from(callSessions).where(eq(callSessions.id, id));
+  async getCallSession(id: string, tenantId: string): Promise<CallSession | undefined> {
+    const [session] = await db.select().from(callSessions).where(and(eq(callSessions.id, id), eq(callSessions.tenantId, tenantId)));
     return session;
   }
 
@@ -2357,15 +2385,12 @@ export class DatabaseStorage implements IStorage {
     return session;
   }
 
-  async getCallSessions(filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]> {
-    const conditions = [];
+  async getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]> {
+    const conditions = [eq(callSessions.tenantId, tenantId)];
     if (filters?.clientId) conditions.push(eq(callSessions.clientId, filters.clientId));
     if (filters?.initiatedByUserId) conditions.push(eq(callSessions.initiatedByUserId, filters.initiatedByUserId));
     if (filters?.status) conditions.push(eq(callSessions.status, filters.status));
 
-    if (conditions.length === 0) {
-      return await db.select().from(callSessions).orderBy(desc(callSessions.startedAt));
-    }
     return await db.select().from(callSessions).where(and(...conditions)).orderBy(desc(callSessions.startedAt));
   }
 
@@ -2540,19 +2565,16 @@ export class DatabaseStorage implements IStorage {
     return newCampaign;
   }
 
-  async getCallCampaign(id: string): Promise<CallCampaign | undefined> {
-    const [campaign] = await db.select().from(callCampaigns).where(eq(callCampaigns.id, id));
+  async getCallCampaign(id: string, tenantId: string): Promise<CallCampaign | undefined> {
+    const [campaign] = await db.select().from(callCampaigns).where(and(eq(callCampaigns.id, id), eq(callCampaigns.tenantId, tenantId)));
     return campaign;
   }
 
-  async getCallCampaigns(filters?: { createdByUserId?: string; status?: string }): Promise<CallCampaign[]> {
-    const conditions = [];
+  async getCallCampaigns(tenantId: string, filters?: { createdByUserId?: string; status?: string }): Promise<CallCampaign[]> {
+    const conditions = [eq(callCampaigns.tenantId, tenantId)];
     if (filters?.createdByUserId) conditions.push(eq(callCampaigns.createdByUserId, filters.createdByUserId));
     if (filters?.status) conditions.push(eq(callCampaigns.status, filters.status));
 
-    if (conditions.length === 0) {
-      return await db.select().from(callCampaigns).orderBy(desc(callCampaigns.createdAt));
-    }
     return await db.select().from(callCampaigns).where(and(...conditions)).orderBy(desc(callCampaigns.createdAt));
   }
 

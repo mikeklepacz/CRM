@@ -115,11 +115,15 @@ export async function setupAuth(app: Express) {
         if (!fullUser) {
           return cb(new Error('User not found'));
         }
+        // Fetch tenant context for the user
+        const tenantContext = await storage.getUserDefaultTenant(user.id);
         // Return password auth user with fresh data and a flag to skip token expiry checks
         cb(null, { 
           ...user, 
           role: fullUser.role,
           hasVoiceAccess: fullUser.hasVoiceAccess ?? false,
+          tenantId: tenantContext?.tenantId,
+          roleInTenant: tenantContext?.roleInTenant,
           skipTokenCheck: true 
         });
       } catch (error) {
@@ -131,10 +135,14 @@ export async function setupAuth(app: Express) {
       try {
         const fullUser = await storage.getUser(user.claims?.sub);
         if (fullUser) {
+          // Fetch tenant context for the user
+          const tenantContext = await storage.getUserDefaultTenant(fullUser.id);
           cb(null, { 
             ...user, 
             role: fullUser.role,
-            hasVoiceAccess: fullUser.hasVoiceAccess ?? false
+            hasVoiceAccess: fullUser.hasVoiceAccess ?? false,
+            tenantId: tenantContext?.tenantId,
+            roleInTenant: tenantContext?.roleInTenant
           });
         } else {
           // If can't find user, return session data as-is

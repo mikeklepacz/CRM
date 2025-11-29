@@ -55,7 +55,7 @@ export const users = pgTable("users", {
 // CSV Upload tracking table
 export const csvUploads = pgTable("csv_uploads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   filename: varchar("filename").notNull(),
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
   uniqueKey: varchar("unique_key").notNull(), // Column used as unique identifier
@@ -67,7 +67,7 @@ export const csvUploads = pgTable("csv_uploads", {
 // Google Sheets connection tracking
 export const googleSheets = pgTable("google_sheets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   spreadsheetId: varchar("spreadsheet_id").notNull(),
   spreadsheetName: varchar("spreadsheet_name").notNull(),
   sheetName: varchar("sheet_name").notNull(), // Tab/worksheet name
@@ -82,7 +82,7 @@ export const googleSheets = pgTable("google_sheets", {
 // Client data table - stores CSV/Google Sheets data + tracking fields
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   // Google Sheets sync fields
   uniqueIdentifier: varchar("unique_identifier"), // Leafly link or other unique ID (temporarily removed .unique() due to drizzle metadata mismatch - will re-add after migration cleanup)
   googleSheetId: varchar("google_sheet_id"), // ID of the connected Google Sheet
@@ -110,7 +110,7 @@ export const clients = pgTable("clients", {
 // Notes table for follow-up tracking
 export const notes = pgTable("notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
   userId: varchar("user_id").notNull().references(() => users.id),
   content: text("content").notNull(),
@@ -121,7 +121,7 @@ export const notes = pgTable("notes", {
 // Orders table - synced from WooCommerce
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey(), // WooCommerce order ID
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   clientId: varchar("client_id").references(() => clients.id),
   orderNumber: varchar("order_number").notNull(),
   billingEmail: varchar("billing_email"),
@@ -138,7 +138,7 @@ export const orders = pgTable("orders", {
 // Commissions table - ledger for all commission records (primary agent and referral bonuses)
 export const commissions = pgTable("commissions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: 'cascade' }),
   agentId: varchar("agent_id").notNull().references(() => users.id), // Agent receiving this commission
   commissionKind: varchar("commission_kind", { length: 20 }).notNull(), // 'primary' or 'referral'
@@ -174,7 +174,7 @@ export const systemIntegrations = pgTable("system_integrations", {
 // User integrations - per-user integration credentials
 export const userIntegrations = pgTable("user_integrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id).unique(),
   // WooCommerce settings
   wooUrl: text("woo_url"),
@@ -202,7 +202,7 @@ export const userIntegrations = pgTable("user_integrations", {
 // Gmail Push Notification idempotency - prevents processing same message twice
 export const processedGmailMessages = pgTable("processed_gmail_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   gmailMessageId: varchar("gmail_message_id").notNull().unique(), // Gmail's message ID
   userId: varchar("user_id").notNull().references(() => users.id),
   processedAt: timestamp("processed_at").defaultNow(),
@@ -214,7 +214,7 @@ export const processedGmailMessages = pgTable("processed_gmail_messages", {
 // Dashboard card configurations - controls which roles see which cards
 export const dashboardCards = pgTable("dashboard_cards", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   cardType: varchar("card_type", { length: 50 }).notNull(), // 'total_sales', 'last_order', 'commission_warning', etc.
   title: varchar("title").notNull(),
   description: text("description"),
@@ -228,7 +228,7 @@ export const dashboardCards = pgTable("dashboard_cards", {
 // User preferences for Sales Dashboard view - syncs across devices
 export const userPreferences = pgTable("user_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id).unique(),
   visibleColumns: jsonb("visible_columns").$type<Record<string, boolean>>(),
   columnOrder: jsonb("column_order").$type<string[]>(),
@@ -305,7 +305,7 @@ export const userPreferences = pgTable("user_preferences", {
 // Saved exclusions for Map Search - global keywords and place types
 export const savedExclusions = pgTable("saved_exclusions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   type: varchar("type", { length: 20 }).notNull(), // 'keyword' or 'place_type'
   value: varchar("value").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -314,7 +314,7 @@ export const savedExclusions = pgTable("saved_exclusions", {
 // Custom reminders for client follow-ups
 export const reminders = pgTable("reminders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   clientId: varchar("client_id").references(() => clients.id, { onDelete: 'cascade' }),
   title: varchar("title", { length: 200 }).notNull(),
@@ -361,7 +361,7 @@ export const reminders = pgTable("reminders", {
 // Notifications for alerts and reminders
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   clientId: varchar("client_id").references(() => clients.id, { onDelete: 'cascade' }),
   reminderId: varchar("reminder_id").references(() => reminders.id, { onDelete: 'cascade' }),
@@ -390,7 +390,7 @@ export const notifications = pgTable("notifications", {
 // Call History table - tracks phone calls made by agents
 export const callHistory = pgTable("call_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   agentId: varchar("agent_id").notNull().references(() => users.id),
   storeName: varchar("store_name", { length: 255 }).notNull(),
   phoneNumber: varchar("phone_number", { length: 50 }).notNull(),
@@ -403,7 +403,7 @@ export const callHistory = pgTable("call_history", {
 // Dashboard widget layouts - save drag-and-drop positions
 export const widgetLayouts = pgTable("widget_layouts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   dashboardType: varchar("dashboard_type", { length: 50 }).notNull().default('sales'), // 'sales', 'analytics', 'custom'
   layoutName: varchar("layout_name", { length: 100 }),
@@ -417,7 +417,7 @@ export const widgetLayouts = pgTable("widget_layouts", {
 // OpenAI settings table - stores API key and file search configuration
 export const openaiSettings = pgTable("openai_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   apiKey: text("api_key"), // Encrypted OpenAI API key
   aiInstructions: text("ai_instructions"), // Custom system prompt for AI assistant
   vectorStoreId: varchar("vector_store_id"), // OpenAI vector store ID for file search
@@ -430,7 +430,7 @@ export const openaiSettings = pgTable("openai_settings", {
 // Knowledge base files table - tracks uploaded files
 export const knowledgeBaseFiles = pgTable("knowledge_base_files", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   filename: varchar("filename", { length: 255 }).notNull(),
   originalName: varchar("original_name", { length: 255 }).notNull(),
   fileSize: integer("file_size").notNull(), // in bytes
@@ -448,7 +448,7 @@ export const knowledgeBaseFiles = pgTable("knowledge_base_files", {
 // Projects table - organize conversations into folders
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   name: varchar("name", { length: 200 }).notNull(),
   description: text("description"),
@@ -461,7 +461,7 @@ export const projects = pgTable("projects", {
 // Conversations table - ChatGPT-style conversation threads
 export const conversations = pgTable("conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   projectId: varchar("project_id").references(() => projects.id, { onDelete: 'set null' }),
   title: varchar("title", { length: 300 }).notNull(),
@@ -484,7 +484,7 @@ export const conversations = pgTable("conversations", {
 // Chat history table - stores individual messages within conversations
 export const chatMessages = pgTable("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   conversationId: varchar("conversation_id").references(() => conversations.id, { onDelete: 'cascade' }),
   role: varchar("role", { length: 20 }).notNull(), // 'user' or 'assistant'
@@ -504,7 +504,7 @@ export const chatMessages = pgTable("chat_messages", {
 // Templates table - per-user library of email/script templates
 export const templates = pgTable("templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   title: varchar("title", { length: 200 }).notNull(),
   content: text("content").notNull(),
@@ -520,7 +520,7 @@ export const templates = pgTable("templates", {
 // User Tags table - personal tag collection per user for template organization
 export const userTags = pgTable("user_tags", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   tag: varchar("tag", { length: 100 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -531,7 +531,7 @@ export const userTags = pgTable("user_tags", {
 // Categories table - global categories for Map Search filtering
 export const categories = pgTable("categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: varchar("name", { length: 100 }).notNull().unique(),
   description: text("description"),
   isActive: boolean("is_active").default(true),
@@ -543,7 +543,7 @@ export const categories = pgTable("categories", {
 // Statuses table - system-wide status definitions with colors for light/dark modes
 export const statuses = pgTable("statuses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: varchar("name", { length: 100 }).notNull().unique(),
   displayOrder: integer("display_order").notNull(),
   lightBgColor: varchar("light_bg_color", { length: 7 }).notNull(), // Hex color e.g. #dbeafe
@@ -560,7 +560,7 @@ export const importedPlaces = pgTable(
   "imported_places",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    tenantId: varchar("tenant_id").references(() => tenants.id),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
     placeId: varchar("place_id", { length: 255 }).notNull().unique(), // Google Maps place_id
     importedAt: timestamp("imported_at").defaultNow(),
   },
@@ -572,7 +572,7 @@ export const searchHistory = pgTable(
   "search_history",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    tenantId: varchar("tenant_id").references(() => tenants.id),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
     businessType: text("business_type").notNull(),
     category: varchar("category", { length: 100 }), // Category used for this search (e.g., 'pet', 'food', etc.)
     city: text("city").notNull(),
@@ -871,7 +871,7 @@ export const insertStatusSchema = createInsertSchema(statuses, {
 // Support Tickets table
 export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   subject: varchar("subject", { length: 255 }).notNull(),
   message: text("message").notNull(),
@@ -888,7 +888,7 @@ export const tickets = pgTable("tickets", {
 // Ticket Replies table
 export const ticketReplies = pgTable("ticket_replies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   ticketId: varchar("ticket_id").notNull().references(() => tickets.id, { onDelete: 'cascade' }),
   userId: varchar("user_id").notNull().references(() => users.id),
   message: text("message").notNull(),
@@ -898,7 +898,7 @@ export const ticketReplies = pgTable("ticket_replies", {
 // Google Drive folder configuration - simple folder browser
 export const driveFolders = pgTable("drive_folders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: varchar("name", { length: 100 }).notNull().unique(), // Display name (e.g., "Cannabis", "Sales Materials")
   folderId: varchar("folder_id").notNull(), // Google Drive folder ID (extracted from URL)
   createdBy: varchar("created_by").notNull().references(() => users.id),
@@ -909,7 +909,7 @@ export const driveFolders = pgTable("drive_folders", {
 // ElevenLabs API configuration (stores API key and Twilio number)
 export const elevenLabsConfig = pgTable("elevenlabs_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   apiKey: text("api_key").notNull(), // ElevenLabs API key
   phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls
   twilioNumber: varchar("twilio_number", { length: 50 }), // Twilio phone number (for display only)
@@ -921,7 +921,7 @@ export const elevenLabsConfig = pgTable("elevenlabs_config", {
 // Twilio configuration (credentials stored as environment secrets)
 export const twilioConfig = pgTable("twilio_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   phoneNumber: varchar("phone_number", { length: 50 }), // Twilio phone number in E.164 format
   isConfigured: boolean("is_configured").notNull().default(false), // Whether credentials are set
   createdAt: timestamp("created_at").defaultNow(),
@@ -932,7 +932,7 @@ export const twilioConfig = pgTable("twilio_config", {
 // ElevenLabs Phone Numbers - stores available phone numbers from ElevenLabs
 export const elevenLabsPhoneNumbers = pgTable("elevenlabs_phone_numbers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   phoneNumberId: varchar("phone_number_id", { length: 255 }).notNull().unique(), // ElevenLabs phone number ID
   phoneNumber: varchar("phone_number", { length: 50 }).notNull(), // Actual phone number (e.g., +1-845-668-4367)
   label: varchar("label", { length: 255 }), // Optional label/name for this number
@@ -942,7 +942,7 @@ export const elevenLabsPhoneNumbers = pgTable("elevenlabs_phone_numbers", {
 
 export const elevenLabsAgents = pgTable("elevenlabs_agents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: varchar("name", { length: 255 }).notNull(), // Display name (e.g., "Sales Cold Caller")
   agentId: varchar("agent_id", { length: 255 }).notNull(), // ElevenLabs agent ID
   phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls (nullable)
@@ -955,7 +955,7 @@ export const elevenLabsAgents = pgTable("elevenlabs_agents", {
 // Voice AI Call Sessions - main call records with AI analysis
 export const callSessions = pgTable("call_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   conversationId: varchar("conversation_id").unique(), // ElevenLabs conversation ID
   callSid: varchar("call_sid"), // Twilio call SID
   agentId: varchar("agent_id").notNull(), // ElevenLabs agent ID used
@@ -999,7 +999,7 @@ export const callSessions = pgTable("call_sessions", {
 // Call Transcripts - conversation messages
 export const callTranscripts = pgTable("call_transcripts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   conversationId: varchar("conversation_id").notNull(), // Links to callSessions
   role: varchar("role", { length: 20 }).notNull(), // 'agent' or 'user'
   message: text("message").notNull(),
@@ -1015,7 +1015,7 @@ export const callTranscripts = pgTable("call_transcripts", {
 // Call Events - status timeline and webhook payloads for debugging
 export const callEvents = pgTable("call_events", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   conversationId: varchar("conversation_id").notNull(),
   eventType: varchar("event_type", { length: 50 }).notNull(), // 'webhook_received', 'status_change', 'error'
   status: varchar("status", { length: 50 }),
@@ -1028,7 +1028,7 @@ export const callEvents = pgTable("call_events", {
 // Call Campaigns - batch calling campaigns
 export const callCampaigns = pgTable("call_campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: varchar("name", { length: 255 }).notNull(),
   scenario: varchar("scenario", { length: 50 }), // 'cold_call', 'follow_up', 'recovery', 'custom'
   agentId: varchar("agent_id").notNull(), // Which ElevenLabs agent to use
@@ -1052,7 +1052,7 @@ export const callCampaigns = pgTable("call_campaigns", {
 // Call Campaign Targets - join table for campaign -> store mapping
 export const callCampaignTargets = pgTable("call_campaign_targets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   campaignId: varchar("campaign_id").notNull().references(() => callCampaigns.id, { onDelete: 'cascade' }),
   clientId: varchar("client_id").notNull().references(() => clients.id),
   callSessionId: varchar("call_session_id").references(() => callSessions.id), // Links to actual call once made
@@ -1073,7 +1073,7 @@ export const callCampaignTargets = pgTable("call_campaign_targets", {
 // AI Insights - Historical tracking of call analysis
 export const aiInsights = pgTable("ai_insights", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   analyzedAt: timestamp("analyzed_at").defaultNow(),
   dateRangeStart: timestamp("date_range_start"),
   dateRangeEnd: timestamp("date_range_end"),
@@ -1091,7 +1091,7 @@ export const aiInsights = pgTable("ai_insights", {
 
 export const aiInsightObjections = pgTable("ai_insight_objections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   insightId: varchar("insight_id").notNull().references(() => aiInsights.id, { onDelete: 'cascade' }),
   objection: text("objection").notNull(),
   frequency: integer("frequency").notNull(),
@@ -1103,7 +1103,7 @@ export const aiInsightObjections = pgTable("ai_insight_objections", {
 
 export const aiInsightPatterns = pgTable("ai_insight_patterns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   insightId: varchar("insight_id").notNull().references(() => aiInsights.id, { onDelete: 'cascade' }),
   pattern: text("pattern").notNull(),
   frequency: integer("frequency").notNull(),
@@ -1115,7 +1115,7 @@ export const aiInsightPatterns = pgTable("ai_insight_patterns", {
 
 export const aiInsightRecommendations = pgTable("ai_insight_recommendations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   insightId: varchar("insight_id").notNull().references(() => aiInsights.id, { onDelete: 'cascade' }),
   title: text("title").notNull(),
   description: text("description").notNull(),
@@ -1128,7 +1128,7 @@ export const aiInsightRecommendations = pgTable("ai_insight_recommendations", {
 // Knowledge Base Management - Self-evolving KB system
 export const kbFiles = pgTable("kb_files", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   elevenlabsDocId: varchar("elevenlabs_doc_id").unique(), // ID from ElevenLabs API
   filename: varchar("filename", { length: 255 }).notNull().unique(), // Immutable, enforced by trigger
   currentContent: text("current_content"), // Latest approved content
@@ -1152,7 +1152,7 @@ export const kbFiles = pgTable("kb_files", {
 
 export const kbFileVersions = pgTable("kb_file_versions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   kbFileId: varchar("kb_file_id").notNull().references(() => kbFiles.id, { onDelete: 'restrict' }), // Preserve history
   versionNumber: integer("version_number").notNull(),
   content: text("content").notNull(),
@@ -1166,7 +1166,7 @@ export const kbFileVersions = pgTable("kb_file_versions", {
 
 export const kbChangeProposals = pgTable("kb_change_proposals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   kbFileId: varchar("kb_file_id").notNull().references(() => kbFiles.id, { onDelete: 'restrict' }),
   baseVersionId: varchar("base_version_id").notNull().references(() => kbFileVersions.id, { onDelete: 'restrict' }), // Optimistic locking
   proposedContent: text("proposed_content").notNull(),
@@ -1187,7 +1187,7 @@ export const kbChangeProposals = pgTable("kb_change_proposals", {
 // Analysis Jobs - Track sequential call analysis progress
 export const analysisJobs = pgTable("analysis_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   type: varchar("type", { length: 20 }).notNull(), // 'wick_coach', 'aligner', 'both'
   status: varchar("status", { length: 20 }).notNull().default('queued'), // 'queued', 'running', 'completed', 'failed', 'cancelled'
   agentId: varchar("agent_id"), // Optional filter: which ElevenLabs agent
@@ -1209,7 +1209,7 @@ export const analysisJobs = pgTable("analysis_jobs", {
 // OpenAI Assistants - Support multiple assistants with separate instructions and knowledge bases
 export const openaiAssistants = pgTable("openai_assistants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: varchar("name", { length: 100 }).notNull(), // e.g., 'Sales Assistant', 'Aligner', 'Wick Coach'
   slug: varchar("slug", { length: 100 }).notNull().unique(), // e.g., 'sales-assistant', 'aligner', 'wick-coach'
   description: text("description"),
@@ -1229,7 +1229,7 @@ export const openaiAssistants = pgTable("openai_assistants", {
 // OpenAI Assistant Files - Link knowledge base files to specific assistants
 export const openaiAssistantFiles = pgTable("openai_assistant_files", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   assistantId: varchar("assistant_id").notNull().references(() => openaiAssistants.id, { onDelete: 'cascade' }),
   filename: varchar("filename", { length: 255 }).notNull(),
   openaiFileId: varchar("openai_file_id"), // OpenAI file ID
@@ -1245,7 +1245,7 @@ export const openaiAssistantFiles = pgTable("openai_assistant_files", {
 // Background Audio Settings for Voice Proxy
 export const backgroundAudioSettings = pgTable("background_audio_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   fileName: varchar("file_name", { length: 255 }),
   filePath: varchar("file_path", { length: 512 }),
   volumeDb: integer("volume_db").notNull().default(-25), // Volume in decibels (-40 to -10)
@@ -1256,7 +1256,7 @@ export const backgroundAudioSettings = pgTable("background_audio_settings", {
 // Voice Proxy Sessions - tracks active Twilio<->ElevenLabs connections
 export const voiceProxySessions = pgTable("voice_proxy_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   streamSid: varchar("stream_sid", { length: 255 }).notNull().unique(), // Twilio Media Stream SID
   agentId: varchar("agent_id", { length: 255 }), // ElevenLabs agent ID from parameters
   callSid: varchar("call_sid", { length: 255 }), // Twilio Call SID
@@ -1271,7 +1271,7 @@ export const voiceProxySessions = pgTable("voice_proxy_sessions", {
 // Non-Duplicates tracking table
 export const nonDuplicates = pgTable("non_duplicates", {
   id: integer("id").primaryKey(),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   link1: text("link1").notNull(),
   link2: text("link2").notNull(),
   markedByUserId: varchar("marked_by_user_id").references(() => users.id, { onDelete: 'set null' }),
@@ -1284,7 +1284,7 @@ export const nonDuplicates = pgTable("non_duplicates", {
 // E-Hub Global Settings - System-wide configuration
 export const ehubSettings = pgTable("ehub_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   minDelayMinutes: integer("min_delay_minutes").notNull().default(1), // Minimum minutes between sends
   maxDelayMinutes: integer("max_delay_minutes").notNull().default(3), // Maximum minutes between sends
   jitterPercentage: integer("jitter_percentage").notNull().default(50), // Jitter variance percentage (default ±50% of spacing)
@@ -1324,7 +1324,7 @@ export type StrategyTranscript = {
 // E-Hub Email Campaign System - Cold outreach automation
 export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   name: varchar("name", { length: 255 }).notNull(),
   isSystem: boolean("is_system").default(false), // System sequences (e.g., Manual Follow-Ups) cannot be deleted
   strategyTranscript: jsonb("strategy_transcript").$type<StrategyTranscript>(), // Full AI strategy conversation with envelope
@@ -1353,7 +1353,7 @@ export const sequences = pgTable("sequences", {
 // Sequence steps - defines the multi-step follow-up structure
 export const sequenceSteps = pgTable("sequence_steps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
   stepNumber: integer("step_number").notNull(), // 1, 2, 3, etc.
   delayDays: decimal("delay_days", { precision: 10, scale: 4 }).notNull(), // Days to wait after previous step (supports decimals like 0.0035 for testing)
@@ -1367,7 +1367,7 @@ export const sequenceSteps = pgTable("sequence_steps", {
 // Sequence recipient messages - stores each sent email per step for AI context
 export const sequenceRecipientMessages = pgTable("sequence_recipient_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   recipientId: varchar("recipient_id").notNull().references(() => sequenceRecipients.id, { onDelete: 'cascade' }),
   stepNumber: integer("step_number").notNull(), // Which step this email was for
   subject: text("subject").notNull(), // Subject line that was sent
@@ -1383,7 +1383,7 @@ export const sequenceRecipientMessages = pgTable("sequence_recipient_messages", 
 
 export const sequenceRecipients = pgTable("sequence_recipients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
   email: varchar("email", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }),
@@ -1416,7 +1416,7 @@ export const sequenceRecipients = pgTable("sequence_recipients", {
 // Sequence scheduled sends - pre-scheduled individual emails for queue visibility
 export const sequenceScheduledSends = pgTable("sequence_scheduled_sends", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   recipientId: varchar("recipient_id").notNull().references(() => sequenceRecipients.id, { onDelete: 'cascade' }),
   sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
   stepNumber: integer("step_number").notNull(), // Which step this is (1, 2, 3, etc.)
@@ -1447,7 +1447,7 @@ export const sequenceScheduledSends = pgTable("sequence_scheduled_sends", {
 // Reschedule jobs - track background reschedule operations when global settings change
 export const rescheduleJobs = pgTable("reschedule_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   status: varchar("status", { length: 50 }).notNull().default('running'), // 'running', 'completed', 'failed'
   startedAt: timestamp("started_at").defaultNow().notNull(),
   finishedAt: timestamp("finished_at"),
@@ -1462,7 +1462,7 @@ export const rescheduleJobs = pgTable("reschedule_jobs", {
 // Email blacklist - permanently exclude emails from Manual Follow-Ups scanner
 export const emailBlacklist = pgTable("email_blacklist", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   email: varchar("email", { length: 255 }).notNull().unique(),
   reason: text("reason"), // Optional note about why blacklisted
   blacklistedBy: varchar("blacklisted_by").references(() => users.id),
@@ -1885,7 +1885,7 @@ export type SentHistoryResponse = z.infer<typeof sentHistoryResponseSchema>;
 // Test Email Sends - for rapid testing of email threading and reply detection
 export const testEmailSends = pgTable("test_email_sends", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   recipientEmail: varchar("recipient_email", { length: 255 }).notNull(),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
@@ -1919,7 +1919,7 @@ export type TestEmailSend = typeof testEmailSends.$inferSelect;
 // Test Data Nuke Audit Log - tracks cleanup operations for debugging
 export const testDataNukeLog = pgTable("test_data_nuke_log", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   executedBy: varchar("executed_by").notNull().references(() => users.id),
   emailPattern: varchar("email_pattern", { length: 255 }), // null = nuclear delete all
   recipientsDeleted: integer("recipients_deleted").notNull().default(0),
@@ -1942,7 +1942,7 @@ export type TestDataNukeLog = typeof testDataNukeLog.$inferSelect;
 // Daily Send Slots - pre-generated email slots for Matrix2 scheduling engine
 export const dailySendSlots = pgTable("daily_send_slots", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   slotDate: date("slot_date").notNull(),
   slotTimeUtc: timestamp("slot_time_utc", { withTimezone: true }).notNull(),
   filled: boolean("filled").notNull().default(false),
@@ -1967,7 +1967,7 @@ export type DailySendSlot = typeof dailySendSlots.$inferSelect;
 // No-Send Dates - custom admin-configured blackout dates for outreach
 export const noSendDates = pgTable("no_send_dates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   date: date("date").notNull().unique(),
   reason: varchar("reason", { length: 255 }).notNull(),
   createdBy: varchar("created_by").notNull().references(() => users.id),
@@ -1987,7 +1987,7 @@ export type NoSendDate = typeof noSendDates.$inferSelect;
 // Ignored Holidays - holidays that are toggled OFF (outreach allowed on these days)
 export const ignoredHolidays = pgTable("ignored_holidays", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   holidayId: varchar("holiday_id", { length: 100 }).notNull().unique(), // e.g., "columbus_day", "veterans_day", "thanksgiving_window"
   holidayName: varchar("holiday_name", { length: 255 }).notNull(), // Display name
   ignoredBy: varchar("ignored_by").notNull().references(() => users.id),
@@ -2162,7 +2162,7 @@ export type Pipeline = typeof pipelines.$inferSelect;
 // Pipeline Stages - Steps within each pipeline
 export const pipelineStages = pgTable("pipeline_stages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   pipelineId: varchar("pipeline_id").notNull().references(() => pipelines.id, { onDelete: 'cascade' }),
   name: varchar("name", { length: 255 }).notNull(), // "Initial Call", "Qualification Questions", "Follow-up"
   stageOrder: integer("stage_order").notNull(), // 1, 2, 3...

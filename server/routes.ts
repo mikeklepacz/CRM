@@ -2170,6 +2170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Agent users can only see their own initiated calls
+      const tenantId = (req.user as any).tenantId;
       const filters: any = {};
       if (user?.role !== 'admin') {
         filters.initiatedByUserId = userId;
@@ -2181,10 +2182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.status = status;
       }
 
-      const sessions = await storage.getCallSessions(filters, {
-        limit: limit ? parseInt(limit as string) : 50,
-        offset: offset ? parseInt(offset as string) : 0,
-      });
+      const sessions = await storage.getCallSessions(tenantId, filters);
 
       res.json(sessions);
     } catch (error: any) {
@@ -2263,10 +2261,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get call sessions with filters
-      const sessions = await storage.getCallSessions(filters, {
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string),
-      });
+      const tenantId = (req.user as any).tenantId;
+      const sessions = await storage.getCallSessions(tenantId, filters);
 
       // Enrich each session with client and campaign data
       const enrichedSessions = await Promise.all(sessions.map(async (session: any) => {
@@ -2277,7 +2273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get client data if available
         if (session.clientId) {
           try {
-            client = await storage.getClient(session.clientId);
+            client = await storage.getClient(session.clientId, tenantId);
           } catch (e) {
             console.warn(`Could not fetch client ${session.clientId}:`, e);
           }
@@ -2289,7 +2285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (targets && targets.length > 0) {
             const target = targets[0];
             if (target.campaignId) {
-              campaign = await storage.getCallCampaign(target.campaignId);
+              campaign = await storage.getCallCampaign(target.campaignId, tenantId);
               campaignName = campaign?.name || null;
             }
           }
@@ -2814,6 +2810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             googleSheetId: storeInfo.sheetId || 'unknown',
             data: storeInfo,
             status: storeInfo.status || 'unassigned',
+            tenantId: (req.user as any).tenantId,
           });
         }
         
@@ -2972,11 +2969,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get all active campaigns (scheduled or in-progress)
-      const scheduledCampaigns = await storage.getCallCampaigns({
+      const tenantId = (req.user as any).tenantId;
+      const scheduledCampaigns = await storage.getCallCampaigns(tenantId, {
         status: 'scheduled',
         createdByUserId: user?.role === 'admin' ? undefined : userId,
       });
-      const inProgressCampaigns = await storage.getCallCampaigns({
+      const inProgressCampaigns = await storage.getCallCampaigns(tenantId, {
         status: 'in-progress',
         createdByUserId: user?.role === 'admin' ? undefined : userId,
       });
@@ -3408,6 +3406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 businessName: details.conversation_initiation_client_data?.business_name,
                 ...details.conversation_initiation_client_data,
               },
+              tenantId: (req.user as any).tenantId,
             });
           }
 
@@ -3965,8 +3964,9 @@ Ready to receive calls?`;
       let elevenLabsErrors: string[] = [];
       
       if (config?.apiKey) {
-        // Get all unique conversation IDs from call history
-        const callHistory = await storage.getAllCallHistory();
+        // Get all unique conversation IDs from call history (admin route - use requesting user's tenant)
+        const tenantId = (req.user as any).tenantId;
+        const callHistory = await storage.getAllCallHistory(tenantId);
         const conversationIds = [...new Set(callHistory.map(c => c.conversationId).filter(Boolean))];
         
         console.log(`[NUKE CALL DATA] Found ${conversationIds.length} conversations to delete from ElevenLabs`);
@@ -7699,7 +7699,8 @@ IMPORTANT:
 
         if (existing) {
           // Update existing client
-          await storage.updateClient(existing.id, {
+          const tenantId = (req.user as any).tenantId;
+          await storage.updateClient(existing.id, tenantId, {
             data: row,
           });
           updated++;
@@ -7708,6 +7709,7 @@ IMPORTANT:
           await storage.createClient({
             data: row,
             status: 'unassigned',
+            tenantId: (req.user as any).tenantId,
           });
           created++;
         }
@@ -7729,9 +7731,10 @@ IMPORTANT:
   app.get('/api/clients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = req.user.tenantId;
       const selectedCategory = await storage.getSelectedCategory(userId);
 
-      const clients = await storage.getAllClients();
+      const clients = await storage.getAllClients(tenantId);
 
       // Filter by selected category if one is set
       const filteredClients = selectedCategory 
@@ -8021,7 +8024,8 @@ IMPORTANT:
         filters.agentId = user.id;
       }
 
-      const clients = await storage.getFilteredClients(filters);
+      const tenantId = (req.user as any).tenantId;
+      const clients = await storage.getFilteredClients(tenantId, filters);
       res.json(clients);
     } catch (error: any) {
       console.error("Error fetching filtered clients:", error);
@@ -8033,9 +8037,10 @@ IMPORTANT:
   app.post('/api/clients/:id/claim', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const tenantId = (req.user as any).tenantId;
 
       // Check if client exists and is not already claimed
-      const client = await storage.getClient(id);
+      const client = await storage.getClient(id, tenantId);
       if (!client) {
         return res.status(404).json({ message: "Client not found" });
       }
@@ -8091,6 +8096,7 @@ IMPORTANT:
         userId: req.currentUser.id,
         content,
         isFollowUp: isFollowUp || false,
+        tenantId: (req.user as any).tenantId,
       });
 
       res.json(note);
@@ -8114,10 +8120,11 @@ IMPORTANT:
   // Get all users with sales metrics (admin only)
   app.get('/api/users', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const tenantId = req.user.tenantId;
       const users = await storage.getAllUsers();
 
       // Get all orders from database to calculate sales metrics
-      const allOrders = await storage.getAllOrders();
+      const allOrders = await storage.getAllOrders(tenantId);
 
       const usersWithMetrics = users.map((user) => {
         let totalSales = 0;
@@ -8278,6 +8285,7 @@ IMPORTANT:
   // Get sales report data (admin only)
   app.get('/api/reports/sales-data', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const tenantId = req.user.tenantId;
       const { startDate, endDate } = req.query;
 
       if (!startDate || !endDate) {
@@ -8290,7 +8298,7 @@ IMPORTANT:
       end.setHours(23, 59, 59, 999); // Include the entire end date
 
       // Fetch all orders within the date range
-      const allOrders = await storage.getAllOrders();
+      const allOrders = await storage.getAllOrders(tenantId);
       const ordersInRange = allOrders.filter(order => {
         const orderDate = new Date(order.orderDate);
         return orderDate >= start && orderDate <= end;
@@ -8809,7 +8817,8 @@ IMPORTANT:
   app.get('/api/orders', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const orders = await storage.getAllOrders();
+      const tenantId = req.user.tenantId;
+      const orders = await storage.getAllOrders(tenantId);
       console.log('[GET /api/orders] All orders fetched:', orders.length);
 
       // Check Commission Tracker to see which orders have tracker rows
@@ -9551,6 +9560,14 @@ IMPORTANT:
       // Create or update order
       const existingOrder = await storage.getOrderById(order.id.toString());
 
+      // Get tenantId from matched client (webhooks don't have user context)
+      const tenantId = client?.tenantId;
+      
+      if (!tenantId && !existingOrder) {
+        console.log('[Webhook] Cannot create order - no client matched and no tenantId available');
+        return res.status(200).json({ message: 'Order skipped - no matching client found' });
+      }
+
       if (existingOrder) {
         await storage.updateOrder(order.id.toString(), {
           clientId: client?.id || null,
@@ -9573,6 +9590,7 @@ IMPORTANT:
           total: order.total,
           status: order.status,
           orderDate: new Date(order.date_created),
+          tenantId: tenantId!,
         });
       }
 
@@ -9613,7 +9631,7 @@ IMPORTANT:
           updates.commissionTotal = (parseFloat(client.commissionTotal || '0') + commission).toString();
         }
 
-        await storage.updateClient(client.id, updates);
+        await storage.updateClient(client.id, client.tenantId, updates);
 
         // Write to Commission Tracker Google Sheet - ONLY if client has an assigned agent
         // This ensures we don't create incomplete commission records for unclaimed stores
@@ -9852,6 +9870,7 @@ IMPORTANT:
             total: order.total,
             status: order.status,
             orderDate: new Date(order.date_created),
+            tenantId: (req.user as any).tenantId,
           });
 
           // Create notification for re-order
@@ -9901,13 +9920,13 @@ IMPORTANT:
             updates.commissionTotal = (parseFloat(client.commissionTotal || '0') + commission).toString();
           }
 
-          await storage.updateClient(client.id, updates);
+          await storage.updateClient(client.id, client.tenantId, updates);
         }
       }
 
       // TWO-WAY SYNC: Delete local orders that no longer exist in WooCommerce
       // This handles cancelled, deleted, or refunded orders
-      const allLocalOrders = await storage.getAllOrders();
+      const allLocalOrders = await storage.getAllOrders(tenantId);
       const wooOrderIds = new Set(orders.map((o: any) => o.id.toString()));
       let deleted = 0;
 
@@ -9976,7 +9995,7 @@ IMPORTANT:
                 const newTotalSales = Math.max(0, currentTotalSales - orderTotal);
                 const newCommissionTotal = Math.max(0, currentCommissionTotal - totalCommissionAmount);
                 
-                await storage.updateClient(client.id, { 
+                await storage.updateClient(client.id, client.tenantId, { 
                   totalSales: newTotalSales.toString(),
                   commissionTotal: newCommissionTotal.toString()
                 });
@@ -10124,7 +10143,7 @@ IMPORTANT:
       }
 
       try {
-        const allLocalOrders = await storage.getAllOrders();
+        const allLocalOrders = await storage.getAllOrders(tenantId);
 
         for (const localOrder of allLocalOrders) {
           if (!localOrder.salesAgentName) continue;
@@ -10265,7 +10284,7 @@ IMPORTANT:
         const totalIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'total');
         
         if (orderIdIndex !== -1 && totalIndex !== -1) {
-          const allLocalOrders = await storage.getAllOrders();
+          const allLocalOrders = await storage.getAllOrders(tenantId);
           
           for (const localOrder of allLocalOrders) {
             if (!localOrder.total) continue;
@@ -10310,8 +10329,8 @@ IMPORTANT:
       let clientsRecalculated = 0;
       
       try {
-        const allClients = await storage.getAllClients();
-        const allOrders = await storage.getAllOrders();
+        const allClients = await storage.getAllClients(tenantId);
+        const allOrders = await storage.getAllOrders(tenantId);
         
         // PERFORMANCE OPTIMIZATION: Load all commissions once and build lookup maps
         const allCommissions = await db.select().from(commissions);
@@ -10356,7 +10375,7 @@ IMPORTANT:
           const oldCommissionTotal = parseFloat(client.commissionTotal || '0');
           
           if (Math.abs(oldTotalSales - newTotalSales) > 0.001 || Math.abs(oldCommissionTotal - newCommissionTotal) > 0.001) {
-            await storage.updateClient(client.id, {
+            await storage.updateClient(client.id, client.tenantId, {
               totalSales: newTotalSales.toFixed(2),
               commissionTotal: newCommissionTotal.toFixed(2)
             });
@@ -10508,6 +10527,7 @@ IMPORTANT:
       const skipped = 0;
       const conflicts: any[] = [];
 
+      const tenantId = (req.user as any).tenantId;
       for (const orderReq of orderRequests) {
         const { orderId, commissionType, commissionAmount } = orderReq;
 
@@ -10519,7 +10539,7 @@ IMPORTANT:
         }
 
         // Extract link from order's client data
-        const client = await storage.getClient(order.clientId);
+        const client = await storage.getClient(order.clientId, tenantId);
         if (!client) {
           console.log(`Skipping order ${orderId}: client not found`);
           continue;
@@ -12262,7 +12282,8 @@ IMPORTANT:
 
         if (existing) {
           // Update existing client
-          await storage.updateClient(existing.id, {
+          const tenantId = (req.user as any).tenantId;
+          await storage.updateClient(existing.id, tenantId, {
             data: item.data,
             googleSheetId: spreadsheetId,
             googleSheetRowId: item.rowIndex,
@@ -12278,6 +12299,7 @@ IMPORTANT:
             data: item.data,
             status: 'unassigned',
             lastSyncedAt: new Date(),
+            tenantId: (req.user as any).tenantId,
           });
           created++;
         }
@@ -12302,6 +12324,7 @@ IMPORTANT:
   app.post('/api/sheets/:id/sync/export', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = req.user.tenantId;
       const { id } = req.params;
 
       const sheet = await storage.getGoogleSheetById(id);
@@ -12322,7 +12345,7 @@ IMPORTANT:
       const headers = headerRows[0];
 
       // Get all clients
-      const clients = await storage.getAllClients();
+      const clients = await storage.getAllClients(tenantId);
       const rows: any[][] = [];
 
       for (const client of clients) {
@@ -12373,9 +12396,10 @@ IMPORTANT:
 
       for (const item of parsed) {
         const existing = await storage.getClientByUniqueIdentifier(item.uniqueId);
+        const tenantId = (req.user as any).tenantId;
 
         if (existing) {
-          await storage.updateClient(existing.id, {
+          await storage.updateClient(existing.id, tenantId, {
             data: item.data,
             googleSheetId: spreadsheetId,
             googleSheetRowId: item.rowIndex,
@@ -12390,6 +12414,7 @@ IMPORTANT:
             data: item.data,
             status: 'unassigned',
             lastSyncedAt: new Date(),
+            tenantId: (req.user as any).tenantId,
           });
           created++;
         }
@@ -12805,7 +12830,8 @@ IMPORTANT:
   // Get status hierarchy for duplicate detection
   app.get('/api/statuses/hierarchy', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const statuses = await storage.getAllStatuses();
+      const tenantId = req.user.tenantId;
+      const statuses = await storage.getAllStatuses(tenantId);
       
       // Build hierarchy map: { "Status Name": displayOrder }
       const hierarchy: Record<string, number> = {};
@@ -15540,9 +15566,10 @@ ${rawText}`;
       }
 
       // Fetch reminders for allowed users
+      const tenantId = (req.user as any).tenantId;
       let allReminders: any[] = [];
       for (const uid of allowedUserIds) {
-        const userReminders = await storage.getRemindersByUser(uid);
+        const userReminders = await storage.getRemindersByUser(uid, tenantId);
 
         // Fetch user info to add agentName to each reminder
         const reminderUser = await storage.getUserById(uid);
@@ -15594,8 +15621,9 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { clientId } = req.params;
-      const reminders = await storage.getRemindersByClient(clientId);
+      const reminders = await storage.getRemindersByClient(clientId, tenantId);
 
       // Filter by user (security check)
       const userReminders = reminders.filter(r => r.userId === userId);
@@ -15614,10 +15642,11 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { date } = req.params; // Expected format: YYYY-MM-DD
 
       // Get all user's reminders
-      const allReminders = await storage.getRemindersByUser(userId);
+      const allReminders = await storage.getRemindersByUser(userId, tenantId);
 
       // Filter by date
       const dateReminders = allReminders.filter(r => r.scheduledDate === date && r.isActive);
@@ -15705,6 +15734,7 @@ ${rawText}`;
         isActive: true,
         addToCalendar: false,
         storeMetadata: enhancedStoreMetadata,
+        tenantId: (req.user as any).tenantId,
       };
 
       // Validate with schema
@@ -15901,7 +15931,8 @@ ${rawText}`;
 
           // Save calendar event ID to reminder
           if (createdEvent.data.id) {
-            await storage.updateReminder(reminder.id, {
+            const tenantId = (req.user as any).tenantId;
+            await storage.updateReminder(reminder.id, tenantId, {
               googleCalendarEventId: createdEvent.data.id
             });
           }
@@ -15949,15 +15980,16 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { id } = req.params;
 
       // Verify ownership
-      const existing = await storage.getReminderById(id);
+      const existing = await storage.getReminderById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Reminder not found' });
       }
 
-      const reminder = await storage.updateReminder(id, req.body);
+      const reminder = await storage.updateReminder(id, tenantId, req.body);
       res.json({ reminder });
     } catch (error: any) {
       console.error('Error updating reminder:', error);
@@ -15973,15 +16005,16 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { id } = req.params;
 
       // Verify ownership
-      const existing = await storage.getReminderById(id);
+      const existing = await storage.getReminderById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Reminder not found' });
       }
 
-      const reminder = await storage.updateReminder(id, req.body);
+      const reminder = await storage.updateReminder(id, tenantId, req.body);
       res.json({ reminder });
     } catch (error: any) {
       console.error('Error updating reminder:', error);
@@ -15997,15 +16030,16 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { id } = req.params;
 
       // Verify ownership
-      const existing = await storage.getReminderById(id);
+      const existing = await storage.getReminderById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Reminder not found' });
       }
 
-      await storage.deleteReminder(id);
+      await storage.deleteReminder(id, tenantId);
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error deleting reminder:', error);
@@ -16033,7 +16067,8 @@ ${rawText}`;
       const defaultCalendarReminders = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }];
 
       // Get all active reminders for this user
-      const reminders = await storage.getRemindersByUser(userId);
+      const tenantId = (req.user as any).tenantId;
+      const reminders = await storage.getRemindersByUser(userId, tenantId);
       // Filter to only reminders that are active, have a trigger date, and don't already have a calendar event
       const activeReminders = reminders.filter(r => 
         r.isActive && 
@@ -16145,7 +16180,7 @@ ${rawText}`;
 
           // Save calendar event ID to reminder metadata
           if (createdEvent.data.id) {
-            await storage.updateReminder(reminder.id, {
+            await storage.updateReminder(reminder.id, tenantId, {
               googleCalendarEventId: createdEvent.data.id
             });
           }
@@ -16179,7 +16214,8 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const reminders = await storage.getRemindersByUser(userId);
+      const tenantId = (req.user as any).tenantId;
+      const reminders = await storage.getRemindersByUser(userId, tenantId);
 
       // Filter only active reminders with nextTrigger set
       const activeReminders = reminders.filter(r => r.isActive && r.nextTrigger);
@@ -16275,9 +16311,10 @@ ${rawText}`;
       }
 
       // Fetch notifications for allowed users
+      const tenantId = (req.user as any).tenantId;
       let allNotifications: any[] = [];
       for (const uid of allowedUserIds) {
-        const userNotifications = await storage.getNotificationsByUser(uid);
+        const userNotifications = await storage.getNotificationsByUser(uid, tenantId);
         allNotifications = allNotifications.concat(userNotifications);
       }
 
@@ -16303,15 +16340,16 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { id } = req.params;
 
       // Verify ownership
-      const existing = await storage.getNotificationById(id);
+      const existing = await storage.getNotificationById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Notification not found' });
       }
 
-      const notification = await storage.markNotificationAsRead(id);
+      const notification = await storage.markNotificationAsRead(id, tenantId);
       res.json({ notification });
     } catch (error: any) {
       console.error('Error marking notification as read:', error);
@@ -16327,15 +16365,16 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { id } = req.params;
 
       // Verify ownership
-      const existing = await storage.getNotificationById(id);
+      const existing = await storage.getNotificationById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Notification not found' });
       }
 
-      const notification = await storage.markNotificationAsResolved(id);
+      const notification = await storage.markNotificationAsResolved(id, tenantId);
       res.json({ notification });
     } catch (error: any) {
       console.error('Error resolving notification:', error);
@@ -16351,15 +16390,16 @@ ${rawText}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { id } = req.params;
 
       // Verify ownership
-      const existing = await storage.getNotificationById(id);
+      const existing = await storage.getNotificationById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Notification not found' });
       }
 
-      await storage.deleteNotification(id);
+      await storage.deleteNotification(id, tenantId);
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error deleting notification:', error);
@@ -17699,7 +17739,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/templates', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const templates = await storage.getUserTemplates(userId);
+      const tenantId = (req.user as any).tenantId;
+      const templates = await storage.getUserTemplates(userId, tenantId);
       res.json(templates);
     } catch (error: any) {
       console.error('Error fetching templates:', error);
@@ -17710,7 +17751,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/templates', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const validation = insertTemplateSchema.safeParse({ ...req.body, userId });
+      const tenantId = (req.user as any).tenantId;
+      const validation = insertTemplateSchema.safeParse({ ...req.body, userId, tenantId });
 
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
@@ -17718,10 +17760,10 @@ Use this store information to provide context-aware responses. When helping draf
 
       // If setting this as default Script, unset other defaults first
       if (validation.data.isDefault && validation.data.type === 'Script') {
-        const existingTemplates = await storage.getUserTemplates(userId);
+        const existingTemplates = await storage.getUserTemplates(userId, tenantId);
         for (const existing of existingTemplates) {
           if (existing.isDefault && existing.type === 'Script' && existing.id !== validation.data.id) {
-            await storage.updateTemplate(existing.id, { isDefault: false });
+            await storage.updateTemplate(existing.id, tenantId, { isDefault: false });
           }
         }
       }
@@ -17738,8 +17780,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const template = await storage.getTemplate(id);
+      const template = await storage.getTemplate(id, tenantId);
       if (!template) {
         return res.status(404).json({ message: 'Template not found' });
       }
@@ -17766,15 +17809,15 @@ Use this store information to provide context-aware responses. When helping draf
 
       // If setting this as default Script, unset other defaults first
       if (validation.data.isDefault && updatedType === 'Script') {
-        const existingTemplates = await storage.getUserTemplates(userId);
+        const existingTemplates = await storage.getUserTemplates(userId, tenantId);
         for (const existing of existingTemplates) {
           if (existing.isDefault && existing.type === 'Script' && existing.id !== id) {
-            await storage.updateTemplate(existing.id, { isDefault: false });
+            await storage.updateTemplate(existing.id, tenantId, { isDefault: false });
           }
         }
       }
 
-      const updated = await storage.updateTemplate(id, validation.data);
+      const updated = await storage.updateTemplate(id, tenantId, validation.data);
       res.json(updated);
     } catch (error: any) {
       console.error('Error updating template:', error);
@@ -17786,8 +17829,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const template = await storage.getTemplate(id);
+      const template = await storage.getTemplate(id, tenantId);
       if (!template) {
         return res.status(404).json({ message: 'Template not found' });
       }
@@ -17796,7 +17840,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      await storage.deleteTemplate(id);
+      await storage.deleteTemplate(id, tenantId);
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error deleting template:', error);
@@ -17807,7 +17851,8 @@ Use this store information to provide context-aware responses. When helping draf
   // Get all unique tags across all templates (alphabetically)
   app.get('/api/templates/tags', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const allTags = await storage.getAllTemplateTags();
+      const tenantId = (req.user as any).tenantId;
+      const allTags = await storage.getAllTemplateTags(tenantId);
       res.json(allTags);
     } catch (error: any) {
       console.error('Error fetching template tags:', error);
@@ -17907,6 +17952,14 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = userIntegration.userId;
       console.log('[Webhook] Processing calendar changes for user:', userId);
 
+      // Get user's tenantId for multi-tenant operations
+      const webhookUser = await storage.getUserById(userId);
+      const tenantId = webhookUser?.tenantId || '';
+      if (!tenantId) {
+        console.log('[Webhook] No tenantId found for user:', userId);
+        return;
+      }
+
       // Get system OAuth credentials for token refresh
       const systemIntegration = await storage.getSystemIntegration('google_sheets');
       if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
@@ -17955,7 +18008,7 @@ Use this store information to provide context-aware responses. When helping draf
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
       // Get all reminders for this user
-      const reminders = await storage.getRemindersByUser(userId);
+      const reminders = await storage.getRemindersByUser(userId, tenantId);
 
       // Fetch each event to check for updates/deletions
       for (const reminder of reminders) {
@@ -17975,7 +18028,7 @@ Use this store information to provide context-aware responses. When helping draf
           if (event.status === 'cancelled') {
             // Event was deleted, delete the reminder
             console.log(`[Webhook] Calendar event ${calendarEventId} deleted, deleting reminder ${reminder.id}`);
-            await storage.deleteReminder(reminder.id);
+            await storage.deleteReminder(reminder.id, tenantId);
           } else if (event.updated) {
             // Event was updated, sync the changes from Google Calendar
             // Google returns ISO datetime with timezone, parse it in the event's timezone
@@ -17994,7 +18047,7 @@ Use this store information to provide context-aware responses. When helping draf
               if (newScheduledDate !== reminder.scheduledDate || newScheduledTime !== reminder.scheduledTime) {
                 console.log(`[Webhook] Calendar event ${calendarEventId} time changed, updating reminder ${reminder.id}`);
                 console.log(`[Webhook] Old: ${reminder.scheduledDate} ${reminder.scheduledTime}, New: ${newScheduledDate} ${newScheduledTime}`);
-                await storage.updateReminder(reminder.id, {
+                await storage.updateReminder(reminder.id, tenantId, {
                   scheduledDate: newScheduledDate,
                   scheduledTime: newScheduledTime,
                   timezone: eventTimeZone
@@ -18004,7 +18057,7 @@ Use this store information to provide context-aware responses. When helping draf
 
             // Update title if changed
             if (event.summary && event.summary !== reminder.title) {
-              await storage.updateReminder(reminder.id, {
+              await storage.updateReminder(reminder.id, tenantId, {
                 title: event.summary
               });
             }
@@ -18012,7 +18065,7 @@ Use this store information to provide context-aware responses. When helping draf
         } catch (eventError: any) {
           // Event not found (404) means it was deleted
           if (eventError.code === 404 || eventError.status === 404) {
-            await storage.deleteReminder(reminder.id);
+            await storage.deleteReminder(reminder.id, tenantId);
           }
         }
       }
@@ -18157,9 +18210,10 @@ Use this store information to provide context-aware responses. When helping draf
   // ============================================================================
 
   // Get all categories (admin only)
-  app.get('/api/categories', isAuthenticatedCustom, async (req, res) => {
+  app.get('/api/categories', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const categories = await storage.getAllCategories();
+      const tenantId = req.user.tenantId;
+      const categories = await storage.getAllCategories(tenantId);
       res.json({ categories });
     } catch (error: any) {
       console.error('Error fetching categories:', error);
@@ -18168,9 +18222,10 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Get active categories (all authenticated users)
-  app.get('/api/categories/active', isAuthenticatedCustom, async (req, res) => {
+  app.get('/api/categories/active', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const categories = await storage.getActiveCategories();
+      const tenantId = req.user.tenantId;
+      const categories = await storage.getActiveCategories(tenantId);
       res.json({ categories });
     } catch (error: any) {
       console.error('Error fetching active categories:', error);
@@ -18228,9 +18283,10 @@ Use this store information to provide context-aware responses. When helping draf
   // ============================================================================
 
   // Get all statuses (all authenticated users)
-  app.get('/api/statuses', isAuthenticatedCustom, async (req, res) => {
+  app.get('/api/statuses', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const statuses = await storage.getAllStatuses();
+      const tenantId = req.user.tenantId;
+      const statuses = await storage.getAllStatuses(tenantId);
       res.json({ statuses });
     } catch (error: any) {
       console.error('Error fetching statuses:', error);
@@ -18239,9 +18295,10 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Get active statuses (all authenticated users)
-  app.get('/api/statuses/active', isAuthenticatedCustom, async (req, res) => {
+  app.get('/api/statuses/active', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const statuses = await storage.getActiveStatuses();
+      const tenantId = req.user.tenantId;
+      const statuses = await storage.getActiveStatuses(tenantId);
       res.json({ statuses });
     } catch (error: any) {
       console.error('Error fetching active statuses:', error);
@@ -18326,9 +18383,10 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Seed default statuses (admin only) - one-time setup
-  app.post('/api/statuses/seed', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.post('/api/statuses/seed', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const existingStatuses = await storage.getAllStatuses();
+      const tenantId = req.user.tenantId;
+      const existingStatuses = await storage.getAllStatuses(tenantId);
       if (existingStatuses.length > 0) {
         return res.status(400).json({ message: 'Statuses already exist. Clear the database first if you want to re-seed.' });
       }
@@ -19245,6 +19303,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/call-history', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const user = await storage.getUser(userId);
 
       if (!user) {
@@ -19255,15 +19314,15 @@ Use this store information to provide context-aware responses. When helping draf
       const { agentId } = req.query;
       
       if (agentId && user.role === 'admin') {
-        const callHistory = await storage.getAllCallHistory(agentId as string);
+        const callHistory = await storage.getAllCallHistory(tenantId, agentId as string);
         res.json(callHistory);
       } else if (user.role === 'admin' && !agentId) {
         // Admin without filter gets all call history
-        const callHistory = await storage.getAllCallHistory();
+        const callHistory = await storage.getAllCallHistory(tenantId);
         res.json(callHistory);
       } else {
         // Regular users get only their own call history
-        const callHistory = await storage.getUserCallHistory(userId);
+        const callHistory = await storage.getUserCallHistory(userId, tenantId);
         res.json(callHistory);
       }
     } catch (error: any) {
@@ -19452,7 +19511,8 @@ Use this store information to provide context-aware responses. When helping draf
       console.log('[FOLLOW-UP] 📋 Column indices:', { linkIndex, agentNameIndex, statusIndex, totalIndex, dateIndex });
 
       // Get all call history for correlation
-      const allCallHistory = await storage.getAllCallHistory();
+      const tenantId = (req.user as any).tenantId;
+      const allCallHistory = await storage.getAllCallHistory(tenantId);
       console.log('[FOLLOW-UP] 📞 Found', allCallHistory.length, 'total calls in history');
 
       // Build a map of Link -> call metrics
