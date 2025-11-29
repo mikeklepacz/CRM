@@ -636,7 +636,7 @@ Rules:
                 <SelectContent>
                   <SelectItem value="">None (Available to all agents)</SelectItem>
                   {agents.map((agent: any) => (
-                    <SelectItem key={agent.id} value={agent.agent_id}>
+                    <SelectItem key={agent.id} value={agent.agentId}>
                       {agent.name}
                     </SelectItem>
                   ))}
