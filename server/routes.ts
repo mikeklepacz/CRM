@@ -22708,6 +22708,247 @@ ${conversationContext}`;
     }
   });
 
+  // ============ Pipeline Management Routes ============
+  
+  // GET /api/org-admin/pipelines - List all pipelines for tenant
+  app.get('/api/org-admin/pipelines', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const pipelinesList = await storage.listPipelines(tenantId);
+      res.json({ pipelines: pipelinesList });
+    } catch (error: any) {
+      console.error('Error listing pipelines:', error);
+      res.status(500).json({ message: error.message || 'Failed to list pipelines' });
+    }
+  });
+
+  // GET /api/org-admin/pipelines/:pipelineId - Get a specific pipeline with stages
+  app.get('/api/org-admin/pipelines/:pipelineId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { pipelineId } = req.params;
+      const tenantId = req.user.tenantId;
+      
+      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
+      if (!pipeline) {
+        return res.status(404).json({ message: 'Pipeline not found' });
+      }
+      
+      const stages = await storage.listPipelineStages(pipelineId, tenantId);
+      res.json({ pipeline, stages });
+    } catch (error: any) {
+      console.error('Error getting pipeline:', error);
+      res.status(500).json({ message: error.message || 'Failed to get pipeline' });
+    }
+  });
+
+  // POST /api/org-admin/pipelines - Create a new pipeline
+  app.post('/api/org-admin/pipelines', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { name, slug, pipelineType, description, aiPromptTemplate, aiAssistantId, voiceAgentId, googleSheetProfile } = req.body;
+      
+      if (!name || !slug) {
+        return res.status(400).json({ message: 'Name and slug are required' });
+      }
+      
+      // Check for slug uniqueness within tenant
+      const existingPipeline = await storage.getPipelineBySlug(slug, tenantId);
+      if (existingPipeline) {
+        return res.status(400).json({ message: 'A pipeline with this slug already exists' });
+      }
+      
+      const pipeline = await storage.createPipeline({
+        tenantId,
+        name,
+        slug,
+        pipelineType: pipelineType || 'custom',
+        description,
+        aiPromptTemplate,
+        aiAssistantId,
+        voiceAgentId,
+        googleSheetProfile,
+        isActive: true,
+      });
+      
+      res.json({ pipeline });
+    } catch (error: any) {
+      console.error('Error creating pipeline:', error);
+      res.status(500).json({ message: error.message || 'Failed to create pipeline' });
+    }
+  });
+
+  // PATCH /api/org-admin/pipelines/:pipelineId - Update a pipeline
+  app.patch('/api/org-admin/pipelines/:pipelineId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { pipelineId } = req.params;
+      const tenantId = req.user.tenantId;
+      const updates = req.body;
+      
+      // Check if pipeline exists
+      const existing = await storage.getPipelineById(pipelineId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Pipeline not found' });
+      }
+      
+      // If changing slug, check uniqueness
+      if (updates.slug && updates.slug !== existing.slug) {
+        const slugConflict = await storage.getPipelineBySlug(updates.slug, tenantId);
+        if (slugConflict) {
+          return res.status(400).json({ message: 'A pipeline with this slug already exists' });
+        }
+      }
+      
+      const pipeline = await storage.updatePipeline(pipelineId, tenantId, updates);
+      res.json({ pipeline });
+    } catch (error: any) {
+      console.error('Error updating pipeline:', error);
+      res.status(500).json({ message: error.message || 'Failed to update pipeline' });
+    }
+  });
+
+  // DELETE /api/org-admin/pipelines/:pipelineId - Delete a pipeline
+  app.delete('/api/org-admin/pipelines/:pipelineId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { pipelineId } = req.params;
+      const tenantId = req.user.tenantId;
+      
+      const existing = await storage.getPipelineById(pipelineId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Pipeline not found' });
+      }
+      
+      await storage.deletePipeline(pipelineId, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting pipeline:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete pipeline' });
+    }
+  });
+
+  // ============ Pipeline Stage Routes ============
+  
+  // POST /api/org-admin/pipelines/:pipelineId/stages - Create a new stage
+  app.post('/api/org-admin/pipelines/:pipelineId/stages', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { pipelineId } = req.params;
+      const tenantId = req.user.tenantId;
+      const { name, stageType, config, aiPromptOverride } = req.body;
+      
+      // Verify pipeline exists and belongs to tenant
+      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
+      if (!pipeline) {
+        return res.status(404).json({ message: 'Pipeline not found' });
+      }
+      
+      if (!name) {
+        return res.status(400).json({ message: 'Stage name is required' });
+      }
+      
+      // Get max stage order
+      const existingStages = await storage.listPipelineStages(pipelineId, tenantId);
+      const maxOrder = existingStages.length > 0 
+        ? Math.max(...existingStages.map(s => s.stageOrder)) 
+        : 0;
+      
+      const stage = await storage.createPipelineStage({
+        tenantId,
+        pipelineId,
+        name,
+        stageOrder: maxOrder + 1,
+        stageType: stageType || 'action',
+        config: config || {},
+        aiPromptOverride,
+        isActive: true,
+      });
+      
+      res.json({ stage });
+    } catch (error: any) {
+      console.error('Error creating stage:', error);
+      res.status(500).json({ message: error.message || 'Failed to create stage' });
+    }
+  });
+
+  // PATCH /api/org-admin/pipelines/:pipelineId/stages/:stageId - Update a stage
+  app.patch('/api/org-admin/pipelines/:pipelineId/stages/:stageId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { pipelineId, stageId } = req.params;
+      const tenantId = req.user.tenantId;
+      const updates = req.body;
+      
+      // Verify pipeline exists
+      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
+      if (!pipeline) {
+        return res.status(404).json({ message: 'Pipeline not found' });
+      }
+      
+      // Verify stage exists
+      const stage = await storage.getPipelineStageById(stageId, tenantId);
+      if (!stage || stage.pipelineId !== pipelineId) {
+        return res.status(404).json({ message: 'Stage not found' });
+      }
+      
+      const updatedStage = await storage.updatePipelineStage(stageId, tenantId, updates);
+      res.json({ stage: updatedStage });
+    } catch (error: any) {
+      console.error('Error updating stage:', error);
+      res.status(500).json({ message: error.message || 'Failed to update stage' });
+    }
+  });
+
+  // DELETE /api/org-admin/pipelines/:pipelineId/stages/:stageId - Delete a stage
+  app.delete('/api/org-admin/pipelines/:pipelineId/stages/:stageId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { pipelineId, stageId } = req.params;
+      const tenantId = req.user.tenantId;
+      
+      // Verify pipeline exists
+      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
+      if (!pipeline) {
+        return res.status(404).json({ message: 'Pipeline not found' });
+      }
+      
+      // Verify stage exists
+      const stage = await storage.getPipelineStageById(stageId, tenantId);
+      if (!stage || stage.pipelineId !== pipelineId) {
+        return res.status(404).json({ message: 'Stage not found' });
+      }
+      
+      await storage.deletePipelineStage(stageId, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting stage:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete stage' });
+    }
+  });
+
+  // POST /api/org-admin/pipelines/:pipelineId/stages/reorder - Reorder stages
+  app.post('/api/org-admin/pipelines/:pipelineId/stages/reorder', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { pipelineId } = req.params;
+      const tenantId = req.user.tenantId;
+      const { stageIds } = req.body;
+      
+      if (!Array.isArray(stageIds) || stageIds.length === 0) {
+        return res.status(400).json({ message: 'stageIds array is required' });
+      }
+      
+      // Verify pipeline exists
+      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
+      if (!pipeline) {
+        return res.status(404).json({ message: 'Pipeline not found' });
+      }
+      
+      await storage.reorderPipelineStages(pipelineId, tenantId, stageIds);
+      
+      // Return updated stages
+      const stages = await storage.listPipelineStages(pipelineId, tenantId);
+      res.json({ stages });
+    } catch (error: any) {
+      console.error('Error reordering stages:', error);
+      res.status(500).json({ message: error.message || 'Failed to reorder stages' });
+    }
+  });
+
   // POST /api/invites/:token/accept - Accept an invite (authenticated user)
   app.post('/api/invites/:token/accept', isAuthenticated, async (req: any, res) => {
     try {
