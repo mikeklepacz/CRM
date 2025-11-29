@@ -19,7 +19,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, Users, BarChart3, Plus, Edit, Eye, Loader2, Check } from "lucide-react";
+import { Building2, Users, BarChart3, Plus, Edit, Eye, Loader2, Check, Trash2, UserPlus } from "lucide-react";
 
 interface Tenant {
   id: string;
@@ -69,6 +69,13 @@ const tenantFormSchema = z.object({
 
 type TenantFormData = z.infer<typeof tenantFormSchema>;
 
+const addUserToTenantSchema = z.object({
+  tenantId: z.string().min(1, "Tenant is required"),
+  roleInTenant: z.enum(["org_admin", "agent"]),
+});
+
+type AddUserToTenantFormData = z.infer<typeof addUserToTenantSchema>;
+
 export default function SuperAdmin() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -77,6 +84,8 @@ export default function SuperAdmin() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [viewingTenantId, setViewingTenantId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserWithMemberships | null>(null);
+  const [isAddToTenantOpen, setIsAddToTenantOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && user && !isSuperAdmin(user)) {
@@ -122,6 +131,14 @@ export default function SuperAdmin() {
     },
   });
 
+  const addUserToTenantForm = useForm<AddUserToTenantFormData>({
+    resolver: zodResolver(addUserToTenantSchema),
+    defaultValues: {
+      tenantId: "",
+      roleInTenant: "agent",
+    },
+  });
+
   useEffect(() => {
     if (editingTenant) {
       editForm.reset({
@@ -131,6 +148,15 @@ export default function SuperAdmin() {
       });
     }
   }, [editingTenant, editForm]);
+
+  useEffect(() => {
+    if (isAddToTenantOpen) {
+      addUserToTenantForm.reset({
+        tenantId: "",
+        roleInTenant: "agent",
+      });
+    }
+  }, [isAddToTenantOpen, addUserToTenantForm]);
 
   const createTenantMutation = useMutation({
     mutationFn: async (data: TenantFormData) => {
@@ -178,6 +204,54 @@ export default function SuperAdmin() {
     },
   });
 
+  const addUserToTenantMutation = useMutation({
+    mutationFn: async ({ userId, tenantId, roleInTenant }: { userId: string; tenantId: string; roleInTenant: string }) => {
+      return await apiRequest("POST", `/api/super-admin/users/${userId}/tenants`, { tenantId, roleInTenant });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/tenants'] });
+      setIsAddToTenantOpen(false);
+      addUserToTenantForm.reset();
+      toast({
+        title: "Success",
+        description: "User added to tenant successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add user to tenant",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeUserFromTenantMutation = useMutation({
+    mutationFn: async ({ userId, tenantId }: { userId: string; tenantId: string }) => {
+      return await apiRequest("DELETE", `/api/super-admin/users/${userId}/tenants/${tenantId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/tenants'] });
+      if (selectedUser) {
+        const updatedMemberships = selectedUser.tenantMemberships.filter(m => m.tenantId !== removeUserFromTenantMutation.variables?.tenantId);
+        setSelectedUser({ ...selectedUser, tenantMemberships: updatedMemberships });
+      }
+      toast({
+        title: "Success",
+        description: "User removed from tenant",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove user from tenant",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateSubmit = (data: TenantFormData) => {
     createTenantMutation.mutate(data);
   };
@@ -186,6 +260,26 @@ export default function SuperAdmin() {
     if (editingTenant) {
       updateTenantMutation.mutate({ id: editingTenant.id, data });
     }
+  };
+
+  const handleAddUserToTenantSubmit = (data: AddUserToTenantFormData) => {
+    if (selectedUser) {
+      addUserToTenantMutation.mutate({
+        userId: selectedUser.id,
+        tenantId: data.tenantId,
+        roleInTenant: data.roleInTenant,
+      });
+    }
+  };
+
+  const handleRemoveUserFromTenant = (userId: string, tenantId: string) => {
+    removeUserFromTenantMutation.mutate({ userId, tenantId });
+  };
+
+  const getAvailableTenants = () => {
+    if (!selectedUser || !tenantsData?.tenants) return [];
+    const memberTenantIds = new Set(selectedUser.tenantMemberships.map(m => m.tenantId));
+    return tenantsData.tenants.filter(t => !memberTenantIds.has(t.id));
   };
 
   if (authLoading) return null;
@@ -332,7 +426,7 @@ export default function SuperAdmin() {
           <Card>
             <CardHeader>
               <CardTitle>Users</CardTitle>
-              <CardDescription>View all users across all tenants</CardDescription>
+              <CardDescription>View and manage users across all tenants. Click a row to manage memberships.</CardDescription>
             </CardHeader>
             <CardContent>
               {usersLoading ? (
@@ -349,18 +443,24 @@ export default function SuperAdmin() {
                       <TableHead>Email</TableHead>
                       <TableHead>Super Admin</TableHead>
                       <TableHead>Tenant Memberships</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {usersData?.users?.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
                     ) : (
                       usersData?.users?.map((u) => (
-                        <TableRow key={u.id} data-testid={`row-user-${u.id}`}>
+                        <TableRow 
+                          key={u.id} 
+                          data-testid={`row-user-${u.id}`}
+                          className="cursor-pointer hover-elevate"
+                          onClick={() => setSelectedUser(u)}
+                        >
                           <TableCell className="font-medium">
                             {u.firstName || u.lastName
                               ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
@@ -389,6 +489,19 @@ export default function SuperAdmin() {
                                 <span className="text-muted-foreground">None</span>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedUser(u);
+                              }}
+                              data-testid={`button-manage-user-${u.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -659,6 +772,165 @@ export default function SuperAdmin() {
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewingTenantId(null)} data-testid="button-close-details">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Manage User Memberships</DialogTitle>
+            <DialogDescription>
+              {selectedUser?.firstName || selectedUser?.lastName
+                ? `${selectedUser?.firstName ?? ""} ${selectedUser?.lastName ?? ""}`.trim()
+                : selectedUser?.email ?? "User"}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-sm font-medium mb-2">Current Memberships</h4>
+              {selectedUser?.tenantMemberships?.length === 0 ? (
+                <p className="text-sm text-muted-foreground">This user is not a member of any tenant.</p>
+              ) : (
+                <div className="space-y-2">
+                  {selectedUser?.tenantMemberships?.map((m) => (
+                    <div 
+                      key={m.tenantId} 
+                      className="flex items-center justify-between p-2 rounded-md border"
+                      data-testid={`membership-${m.tenantId}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{m.tenantName}</Badge>
+                        <span className="text-sm text-muted-foreground">({m.roleInTenant})</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleRemoveUserFromTenant(selectedUser!.id, m.tenantId)}
+                        disabled={removeUserFromTenantMutation.isPending}
+                        data-testid={`button-remove-from-${m.tenantId}`}
+                      >
+                        {removeUserFromTenantMutation.isPending && 
+                          removeUserFromTenantMutation.variables?.tenantId === m.tenantId ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium">Add to Tenant</h4>
+                {!isAddToTenantOpen && getAvailableTenants().length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsAddToTenantOpen(true)}
+                    data-testid="button-show-add-form"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Add to Tenant
+                  </Button>
+                )}
+              </div>
+
+              {getAvailableTenants().length === 0 && !isAddToTenantOpen && (
+                <p className="text-sm text-muted-foreground">
+                  This user is already a member of all available tenants.
+                </p>
+              )}
+
+              {isAddToTenantOpen && (
+                <Form {...addUserToTenantForm}>
+                  <form onSubmit={addUserToTenantForm.handleSubmit(handleAddUserToTenantSubmit)} className="space-y-4">
+                    <FormField
+                      control={addUserToTenantForm.control}
+                      name="tenantId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tenant</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-add-tenant">
+                                <SelectValue placeholder="Select tenant" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {getAvailableTenants().map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={addUserToTenantForm.control}
+                      name="roleInTenant"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Role</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-add-role">
+                                <SelectValue placeholder="Select role" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="org_admin">Org Admin</SelectItem>
+                              <SelectItem value="agent">Agent</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsAddToTenantOpen(false)}
+                        data-testid="button-cancel-add"
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={addUserToTenantMutation.isPending}
+                        data-testid="button-submit-add"
+                      >
+                        {addUserToTenantMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Add
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setSelectedUser(null);
+                setIsAddToTenantOpen(false);
+              }}
+              data-testid="button-close-user-dialog"
+            >
               Close
             </Button>
           </DialogFooter>
