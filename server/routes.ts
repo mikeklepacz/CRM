@@ -22951,6 +22951,335 @@ ${conversationContext}`;
     }
   });
 
+  // =====================
+  // Org Admin - Projects
+  // =====================
+
+  // GET /api/org-admin/projects - List all projects for tenant
+  app.get('/api/org-admin/projects', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { status } = req.query;
+      const projects = await storage.listTenantProjects(tenantId, status as string | undefined);
+      res.json({ projects });
+    } catch (error: any) {
+      console.error('Error listing projects:', error);
+      res.status(500).json({ message: error.message || 'Failed to list projects' });
+    }
+  });
+
+  // GET /api/org-admin/projects/:projectId - Get a specific project
+  app.get('/api/org-admin/projects/:projectId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const tenantId = req.user.tenantId;
+      const project = await storage.getTenantProjectById(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+      res.json({ project });
+    } catch (error: any) {
+      console.error('Error getting project:', error);
+      res.status(500).json({ message: error.message || 'Failed to get project' });
+    }
+  });
+
+  // POST /api/org-admin/projects - Create a new project
+  app.post('/api/org-admin/projects', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const userId = req.user.id;
+      const { name, slug, projectType, description, settings, isDefault } = req.body;
+
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ message: 'Project name is required' });
+      }
+
+      if (slug) {
+        const existing = await storage.getTenantProjectBySlug(slug, tenantId);
+        if (existing) {
+          return res.status(400).json({ message: 'A project with this slug already exists' });
+        }
+      }
+
+      const project = await storage.createTenantProject({
+        tenantId,
+        name: name.trim(),
+        slug: slug?.trim(),
+        projectType: projectType || 'campaign',
+        description: description?.trim(),
+        settings: settings || {},
+        isDefault: isDefault || false,
+        createdBy: userId,
+      });
+
+      if (isDefault) {
+        await storage.setDefaultTenantProject(project.id, tenantId);
+      }
+
+      res.status(201).json({ project });
+    } catch (error: any) {
+      console.error('Error creating project:', error);
+      res.status(500).json({ message: error.message || 'Failed to create project' });
+    }
+  });
+
+  // PATCH /api/org-admin/projects/:projectId - Update a project
+  app.patch('/api/org-admin/projects/:projectId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const tenantId = req.user.tenantId;
+      const { name, slug, projectType, description, settings, status } = req.body;
+
+      const existing = await storage.getTenantProjectById(projectId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      if (slug && slug !== existing.slug) {
+        const slugExists = await storage.getTenantProjectBySlug(slug, tenantId);
+        if (slugExists && slugExists.id !== projectId) {
+          return res.status(400).json({ message: 'A project with this slug already exists' });
+        }
+      }
+
+      const updates: any = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (slug !== undefined) updates.slug = slug.trim();
+      if (projectType !== undefined) updates.projectType = projectType;
+      if (description !== undefined) updates.description = description?.trim();
+      if (settings !== undefined) updates.settings = settings;
+      if (status !== undefined) updates.status = status;
+
+      const project = await storage.updateTenantProject(projectId, tenantId, updates);
+      res.json({ project });
+    } catch (error: any) {
+      console.error('Error updating project:', error);
+      res.status(500).json({ message: error.message || 'Failed to update project' });
+    }
+  });
+
+  // POST /api/org-admin/projects/:projectId/archive - Archive a project
+  app.post('/api/org-admin/projects/:projectId/archive', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const tenantId = req.user.tenantId;
+      const userId = req.user.id;
+
+      const existing = await storage.getTenantProjectById(projectId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      if (existing.status === 'archived') {
+        return res.status(400).json({ message: 'Project is already archived' });
+      }
+
+      const project = await storage.archiveTenantProject(projectId, tenantId, userId);
+      res.json({ project });
+    } catch (error: any) {
+      console.error('Error archiving project:', error);
+      res.status(500).json({ message: error.message || 'Failed to archive project' });
+    }
+  });
+
+  // POST /api/org-admin/projects/:projectId/restore - Restore an archived project
+  app.post('/api/org-admin/projects/:projectId/restore', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const tenantId = req.user.tenantId;
+
+      const existing = await storage.getTenantProjectById(projectId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      if (existing.status !== 'archived') {
+        return res.status(400).json({ message: 'Project is not archived' });
+      }
+
+      const project = await storage.restoreTenantProject(projectId, tenantId);
+      res.json({ project });
+    } catch (error: any) {
+      console.error('Error restoring project:', error);
+      res.status(500).json({ message: error.message || 'Failed to restore project' });
+    }
+  });
+
+  // POST /api/org-admin/projects/:projectId/set-default - Set as default project
+  app.post('/api/org-admin/projects/:projectId/set-default', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const tenantId = req.user.tenantId;
+
+      const existing = await storage.getTenantProjectById(projectId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      if (existing.status === 'archived') {
+        return res.status(400).json({ message: 'Cannot set archived project as default' });
+      }
+
+      const project = await storage.setDefaultTenantProject(projectId, tenantId);
+      res.json({ project });
+    } catch (error: any) {
+      console.error('Error setting default project:', error);
+      res.status(500).json({ message: error.message || 'Failed to set default project' });
+    }
+  });
+
+  // DELETE /api/org-admin/projects/:projectId - Delete a project
+  app.delete('/api/org-admin/projects/:projectId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const tenantId = req.user.tenantId;
+
+      const existing = await storage.getTenantProjectById(projectId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      if (existing.isDefault) {
+        return res.status(400).json({ message: 'Cannot delete the default project. Set another project as default first.' });
+      }
+
+      await storage.deleteTenantProject(projectId, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting project:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete project' });
+    }
+  });
+
+  // GET /api/org-admin/projects/:projectId/config - Get merged project configuration
+  app.get('/api/org-admin/projects/:projectId/config', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const tenantId = req.user.tenantId;
+
+      const { resolveProjectConfig } = await import('./services/projectConfigResolver');
+      const config = await resolveProjectConfig(tenantId, projectId);
+
+      if (!config) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      res.json({ config });
+    } catch (error: any) {
+      console.error('Error getting project config:', error);
+      res.status(500).json({ message: error.message || 'Failed to get project config' });
+    }
+  });
+
+  // =============================
+  // Org Admin - Assistant Blueprints
+  // =============================
+
+  // GET /api/org-admin/blueprints - List all assistant blueprints
+  app.get('/api/org-admin/blueprints', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { type } = req.query;
+      const blueprints = await storage.listAssistantBlueprints(tenantId, type as string | undefined);
+      res.json({ blueprints });
+    } catch (error: any) {
+      console.error('Error listing blueprints:', error);
+      res.status(500).json({ message: error.message || 'Failed to list blueprints' });
+    }
+  });
+
+  // GET /api/org-admin/blueprints/:blueprintId - Get a specific blueprint
+  app.get('/api/org-admin/blueprints/:blueprintId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { blueprintId } = req.params;
+      const tenantId = req.user.tenantId;
+      const blueprint = await storage.getAssistantBlueprintById(blueprintId, tenantId);
+      if (!blueprint) {
+        return res.status(404).json({ message: 'Blueprint not found' });
+      }
+      res.json({ blueprint });
+    } catch (error: any) {
+      console.error('Error getting blueprint:', error);
+      res.status(500).json({ message: error.message || 'Failed to get blueprint' });
+    }
+  });
+
+  // POST /api/org-admin/blueprints - Create a new blueprint
+  app.post('/api/org-admin/blueprints', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const userId = req.user.id;
+      const { name, slug, blueprintType, description, baseConfig } = req.body;
+
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ message: 'Blueprint name is required' });
+      }
+
+      const blueprint = await storage.createAssistantBlueprint({
+        tenantId,
+        name: name.trim(),
+        slug: slug?.trim(),
+        blueprintType: blueprintType || 'general',
+        description: description?.trim(),
+        baseConfig: baseConfig || {},
+        createdBy: userId,
+      });
+
+      res.status(201).json({ blueprint });
+    } catch (error: any) {
+      console.error('Error creating blueprint:', error);
+      res.status(500).json({ message: error.message || 'Failed to create blueprint' });
+    }
+  });
+
+  // PATCH /api/org-admin/blueprints/:blueprintId - Update a blueprint
+  app.patch('/api/org-admin/blueprints/:blueprintId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { blueprintId } = req.params;
+      const tenantId = req.user.tenantId;
+      const { name, slug, blueprintType, description, baseConfig, isActive } = req.body;
+
+      const existing = await storage.getAssistantBlueprintById(blueprintId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Blueprint not found' });
+      }
+
+      const updates: any = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (slug !== undefined) updates.slug = slug.trim();
+      if (blueprintType !== undefined) updates.blueprintType = blueprintType;
+      if (description !== undefined) updates.description = description?.trim();
+      if (baseConfig !== undefined) updates.baseConfig = baseConfig;
+      if (isActive !== undefined) updates.isActive = isActive;
+
+      const blueprint = await storage.updateAssistantBlueprint(blueprintId, tenantId, updates);
+      res.json({ blueprint });
+    } catch (error: any) {
+      console.error('Error updating blueprint:', error);
+      res.status(500).json({ message: error.message || 'Failed to update blueprint' });
+    }
+  });
+
+  // DELETE /api/org-admin/blueprints/:blueprintId - Delete a blueprint
+  app.delete('/api/org-admin/blueprints/:blueprintId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { blueprintId } = req.params;
+      const tenantId = req.user.tenantId;
+
+      const existing = await storage.getAssistantBlueprintById(blueprintId, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Blueprint not found' });
+      }
+
+      await storage.deleteAssistantBlueprint(blueprintId, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting blueprint:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete blueprint' });
+    }
+  });
+
   // POST /api/invites/:token/accept - Accept an invite (authenticated user)
   app.post('/api/invites/:token/accept', isAuthenticated, async (req: any, res) => {
     try {
