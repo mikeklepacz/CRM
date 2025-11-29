@@ -190,6 +190,12 @@ import {
   type InsertPipeline,
   type PipelineStage,
   type InsertPipelineStage,
+  tenantProjects,
+  type TenantProject,
+  type InsertTenantProject,
+  assistantBlueprints,
+  type AssistantBlueprint,
+  type InsertAssistantBlueprint,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
@@ -253,6 +259,25 @@ export interface IStorage {
   updatePipelineStage(stageId: string, tenantId: string, updates: Partial<InsertPipelineStage>): Promise<PipelineStage>;
   deletePipelineStage(stageId: string, tenantId: string): Promise<void>;
   reorderPipelineStages(pipelineId: string, tenantId: string, stageIds: string[]): Promise<void>;
+
+  // Tenant Project operations (business projects/campaigns/cases)
+  listTenantProjects(tenantId: string, status?: string): Promise<TenantProject[]>;
+  getTenantProjectById(projectId: string, tenantId: string): Promise<TenantProject | undefined>;
+  getTenantProjectBySlug(slug: string, tenantId: string): Promise<TenantProject | undefined>;
+  getDefaultTenantProject(tenantId: string): Promise<TenantProject | undefined>;
+  createTenantProject(data: InsertTenantProject): Promise<TenantProject>;
+  updateTenantProject(projectId: string, tenantId: string, updates: Partial<InsertTenantProject>): Promise<TenantProject>;
+  archiveTenantProject(projectId: string, tenantId: string, archivedBy: string): Promise<TenantProject>;
+  restoreTenantProject(projectId: string, tenantId: string): Promise<TenantProject>;
+  setDefaultTenantProject(projectId: string, tenantId: string): Promise<TenantProject>;
+  deleteTenantProject(projectId: string, tenantId: string): Promise<void>;
+
+  // Assistant Blueprint operations (reusable AI templates)
+  listAssistantBlueprints(tenantId: string, blueprintType?: string): Promise<AssistantBlueprint[]>;
+  getAssistantBlueprintById(blueprintId: string, tenantId: string): Promise<AssistantBlueprint | undefined>;
+  createAssistantBlueprint(data: InsertAssistantBlueprint): Promise<AssistantBlueprint>;
+  updateAssistantBlueprint(blueprintId: string, tenantId: string, updates: Partial<InsertAssistantBlueprint>): Promise<AssistantBlueprint>;
+  deleteAssistantBlueprint(blueprintId: string, tenantId: string): Promise<void>;
 
   // System integrations operations
   getSystemIntegration(provider: string): Promise<SystemIntegration | undefined>;
@@ -1197,6 +1222,169 @@ export class DatabaseStorage implements IStorage {
           eq(pipelineStages.tenantId, tenantId)
         ));
     }
+  }
+
+  // Tenant Project operations
+  async listTenantProjects(tenantId: string, status?: string): Promise<TenantProject[]> {
+    if (status) {
+      return await db
+        .select()
+        .from(tenantProjects)
+        .where(and(eq(tenantProjects.tenantId, tenantId), eq(tenantProjects.status, status)))
+        .orderBy(desc(tenantProjects.createdAt));
+    }
+    return await db
+      .select()
+      .from(tenantProjects)
+      .where(eq(tenantProjects.tenantId, tenantId))
+      .orderBy(desc(tenantProjects.createdAt));
+  }
+
+  async getTenantProjectById(projectId: string, tenantId: string): Promise<TenantProject | undefined> {
+    const [project] = await db
+      .select()
+      .from(tenantProjects)
+      .where(and(eq(tenantProjects.id, projectId), eq(tenantProjects.tenantId, tenantId)));
+    return project;
+  }
+
+  async getTenantProjectBySlug(slug: string, tenantId: string): Promise<TenantProject | undefined> {
+    const [project] = await db
+      .select()
+      .from(tenantProjects)
+      .where(and(eq(tenantProjects.slug, slug), eq(tenantProjects.tenantId, tenantId)));
+    return project;
+  }
+
+  async getDefaultTenantProject(tenantId: string): Promise<TenantProject | undefined> {
+    const [project] = await db
+      .select()
+      .from(tenantProjects)
+      .where(and(eq(tenantProjects.tenantId, tenantId), eq(tenantProjects.isDefault, true)));
+    return project;
+  }
+
+  async createTenantProject(data: InsertTenantProject): Promise<TenantProject> {
+    const slug = data.slug || this.generateSlugFromName(data.name);
+    const [project] = await db
+      .insert(tenantProjects)
+      .values({
+        ...data,
+        slug,
+        status: data.status || 'active',
+      })
+      .returning();
+    return project;
+  }
+
+  async updateTenantProject(projectId: string, tenantId: string, updates: Partial<InsertTenantProject>): Promise<TenantProject> {
+    const [project] = await db
+      .update(tenantProjects)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(tenantProjects.id, projectId), eq(tenantProjects.tenantId, tenantId)))
+      .returning();
+    return project;
+  }
+
+  async archiveTenantProject(projectId: string, tenantId: string, archivedBy: string): Promise<TenantProject> {
+    const [project] = await db
+      .update(tenantProjects)
+      .set({
+        status: 'archived',
+        archivedAt: new Date(),
+        archivedBy,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(tenantProjects.id, projectId), eq(tenantProjects.tenantId, tenantId)))
+      .returning();
+    return project;
+  }
+
+  async restoreTenantProject(projectId: string, tenantId: string): Promise<TenantProject> {
+    const [project] = await db
+      .update(tenantProjects)
+      .set({
+        status: 'active',
+        archivedAt: null,
+        archivedBy: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(tenantProjects.id, projectId), eq(tenantProjects.tenantId, tenantId)))
+      .returning();
+    return project;
+  }
+
+  async setDefaultTenantProject(projectId: string, tenantId: string): Promise<TenantProject> {
+    // First, unset any existing default
+    await db
+      .update(tenantProjects)
+      .set({ isDefault: false, updatedAt: new Date() })
+      .where(and(eq(tenantProjects.tenantId, tenantId), eq(tenantProjects.isDefault, true)));
+    
+    // Set the new default
+    const [project] = await db
+      .update(tenantProjects)
+      .set({ isDefault: true, updatedAt: new Date() })
+      .where(and(eq(tenantProjects.id, projectId), eq(tenantProjects.tenantId, tenantId)))
+      .returning();
+    return project;
+  }
+
+  async deleteTenantProject(projectId: string, tenantId: string): Promise<void> {
+    await db
+      .delete(tenantProjects)
+      .where(and(eq(tenantProjects.id, projectId), eq(tenantProjects.tenantId, tenantId)));
+  }
+
+  // Assistant Blueprint operations
+  async listAssistantBlueprints(tenantId: string, blueprintType?: string): Promise<AssistantBlueprint[]> {
+    if (blueprintType) {
+      return await db
+        .select()
+        .from(assistantBlueprints)
+        .where(and(eq(assistantBlueprints.tenantId, tenantId), eq(assistantBlueprints.blueprintType, blueprintType)))
+        .orderBy(desc(assistantBlueprints.createdAt));
+    }
+    return await db
+      .select()
+      .from(assistantBlueprints)
+      .where(eq(assistantBlueprints.tenantId, tenantId))
+      .orderBy(desc(assistantBlueprints.createdAt));
+  }
+
+  async getAssistantBlueprintById(blueprintId: string, tenantId: string): Promise<AssistantBlueprint | undefined> {
+    const [blueprint] = await db
+      .select()
+      .from(assistantBlueprints)
+      .where(and(eq(assistantBlueprints.id, blueprintId), eq(assistantBlueprints.tenantId, tenantId)));
+    return blueprint;
+  }
+
+  async createAssistantBlueprint(data: InsertAssistantBlueprint): Promise<AssistantBlueprint> {
+    const slug = data.slug || this.generateSlugFromName(data.name);
+    const [blueprint] = await db
+      .insert(assistantBlueprints)
+      .values({
+        ...data,
+        slug,
+      })
+      .returning();
+    return blueprint;
+  }
+
+  async updateAssistantBlueprint(blueprintId: string, tenantId: string, updates: Partial<InsertAssistantBlueprint>): Promise<AssistantBlueprint> {
+    const [blueprint] = await db
+      .update(assistantBlueprints)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(assistantBlueprints.id, blueprintId), eq(assistantBlueprints.tenantId, tenantId)))
+      .returning();
+    return blueprint;
+  }
+
+  async deleteAssistantBlueprint(blueprintId: string, tenantId: string): Promise<void> {
+    await db
+      .delete(assistantBlueprints)
+      .where(and(eq(assistantBlueprints.id, blueprintId), eq(assistantBlueprints.tenantId, tenantId)));
   }
 
   async updateUser(id: string, updates: Partial<UpsertUser>): Promise<User> {
