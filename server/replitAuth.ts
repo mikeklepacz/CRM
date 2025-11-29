@@ -229,7 +229,12 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 };
 
 // Route guard: Requires super admin (platform-wide access)
+// IMPORTANT: This guard verifies authentication internally - no need to chain with isAuthenticated
 export const requireSuperAdmin: RequestHandler = (req, res, next) => {
+  // First verify authentication
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
   const user = req.user as any;
   if (!user?.isSuperAdmin) {
     return res.status(403).json({ message: "Forbidden: Super admin access required" });
@@ -238,35 +243,48 @@ export const requireSuperAdmin: RequestHandler = (req, res, next) => {
 };
 
 // Route guard: Requires org admin or higher (tenant-level admin)
+// IMPORTANT: This guard verifies authentication internally - no need to chain with isAuthenticated
 export const requireOrgAdmin: RequestHandler = (req, res, next) => {
+  // First verify authentication
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
   const user = req.user as any;
   // Super admins can access org admin routes
   if (user?.isSuperAdmin) {
     return next();
   }
-  // Check tenant-level role
-  if (user?.roleInTenant !== 'org_admin') {
-    return res.status(403).json({ message: "Forbidden: Organization admin access required" });
+  // Check tenant-level role (includes backward compatibility with legacy 'admin' role)
+  if (user?.roleInTenant === 'org_admin' || user?.role === 'admin') {
+    return next();
   }
-  return next();
+  return res.status(403).json({ message: "Forbidden: Organization admin access required" });
 };
 
 // Route guard: Requires agent or higher (any authenticated user in tenant)
-// This is essentially the same as isAuthenticated but validates tenant context
+// IMPORTANT: This guard verifies authentication internally - no need to chain with isAuthenticated
 export const requireAgent: RequestHandler = (req, res, next) => {
+  // First verify authentication
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
   const user = req.user as any;
   // Super admins can access all agent routes
   if (user?.isSuperAdmin) {
     return next();
   }
-  // Check that user has valid tenant context
-  if (!user?.tenantId || !user?.roleInTenant) {
-    return res.status(403).json({ message: "Forbidden: No valid tenant context" });
+  // Check that user has valid tenant context (includes backward compatibility check)
+  if (user?.tenantId && user?.roleInTenant) {
+    return next();
   }
-  return next();
+  // Legacy admin users with role='admin' are allowed
+  if (user?.role === 'admin') {
+    return next();
+  }
+  return res.status(403).json({ message: "Forbidden: No valid tenant context" });
 };
 
-// Helper to check if user can access admin features (org_admin or super_admin)
+// Helper to check if user can access admin features (org_admin or super_admin or legacy admin)
 export const canAccessAdminFeatures = (user: any): boolean => {
   if (!user) return false;
   return user.isSuperAdmin || user.roleInTenant === 'org_admin' || user.role === 'admin';
