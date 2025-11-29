@@ -944,6 +944,7 @@ export const elevenLabsPhoneNumbers = pgTable("elevenlabs_phone_numbers", {
 export const elevenLabsAgents = pgTable("elevenlabs_agents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Scope to specific project (null = tenant-wide)
   name: varchar("name", { length: 255 }).notNull(), // Display name (e.g., "Sales Cold Caller")
   agentId: varchar("agent_id", { length: 255 }).notNull(), // ElevenLabs agent ID
   phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls (nullable)
@@ -951,7 +952,9 @@ export const elevenLabsAgents = pgTable("elevenlabs_agents", {
   isDefault: boolean("is_default").default(false), // Default agent for calls
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_elevenlabs_agents_project").on(table.projectId),
+]);
 
 // Voice AI Call Sessions - main call records with AI analysis
 export const callSessions = pgTable("call_sessions", {
@@ -1130,6 +1133,7 @@ export const aiInsightRecommendations = pgTable("ai_insight_recommendations", {
 export const kbFiles = pgTable("kb_files", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Scope to specific project (null = tenant-wide)
   elevenlabsDocId: varchar("elevenlabs_doc_id").unique(), // ID from ElevenLabs API
   filename: varchar("filename", { length: 255 }).notNull().unique(), // Immutable, enforced by trigger
   currentContent: text("current_content"), // Latest approved content
@@ -1149,6 +1153,7 @@ export const kbFiles = pgTable("kb_files", {
   index("idx_kb_files_locked_synced").on(table.locked, table.lastSyncedAt),
   index("idx_kb_files_agent").on(table.agentId),
   index("idx_kb_files_sync_state").on(table.syncState),
+  index("idx_kb_files_project").on(table.projectId),
 ]);
 
 export const kbFileVersions = pgTable("kb_file_versions", {
@@ -1326,6 +1331,7 @@ export type StrategyTranscript = {
 export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Scope to specific project (null = tenant-wide)
   name: varchar("name", { length: 255 }).notNull(),
   isSystem: boolean("is_system").default(false), // System sequences (e.g., Manual Follow-Ups) cannot be deleted
   strategyTranscript: jsonb("strategy_transcript").$type<StrategyTranscript>(), // Full AI strategy conversation with envelope
@@ -1349,6 +1355,7 @@ export const sequences = pgTable("sequences", {
   index("idx_sequences_created_by").on(table.createdBy),
   index("idx_sequences_status").on(table.status),
   index("idx_sequences_last_sent").on(table.lastSentAt),
+  index("idx_sequences_project").on(table.projectId),
 ]);
 
 // Sequence steps - defines the multi-step follow-up structure
@@ -2240,6 +2247,7 @@ export type TenantIntegration = typeof tenantIntegrations.$inferSelect;
 export const pipelines = pgTable("pipelines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Scope to specific project (null = tenant-wide)
   name: varchar("name", { length: 255 }).notNull(), // "Sales Outreach", "Plaintiff Qualification"
   slug: varchar("slug", { length: 100 }).notNull(), // URL-friendly within tenant
   pipelineType: varchar("pipeline_type", { length: 50 }).notNull().default('sales'), // 'sales', 'qualification', 'support', 'custom'
@@ -2268,6 +2276,7 @@ export const pipelines = pgTable("pipelines", {
   index("idx_pipelines_tenant").on(table.tenantId),
   index("idx_pipelines_type").on(table.tenantId, table.pipelineType),
   uniqueIndex("idx_pipelines_tenant_slug").on(table.tenantId, table.slug),
+  index("idx_pipelines_project").on(table.projectId),
 ]);
 
 export const insertPipelineSchema = createInsertSchema(pipelines).omit({
