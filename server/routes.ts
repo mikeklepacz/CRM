@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray, and, desc, isNotNull, isNull, ne } from "drizzle-orm";
 import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences } from "@shared/schema";
-import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin } from "./replitAuth";
+import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
 import { getTimezoneOffset } from "date-fns-tz";
@@ -22709,7 +22709,7 @@ ${conversationContext}`;
   });
 
   // POST /api/invites/:token/accept - Accept an invite (authenticated user)
-  app.post('/api/invites/:token/accept', requireAuth, async (req: any, res) => {
+  app.post('/api/invites/:token/accept', isAuthenticated, async (req: any, res) => {
     try {
       const { token } = req.params;
       const userId = req.user.id;

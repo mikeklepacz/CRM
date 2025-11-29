@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -97,6 +97,14 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               <Button variant="ghost" size="sm" data-testid="nav-super-admin">
                 <Globe className="hidden xl:mr-2 xl:inline h-4 w-4" />
                 Platform
+              </Button>
+            </Link>
+          )}
+          {canAccessAdminFeatures(user) && (
+            <Link href="/org-admin">
+              <Button variant="ghost" size="sm" data-testid="nav-org-admin">
+                <Building2 className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Organization
               </Button>
             </Link>
           )}
@@ -204,6 +212,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <DropdownMenuItem onClick={() => { setLocation('/super-admin'); setMobileMenuOpen(false); }}>
                   <Globe className="mr-2 h-4 w-4" />
                   Platform Admin
+                </DropdownMenuItem>
+              )}
+              {canAccessAdminFeatures(user) && (
+                <DropdownMenuItem onClick={() => { setLocation('/org-admin'); setMobileMenuOpen(false); }}>
+                  <Building2 className="mr-2 h-4 w-4" />
+                  Organization
                 </DropdownMenuItem>
               )}
               {canAccessAdminFeatures(user) && visibleModules.admin && (
