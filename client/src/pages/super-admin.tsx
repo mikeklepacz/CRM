@@ -158,6 +158,15 @@ export default function SuperAdmin() {
     }
   }, [isAddToTenantOpen, addUserToTenantForm]);
 
+  useEffect(() => {
+    if (selectedUser && usersData?.users) {
+      const freshUser = usersData.users.find(u => u.id === selectedUser.id);
+      if (freshUser && JSON.stringify(freshUser) !== JSON.stringify(selectedUser)) {
+        setSelectedUser(freshUser);
+      }
+    }
+  }, [usersData, selectedUser]);
+
   const createTenantMutation = useMutation({
     mutationFn: async (data: TenantFormData) => {
       return await apiRequest("POST", "/api/super-admin/tenants", data);
@@ -208,11 +217,23 @@ export default function SuperAdmin() {
     mutationFn: async ({ userId, tenantId, roleInTenant }: { userId: string; tenantId: string; roleInTenant: string }) => {
       return await apiRequest("POST", `/api/super-admin/users/${userId}/tenants`, { tenantId, roleInTenant });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
       queryClient.invalidateQueries({ queryKey: ['/api/super-admin/tenants'] });
       setIsAddToTenantOpen(false);
       addUserToTenantForm.reset();
+      if (selectedUser) {
+        const tenant = tenantsData?.tenants?.find(t => t.id === variables.tenantId);
+        if (tenant) {
+          setSelectedUser({
+            ...selectedUser,
+            tenantMemberships: [
+              ...selectedUser.tenantMemberships,
+              { tenantId: variables.tenantId, tenantName: tenant.name, roleInTenant: variables.roleInTenant }
+            ]
+          });
+        }
+      }
       toast({
         title: "Success",
         description: "User added to tenant successfully",
@@ -231,12 +252,14 @@ export default function SuperAdmin() {
     mutationFn: async ({ userId, tenantId }: { userId: string; tenantId: string }) => {
       return await apiRequest("DELETE", `/api/super-admin/users/${userId}/tenants/${tenantId}`);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
       queryClient.invalidateQueries({ queryKey: ['/api/super-admin/tenants'] });
       if (selectedUser) {
-        const updatedMemberships = selectedUser.tenantMemberships.filter(m => m.tenantId !== removeUserFromTenantMutation.variables?.tenantId);
-        setSelectedUser({ ...selectedUser, tenantMemberships: updatedMemberships });
+        setSelectedUser({
+          ...selectedUser,
+          tenantMemberships: selectedUser.tenantMemberships.filter(m => m.tenantId !== variables.tenantId)
+        });
       }
       toast({
         title: "Success",
