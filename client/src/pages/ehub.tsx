@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import DOMPurify from 'dompurify';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format, parseISO } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -13,8 +13,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store, Search, CheckCircle2, XCircle } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store, Search, CheckCircle2, XCircle, ChevronDown, CalendarOff } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -1597,6 +1598,11 @@ export default function EHub() {
   // Fetch E-Hub settings
   const { data: settings } = useQuery<EhubSettings>({
     queryKey: ['/api/ehub/settings'],
+  });
+
+  // Fetch upcoming blocked days (holidays) for holiday summary
+  const { data: upcomingBlockedDays } = useQuery<{ date: string; reason: string }[]>({
+    queryKey: ['/api/no-send-dates/upcoming'],
   });
 
   // Fetch all contacts with pagination and filters
@@ -3967,6 +3973,45 @@ export default function EHub() {
                       </p>
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Collapsible>
+                    <CollapsibleTrigger 
+                      className="flex items-center gap-2 text-sm font-medium"
+                      data-testid="holiday-blackout-trigger"
+                    >
+                      <CalendarOff className="w-4 h-4" />
+                      Holiday Blackout Dates
+                      <ChevronDown className="w-4 h-4" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent data-testid="holiday-blackout-content">
+                      <div className="mt-2 p-3 rounded-md bg-muted/50 border">
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Emails and calls are automatically paused on these dates:
+                        </p>
+                        <div className="space-y-1">
+                          {upcomingBlockedDays?.slice(0, 7).map((day, index) => (
+                            <div 
+                              key={day.date} 
+                              className="text-sm flex items-center gap-2"
+                              data-testid={`holiday-date-${index}`}
+                            >
+                              <span className="font-medium">{format(parseISO(day.date), 'MMM d')}</span>
+                              <span className="text-muted-foreground">-</span>
+                              <span>{day.reason}</span>
+                            </div>
+                          ))}
+                          {(!upcomingBlockedDays || upcomingBlockedDays.length === 0) && (
+                            <p className="text-sm text-muted-foreground">No upcoming blackout dates</p>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Manage holidays in Admin Settings → Calendar
+                        </p>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </div>
 
                 <div className="space-y-2">

@@ -43,6 +43,7 @@ import {
   insertSequenceSchema,
   insertSequenceRecipientSchema,
   insertSequenceStepSchema,
+  insertNoSendDateSchema,
 } from "@shared/schema";
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
@@ -22128,6 +22129,78 @@ ${conversationContext}`;
       res.status(500).json({ 
         message: error.message || 'Failed to export project' 
       });
+    }
+  });
+
+  // ============================================================================
+  // No-Send Dates API (Admin-configured blackout dates for outreach)
+  // ============================================================================
+  
+  // Get all custom blocked dates (admin only)
+  app.get('/api/no-send-dates', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const dates = await storage.getNoSendDates();
+      res.json(dates);
+    } catch (error: any) {
+      console.error('Error fetching no-send dates:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch no-send dates' });
+    }
+  });
+
+  // Create new blocked date (admin only)
+  app.post('/api/no-send-dates', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.user?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const validatedData = insertNoSendDateSchema.parse({
+        ...req.body,
+        createdBy: userId,
+      });
+
+      const created = await storage.createNoSendDate(validatedData);
+      res.status(201).json(created);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid data', errors: error.errors });
+      }
+      if (error.message?.includes('duplicate key') || error.code === '23505') {
+        return res.status(409).json({ message: 'This date is already blocked' });
+      }
+      console.error('Error creating no-send date:', error);
+      res.status(500).json({ message: error.message || 'Failed to create no-send date' });
+    }
+  });
+
+  // Delete blocked date (admin only)
+  app.delete('/api/no-send-dates/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      const existing = await storage.getNoSendDate(id);
+      if (!existing) {
+        return res.status(404).json({ message: 'No-send date not found' });
+      }
+
+      await storage.deleteNoSendDate(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting no-send date:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete no-send date' });
+    }
+  });
+
+  // Get upcoming blocked days (both federal + custom) for next 90 days
+  app.get('/api/no-send-dates/upcoming', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { getUpcomingBlockedDays } = await import('./services/holidayCalendar');
+      const blockedDays = await getUpcomingBlockedDays(new Date(), 90);
+      res.json(blockedDays);
+    } catch (error: any) {
+      console.error('Error fetching upcoming blocked days:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch upcoming blocked days' });
     }
   });
 

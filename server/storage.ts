@@ -172,6 +172,9 @@ import {
   type TestEmailSend,
   type InsertTestDataNukeLog,
   type TestDataNukeLog,
+  noSendDates,
+  type NoSendDate,
+  type InsertNoSendDate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
@@ -626,6 +629,12 @@ export interface IStorage {
     slotsDeleted: number;
   }>;
   logTestDataNuke(log: InsertTestDataNukeLog): Promise<TestDataNukeLog>;
+
+  // No-Send Dates operations
+  getNoSendDates(): Promise<NoSendDate[]>;
+  getNoSendDate(id: string): Promise<NoSendDate | undefined>;
+  createNoSendDate(data: InsertNoSendDate): Promise<NoSendDate>;
+  deleteNoSendDate(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4840,6 +4849,25 @@ export class DatabaseStorage implements IStorage {
       console.error(`[Storage] Error inserting recipient message:`, error);
       return null;
     }
+  }
+
+  // No-Send Dates operations
+  async getNoSendDates(): Promise<NoSendDate[]> {
+    return await db.select().from(noSendDates).orderBy(noSendDates.date);
+  }
+
+  async getNoSendDate(id: string): Promise<NoSendDate | undefined> {
+    const [noSendDate] = await db.select().from(noSendDates).where(eq(noSendDates.id, id));
+    return noSendDate;
+  }
+
+  async createNoSendDate(data: InsertNoSendDate): Promise<NoSendDate> {
+    const [created] = await db.insert(noSendDates).values(data).returning();
+    return created;
+  }
+
+  async deleteNoSendDate(id: string): Promise<void> {
+    await db.delete(noSendDates).where(eq(noSendDates.id, id));
   }
 }
 

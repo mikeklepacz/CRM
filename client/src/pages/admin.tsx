@@ -16,6 +16,7 @@ import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
 import { WebhookManagement } from "@/components/webhook-management";
 import { DriveFolderConfig } from "@/components/drive-folder-config";
 import { VoiceSettings } from "@/components/voice-settings";
+import { HolidayCalendar } from "@/components/holiday-calendar";
 
 export default function Admin() {
   const { user, isLoading: authLoading } = useAuth();
@@ -58,6 +59,7 @@ export default function Admin() {
               <SelectItem value="tickets" data-testid="tab-tickets">Support Tickets</SelectItem>
               <SelectItem value="reports" data-testid="tab-reports">Reports</SelectItem>
               <SelectItem value="webhooks" data-testid="tab-webhooks">Webhooks</SelectItem>
+              <SelectItem value="calendar" data-testid="tab-calendar">Calendar</SelectItem>
               <SelectItem value="voice" data-testid="tab-voice">Voice</SelectItem>
               <SelectItem value="openai" data-testid="tab-openai">OpenAI</SelectItem>
               <SelectItem value="aligner" data-testid="tab-aligner">Aligner</SelectItem>
@@ -73,6 +75,7 @@ export default function Admin() {
             <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
             <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
             <TabsTrigger value="webhooks" data-testid="tab-webhooks">Webhooks</TabsTrigger>
+            <TabsTrigger value="calendar" data-testid="tab-calendar">Calendar</TabsTrigger>
             <TabsTrigger value="voice" data-testid="tab-voice">Voice</TabsTrigger>
             <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
             <TabsTrigger value="aligner" data-testid="tab-aligner">Aligner</TabsTrigger>
@@ -96,6 +99,10 @@ export default function Admin() {
 
         <TabsContent value="webhooks">
           <WebhookManagement />
+        </TabsContent>
+
+        <TabsContent value="calendar">
+          <HolidayCalendar />
         </TabsContent>
 
         {/* AI CALL HISTORY SYSTEM - Admin-only ElevenLabs AI voice calling (call_sessions table) */}

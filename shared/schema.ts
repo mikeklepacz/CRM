@@ -1901,3 +1901,22 @@ export const insertDailySendSlotSchema = createInsertSchema(dailySendSlots).omit
 
 export type InsertDailySendSlot = z.infer<typeof insertDailySendSlotSchema>;
 export type DailySendSlot = typeof dailySendSlots.$inferSelect;
+
+// No-Send Dates - custom admin-configured blackout dates for outreach
+export const noSendDates = pgTable("no_send_dates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: date("date").notNull().unique(),
+  reason: varchar("reason", { length: 255 }).notNull(),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_no_send_dates_date").on(table.date),
+]);
+
+export const insertNoSendDateSchema = createInsertSchema(noSendDates).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertNoSendDate = z.infer<typeof insertNoSendDateSchema>;
+export type NoSendDate = typeof noSendDates.$inferSelect;

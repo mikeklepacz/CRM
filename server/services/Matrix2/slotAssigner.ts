@@ -49,6 +49,7 @@ import { getEmptySlots, fillSlot } from "./slotDb";
 import { getEligibleRecipientsForAssignment } from "./recipientDb";
 import { storage } from "../../storage";
 import { eventGateway } from "../events/gateway";
+import { isNoSendDay } from '../holidayCalendar';
 
 /**
  * Immediately assign a specific recipient to the next available slot
@@ -86,7 +87,7 @@ export async function assignSingleRecipient(recipientId: string) {
       continue;
     }
 
-    if (isRecipientEligible(recipient, slotUtc, settings)) {
+    if (await isRecipientEligible(recipient, slotUtc, settings)) {
       await fillSlot(slot.id, recipient.id);
       
       // Emit WebSocket event for real-time UI updates
@@ -187,7 +188,7 @@ export async function assignRecipientsToSlots() {
     for (let i = 0; i < sortedRecipients.length; i++) {
       const r = sortedRecipients[i];
       
-      if (!isRecipientEligible(r, slotUtc, settings)) {
+      if (!(await isRecipientEligible(r, slotUtc, settings))) {
         continue;
       }
 
@@ -213,7 +214,7 @@ export async function assignRecipientsToSlots() {
   }
 }
 
-function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): boolean {
+async function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): Promise<boolean> {
   const recipientState = recipient.state || '';
   const recipientTimezone = recipient.timezone;
   
@@ -231,6 +232,13 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   // Convert slot UTC time to recipient's local time
   const localTime = toZonedTime(slotUtc, recipientTimezone);
   const dayOfWeek = localTime.getDay();
+
+  // Check if this is a no-send day (federal holiday or custom blackout)
+  // Pass UTC slot time + recipient timezone for proper date conversion
+  const noSendCheck = await isNoSendDay(slotUtc, recipientTimezone);
+  if (noSendCheck.blocked) {
+    return false; // Blocked day - skip silently
+  }
 
   // Check excluded days setting FIRST (before business hours parsing)
   const excludedDays = settings.excludedDays || [];

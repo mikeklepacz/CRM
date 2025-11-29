@@ -2,6 +2,7 @@ import axios from 'axios';
 import { storage } from './storage';
 import { generateStreamTwiML, initiateOutboundCall as twilioInitiateCall, isTwilioConfigured } from './twilio-service';
 import { eventGateway } from './services/events/gateway';
+import { isNoSendDay } from './services/holidayCalendar';
 
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 const MAX_RETRY_ATTEMPTS = 3;
@@ -92,6 +93,13 @@ export class CallDispatcher {
     try {
       this.isRunning = true;
       console.log('[CallDispatcher][DEBUG] Set isRunning=true');
+
+      // Check if today is a no-send day (federal holiday or custom blackout)
+      const todayCheck = await isNoSendDay(new Date());
+      if (todayCheck.blocked) {
+        console.log(`[CallDispatcher] Today is blocked: ${todayCheck.reason} - skipping call processing`);
+        return;
+      }
 
       const config = await storage.getElevenLabsConfig();
       if (!config?.apiKey) {
