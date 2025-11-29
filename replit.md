@@ -22,9 +22,14 @@ This project started as a Google Sheets-powered CRM for hemp wick sales teams an
   - Created client/src/lib/authUtils.ts with canAccessAdminFeatures() and isSuperAdmin() helpers
   - Updated 9 frontend files to use centralized role checking
   - Backward compatible with legacy 'admin' role during transition
+- **Phase 6**: Super Admin Dashboard
+  - Storage layer: listTenants, getTenantById, createTenant, updateTenant, getTenantStats
+  - Storage layer: listUsersAcrossTenants, getUserTenantMemberships, addUserToTenant, removeUserFromTenant, getPlatformMetrics
+  - API: 9 new /api/super-admin/* endpoints (all protected by requireSuperAdmin)
+  - Frontend: super-admin.tsx page with Tenants/Users/Metrics tabs
+  - Frontend: "Platform" nav link in header (visible only to super admins)
 
 ### Pending Phases:
-- **Phase 6**: Build Super Admin dashboard
 - **Phase 7**: Build Org Admin features
 - **Phase 8**: Build Pipelines system (workflow definitions, stages, AI prompts)
 
