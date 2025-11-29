@@ -50,6 +50,7 @@ import {
   openaiAssistantFiles,
   nonDuplicates,
   userTenants,
+  tenants,
   type User,
   type UpsertUser,
   type Ticket,
@@ -141,6 +142,8 @@ import {
   type InsertAnalysisJob,
   type NonDuplicate,
   type InsertNonDuplicate,
+  type Tenant,
+  type InsertTenant,
   backgroundAudioSettings,
   voiceProxySessions,
   type BackgroundAudioSettings,
@@ -201,6 +204,11 @@ export interface IStorage {
 
   // Tenant operations
   getUserDefaultTenant(userId: string): Promise<{ tenantId: string; roleInTenant: string } | undefined>;
+  listTenants(): Promise<Array<Tenant & { userCount: number }>>;
+  getTenantById(tenantId: string): Promise<Tenant | undefined>;
+  createTenant(data: InsertTenant): Promise<Tenant>;
+  updateTenant(tenantId: string, updates: Partial<InsertTenant>): Promise<Tenant>;
+  getTenantStats(tenantId: string): Promise<{ userCount: number; clientCount: number; callCount: number }>;
 
   // System integrations operations
   getSystemIntegration(provider: string): Promise<SystemIntegration | undefined>;
@@ -729,6 +737,98 @@ export class DatabaseStorage implements IStorage {
       .orderBy(userTenants.joinedAt);
 
     return firstTenant;
+  }
+
+  async listTenants(): Promise<Array<Tenant & { userCount: number }>> {
+    const result = await db
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        slug: tenants.slug,
+        ownerId: tenants.ownerId,
+        status: tenants.status,
+        settings: tenants.settings,
+        createdAt: tenants.createdAt,
+        updatedAt: tenants.updatedAt,
+        userCount: sql<number>`CAST(COUNT(DISTINCT ${userTenants.userId}) AS INTEGER)`,
+      })
+      .from(tenants)
+      .leftJoin(userTenants, eq(tenants.id, userTenants.tenantId))
+      .groupBy(tenants.id)
+      .orderBy(desc(tenants.createdAt));
+
+    return result.map(row => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      ownerId: row.ownerId,
+      status: row.status,
+      settings: row.settings,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      userCount: row.userCount || 0,
+    }));
+  }
+
+  async getTenantById(tenantId: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    return tenant;
+  }
+
+  async createTenant(data: InsertTenant): Promise<Tenant> {
+    const slug = data.slug || this.generateSlugFromName(data.name);
+    const [tenant] = await db
+      .insert(tenants)
+      .values({
+        ...data,
+        slug,
+        status: data.status || 'active',
+      })
+      .returning();
+    return tenant;
+  }
+
+  private generateSlugFromName(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 100);
+  }
+
+  async updateTenant(tenantId: string, updates: Partial<InsertTenant>): Promise<Tenant> {
+    const [tenant] = await db
+      .update(tenants)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+    return tenant;
+  }
+
+  async getTenantStats(tenantId: string): Promise<{ userCount: number; clientCount: number; callCount: number }> {
+    const [userCountResult] = await db
+      .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+      .from(userTenants)
+      .where(eq(userTenants.tenantId, tenantId));
+
+    const [clientCountResult] = await db
+      .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId));
+
+    const [callCountResult] = await db
+      .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+      .from(callHistory)
+      .where(eq(callHistory.tenantId, tenantId));
+
+    return {
+      userCount: userCountResult?.count || 0,
+      clientCount: clientCountResult?.count || 0,
+      callCount: callCountResult?.count || 0,
+    };
   }
 
   async updateUser(id: string, updates: Partial<UpsertUser>): Promise<User> {
