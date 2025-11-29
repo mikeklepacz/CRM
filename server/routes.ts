@@ -2303,7 +2303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let agentName = 'Unknown';
         if (session.agentId) {
           try {
-            const agent = await storage.getElevenLabsAgent(session.agentId);
+            const agent = await storage.getElevenLabsAgent(session.agentId, tenantId);
             agentName = agent?.name || 'Unknown';
           } catch (e) {
             console.warn(`Could not fetch agent ${session.agentId}:`, e);
@@ -2750,7 +2750,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify agent exists and has required fields using the database record ID
-      const agent = await storage.getElevenLabsAgent(agent_record_id);
+      const tenantId = (req.user as any).tenantId;
+      const agent = await storage.getElevenLabsAgent(agent_record_id, tenantId);
       if (!agent) {
         return res.status(404).json({ error: 'Agent not found' });
       }
@@ -3346,7 +3347,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const errors: string[] = [];
 
       // Get all configured agents to validate against
-      const configuredAgents = await storage.getAllElevenLabsAgents();
+      const tenantId = (req.user as any).tenantId;
+      const configuredAgents = await storage.getAllElevenLabsAgents(tenantId);
       const validAgentIds = new Set(configuredAgents.map(a => a.agentId));
       console.log(`[Sync] Configured agents:`, Array.from(validAgentIds));
 
