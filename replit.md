@@ -37,6 +37,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **E-Hub: Email Campaign System (Admin-Only)**: AI-powered cold outreach automation with automated follow-up sequences, reply detection, and CRM synchronization.
 - **Manual Follow-Ups System**: Automated human-to-AI handoff for follow-ups, triggered by Gmail draft creation.
 - **Real-Time Event Gateway (SSE)**: Server-Sent Events for push-based UI updates, invalidating React Query caches.
+- **Holiday Toggle System**: Admin controls to enable/disable holiday blocking for individual federal holidays and extended windows. Useful for retail businesses that operate on "bank holidays" like Columbus Day or Veterans Day. Toggles are persisted in `ignored_holidays` table with priority order: Custom dates > Ignored holidays > Extended windows > Federal holidays.
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management, preferences, and operational data.
