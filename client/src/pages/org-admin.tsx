@@ -112,6 +112,7 @@ interface TenantProject {
   slug: string;
   projectType: string;
   description: string | null;
+  accentColor: string | null;
   status: string;
   isDefault: boolean;
   createdAt: string;
@@ -168,11 +169,27 @@ const stageFormSchema = z.object({
 
 type StageFormData = z.infer<typeof stageFormSchema>;
 
+const PROJECT_COLORS = [
+  { value: "#6366f1", label: "Indigo" },
+  { value: "#8b5cf6", label: "Violet" },
+  { value: "#ec4899", label: "Pink" },
+  { value: "#ef4444", label: "Red" },
+  { value: "#f97316", label: "Orange" },
+  { value: "#eab308", label: "Yellow" },
+  { value: "#22c55e", label: "Green" },
+  { value: "#14b8a6", label: "Teal" },
+  { value: "#06b6d4", label: "Cyan" },
+  { value: "#3b82f6", label: "Blue" },
+  { value: "#64748b", label: "Slate" },
+  { value: "#78716c", label: "Stone" },
+];
+
 const projectFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Slug must be URL-friendly (lowercase, numbers, hyphens only)"),
   projectType: z.enum(["campaign", "case", "initiative", "custom"]),
   description: z.string().optional(),
+  accentColor: z.string().optional(),
 });
 
 type ProjectFormData = z.infer<typeof projectFormSchema>;
@@ -410,6 +427,7 @@ export default function OrgAdmin() {
       slug: "",
       projectType: "campaign",
       description: "",
+      accentColor: "#6366f1",
     },
   });
 
@@ -938,6 +956,7 @@ export default function OrgAdmin() {
         slug: project.slug,
         projectType: project.projectType as "campaign" | "case" | "initiative" | "custom",
         description: project.description || "",
+        accentColor: project.accentColor || "#6366f1",
       });
     } else {
       setEditingProject(null);
@@ -946,6 +965,7 @@ export default function OrgAdmin() {
         slug: "",
         projectType: "campaign",
         description: "",
+        accentColor: "#6366f1",
       });
     }
     setIsProjectDialogOpen(true);
@@ -2280,6 +2300,35 @@ export default function OrgAdmin() {
                         {...field}
                         data-testid="input-project-description" 
                       />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={projectForm.control}
+                name="accentColor"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Header Color</FormLabel>
+                    <FormControl>
+                      <div className="flex flex-wrap gap-2" data-testid="color-picker-project">
+                        {PROJECT_COLORS.map((color) => (
+                          <button
+                            key={color.value}
+                            type="button"
+                            onClick={() => field.onChange(color.value)}
+                            className={`w-8 h-8 rounded-full border-2 transition-all ${
+                              field.value === color.value 
+                                ? 'border-foreground scale-110' 
+                                : 'border-transparent hover:scale-105'
+                            }`}
+                            style={{ backgroundColor: color.value }}
+                            title={color.label}
+                            data-testid={`color-option-${color.value}`}
+                          />
+                        ))}
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
