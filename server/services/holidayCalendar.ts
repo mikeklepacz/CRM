@@ -47,10 +47,57 @@ interface HolidayCache {
 
 class HolidayCalendarService {
   private holidayCache: HolidayCache = {};
+  private ignoredHolidaysCache: Set<string> | null = null;
+  private ignoredHolidaysCacheTime: number = 0;
+  private readonly CACHE_TTL_MS = 60000; // 1 minute cache
   private readonly options = {
     shiftSaturdayHolidays: true,
     shiftSundayHolidays: true
   };
+
+  /**
+   * Convert a holiday reason/name to a consistent holiday ID
+   * Used for matching against ignored_holidays table
+   */
+  private reasonToHolidayId(reason: string): string {
+    return reason
+      .toLowerCase()
+      .replace(/['']/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  /**
+   * Get the set of ignored holiday IDs (cached)
+   */
+  private async getIgnoredHolidayIds(): Promise<Set<string>> {
+    const now = Date.now();
+    if (this.ignoredHolidaysCache && (now - this.ignoredHolidaysCacheTime) < this.CACHE_TTL_MS) {
+      return this.ignoredHolidaysCache;
+    }
+    
+    const ignoredList = await storage.getIgnoredHolidays();
+    this.ignoredHolidaysCache = new Set(ignoredList.map(h => h.holidayId));
+    this.ignoredHolidaysCacheTime = now;
+    return this.ignoredHolidaysCache;
+  }
+
+  /**
+   * Check if a holiday is ignored (toggled OFF)
+   */
+  private async isHolidayIgnored(reason: string): Promise<boolean> {
+    const holidayId = this.reasonToHolidayId(reason);
+    const ignoredIds = await this.getIgnoredHolidayIds();
+    return ignoredIds.has(holidayId);
+  }
+
+  /**
+   * Clear the ignored holidays cache (call when toggles change)
+   */
+  clearIgnoredHolidaysCache(): void {
+    this.ignoredHolidaysCache = null;
+    this.ignoredHolidaysCacheTime = 0;
+  }
 
   /**
    * Get all federal holidays for a given year (cached)
@@ -191,6 +238,7 @@ class HolidayCalendarService {
    * 
    * Priority order: Custom dates > Extended windows > Federal holidays
    * Custom dates always take precedence so admins can override holiday reasons.
+   * Holidays can be toggled OFF (ignored) by admins, allowing outreach on those days.
    * 
    * @param date - The UTC instant to check
    * @param timezone - Optional IANA timezone string. When provided, the date is converted
@@ -204,33 +252,41 @@ class HolidayCalendarService {
   async isNoSendDay(date: Date, timezone?: string): Promise<BlockedDayResult> {
     const dateStr = this.dateToString(date, timezone);
     
-    // Check custom blocked dates FIRST (highest priority - allows admin overrides)
+    // Check custom blocked dates FIRST (highest priority - these are always enforced)
     const customBlocked = await this.getCustomBlockedDates();
     const customMatch = customBlocked.find(cb => cb.date === dateStr);
     if (customMatch) {
       return { blocked: true, reason: customMatch.reason };
     }
     
-    // Check extended holiday windows
+    // Check extended holiday windows (can be ignored)
     const thanksgivingCheck = this.isThanksgivingWindow(dateStr);
-    if (thanksgivingCheck.blocked) {
-      return thanksgivingCheck;
+    if (thanksgivingCheck.blocked && thanksgivingCheck.reason) {
+      if (!await this.isHolidayIgnored(thanksgivingCheck.reason)) {
+        return thanksgivingCheck;
+      }
     }
     
     const christmasCheck = this.isChristmasWindow(dateStr);
-    if (christmasCheck.blocked) {
-      return christmasCheck;
+    if (christmasCheck.blocked && christmasCheck.reason) {
+      if (!await this.isHolidayIgnored(christmasCheck.reason)) {
+        return christmasCheck;
+      }
     }
     
     const newYearsCheck = this.isNewYearsWindow(dateStr);
-    if (newYearsCheck.blocked) {
-      return newYearsCheck;
+    if (newYearsCheck.blocked && newYearsCheck.reason) {
+      if (!await this.isHolidayIgnored(newYearsCheck.reason)) {
+        return newYearsCheck;
+      }
     }
     
-    // Check federal holidays (lowest priority for built-in holidays)
+    // Check federal holidays (can be ignored)
     const federalCheck = this.isFederalHoliday(dateStr);
-    if (federalCheck.isHoliday) {
-      return { blocked: true, reason: federalCheck.name };
+    if (federalCheck.isHoliday && federalCheck.name) {
+      if (!await this.isHolidayIgnored(federalCheck.name)) {
+        return { blocked: true, reason: federalCheck.name };
+      }
     }
     
     return { blocked: false };
@@ -241,35 +297,44 @@ class HolidayCalendarService {
    * Convenience method for when you already have a date string
    * 
    * Priority order: Custom dates > Extended windows > Federal holidays
+   * Holidays can be toggled OFF (ignored) by admins.
    */
   async isNoSendDayByString(dateStr: string): Promise<BlockedDayResult> {
-    // Check custom blocked dates FIRST (highest priority - allows admin overrides)
+    // Check custom blocked dates FIRST (highest priority - these are always enforced)
     const customBlocked = await this.getCustomBlockedDates();
     const customMatch = customBlocked.find(cb => cb.date === dateStr);
     if (customMatch) {
       return { blocked: true, reason: customMatch.reason };
     }
     
-    // Check extended windows
+    // Check extended windows (can be ignored)
     const thanksgivingCheck = this.isThanksgivingWindow(dateStr);
-    if (thanksgivingCheck.blocked) {
-      return thanksgivingCheck;
+    if (thanksgivingCheck.blocked && thanksgivingCheck.reason) {
+      if (!await this.isHolidayIgnored(thanksgivingCheck.reason)) {
+        return thanksgivingCheck;
+      }
     }
     
     const christmasCheck = this.isChristmasWindow(dateStr);
-    if (christmasCheck.blocked) {
-      return christmasCheck;
+    if (christmasCheck.blocked && christmasCheck.reason) {
+      if (!await this.isHolidayIgnored(christmasCheck.reason)) {
+        return christmasCheck;
+      }
     }
     
     const newYearsCheck = this.isNewYearsWindow(dateStr);
-    if (newYearsCheck.blocked) {
-      return newYearsCheck;
+    if (newYearsCheck.blocked && newYearsCheck.reason) {
+      if (!await this.isHolidayIgnored(newYearsCheck.reason)) {
+        return newYearsCheck;
+      }
     }
     
-    // Check federal holidays
+    // Check federal holidays (can be ignored)
     const federalCheck = this.isFederalHoliday(dateStr);
-    if (federalCheck.isHoliday) {
-      return { blocked: true, reason: federalCheck.name };
+    if (federalCheck.isHoliday && federalCheck.name) {
+      if (!await this.isHolidayIgnored(federalCheck.name)) {
+        return { blocked: true, reason: federalCheck.name };
+      }
     }
     
     return { blocked: false };
@@ -280,6 +345,7 @@ class HolidayCalendarService {
    * 
    * This method iterates by DATE STRING, not by Date objects, to avoid
    * any DST drift issues. Each day is checked independently.
+   * Ignored holidays are excluded from results (they won't block outreach).
    * 
    * @param startDate - The start date of the range (server timezone or UTC)
    * @param days - Number of days to check
@@ -288,10 +354,10 @@ class HolidayCalendarService {
   async getUpcomingBlockedDays(startDate: Date, days: number, timezone?: string): Promise<BlockedDay[]> {
     const blockedDaysMap = new Map<string, BlockedDay>();
     
-    // Pre-load custom dates once for efficiency
+    // Pre-load custom dates and ignored holidays once for efficiency
     const customDates = await this.getCustomBlockedDates();
-    const customDatesSet = new Set(customDates.map(d => d.date));
     const customDatesMap = new Map(customDates.map(d => [d.date, d.reason]));
+    const ignoredIds = await this.getIgnoredHolidayIds();
     
     // Start from the given date and iterate by adding days
     let currentDate = startDate;
@@ -303,16 +369,43 @@ class HolidayCalendarService {
         // Check in priority order: custom > extended windows > federal
         const customReason = customDatesMap.get(dateStr);
         if (customReason) {
+          // Custom dates are always enforced (not subject to ignoring)
           blockedDaysMap.set(dateStr, { date: dateStr, reason: customReason });
         } else {
-          // Check extended windows
-          let result = this.isThanksgivingWindow(dateStr);
-          if (!result.blocked) result = this.isChristmasWindow(dateStr);
-          if (!result.blocked) result = this.isNewYearsWindow(dateStr);
+          // Check extended windows (can be ignored)
+          let result: BlockedDayResult = { blocked: false };
+          
+          const thanksgivingCheck = this.isThanksgivingWindow(dateStr);
+          if (thanksgivingCheck.blocked && thanksgivingCheck.reason) {
+            if (!ignoredIds.has(this.reasonToHolidayId(thanksgivingCheck.reason))) {
+              result = thanksgivingCheck;
+            }
+          }
+          
+          if (!result.blocked) {
+            const christmasCheck = this.isChristmasWindow(dateStr);
+            if (christmasCheck.blocked && christmasCheck.reason) {
+              if (!ignoredIds.has(this.reasonToHolidayId(christmasCheck.reason))) {
+                result = christmasCheck;
+              }
+            }
+          }
+          
+          if (!result.blocked) {
+            const newYearsCheck = this.isNewYearsWindow(dateStr);
+            if (newYearsCheck.blocked && newYearsCheck.reason) {
+              if (!ignoredIds.has(this.reasonToHolidayId(newYearsCheck.reason))) {
+                result = newYearsCheck;
+              }
+            }
+          }
+          
           if (!result.blocked) {
             const fedCheck = this.isFederalHoliday(dateStr);
-            if (fedCheck.isHoliday) {
-              result = { blocked: true, reason: fedCheck.name };
+            if (fedCheck.isHoliday && fedCheck.name) {
+              if (!ignoredIds.has(this.reasonToHolidayId(fedCheck.name))) {
+                result = { blocked: true, reason: fedCheck.name };
+              }
             }
           }
           
@@ -326,6 +419,46 @@ class HolidayCalendarService {
     }
     
     return Array.from(blockedDaysMap.values());
+  }
+
+  /**
+   * Get all holidays (including ignored ones) with their status
+   * Used for the admin UI to display toggles
+   */
+  async getAllHolidaysWithStatus(): Promise<{ holidayId: string; name: string; isIgnored: boolean }[]> {
+    const ignoredIds = await this.getIgnoredHolidayIds();
+    
+    // Define all holidays that can be toggled
+    const allHolidays = [
+      // Federal holidays
+      { holidayId: 'new_years_day', name: "New Year's Day" },
+      { holidayId: 'birthday_of_martin_luther_king_jr', name: 'Birthday of Martin Luther King, Jr.' },
+      { holidayId: 'washingtons_birthday', name: "Washington's Birthday" },
+      { holidayId: 'memorial_day', name: 'Memorial Day' },
+      { holidayId: 'juneteenth_national_independence_day', name: 'Juneteenth National Independence Day' },
+      { holidayId: 'independence_day', name: 'Independence Day' },
+      { holidayId: 'labor_day', name: 'Labor Day' },
+      { holidayId: 'columbus_day', name: 'Columbus Day' },
+      { holidayId: 'veterans_day', name: 'Veterans Day' },
+      { holidayId: 'thanksgiving_day', name: 'Thanksgiving Day' },
+      { holidayId: 'christmas_day', name: 'Christmas Day' },
+      // Extended windows
+      { holidayId: 'thanksgiving_eve', name: 'Thanksgiving Eve' },
+      { holidayId: 'black_friday', name: 'Black Friday' },
+      { holidayId: 'thanksgiving_weekend_saturday', name: 'Thanksgiving Weekend (Saturday)' },
+      { holidayId: 'thanksgiving_weekend_sunday', name: 'Thanksgiving Weekend (Sunday)' },
+      { holidayId: 'cyber_monday', name: 'Cyber Monday' },
+      { holidayId: 'christmas_eve_eve', name: 'Christmas Eve Eve (Dec 23)' },
+      { holidayId: 'christmas_eve', name: 'Christmas Eve' },
+      { holidayId: 'day_after_christmas', name: 'Day After Christmas' },
+      { holidayId: 'new_years_eve', name: "New Year's Eve" },
+      { holidayId: 'day_after_new_years', name: "Day After New Year's" },
+    ];
+    
+    return allHolidays.map(h => ({
+      ...h,
+      isIgnored: ignoredIds.has(h.holidayId)
+    }));
   }
 
   /**
@@ -354,3 +487,5 @@ export const isNoSendDay = (date: Date, timezone?: string) => holidayCalendarSer
 export const getUpcomingBlockedDays = (startDate: Date, days: number, timezone?: string) => 
   holidayCalendarService.getUpcomingBlockedDays(startDate, days, timezone);
 export const getCustomBlockedDates = () => holidayCalendarService.getCustomBlockedDates();
+export const getAllHolidaysWithStatus = () => holidayCalendarService.getAllHolidaysWithStatus();
+export const clearIgnoredHolidaysCache = () => holidayCalendarService.clearIgnoredHolidaysCache();
