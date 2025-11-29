@@ -12,15 +12,20 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X } from "lucide-react";
+import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil } from "lucide-react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface TenantUser {
   id: string;
@@ -59,6 +64,167 @@ interface TenantInvite {
   status: string;
   expiresAt: string;
   createdAt: string;
+}
+
+interface Pipeline {
+  id: string;
+  tenantId: string;
+  name: string;
+  slug: string;
+  pipelineType: string;
+  description: string | null;
+  aiPromptTemplate: string | null;
+  aiAssistantId: string | null;
+  voiceAgentId: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ElevenLabsAgent {
+  id: string;
+  name: string;
+  agentId: string;
+  isDefault: boolean;
+}
+
+interface PipelineStage {
+  id: string;
+  tenantId: string;
+  pipelineId: string;
+  name: string;
+  stageOrder: number;
+  stageType: string;
+  config: Record<string, any> | null;
+  isTerminal: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface PipelineWithStages extends Pipeline {
+  stages: PipelineStage[];
+}
+
+const PIPELINE_TYPES = [
+  { value: "sales", label: "Sales" },
+  { value: "qualification", label: "Qualification" },
+  { value: "support", label: "Support" },
+  { value: "custom", label: "Custom" },
+];
+
+const STAGE_TYPES = [
+  { value: "action", label: "Action" },
+  { value: "decision", label: "Decision" },
+  { value: "wait", label: "Wait" },
+  { value: "complete", label: "Complete" },
+];
+
+const generateSlug = (name: string): string => {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+};
+
+const pipelineFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Slug must be URL-friendly (lowercase, numbers, hyphens only)"),
+  pipelineType: z.enum(["sales", "qualification", "support", "custom"]),
+  description: z.string().optional(),
+  aiPromptTemplate: z.string().optional(),
+  voiceAgentId: z.string().optional(),
+  isActive: z.boolean(),
+});
+
+type PipelineFormData = z.infer<typeof pipelineFormSchema>;
+
+const stageFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  stageType: z.enum(["action", "decision", "wait", "complete"]),
+  isTerminal: z.boolean(),
+});
+
+type StageFormData = z.infer<typeof stageFormSchema>;
+
+function SortableStageItem({ stage, onEdit, onDelete, isDeleting }: { 
+  stage: PipelineStage; 
+  onEdit: () => void; 
+  onDelete: () => void;
+  isDeleting: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: stage.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const getStageTypeBadgeVariant = (type: string) => {
+    switch (type) {
+      case "action": return "default";
+      case "decision": return "secondary";
+      case "wait": return "outline";
+      case "complete": return "default";
+      default: return "outline";
+    }
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-3 p-3 border rounded-md bg-background"
+      data-testid={`stage-item-${stage.id}`}
+    >
+      <button
+        type="button"
+        className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
+        {...attributes}
+        {...listeners}
+        data-testid={`drag-handle-${stage.id}`}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="flex-1 flex items-center gap-3">
+        <span className="font-medium" data-testid={`stage-name-${stage.id}`}>{stage.name}</span>
+        <Badge variant={getStageTypeBadgeVariant(stage.stageType)} className="no-default-hover-elevate no-default-active-elevate">
+          {stage.stageType}
+        </Badge>
+        {stage.isTerminal && (
+          <Badge variant="outline" className="no-default-hover-elevate no-default-active-elevate text-xs">Terminal</Badge>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onEdit}
+          data-testid={`button-edit-stage-${stage.id}`}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onDelete}
+          disabled={isDeleting}
+          data-testid={`button-delete-stage-${stage.id}`}
+        >
+          {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 const inviteFormSchema = z.object({
@@ -101,6 +267,22 @@ export default function OrgAdmin() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [userToRemove, setUserToRemove] = useState<TenantUser | null>(null);
   const [roleChangeUser, setRoleChangeUser] = useState<{ user: TenantUser; newRole: string } | null>(null);
+  
+  const [isPipelineDialogOpen, setIsPipelineDialogOpen] = useState(false);
+  const [editingPipeline, setEditingPipeline] = useState<Pipeline | null>(null);
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+  const [pipelineToDelete, setPipelineToDelete] = useState<Pipeline | null>(null);
+  const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
+  const [editingStage, setEditingStage] = useState<PipelineStage | null>(null);
+  const [stageToDelete, setStageToDelete] = useState<PipelineStage | null>(null);
+  const [deletingStageId, setDeletingStageId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     if (!authLoading && user && !canAccessAdminFeatures(user)) {
@@ -128,6 +310,21 @@ export default function OrgAdmin() {
     enabled: canAccessAdminFeatures(user),
   });
 
+  const { data: pipelinesData, isLoading: pipelinesLoading } = useQuery<{ pipelines: Pipeline[] }>({
+    queryKey: ['/api/org-admin/pipelines'],
+    enabled: canAccessAdminFeatures(user),
+  });
+
+  const { data: selectedPipelineData, isLoading: selectedPipelineLoading } = useQuery<{ pipeline: PipelineWithStages }>({
+    queryKey: ['/api/org-admin/pipelines', selectedPipelineId],
+    enabled: canAccessAdminFeatures(user) && !!selectedPipelineId,
+  });
+
+  const { data: voiceAgentsData } = useQuery<{ agents: ElevenLabsAgent[] }>({
+    queryKey: ['/api/elevenlabs/agents'],
+    enabled: canAccessAdminFeatures(user),
+  });
+
   const inviteForm = useForm<InviteFormData>({
     resolver: zodResolver(inviteFormSchema),
     defaultValues: {
@@ -142,6 +339,28 @@ export default function OrgAdmin() {
       companyName: "",
       timezone: "",
       enabledModules: [],
+    },
+  });
+
+  const pipelineForm = useForm<PipelineFormData>({
+    resolver: zodResolver(pipelineFormSchema),
+    defaultValues: {
+      name: "",
+      slug: "",
+      pipelineType: "sales",
+      description: "",
+      aiPromptTemplate: "",
+      voiceAgentId: "",
+      isActive: true,
+    },
+  });
+
+  const stageForm = useForm<StageFormData>({
+    resolver: zodResolver(stageFormSchema),
+    defaultValues: {
+      name: "",
+      stageType: "action",
+      isTerminal: false,
     },
   });
 
@@ -260,12 +479,278 @@ export default function OrgAdmin() {
     },
   });
 
+  const createPipelineMutation = useMutation({
+    mutationFn: async (data: PipelineFormData) => {
+      return await apiRequest("POST", "/api/org-admin/pipelines", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines'] });
+      setIsPipelineDialogOpen(false);
+      setEditingPipeline(null);
+      pipelineForm.reset();
+      toast({
+        title: "Success",
+        description: "Pipeline created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create pipeline",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updatePipelineMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: PipelineFormData }) => {
+      return await apiRequest("PATCH", `/api/org-admin/pipelines/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines'] });
+      if (selectedPipelineId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines', selectedPipelineId] });
+      }
+      setIsPipelineDialogOpen(false);
+      setEditingPipeline(null);
+      pipelineForm.reset();
+      toast({
+        title: "Success",
+        description: "Pipeline updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update pipeline",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePipelineMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/org-admin/pipelines/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines'] });
+      setPipelineToDelete(null);
+      if (selectedPipelineId === pipelineToDelete?.id) {
+        setSelectedPipelineId(null);
+      }
+      toast({
+        title: "Success",
+        description: "Pipeline deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete pipeline",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createStageMutation = useMutation({
+    mutationFn: async ({ pipelineId, data }: { pipelineId: string; data: StageFormData }) => {
+      return await apiRequest("POST", `/api/org-admin/pipelines/${pipelineId}/stages`, data);
+    },
+    onSuccess: () => {
+      if (selectedPipelineId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines', selectedPipelineId] });
+      }
+      setIsStageDialogOpen(false);
+      setEditingStage(null);
+      stageForm.reset();
+      toast({
+        title: "Success",
+        description: "Stage created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create stage",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateStageMutation = useMutation({
+    mutationFn: async ({ pipelineId, stageId, data }: { pipelineId: string; stageId: string; data: StageFormData }) => {
+      return await apiRequest("PATCH", `/api/org-admin/pipelines/${pipelineId}/stages/${stageId}`, data);
+    },
+    onSuccess: () => {
+      if (selectedPipelineId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines', selectedPipelineId] });
+      }
+      setIsStageDialogOpen(false);
+      setEditingStage(null);
+      stageForm.reset();
+      toast({
+        title: "Success",
+        description: "Stage updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update stage",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteStageMutation = useMutation({
+    mutationFn: async ({ pipelineId, stageId }: { pipelineId: string; stageId: string }) => {
+      return await apiRequest("DELETE", `/api/org-admin/pipelines/${pipelineId}/stages/${stageId}`);
+    },
+    onSuccess: () => {
+      if (selectedPipelineId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines', selectedPipelineId] });
+      }
+      setStageToDelete(null);
+      setDeletingStageId(null);
+      toast({
+        title: "Success",
+        description: "Stage deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      setDeletingStageId(null);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete stage",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const reorderStagesMutation = useMutation({
+    mutationFn: async ({ pipelineId, stageIds }: { pipelineId: string; stageIds: string[] }) => {
+      return await apiRequest("POST", `/api/org-admin/pipelines/${pipelineId}/stages/reorder`, { stageIds });
+    },
+    onSuccess: () => {
+      if (selectedPipelineId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines', selectedPipelineId] });
+      }
+    },
+    onError: (error: any) => {
+      if (selectedPipelineId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines', selectedPipelineId] });
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reorder stages",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleInviteSubmit = (data: InviteFormData) => {
     createInviteMutation.mutate(data);
   };
 
   const handleSettingsSubmit = (data: SettingsFormData) => {
     updateSettingsMutation.mutate(data);
+  };
+
+  const handleOpenPipelineDialog = (pipeline?: Pipeline) => {
+    if (pipeline) {
+      setEditingPipeline(pipeline);
+      pipelineForm.reset({
+        name: pipeline.name,
+        slug: pipeline.slug,
+        pipelineType: pipeline.pipelineType as "sales" | "qualification" | "support" | "custom",
+        description: pipeline.description || "",
+        aiPromptTemplate: pipeline.aiPromptTemplate || "",
+        voiceAgentId: pipeline.voiceAgentId || "",
+        isActive: pipeline.isActive,
+      });
+    } else {
+      setEditingPipeline(null);
+      pipelineForm.reset({
+        name: "",
+        slug: "",
+        pipelineType: "sales",
+        description: "",
+        aiPromptTemplate: "",
+        voiceAgentId: "",
+        isActive: true,
+      });
+    }
+    setIsPipelineDialogOpen(true);
+  };
+
+  const handlePipelineSubmit = (data: PipelineFormData) => {
+    if (editingPipeline) {
+      updatePipelineMutation.mutate({ id: editingPipeline.id, data });
+    } else {
+      createPipelineMutation.mutate(data);
+    }
+  };
+
+  const handleOpenStageDialog = (stage?: PipelineStage) => {
+    if (stage) {
+      setEditingStage(stage);
+      stageForm.reset({
+        name: stage.name,
+        stageType: stage.stageType as "action" | "decision" | "wait" | "complete",
+        isTerminal: stage.isTerminal,
+      });
+    } else {
+      setEditingStage(null);
+      stageForm.reset({
+        name: "",
+        stageType: "action",
+        isTerminal: false,
+      });
+    }
+    setIsStageDialogOpen(true);
+  };
+
+  const handleStageSubmit = (data: StageFormData) => {
+    if (!selectedPipelineId) return;
+    
+    if (editingStage) {
+      updateStageMutation.mutate({ pipelineId: selectedPipelineId, stageId: editingStage.id, data });
+    } else {
+      createStageMutation.mutate({ pipelineId: selectedPipelineId, data });
+    }
+  };
+
+  const handleDeleteStage = (stage: PipelineStage) => {
+    if (!selectedPipelineId) return;
+    setDeletingStageId(stage.id);
+    deleteStageMutation.mutate({ pipelineId: selectedPipelineId, stageId: stage.id });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id || !selectedPipelineId) return;
+    
+    const stages = selectedPipelineData?.pipeline?.stages || [];
+    const oldIndex = stages.findIndex((s) => s.id === active.id);
+    const newIndex = stages.findIndex((s) => s.id === over.id);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+    
+    const newOrder = arrayMove(stages, oldIndex, newIndex);
+    const stageIds = newOrder.map((s) => s.id);
+    
+    reorderStagesMutation.mutate({ pipelineId: selectedPipelineId, stageIds });
+  };
+
+  const getPipelineTypeBadgeVariant = (type: string) => {
+    switch (type) {
+      case "sales": return "default";
+      case "qualification": return "secondary";
+      case "support": return "outline";
+      case "custom": return "outline";
+      default: return "outline";
+    }
   };
 
   if (authLoading) return null;
@@ -338,6 +823,10 @@ export default function OrgAdmin() {
           <TabsTrigger value="stats" data-testid="tab-stats">
             <BarChart3 className="mr-2 h-4 w-4" />
             Stats
+          </TabsTrigger>
+          <TabsTrigger value="pipelines" data-testid="tab-pipelines">
+            <Workflow className="mr-2 h-4 w-4" />
+            Pipelines
           </TabsTrigger>
         </TabsList>
 
@@ -679,6 +1168,187 @@ export default function OrgAdmin() {
             </Card>
           </div>
         </TabsContent>
+
+        <TabsContent value="pipelines">
+          {selectedPipelineId ? (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedPipelineId(null)}
+                    data-testid="button-back-to-pipelines"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <div>
+                    {selectedPipelineLoading ? (
+                      <>
+                        <Skeleton className="h-6 w-48 mb-1" />
+                        <Skeleton className="h-4 w-64" />
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <CardTitle data-testid="text-pipeline-name">{selectedPipelineData?.pipeline?.name}</CardTitle>
+                          <Badge variant={getPipelineTypeBadgeVariant(selectedPipelineData?.pipeline?.pipelineType || "")} className="no-default-hover-elevate no-default-active-elevate">
+                            {selectedPipelineData?.pipeline?.pipelineType}
+                          </Badge>
+                          {!selectedPipelineData?.pipeline?.isActive && (
+                            <Badge variant="outline" className="no-default-hover-elevate no-default-active-elevate">Inactive</Badge>
+                          )}
+                        </div>
+                        <CardDescription data-testid="text-pipeline-description">
+                          {selectedPipelineData?.pipeline?.description || "No description"}
+                        </CardDescription>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <Button onClick={() => handleOpenStageDialog()} data-testid="button-add-stage">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Stage
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {selectedPipelineLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-14 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(selectedPipelineData?.pipeline?.stages?.length || 0) === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground" data-testid="text-no-stages">
+                        No stages yet. Click "Add Stage" to create your first stage.
+                      </div>
+                    ) : (
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <SortableContext
+                          items={selectedPipelineData?.pipeline?.stages?.map((s) => s.id) || []}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {selectedPipelineData?.pipeline?.stages
+                            ?.sort((a, b) => a.stageOrder - b.stageOrder)
+                            .map((stage) => (
+                              <SortableStageItem
+                                key={stage.id}
+                                stage={stage}
+                                onEdit={() => handleOpenStageDialog(stage)}
+                                onDelete={() => handleDeleteStage(stage)}
+                                isDeleting={deletingStageId === stage.id}
+                              />
+                            ))}
+                        </SortableContext>
+                      </DndContext>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+                <div>
+                  <CardTitle>Pipelines</CardTitle>
+                  <CardDescription>Manage workflow pipelines for your organization</CardDescription>
+                </div>
+                <Button onClick={() => handleOpenPipelineDialog()} data-testid="button-create-pipeline">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Pipeline
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {pipelinesLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(pipelinesData?.pipelines?.length || 0) === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground">
+                            No pipelines found. Create your first pipeline to get started.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        pipelinesData?.pipelines?.map((pipeline) => (
+                          <TableRow 
+                            key={pipeline.id} 
+                            data-testid={`row-pipeline-${pipeline.id}`}
+                            className="cursor-pointer hover-elevate"
+                            onClick={() => setSelectedPipelineId(pipeline.id)}
+                          >
+                            <TableCell className="font-medium" data-testid={`text-pipeline-name-${pipeline.id}`}>
+                              {pipeline.name}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={getPipelineTypeBadgeVariant(pipeline.pipelineType)} className="no-default-hover-elevate no-default-active-elevate">
+                                {pipeline.pipelineType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground max-w-xs truncate">
+                              {pipeline.description || "—"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={pipeline.isActive ? "default" : "outline"} className="no-default-hover-elevate no-default-active-elevate">
+                                {pipeline.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenPipelineDialog(pipeline);
+                                  }}
+                                  data-testid={`button-edit-pipeline-${pipeline.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPipelineToDelete(pipeline);
+                                  }}
+                                  data-testid={`button-delete-pipeline-${pipeline.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
       </Tabs>
 
       <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
@@ -803,6 +1473,350 @@ export default function OrgAdmin() {
               Remove User
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPipelineDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsPipelineDialogOpen(false);
+          setEditingPipeline(null);
+          pipelineForm.reset();
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingPipeline ? "Edit Pipeline" : "Create Pipeline"}</DialogTitle>
+            <DialogDescription>
+              {editingPipeline 
+                ? "Update the pipeline details below" 
+                : "Configure your new workflow pipeline"}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...pipelineForm}>
+            <form onSubmit={pipelineForm.handleSubmit(handlePipelineSubmit)} className="space-y-4">
+              <FormField
+                control={pipelineForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Sales Outreach" 
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          if (!editingPipeline) {
+                            pipelineForm.setValue("slug", generateSlug(e.target.value));
+                          }
+                        }}
+                        data-testid="input-pipeline-name" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={pipelineForm.control}
+                name="slug"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Slug</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="sales-outreach" 
+                        {...field}
+                        data-testid="input-pipeline-slug" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={pipelineForm.control}
+                name="pipelineType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Pipeline Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-pipeline-type">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {PIPELINE_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={pipelineForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (optional)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Describe what this pipeline is for..." 
+                        {...field}
+                        data-testid="input-pipeline-description" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium mb-4">AI Configuration</h4>
+                
+                <FormField
+                  control={pipelineForm.control}
+                  name="voiceAgentId"
+                  render={({ field }) => (
+                    <FormItem className="mb-4">
+                      <FormLabel>Voice Agent (optional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-voice-agent">
+                            <SelectValue placeholder="Select a voice agent" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {voiceAgentsData?.agents?.map((agent) => (
+                            <SelectItem key={agent.id} value={agent.id}>
+                              {agent.name} {agent.isDefault && "(Default)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="text-xs text-muted-foreground">
+                        ElevenLabs voice agent for AI calls in this pipeline
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={pipelineForm.control}
+                  name="aiPromptTemplate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>AI Prompt Template (optional)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="Enter the AI prompt template for voice calls in this pipeline..."
+                          className="min-h-[100px]"
+                          {...field}
+                          data-testid="input-ai-prompt-template" 
+                        />
+                      </FormControl>
+                      <div className="text-xs text-muted-foreground">
+                        System prompt for AI voice calls. Use placeholders like {"{{clientName}}"}, {"{{companyName}}"}.
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={pipelineForm.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Active</FormLabel>
+                      <div className="text-sm text-muted-foreground">
+                        Enable or disable this pipeline
+                      </div>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-pipeline-active"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsPipelineDialogOpen(false);
+                    setEditingPipeline(null);
+                    pipelineForm.reset();
+                  }}
+                  data-testid="button-cancel-pipeline-dialog"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createPipelineMutation.isPending || updatePipelineMutation.isPending}
+                  data-testid="button-submit-pipeline"
+                >
+                  {(createPipelineMutation.isPending || updatePipelineMutation.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {editingPipeline ? "Save Changes" : "Create Pipeline"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pipelineToDelete} onOpenChange={(open) => !open && setPipelineToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Pipeline</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{pipelineToDelete?.name}"? This will also delete all stages in this pipeline. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPipelineToDelete(null)}
+              data-testid="button-cancel-delete-pipeline"
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={() => pipelineToDelete && deletePipelineMutation.mutate(pipelineToDelete.id)}
+              disabled={deletePipelineMutation.isPending}
+              data-testid="button-confirm-delete-pipeline"
+            >
+              {deletePipelineMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete Pipeline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isStageDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsStageDialogOpen(false);
+          setEditingStage(null);
+          stageForm.reset();
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingStage ? "Edit Stage" : "Add Stage"}</DialogTitle>
+            <DialogDescription>
+              {editingStage 
+                ? "Update the stage details below" 
+                : "Configure a new stage for this pipeline"}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...stageForm}>
+            <form onSubmit={stageForm.handleSubmit(handleStageSubmit)} className="space-y-4">
+              <FormField
+                control={stageForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Initial Contact" 
+                        {...field}
+                        data-testid="input-stage-name" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={stageForm.control}
+                name="stageType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Stage Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-stage-type">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {STAGE_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={stageForm.control}
+                name="isTerminal"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Terminal Stage</FormLabel>
+                      <div className="text-sm text-muted-foreground">
+                        Mark this as the final stage in the pipeline
+                      </div>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-stage-terminal"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsStageDialogOpen(false);
+                    setEditingStage(null);
+                    stageForm.reset();
+                  }}
+                  data-testid="button-cancel-stage-dialog"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createStageMutation.isPending || updateStageMutation.isPending}
+                  data-testid="button-submit-stage"
+                >
+                  {(createStageMutation.isPending || updateStageMutation.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {editingStage ? "Save Changes" : "Add Stage"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>
