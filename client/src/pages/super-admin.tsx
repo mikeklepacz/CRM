@@ -100,7 +100,7 @@ export default function SuperAdmin() {
   });
 
   const { data: tenantDetails, isLoading: detailsLoading } = useQuery<TenantDetails>({
-    queryKey: ['/api/super-admin/tenants', viewingTenantId],
+    queryKey: [`/api/super-admin/tenants/${viewingTenantId}`],
     enabled: !!viewingTenantId,
   });
 

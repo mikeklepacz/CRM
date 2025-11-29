@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
-import { canAccessAdminFeatures } from "@/lib/authUtils";
+import { canAccessAdminFeatures, isSuperAdmin } from "@/lib/authUtils";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -92,6 +92,14 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
         
         {/* Full Navigation - Shows on md+, wraps naturally */}
         <nav className="hidden md:flex items-center gap-0 flex-wrap flex-1">
+          {isSuperAdmin(user) && (
+            <Link href="/super-admin">
+              <Button variant="ghost" size="sm" data-testid="nav-super-admin">
+                <Globe className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Platform
+              </Button>
+            </Link>
+          )}
           {canAccessAdminFeatures(user) && visibleModules.admin && (
             <Link href="/admin">
               <Button variant="ghost" size="sm" data-testid="nav-admin">
@@ -192,6 +200,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
+              {isSuperAdmin(user) && (
+                <DropdownMenuItem onClick={() => { setLocation('/super-admin'); setMobileMenuOpen(false); }}>
+                  <Globe className="mr-2 h-4 w-4" />
+                  Platform Admin
+                </DropdownMenuItem>
+              )}
               {canAccessAdminFeatures(user) && visibleModules.admin && (
                 <DropdownMenuItem onClick={() => { setLocation('/admin'); setMobileMenuOpen(false); }}>
                   <ShieldCheck className="mr-2 h-4 w-4" />
