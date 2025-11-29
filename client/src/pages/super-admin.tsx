@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,7 +20,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, Users, BarChart3, Plus, Edit, Eye, Loader2, Check, Trash2, UserPlus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { 
+  Building2, Users, BarChart3, Plus, Edit, Eye, Loader2, Check, Trash2, UserPlus, 
+  Search, ArrowUpDown, ArrowUp, ArrowDown, Mail, Lock, Briefcase, KeyRound, 
+  UserX, UserCheck, Phone
+} from "lucide-react";
 
 interface Tenant {
   id: string;
@@ -41,7 +48,10 @@ interface UserWithMemberships {
   email: string | null;
   firstName: string | null;
   lastName: string | null;
+  agentName: string | null;
   isSuperAdmin: boolean;
+  isActive: boolean;
+  hasVoiceAccess: boolean;
   tenantMemberships: TenantMembership[];
 }
 
@@ -76,6 +86,30 @@ const addUserToTenantSchema = z.object({
 
 type AddUserToTenantFormData = z.infer<typeof addUserToTenantSchema>;
 
+const createUserSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  agentName: z.string().optional(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  tenantId: z.string().min(1, "Tenant is required"),
+  roleInTenant: z.enum(["org_admin", "agent"]),
+});
+
+type CreateUserFormData = z.infer<typeof createUserSchema>;
+
+const editUserSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  agentName: z.string().optional(),
+});
+
+type EditUserFormData = z.infer<typeof editUserSchema>;
+
+type SortField = "name" | "email" | "tenants" | null;
+type SortDirection = "asc" | "desc";
+
 export default function SuperAdmin() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -86,6 +120,18 @@ export default function SuperAdmin() {
   const [viewingTenantId, setViewingTenantId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserWithMemberships | null>(null);
   const [isAddToTenantOpen, setIsAddToTenantOpen] = useState(false);
+
+  const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false);
+  const [userStatusFilter, setUserStatusFilter] = useState<"active" | "inactive">("active");
+  const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     if (!authLoading && user && !isSuperAdmin(user)) {
@@ -139,6 +185,29 @@ export default function SuperAdmin() {
     },
   });
 
+  const createUserForm = useForm<CreateUserFormData>({
+    resolver: zodResolver(createUserSchema),
+    defaultValues: {
+      email: "",
+      firstName: "",
+      lastName: "",
+      agentName: "",
+      password: "",
+      tenantId: "",
+      roleInTenant: "agent",
+    },
+  });
+
+  const editUserForm = useForm<EditUserFormData>({
+    resolver: zodResolver(editUserSchema),
+    defaultValues: {
+      email: "",
+      firstName: "",
+      lastName: "",
+      agentName: "",
+    },
+  });
+
   useEffect(() => {
     if (editingTenant) {
       editForm.reset({
@@ -166,6 +235,93 @@ export default function SuperAdmin() {
       }
     }
   }, [usersData, selectedUser]);
+
+  useEffect(() => {
+    if (selectedUser && isEditingUser) {
+      editUserForm.reset({
+        email: selectedUser.email || "",
+        firstName: selectedUser.firstName || "",
+        lastName: selectedUser.lastName || "",
+        agentName: selectedUser.agentName || "",
+      });
+    }
+  }, [selectedUser, isEditingUser, editUserForm]);
+
+  useEffect(() => {
+    if (isCreateUserDialogOpen) {
+      createUserForm.reset({
+        email: "",
+        firstName: "",
+        lastName: "",
+        agentName: "",
+        password: "",
+        tenantId: "",
+        roleInTenant: "agent",
+      });
+    }
+  }, [isCreateUserDialogOpen, createUserForm]);
+
+  const filteredAndSortedUsers = useMemo(() => {
+    if (!usersData?.users) return [];
+
+    let filtered = usersData.users.filter(u => {
+      const isActiveMatch = userStatusFilter === "active" ? u.isActive !== false : u.isActive === false;
+      if (!isActiveMatch) return false;
+
+      if (tenantFilter !== "all") {
+        const hasTenant = u.tenantMemberships?.some(m => m.tenantId === tenantFilter);
+        if (!hasTenant) return false;
+      }
+
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const fullName = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
+        const email = (u.email || "").toLowerCase();
+        const agentName = (u.agentName || "").toLowerCase();
+        if (!fullName.includes(query) && !email.includes(query) && !agentName.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let aVal = "";
+        let bVal = "";
+
+        switch (sortField) {
+          case "name":
+            aVal = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
+            bVal = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
+            break;
+          case "email":
+            aVal = (a.email || "").toLowerCase();
+            bVal = (b.email || "").toLowerCase();
+            break;
+          case "tenants":
+            aVal = String(a.tenantMemberships?.length || 0);
+            bVal = String(b.tenantMemberships?.length || 0);
+            break;
+        }
+
+        if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [usersData?.users, userStatusFilter, tenantFilter, searchQuery, sortField, sortDirection]);
+
+  const activeUsersCount = useMemo(() => {
+    return usersData?.users?.filter(u => u.isActive !== false).length ?? 0;
+  }, [usersData?.users]);
+
+  const inactiveUsersCount = useMemo(() => {
+    return usersData?.users?.filter(u => u.isActive === false).length ?? 0;
+  }, [usersData?.users]);
 
   const createTenantMutation = useMutation({
     mutationFn: async (data: TenantFormData) => {
@@ -275,6 +431,144 @@ export default function SuperAdmin() {
     },
   });
 
+  const createUserMutation = useMutation({
+    mutationFn: async (data: CreateUserFormData) => {
+      return await apiRequest("POST", "/api/super-admin/users", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/metrics'] });
+      setIsCreateUserDialogOpen(false);
+      createUserForm.reset();
+      toast({
+        title: "Success",
+        description: "User created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ userId, data }: { userId: string; data: EditUserFormData }) => {
+      return await apiRequest("PATCH", `/api/super-admin/users/${userId}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
+      setIsEditingUser(false);
+      toast({
+        title: "Success",
+        description: "User updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
+      return await apiRequest("PATCH", `/api/super-admin/users/${userId}/reset-password`, { newPassword });
+    },
+    onSuccess: () => {
+      setIsResettingPassword(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({
+        title: "Success",
+        description: "Password reset successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reset password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deactivateUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest("POST", `/api/super-admin/users/${userId}/deactivate`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/metrics'] });
+      if (selectedUser) {
+        setSelectedUser({ ...selectedUser, isActive: false });
+      }
+      toast({
+        title: "Success",
+        description: "User deactivated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to deactivate user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const reactivateUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest("POST", `/api/super-admin/users/${userId}/reactivate`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/metrics'] });
+      if (selectedUser) {
+        setSelectedUser({ ...selectedUser, isActive: true });
+      }
+      toast({
+        title: "Success",
+        description: "User reactivated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reactivate user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleVoiceAccessMutation = useMutation({
+    mutationFn: async ({ userId, hasVoiceAccess }: { userId: string; hasVoiceAccess: boolean }) => {
+      return await apiRequest("PATCH", `/api/super-admin/users/${userId}/voice-access`, { hasVoiceAccess });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
+      if (selectedUser) {
+        setSelectedUser({ ...selectedUser, hasVoiceAccess: variables.hasVoiceAccess });
+      }
+      toast({
+        title: "Success",
+        description: "Voice access updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update voice access",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateSubmit = (data: TenantFormData) => {
     createTenantMutation.mutate(data);
   };
@@ -299,10 +593,92 @@ export default function SuperAdmin() {
     removeUserFromTenantMutation.mutate({ userId, tenantId });
   };
 
+  const handleCreateUserSubmit = (data: CreateUserFormData) => {
+    createUserMutation.mutate(data);
+  };
+
+  const handleEditUserSubmit = (data: EditUserFormData) => {
+    if (selectedUser) {
+      updateUserMutation.mutate({ userId: selectedUser.id, data });
+    }
+  };
+
+  const handleResetPasswordSubmit = () => {
+    if (!selectedUser) return;
+
+    if (!newPassword) {
+      toast({
+        title: "Validation Error",
+        description: "Password is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Validation Error",
+        description: "Password must be at least 6 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Validation Error",
+        description: "Passwords do not match",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    resetPasswordMutation.mutate({ userId: selectedUser.id, newPassword });
+  };
+
+  const handleDeactivateUser = () => {
+    if (selectedUser) {
+      deactivateUserMutation.mutate(selectedUser.id);
+    }
+  };
+
+  const handleReactivateUser = () => {
+    if (selectedUser) {
+      reactivateUserMutation.mutate(selectedUser.id);
+    }
+  };
+
   const getAvailableTenants = () => {
     if (!selectedUser || !tenantsData?.tenants) return [];
     const memberTenantIds = new Set(selectedUser.tenantMemberships.map(m => m.tenantId));
     return tenantsData.tenants.filter(t => !memberTenantIds.has(t.id));
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3" />;
+    }
+    return sortDirection === "asc" 
+      ? <ArrowUp className="ml-1 h-3 w-3" />
+      : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+  const handleCloseUserDialog = () => {
+    setSelectedUser(null);
+    setIsAddToTenantOpen(false);
+    setIsEditingUser(false);
+    setIsResettingPassword(false);
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   if (authLoading) return null;
@@ -447,91 +823,293 @@ export default function SuperAdmin() {
 
         <TabsContent value="users">
           <Card>
-            <CardHeader>
-              <CardTitle>Users</CardTitle>
-              <CardDescription>View and manage users across all tenants. Click a row to manage memberships.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+              <div>
+                <CardTitle>Users</CardTitle>
+                <CardDescription>View and manage users across all tenants</CardDescription>
+              </div>
+              <Button onClick={() => setIsCreateUserDialogOpen(true)} data-testid="button-create-user">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Create User
+              </Button>
             </CardHeader>
-            <CardContent>
-              {usersLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by name, email, or agent name..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                      data-testid="input-user-search"
+                    />
+                  </div>
                 </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Super Admin</TableHead>
-                      <TableHead>Tenant Memberships</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {usersData?.users?.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">
-                          No users found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      usersData?.users?.map((u) => (
-                        <TableRow 
-                          key={u.id} 
-                          data-testid={`row-user-${u.id}`}
-                          className="cursor-pointer hover-elevate"
-                          onClick={() => setSelectedUser(u)}
-                        >
-                          <TableCell className="font-medium">
-                            {u.firstName || u.lastName
-                              ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{u.email ?? "—"}</TableCell>
-                          <TableCell>
-                            {u.isSuperAdmin ? (
-                              <Badge variant="default">
-                                <Check className="mr-1 h-3 w-3" />
-                                Yes
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">No</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {u.tenantMemberships?.length > 0 ? (
-                                u.tenantMemberships.map((m) => (
-                                  <Badge key={m.tenantId} variant="outline">
-                                    {m.tenantName} ({m.roleInTenant})
-                                  </Badge>
-                                ))
-                              ) : (
-                                <span className="text-muted-foreground">None</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedUser(u);
-                              }}
-                              data-testid={`button-manage-user-${u.id}`}
+                <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                  <SelectTrigger className="w-[200px]" data-testid="select-tenant-filter">
+                    <SelectValue placeholder="Filter by tenant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tenants</SelectItem>
+                    {tenantsData?.tenants?.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Tabs value={userStatusFilter} onValueChange={(v) => setUserStatusFilter(v as "active" | "inactive")} className="w-full">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="active" data-testid="tab-active-users">
+                    Active Users ({activeUsersCount})
+                  </TabsTrigger>
+                  <TabsTrigger value="inactive" data-testid="tab-inactive-users">
+                    Inactive Users ({inactiveUsersCount})
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="active" className="mt-0">
+                  {usersLoading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead 
+                              className="cursor-pointer select-none"
+                              onClick={() => handleSort("name")}
                             >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              )}
+                              <div className="flex items-center" data-testid="sort-name">
+                                Name {getSortIcon("name")}
+                              </div>
+                            </TableHead>
+                            <TableHead 
+                              className="cursor-pointer select-none"
+                              onClick={() => handleSort("email")}
+                            >
+                              <div className="flex items-center" data-testid="sort-email">
+                                Email {getSortIcon("email")}
+                              </div>
+                            </TableHead>
+                            <TableHead>Agent Name</TableHead>
+                            <TableHead>Super Admin</TableHead>
+                            <TableHead>Voice Access</TableHead>
+                            <TableHead 
+                              className="cursor-pointer select-none"
+                              onClick={() => handleSort("tenants")}
+                            >
+                              <div className="flex items-center" data-testid="sort-tenants">
+                                Tenant Memberships {getSortIcon("tenants")}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAndSortedUsers.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                                No active users found
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredAndSortedUsers.map((u) => (
+                              <TableRow 
+                                key={u.id} 
+                                data-testid={`row-user-${u.id}`}
+                                className="cursor-pointer hover-elevate"
+                                onClick={() => setSelectedUser(u)}
+                              >
+                                <TableCell className="font-medium">
+                                  {u.firstName || u.lastName
+                                    ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                    : "—"}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">{u.email ?? "—"}</TableCell>
+                                <TableCell className="text-muted-foreground">{u.agentName ?? "—"}</TableCell>
+                                <TableCell>
+                                  {u.isSuperAdmin ? (
+                                    <Badge variant="default">
+                                      <Check className="mr-1 h-3 w-3" />
+                                      Yes
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">No</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {u.hasVoiceAccess ? (
+                                    <Badge variant="secondary">
+                                      <Phone className="mr-1 h-3 w-3" />
+                                      Yes
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">No</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {u.tenantMemberships?.length > 0 ? (
+                                      u.tenantMemberships.map((m) => (
+                                        <Badge key={m.tenantId} variant="outline">
+                                          {m.tenantName} ({m.roleInTenant})
+                                        </Badge>
+                                      ))
+                                    ) : (
+                                      <span className="text-muted-foreground">None</span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedUser(u);
+                                    }}
+                                    data-testid={`button-manage-user-${u.id}`}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="inactive" className="mt-0">
+                  {usersLoading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead 
+                              className="cursor-pointer select-none"
+                              onClick={() => handleSort("name")}
+                            >
+                              <div className="flex items-center" data-testid="sort-name-inactive">
+                                Name {getSortIcon("name")}
+                              </div>
+                            </TableHead>
+                            <TableHead 
+                              className="cursor-pointer select-none"
+                              onClick={() => handleSort("email")}
+                            >
+                              <div className="flex items-center" data-testid="sort-email-inactive">
+                                Email {getSortIcon("email")}
+                              </div>
+                            </TableHead>
+                            <TableHead>Agent Name</TableHead>
+                            <TableHead>Super Admin</TableHead>
+                            <TableHead>Voice Access</TableHead>
+                            <TableHead 
+                              className="cursor-pointer select-none"
+                              onClick={() => handleSort("tenants")}
+                            >
+                              <div className="flex items-center" data-testid="sort-tenants-inactive">
+                                Tenant Memberships {getSortIcon("tenants")}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAndSortedUsers.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                                No inactive users found
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredAndSortedUsers.map((u) => (
+                              <TableRow 
+                                key={u.id} 
+                                data-testid={`row-user-${u.id}`}
+                                className="cursor-pointer hover-elevate"
+                                onClick={() => setSelectedUser(u)}
+                              >
+                                <TableCell className="font-medium">
+                                  {u.firstName || u.lastName
+                                    ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                                    : "—"}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">{u.email ?? "—"}</TableCell>
+                                <TableCell className="text-muted-foreground">{u.agentName ?? "—"}</TableCell>
+                                <TableCell>
+                                  {u.isSuperAdmin ? (
+                                    <Badge variant="default">
+                                      <Check className="mr-1 h-3 w-3" />
+                                      Yes
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">No</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {u.hasVoiceAccess ? (
+                                    <Badge variant="secondary">
+                                      <Phone className="mr-1 h-3 w-3" />
+                                      Yes
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">No</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {u.tenantMemberships?.length > 0 ? (
+                                      u.tenantMemberships.map((m) => (
+                                        <Badge key={m.tenantId} variant="outline">
+                                          {m.tenantName} ({m.roleInTenant})
+                                        </Badge>
+                                      ))
+                                    ) : (
+                                      <span className="text-muted-foreground">None</span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedUser(u);
+                                    }}
+                                    data-testid={`button-manage-user-${u.id}`}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </TabsContent>
@@ -801,20 +1379,452 @@ export default function SuperAdmin() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={isCreateUserDialogOpen} onOpenChange={setIsCreateUserDialogOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Manage User Memberships</DialogTitle>
+            <DialogTitle>Create New User</DialogTitle>
+            <DialogDescription>Add a new user to the platform</DialogDescription>
+          </DialogHeader>
+          <Form {...createUserForm}>
+            <form onSubmit={createUserForm.handleSubmit(handleCreateUserSubmit)} className="space-y-4">
+              <FormField
+                control={createUserForm.control}
+                name="tenantId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tenant *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-create-user-tenant">
+                          <SelectValue placeholder="Select tenant" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {tenantsData?.tenants?.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={createUserForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email *</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          placeholder="user@example.com" 
+                          className="pl-10"
+                          {...field} 
+                          data-testid="input-create-user-email" 
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={createUserForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John" {...field} data-testid="input-create-user-firstname" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createUserForm.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Doe" {...field} data-testid="input-create-user-lastname" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={createUserForm.control}
+                name="agentName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Agent Name</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Briefcase className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          placeholder="Agent display name" 
+                          className="pl-10"
+                          {...field} 
+                          data-testid="input-create-user-agentname" 
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={createUserForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password *</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          type="password"
+                          placeholder="Minimum 6 characters" 
+                          className="pl-10"
+                          {...field} 
+                          data-testid="input-create-user-password" 
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={createUserForm.control}
+                name="roleInTenant"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role in Tenant</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-create-user-role">
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="org_admin">Org Admin</SelectItem>
+                        <SelectItem value="agent">Agent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCreateUserDialogOpen(false)}
+                  data-testid="button-cancel-create-user"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-create-user">
+                  {createUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create User
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedUser} onOpenChange={(open) => !open && handleCloseUserDialog()}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage User</DialogTitle>
             <DialogDescription>
               {selectedUser?.firstName || selectedUser?.lastName
                 ? `${selectedUser?.firstName ?? ""} ${selectedUser?.lastName ?? ""}`.trim()
                 : selectedUser?.email ?? "User"}
+              {selectedUser?.isActive === false && (
+                <Badge variant="destructive" className="ml-2">Inactive</Badge>
+              )}
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-medium mb-2">Current Memberships</h4>
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">User Details</h4>
+                {!isEditingUser && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsEditingUser(true)}
+                    data-testid="button-edit-user-details"
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                )}
+              </div>
+
+              {isEditingUser ? (
+                <Form {...editUserForm}>
+                  <form onSubmit={editUserForm.handleSubmit(handleEditUserSubmit)} className="space-y-4">
+                    <FormField
+                      control={editUserForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-edit-user-email" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={editUserForm.control}
+                        name="firstName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>First Name</FormLabel>
+                            <FormControl>
+                              <Input {...field} data-testid="input-edit-user-firstname" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={editUserForm.control}
+                        name="lastName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Last Name</FormLabel>
+                            <FormControl>
+                              <Input {...field} data-testid="input-edit-user-lastname" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormField
+                      control={editUserForm.control}
+                      name="agentName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Agent Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-edit-user-agentname" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsEditingUser(false)}
+                        data-testid="button-cancel-edit-user"
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={updateUserMutation.isPending} data-testid="button-save-edit-user">
+                        {updateUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Changes
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Email</p>
+                    <p className="font-medium">{selectedUser?.email || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Name</p>
+                    <p className="font-medium">
+                      {selectedUser?.firstName || selectedUser?.lastName
+                        ? `${selectedUser?.firstName ?? ""} ${selectedUser?.lastName ?? ""}`.trim()
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Agent Name</p>
+                    <p className="font-medium">{selectedUser?.agentName || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Super Admin</p>
+                    <p className="font-medium">{selectedUser?.isSuperAdmin ? "Yes" : "No"}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium">Voice Access</h4>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="voice-access"
+                  checked={selectedUser?.hasVoiceAccess ?? false}
+                  onCheckedChange={(checked) => {
+                    if (selectedUser) {
+                      toggleVoiceAccessMutation.mutate({
+                        userId: selectedUser.id,
+                        hasVoiceAccess: checked as boolean,
+                      });
+                    }
+                  }}
+                  disabled={toggleVoiceAccessMutation.isPending}
+                  data-testid="checkbox-voice-access"
+                />
+                <Label htmlFor="voice-access" className="text-sm">
+                  Enable voice access for this user
+                </Label>
+                {toggleVoiceAccessMutation.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">Password Reset</h4>
+                {!isResettingPassword && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsResettingPassword(true)}
+                    data-testid="button-show-reset-password"
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    Reset Password
+                  </Button>
+                )}
+              </div>
+
+              {isResettingPassword && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="new-password"
+                        type="password"
+                        placeholder="Minimum 6 characters"
+                        className="pl-10"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        data-testid="input-new-password"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirm Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        placeholder="Confirm new password"
+                        className="pl-10"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        data-testid="input-confirm-password"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsResettingPassword(false);
+                        setNewPassword("");
+                        setConfirmPassword("");
+                      }}
+                      data-testid="button-cancel-reset-password"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleResetPasswordSubmit}
+                      disabled={resetPasswordMutation.isPending}
+                      data-testid="button-submit-reset-password"
+                    >
+                      {resetPasswordMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Reset Password
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium">Account Status</h4>
+              <div className="flex items-center gap-2">
+                {selectedUser?.isActive !== false ? (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleDeactivateUser}
+                    disabled={deactivateUserMutation.isPending}
+                    data-testid="button-deactivate-user"
+                  >
+                    {deactivateUserMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <UserX className="mr-2 h-4 w-4" />
+                    )}
+                    Deactivate User
+                  </Button>
+                ) : (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleReactivateUser}
+                    disabled={reactivateUserMutation.isPending}
+                    data-testid="button-reactivate-user"
+                  >
+                    {reactivateUserMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <UserCheck className="mr-2 h-4 w-4" />
+                    )}
+                    Reactivate User
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium">Current Memberships</h4>
               {selectedUser?.tenantMemberships?.length === 0 ? (
                 <p className="text-sm text-muted-foreground">This user is not a member of any tenant.</p>
               ) : (
@@ -948,10 +1958,7 @@ export default function SuperAdmin() {
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => {
-                setSelectedUser(null);
-                setIsAddToTenantOpen(false);
-              }}
+              onClick={handleCloseUserDialog}
               data-testid="button-close-user-dialog"
             >
               Close

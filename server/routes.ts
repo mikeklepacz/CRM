@@ -22540,6 +22540,145 @@ ${conversationContext}`;
     }
   });
 
+  // GET /api/super-admin/tenants/:tenantId/users - Get users for a specific tenant
+  app.get('/api/super-admin/tenants/:tenantId/users', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const users = await storage.listTenantUsers(tenantId);
+      res.json({ users });
+    } catch (error: any) {
+      console.error('Error listing tenant users:', error);
+      res.status(500).json({ message: error.message || 'Failed to list tenant users' });
+    }
+  });
+
+  // POST /api/super-admin/users - Create user for a specific tenant
+  app.post('/api/super-admin/users', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { email, firstName, lastName, agentName, password, role, tenantId, roleInTenant, selectedCategory, referredBy } = req.body;
+
+      if (!email || !password || !tenantId) {
+        return res.status(400).json({ message: "Email, password, and tenant are required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
+      const username = email;
+
+      const newUser = await storage.createUser({
+        email,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        agentName: agentName || null,
+        username,
+        passwordHash,
+        role: role || 'agent',
+        referredBy: referredBy || null,
+      });
+
+      // Add user to tenant
+      await storage.addUserToTenant(newUser.id, tenantId, roleInTenant || 'agent', true);
+
+      // Set selectedCategory preference if provided
+      if (selectedCategory) {
+        await storage.setSelectedCategory(newUser.id, tenantId, selectedCategory);
+      }
+
+      res.json({ user: newUser });
+    } catch (error: any) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: error.message || "Failed to create user" });
+    }
+  });
+
+  // PATCH /api/super-admin/users/:userId - Update user details
+  app.patch('/api/super-admin/users/:userId', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const { firstName, lastName, agentName, email, role } = req.body;
+
+      const updates: any = {};
+      if (firstName !== undefined) updates.firstName = firstName;
+      if (lastName !== undefined) updates.lastName = lastName;
+      if (agentName !== undefined) updates.agentName = agentName;
+      if (email !== undefined) updates.email = email;
+      if (role !== undefined) updates.role = role;
+
+      const updatedUser = await storage.updateUser(userId, updates);
+      res.json({ user: updatedUser });
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      res.status(500).json({ message: error.message || 'Failed to update user' });
+    }
+  });
+
+  // PATCH /api/super-admin/users/:userId/reset-password - Reset user password
+  app.patch('/api/super-admin/users/:userId/reset-password', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const { newPassword } = req.body;
+
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ message: 'Password must be at least 6 characters' });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateUser(userId, { passwordHash });
+      res.json({ success: true, message: 'Password reset successfully' });
+    } catch (error: any) {
+      console.error('Error resetting password:', error);
+      res.status(500).json({ message: error.message || 'Failed to reset password' });
+    }
+  });
+
+  // POST /api/super-admin/users/:userId/deactivate - Deactivate user
+  app.post('/api/super-admin/users/:userId/deactivate', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      await storage.updateUser(userId, { isActive: false });
+      res.json({ success: true, message: 'User deactivated successfully' });
+    } catch (error: any) {
+      console.error('Error deactivating user:', error);
+      res.status(500).json({ message: error.message || 'Failed to deactivate user' });
+    }
+  });
+
+  // POST /api/super-admin/users/:userId/reactivate - Reactivate user
+  app.post('/api/super-admin/users/:userId/reactivate', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      await storage.updateUser(userId, { isActive: true });
+      res.json({ success: true, message: 'User reactivated successfully' });
+    } catch (error: any) {
+      console.error('Error reactivating user:', error);
+      res.status(500).json({ message: error.message || 'Failed to reactivate user' });
+    }
+  });
+
+  // PATCH /api/super-admin/users/:userId/voice-access - Toggle voice access
+  app.patch('/api/super-admin/users/:userId/voice-access', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const { hasVoiceAccess } = req.body;
+
+      if (typeof hasVoiceAccess !== 'boolean') {
+        return res.status(400).json({ message: 'hasVoiceAccess must be a boolean' });
+      }
+
+      await storage.updateUser(userId, { hasVoiceAccess });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating voice access:', error);
+      res.status(500).json({ message: error.message || 'Failed to update voice access' });
+    }
+  });
+
   // ============================================================================
   // ORG ADMIN ROUTES - Tenant-scoped management for org admins
   // ============================================================================
