@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray, and, desc, isNotNull, isNull, ne } from "drizzle-orm";
 import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences } from "@shared/schema";
-import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
+import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
 import { getTimezoneOffset } from "date-fns-tz";
@@ -45,6 +45,7 @@ import {
   insertSequenceStepSchema,
   insertNoSendDateSchema,
   insertIgnoredHolidaySchema,
+  insertTenantSchema,
 } from "@shared/schema";
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
@@ -22408,6 +22409,130 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error fetching ignored holidays:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch ignored holidays' });
+    }
+  });
+
+  // ============================================================================
+  // Super Admin API Routes (Platform-wide tenant & user management)
+  // ============================================================================
+
+  // GET /api/super-admin/tenants - List all tenants with user counts
+  app.get('/api/super-admin/tenants', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const tenants = await storage.listTenants();
+      res.json({ tenants });
+    } catch (error: any) {
+      console.error('Error listing tenants:', error);
+      res.status(500).json({ message: error.message || 'Failed to list tenants' });
+    }
+  });
+
+  // GET /api/super-admin/tenants/:tenantId - Get tenant details with stats
+  app.get('/api/super-admin/tenants/:tenantId', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const tenant = await storage.getTenantById(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ message: 'Tenant not found' });
+      }
+      const stats = await storage.getTenantStats(tenantId);
+      res.json({ tenant, stats });
+    } catch (error: any) {
+      console.error('Error getting tenant details:', error);
+      res.status(500).json({ message: error.message || 'Failed to get tenant details' });
+    }
+  });
+
+  // POST /api/super-admin/tenants - Create a new tenant
+  app.post('/api/super-admin/tenants', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const parseResult = insertTenantSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: 'Invalid tenant data', errors: parseResult.error.errors });
+      }
+      const tenant = await storage.createTenant(parseResult.data);
+      res.json({ tenant });
+    } catch (error: any) {
+      console.error('Error creating tenant:', error);
+      res.status(500).json({ message: error.message || 'Failed to create tenant' });
+    }
+  });
+
+  // PATCH /api/super-admin/tenants/:tenantId - Update tenant
+  app.patch('/api/super-admin/tenants/:tenantId', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const parseResult = insertTenantSchema.partial().safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: 'Invalid tenant data', errors: parseResult.error.errors });
+      }
+      const tenant = await storage.updateTenant(tenantId, parseResult.data);
+      res.json({ tenant });
+    } catch (error: any) {
+      console.error('Error updating tenant:', error);
+      res.status(500).json({ message: error.message || 'Failed to update tenant' });
+    }
+  });
+
+  // GET /api/super-admin/users - List all users across tenants
+  app.get('/api/super-admin/users', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const users = await storage.listUsersAcrossTenants();
+      res.json({ users });
+    } catch (error: any) {
+      console.error('Error listing users across tenants:', error);
+      res.status(500).json({ message: error.message || 'Failed to list users' });
+    }
+  });
+
+  // GET /api/super-admin/users/:userId/tenants - Get user's tenant memberships
+  app.get('/api/super-admin/users/:userId/tenants', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const memberships = await storage.getUserTenantMemberships(userId);
+      res.json({ memberships });
+    } catch (error: any) {
+      console.error('Error getting user tenant memberships:', error);
+      res.status(500).json({ message: error.message || 'Failed to get user tenant memberships' });
+    }
+  });
+
+  // POST /api/super-admin/users/:userId/tenants - Add user to tenant
+  app.post('/api/super-admin/users/:userId/tenants', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const { tenantId, roleInTenant, isDefault } = req.body;
+      if (!tenantId || !roleInTenant) {
+        return res.status(400).json({ message: 'Missing required fields: tenantId, roleInTenant' });
+      }
+      await storage.addUserToTenant(userId, tenantId, roleInTenant, isDefault);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error adding user to tenant:', error);
+      res.status(500).json({ message: error.message || 'Failed to add user to tenant' });
+    }
+  });
+
+  // DELETE /api/super-admin/users/:userId/tenants/:tenantId - Remove user from tenant
+  app.delete('/api/super-admin/users/:userId/tenants/:tenantId', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId, tenantId } = req.params;
+      await storage.removeUserFromTenant(userId, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error removing user from tenant:', error);
+      res.status(500).json({ message: error.message || 'Failed to remove user from tenant' });
+    }
+  });
+
+  // GET /api/super-admin/metrics - Get platform-wide metrics
+  app.get('/api/super-admin/metrics', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const metrics = await storage.getPlatformMetrics();
+      res.json(metrics);
+    } catch (error: any) {
+      console.error('Error getting platform metrics:', error);
+      res.status(500).json({ message: error.message || 'Failed to get platform metrics' });
     }
   });
 
