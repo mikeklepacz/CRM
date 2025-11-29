@@ -1920,3 +1920,20 @@ export const insertNoSendDateSchema = createInsertSchema(noSendDates).omit({
 
 export type InsertNoSendDate = z.infer<typeof insertNoSendDateSchema>;
 export type NoSendDate = typeof noSendDates.$inferSelect;
+
+// Ignored Holidays - holidays that are toggled OFF (outreach allowed on these days)
+export const ignoredHolidays = pgTable("ignored_holidays", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  holidayId: varchar("holiday_id", { length: 100 }).notNull().unique(), // e.g., "columbus_day", "veterans_day", "thanksgiving_window"
+  holidayName: varchar("holiday_name", { length: 255 }).notNull(), // Display name
+  ignoredBy: varchar("ignored_by").notNull().references(() => users.id),
+  ignoredAt: timestamp("ignored_at").defaultNow(),
+});
+
+export const insertIgnoredHolidaySchema = createInsertSchema(ignoredHolidays).omit({
+  id: true,
+  ignoredAt: true,
+});
+
+export type InsertIgnoredHoliday = z.infer<typeof insertIgnoredHolidaySchema>;
+export type IgnoredHoliday = typeof ignoredHolidays.$inferSelect;

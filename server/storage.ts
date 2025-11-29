@@ -175,6 +175,9 @@ import {
   noSendDates,
   type NoSendDate,
   type InsertNoSendDate,
+  ignoredHolidays,
+  type IgnoredHoliday,
+  type InsertIgnoredHoliday,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
@@ -635,6 +638,12 @@ export interface IStorage {
   getNoSendDate(id: string): Promise<NoSendDate | undefined>;
   createNoSendDate(data: InsertNoSendDate): Promise<NoSendDate>;
   deleteNoSendDate(id: string): Promise<void>;
+
+  // Ignored Holidays operations
+  getIgnoredHolidays(): Promise<IgnoredHoliday[]>;
+  getIgnoredHolidayByHolidayId(holidayId: string): Promise<IgnoredHoliday | undefined>;
+  createIgnoredHoliday(data: InsertIgnoredHoliday): Promise<IgnoredHoliday>;
+  deleteIgnoredHoliday(holidayId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4868,6 +4877,25 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNoSendDate(id: string): Promise<void> {
     await db.delete(noSendDates).where(eq(noSendDates.id, id));
+  }
+
+  // Ignored Holidays operations
+  async getIgnoredHolidays(): Promise<IgnoredHoliday[]> {
+    return await db.select().from(ignoredHolidays);
+  }
+
+  async getIgnoredHolidayByHolidayId(holidayId: string): Promise<IgnoredHoliday | undefined> {
+    const [holiday] = await db.select().from(ignoredHolidays).where(eq(ignoredHolidays.holidayId, holidayId));
+    return holiday;
+  }
+
+  async createIgnoredHoliday(data: InsertIgnoredHoliday): Promise<IgnoredHoliday> {
+    const [created] = await db.insert(ignoredHolidays).values(data).returning();
+    return created;
+  }
+
+  async deleteIgnoredHoliday(holidayId: string): Promise<void> {
+    await db.delete(ignoredHolidays).where(eq(ignoredHolidays.holidayId, holidayId));
   }
 }
 
