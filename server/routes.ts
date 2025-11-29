@@ -556,7 +556,8 @@ function stringSimilarity(str1: string, str2: string): number {
 async function syncKbFileToAlignerVectorStore(
   kbFileId: string,
   content: string,
-  filename: string
+  filename: string,
+  tenantId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Get Aligner assistant
@@ -566,7 +567,7 @@ async function syncKbFileToAlignerVectorStore(
     }
 
     // Get OpenAI settings
-    const openaiSettings = await storage.getOpenaiSettings();
+    const openaiSettings = await storage.getOpenaiSettings(tenantId);
     if (!openaiSettings?.apiKey) {
       return { success: false, error: 'OpenAI API key not configured' };
     }
@@ -913,7 +914,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const preferences = await storage.getUserPreferences(userId);
+      const tenantId = (req.user as any).tenantId;
+      const preferences = await storage.getUserPreferences(userId, tenantId);
       res.json(preferences || null);
     } catch (error: any) {
       console.error("Error fetching user preferences:", error);
@@ -998,8 +1000,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const preferences = await storage.saveUserPreferences(userId, validation.data);
+      const preferences = await storage.saveUserPreferences(userId, tenantId, validation.data);
 
       res.json(preferences);
     } catch (error: any) {
@@ -1027,9 +1030,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
       // Save the loading logo URL to user preferences
-      const preferences = await storage.saveUserPreferences(userId, {
+      const preferences = await storage.saveUserPreferences(userId, tenantId, {
         loadingLogoUrl: imageData
       });
 
@@ -1099,7 +1103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Config endpoints (API key + Twilio number)
   app.get('/api/elevenlabs/config', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const config = await storage.getElevenLabsConfig();
+      const config = await storage.getElevenLabsConfig(req.user.tenantId);
       res.json(config || { apiKey: "", twilioNumber: "" });
     } catch (error: any) {
       console.error("Error fetching ElevenLabs config:", error);
@@ -1114,7 +1118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      await storage.updateElevenLabsConfig(validation.data);
+      await storage.updateElevenLabsConfig(req.user.tenantId, validation.data);
       res.json({ message: "ElevenLabs configuration updated successfully" });
     } catch (error: any) {
       console.error("Error updating ElevenLabs config:", error);
@@ -1125,7 +1129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register/Update ElevenLabs webhook
   app.post('/api/elevenlabs/register-webhook', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const config = await storage.getElevenLabsConfig();
+      const config = await storage.getElevenLabsConfig(req.user.tenantId);
       if (!config?.apiKey) {
         return res.status(400).json({ message: "ElevenLabs API key not configured" });
       }
@@ -1158,7 +1162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Store webhook secret if returned
       if (response.data?.secret) {
-        await storage.updateElevenLabsConfig({ webhookSecret: response.data.secret });
+        await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret: response.data.secret });
       }
 
       res.json({
@@ -1179,7 +1183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get webhook status
   app.get('/api/elevenlabs/webhook-status', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const config = await storage.getElevenLabsConfig();
+      const config = await storage.getElevenLabsConfig(req.user.tenantId);
       
       // Get webhook URL
       let webhookUrl: string | null = null;
@@ -1209,7 +1213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const agent = await storage.createElevenLabsAgent(validation.data);
+      const agent = await storage.createElevenLabsAgent({ ...validation.data, tenantId: req.user.tenantId });
       res.json(agent);
     } catch (error: any) {
       console.error("Error creating ElevenLabs agent:", error);
@@ -1224,7 +1228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const agent = await storage.updateElevenLabsAgent(req.params.id, validation.data);
+      const agent = await storage.updateElevenLabsAgent(req.params.id, req.user.tenantId, validation.data);
       res.json(agent);
     } catch (error: any) {
       console.error("Error updating ElevenLabs agent:", error);
@@ -1234,7 +1238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/elevenlabs/agents/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      await storage.deleteElevenLabsAgent(req.params.id);
+      await storage.deleteElevenLabsAgent(req.params.id, req.user.tenantId);
       res.json({ message: "Agent deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting ElevenLabs agent:", error);
@@ -1244,7 +1248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/elevenlabs/agents/:id/set-default', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      await storage.setDefaultElevenLabsAgent(req.params.id);
+      await storage.setDefaultElevenLabsAgent(req.params.id, req.user.tenantId);
       res.json({ message: "Default agent set successfully" });
     } catch (error: any) {
       console.error("Error setting default agent:", error);
@@ -1256,7 +1260,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/elevenlabs/agents/:agentId/details', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { agentId } = req.params;
-      const config = await storage.getElevenLabsConfig();
+      const config = await storage.getElevenLabsConfig(req.user.tenantId);
       
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
@@ -1307,7 +1311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Prompt is required' });
       }
 
-      const config = await storage.getElevenLabsConfig();
+      const config = await storage.getElevenLabsConfig(req.user.tenantId);
       
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
@@ -1345,7 +1349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sync phone numbers from ElevenLabs API
   app.post('/api/elevenlabs/sync-phone-numbers', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const config = await storage.getElevenLabsConfig();
+      const config = await storage.getElevenLabsConfig(req.user.tenantId);
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
@@ -1372,6 +1376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             phoneNumberId: phone.phone_number_id,
             phoneNumber: phone.number || phone.phone_number || '',
             label: phone.label || phone.name || null,
+            tenantId: req.user.tenantId,
           });
           storedCount++;
         } catch (err: any) {
@@ -1380,13 +1385,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Assign first phone number to agents that don't have one yet
-      const agents = await storage.getAllElevenLabsAgents();
+      const agents = await storage.getAllElevenLabsAgents(req.user.tenantId);
       let updatedCount = 0;
 
       for (const agent of agents) {
         if (!agent.phoneNumberId && phoneNumbers.length > 0) {
           // Use the first phone number for agents without assigned numbers
-          await storage.updateElevenLabsAgent(agent.id, {
+          await storage.updateElevenLabsAgent(agent.id, req.user.tenantId, {
             phoneNumberId: phoneNumbers[0].phone_number_id,
           });
           updatedCount++;
@@ -1929,9 +1934,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Trigger OpenAI reflection job asynchronously (don't block webhook response)
-      if (data.status === 'done' && data.transcript && data.transcript.length > 0) {
+      if (data.status === 'done' && data.transcript && data.transcript.length > 0 && session?.tenantId) {
         // Fire and forget - run async without blocking the webhook response
-        analyzeCallTranscript(conversationId).catch(err => {
+        analyzeCallTranscript(conversationId, session.tenantId).catch(err => {
           console.error('Async error in OpenAI reflection:', err);
         });
         
@@ -1949,7 +1954,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return;
             }
             
-            const preferences = await storage.getUserPreferences(adminUser.id);
+            const preferences = await storage.getUserPreferences(adminUser.id, session.tenantId);
             
             if (!preferences?.autoKbAnalysis) {
               return;
@@ -2111,7 +2116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all phone numbers
   app.get('/api/elevenlabs/phone-numbers', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers();
+      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(req.user.tenantId);
       res.json(phoneNumbers);
     } catch (error: any) {
       console.error('Error fetching phone numbers:', error);
@@ -2129,8 +2134,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
-      const agents = await storage.getAllElevenLabsAgents();
-      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers();
+      const agents = await storage.getAllElevenLabsAgents(req.user.tenantId);
+      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(req.user.tenantId);
       
       // Create a map of phone number IDs to phone numbers for quick lookup
       const phoneMap = new Map(phoneNumbers.map(p => [p.phoneNumberId, p]));
@@ -2198,7 +2203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
 
-      const session = await storage.getCallSessionByConversationId(conversationId);
+      const session = await storage.getCallSessionByConversationId(conversationId, req.user.tenantId);
       if (!session) {
         return res.status(404).json({ error: 'Call session not found' });
       }
@@ -3527,7 +3532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const callLimit = limit || 50;
 
       // Get OpenAI API key from settings
-      const openaiSettings = await storage.getOpenaiSettings();
+      const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ 
@@ -4034,10 +4039,12 @@ Ready to receive calls?`;
       }
 
       // Auto-create Aligner conversation if not provided
+      const tenantId = (req.user as any).tenantId;
       let activeConversationId = conversationId;
       if (!activeConversationId) {
         const newConversation = await storage.createConversation({
           userId,
+          tenantId,
           title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
           assistantType: 'aligner',
           contextData: {},
@@ -4048,7 +4055,7 @@ Ready to receive calls?`;
       }
 
       // Get OpenAI settings
-      const settings = await storage.getOpenaiSettings();
+      const settings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!settings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
@@ -4062,7 +4069,7 @@ Ready to receive calls?`;
       const openai = new OpenAI({ apiKey: settings.apiKey });
 
       // Get conversation to check for existing thread
-      const conversation = await storage.getConversation(activeConversationId);
+      const conversation = await storage.getConversation(activeConversationId, tenantId);
       let threadId = conversation?.threadId;
 
       // Build contextual instructions for collaborative workflow
@@ -4122,13 +4129,14 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       if (!threadId) {
         const thread = await openai.beta.threads.create();
         threadId = thread.id;
-        await storage.updateConversation(activeConversationId, { threadId });
+        await storage.updateConversation(activeConversationId, tenantId, { threadId });
         console.log('[Aligner Chat] New thread created:', threadId);
       }
 
       // Save user message
       await storage.saveChatMessage({
         userId,
+        tenantId,
         conversationId: activeConversationId,
         role: 'user',
         content: message,
@@ -4184,6 +4192,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       // Save assistant response
       await storage.saveChatMessage({
         userId,
+        tenantId,
         conversationId: activeConversationId,
         role: 'assistant',
         content: responseText,
@@ -4212,13 +4221,14 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
     try {
       const { conversationId } = req.body;
       const userId = req.user.id;
+      const tenantId = (req.user as any).tenantId;
 
       if (!conversationId) {
         return res.status(400).json({ error: 'conversationId required' });
       }
 
       // Get conversation to access threadId
-      const conversation = await storage.getConversation(conversationId);
+      const conversation = await storage.getConversation(conversationId, tenantId);
       if (!conversation) {
         return res.status(404).json({ error: 'Conversation not found' });
       }
@@ -4226,7 +4236,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       let threadId = conversation.threadId;
 
       // Get OpenAI settings
-      const settings = await storage.getOpenaiSettings();
+      const settings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!settings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
@@ -4240,7 +4250,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       const openai = new OpenAI({ apiKey: settings.apiKey });
 
       // Build context with KB file list
-      const allKbFiles = await storage.getAllKbFiles();
+      const allKbFiles = await storage.getAllKbFiles(tenantId);
       const kbFilesList = allKbFiles.map(f => `- ${f.filename}${f.agentId ? ` (Agent: ${f.agentId})` : ''}`).join('\n');
 
       const contextualInstructions = `You are the Aligner, an AI assistant that helps improve knowledge base files based on call analysis.
@@ -4277,7 +4287,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       if (!threadId) {
         const thread = await openai.beta.threads.create();
         threadId = thread.id;
-        await storage.updateConversation(conversationId, { threadId });
+        await storage.updateConversation(conversationId, tenantId, { threadId });
       }
 
       // Send confirmation message
@@ -4285,6 +4295,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       await storage.saveChatMessage({
         userId,
+        tenantId,
         conversationId,
         role: 'user',
         content: confirmMessage,
@@ -4336,6 +4347,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       // Save assistant response
       await storage.saveChatMessage({
         userId,
+        tenantId,
         conversationId,
         role: 'assistant',
         content: responseText,
@@ -4370,7 +4382,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
 
       // Create proposals (reuse existing logic from create-proposals-from-chat)
-      const allKbFilesForMatching = await storage.getAllKbFiles();
+      const allKbFilesForMatching = await storage.getAllKbFiles(tenantId);
 
       // Group edits by file
       const editsByFile = new Map<string, any[]>();
@@ -4397,7 +4409,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         }
 
         // Get current version
-        const versions = await storage.getKbFileVersions(matchedFile.id);
+        const versions = await storage.getKbFileVersions(matchedFile.id, tenantId);
         const currentVersion = versions[0];
         if (!currentVersion) {
           console.warn(`[Aligner Agree] No version found for file ${matchedFile.id}, skipping`);
@@ -4438,13 +4450,14 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.post('/api/aligner/create-proposals-from-chat', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { conversationId } = req.body;
+      const tenantId = (req.user as any).tenantId;
 
       if (!conversationId) {
         return res.status(400).json({ error: 'conversationId required' });
       }
 
       // Get the conversation's latest assistant message
-      const messages = await storage.getConversationMessages(conversationId);
+      const messages = await storage.getConversationMessages(conversationId, tenantId);
       if (!messages || messages.length === 0) {
         return res.status(404).json({ error: 'No messages found in this conversation' });
       }
@@ -4487,7 +4500,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
 
       // Fetch KB files for fuzzy matching
-      const allKbFiles = await storage.getAllKbFiles();
+      const allKbFiles = await storage.getAllKbFiles(tenantId);
 
       // Group edits by file
       const editsByFile = new Map<string, any[]>();
@@ -4511,7 +4524,7 @@ The user has agreed to create proposals. Please output your recommended changes 
         }
 
         // Get latest version to use as base
-        const versions = await storage.getKbFileVersions(file.id);
+        const versions = await storage.getKbFileVersions(file.id, tenantId);
         const latestVersion = versions[0];
 
         if (!latestVersion) {
@@ -4560,9 +4573,10 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.get('/api/aligner/chat/history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       
       // Get all Aligner conversations for this user
-      const conversations = await storage.getConversations(userId);
+      const conversations = await storage.getConversations(userId, tenantId);
       const alignerConversations = conversations.filter((c: any) => c.assistantType === 'aligner');
       
       // Sort by most recent first
@@ -4581,10 +4595,11 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.get('/api/aligner/conversations/:id/messages', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const conversationId = req.params.id;
       
       // Verify conversation exists and belongs to user
-      const conversation = await storage.getConversation(conversationId);
+      const conversation = await storage.getConversation(conversationId, tenantId);
       if (!conversation) {
         return res.status(404).json({ error: 'Conversation not found' });
       }
@@ -4596,7 +4611,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
       
       // Get all messages for this conversation
-      const messages = await storage.getConversationMessages(conversationId);
+      const messages = await storage.getConversationMessages(conversationId, tenantId);
       
       res.json(messages);
     } catch (error: any) {
@@ -4609,10 +4624,11 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.delete('/api/conversations/:id', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const conversationId = req.params.id;
       
       // Verify conversation exists and belongs to user
-      const conversation = await storage.getConversation(conversationId);
+      const conversation = await storage.getConversation(conversationId, tenantId);
       if (!conversation) {
         return res.status(404).json({ error: 'Conversation not found' });
       }
@@ -4621,7 +4637,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
       
       // Delete conversation (also deletes messages via CASCADE)
-      await storage.deleteConversation(conversationId);
+      await storage.deleteConversation(conversationId, tenantId);
       
       res.json({ success: true });
     } catch (error: any) {
@@ -4634,14 +4650,15 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.delete('/api/aligner/chat/history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       
       // Get all Aligner conversations for this user
-      const conversations = await storage.getConversations(userId);
+      const conversations = await storage.getConversations(userId, tenantId);
       const alignerConversations = conversations.filter((c: any) => c.assistantType === 'aligner');
 
       // Delete all Aligner conversations and their messages
       for (const conv of alignerConversations) {
-        await storage.deleteConversation(conv.id);
+        await storage.deleteConversation(conv.id, tenantId);
       }
 
       res.json({ success: true, deletedCount: alignerConversations.length });
@@ -4663,7 +4680,7 @@ The user has agreed to create proposals. Please output your recommended changes 
   // Sync KB files with ElevenLabs API (Bidirectional with timestamp-based conflict resolution)
   app.post('/api/kb/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const elevenLabsConfig = await storage.getElevenLabsConfig();
+      const elevenLabsConfig = await storage.getElevenLabsConfig(req.user.tenantId);
       
       if (!elevenLabsConfig?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
@@ -4672,7 +4689,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       console.log('[KB Sync] ========== Starting Bidirectional Sync ==========');
 
       // Fetch all ElevenLabs agents to create agent name → agentId mapping
-      const agents = await storage.getAllElevenLabsAgents();
+      const agents = await storage.getAllElevenLabsAgents(req.user.tenantId);
       const agentNameMap = new Map<string, string>();
       for (const agent of agents) {
         agentNameMap.set(agent.name.toLowerCase(), agent.agentId);
@@ -4742,7 +4759,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
 
       // Get all local KB files
-      const localFiles = await storage.getAllKbFiles();
+      const localFiles = await storage.getAllKbFiles(req.user.tenantId);
       console.log(`[KB Sync] Found ${localFiles.length} files in local database`);
 
       // Build sync operation lists
@@ -4821,14 +4838,16 @@ The user has agreed to create proposals. Please output your recommended changes 
             console.log(`[KB Sync] PUSH: Updating "${localFile.filename}" in ElevenLabs (engine swap, docId: ${remoteDocId})`);
             
             const syncResult = await syncKbDocumentToElevenLabs(
-              localFile.id,
+              elevenLabsConfig.apiKey,
+              remoteDocId,
               localFile.filename,
-              localFile.currentContent
+              localFile.currentContent,
+              req.user.tenantId
             );
 
             if (syncResult.success) {
               // Update local metadata with new docId and timestamp
-              await storage.updateKbFile(localFile.id, {
+              await storage.updateKbFile(localFile.id, req.user.tenantId, {
                 elevenLabsUpdatedAt: new Date(),
                 lastSyncedSource: 'local_to_remote',
                 lastSyncedAt: new Date()
@@ -4866,7 +4885,7 @@ The user has agreed to create proposals. Please output your recommended changes 
             const newDoc = await createResponse.json();
 
             // Update local metadata with new docId
-            await storage.updateKbFile(localFile.id, {
+            await storage.updateKbFile(localFile.id, req.user.tenantId, {
               elevenlabsDocId: newDoc.id,
               elevenLabsUpdatedAt: new Date(),
               lastSyncedSource: 'local_to_remote',
@@ -4913,11 +4932,12 @@ The user has agreed to create proposals. Please output your recommended changes 
             }
 
             // Create new version
-            const versions = await storage.getKbFileVersions(localFile.id);
+            const versions = await storage.getKbFileVersions(localFile.id, req.user.tenantId);
             const latestVersion = versions[0];
             const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
 
             const newVersion = await storage.createKbFileVersion({
+              tenantId: req.user.tenantId,
               kbFileId: localFile.id,
               versionNumber: newVersionNumber,
               content: remoteData.content,
@@ -4933,7 +4953,7 @@ The user has agreed to create proposals. Please output your recommended changes 
             );
 
             // Update file with new content
-            await storage.updateKbFile(localFile.id, {
+            await storage.updateKbFile(localFile.id, req.user.tenantId, {
               currentContent: remoteData.content,
               elevenlabsDocId: remoteDocId,
               currentSyncVersion: newVersion.id,
@@ -4951,6 +4971,7 @@ The user has agreed to create proposals. Please output your recommended changes 
             console.log(`[KB Sync] PULL: Creating new local file "${remoteName}"`);
 
             const newFile = await storage.createKbFile({
+              tenantId: req.user.tenantId,
               filename: remoteName,
               elevenlabsDocId: remoteDocId,
               currentContent: remoteData.content,
@@ -4963,6 +4984,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
             // Create initial version
             const initialVersion = await storage.createKbFileVersion({
+              tenantId: req.user.tenantId,
               kbFileId: newFile.id,
               versionNumber: 1,
               content: remoteData.content,
@@ -4978,7 +5000,7 @@ The user has agreed to create proposals. Please output your recommended changes 
             );
 
             // Update file with current_sync_version
-            await storage.updateKbFile(newFile.id, {
+            await storage.updateKbFile(newFile.id, req.user.tenantId, {
               currentSyncVersion: initialVersion.id,
             });
 
@@ -5041,16 +5063,17 @@ The user has agreed to create proposals. Please output your recommended changes 
           const content = file.buffer.toString('utf-8');
 
           // Find existing KB file by filename
-          const existing = await storage.getKbFileByFilename(filename);
+          const existing = await storage.getKbFileByFilename(filename, req.user.tenantId);
 
           if (existing) {
             // Update existing file with content
-            const versions = await storage.getKbFileVersions(existing.id);
+            const versions = await storage.getKbFileVersions(existing.id, req.user.tenantId);
             const latestVersion = versions[0];
             const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
 
             // Create new version
             const newVersion = await storage.createKbFileVersion({
+              tenantId: req.user.tenantId,
               kbFileId: existing.id,
               versionNumber: newVersionNumber,
               content,
@@ -5066,7 +5089,7 @@ The user has agreed to create proposals. Please output your recommended changes 
             );
 
             // Update file with new content
-            await storage.updateKbFile(existing.id, {
+            await storage.updateKbFile(existing.id, req.user.tenantId, {
               currentContent: content,
               currentSyncVersion: newVersion.id,
               localUpdatedAt: new Date(), // Mark as locally updated for sync
@@ -5078,6 +5101,7 @@ The user has agreed to create proposals. Please output your recommended changes 
           } else {
             // Create new KB file
             const newFile = await storage.createKbFile({
+              tenantId: req.user.tenantId,
               filename,
               currentContent: content,
               fileType: 'file',
@@ -5086,6 +5110,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
             // Create initial version
             const initialVersion = await storage.createKbFileVersion({
+              tenantId: req.user.tenantId,
               kbFileId: newFile.id,
               versionNumber: 1,
               content,
@@ -5101,7 +5126,7 @@ The user has agreed to create proposals. Please output your recommended changes 
             );
 
             // Update file with current_sync_version
-            await storage.updateKbFile(newFile.id, {
+            await storage.updateKbFile(newFile.id, req.user.tenantId, {
               currentSyncVersion: initialVersion.id,
             });
 
@@ -5137,10 +5162,10 @@ The user has agreed to create proposals. Please output your recommended changes 
   /**
    * Find all agents that have a specific KB document in their knowledge base
    */
-  async function getAgentsUsingDocument(apiKey: string, docId: string): Promise<string[]> {
+  async function getAgentsUsingDocument(apiKey: string, docId: string, tenantId: string): Promise<string[]> {
     try {
       // Fetch all agents from our database
-      const agents = await storage.getAllElevenLabsAgents();
+      const agents = await storage.getAllElevenLabsAgents(tenantId);
       const agentIds: string[] = [];
       
       console.log(`[KB Sync] Checking ${agents.length} agents for document ${docId}`);
@@ -5244,7 +5269,8 @@ The user has agreed to create proposals. Please output your recommended changes 
     apiKey: string,
     oldDocId: string,
     filename: string,
-    newContent: string
+    newContent: string,
+    tenantId: string
   ): Promise<{ success: boolean; newDocId?: string; agentsUpdated?: number; error?: string }> {
     let newDocId: string | null = null;
     const swappedAgents: string[] = []; // Track agents we've successfully swapped for rollback
@@ -5272,7 +5298,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       console.log(`[KB Sync] Created new document: ${newDocId}`);
       
       // Step 2: Find all agents using the old document
-      const agentIds = await getAgentsUsingDocument(apiKey, oldDocId);
+      const agentIds = await getAgentsUsingDocument(apiKey, oldDocId, tenantId);
       console.log(`[KB Sync] Found ${agentIds.length} agents using old document`);
       
       // Step 3: Swap each agent to use new document (track for rollback)
@@ -5452,7 +5478,8 @@ The user has agreed to create proposals. Please output your recommended changes 
   // Get all KB files
   app.get('/api/kb/files', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const files = await storage.getAllKbFiles();
+      const tenantId = (req.user as any).tenantId;
+      const files = await storage.getAllKbFiles(tenantId);
       res.json({ files });
     } catch (error: any) {
       console.error('[KB] Error fetching files:', error);
@@ -5464,7 +5491,8 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.get('/api/kb/files/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const file = await storage.getKbFileById(id);
+      const tenantId = (req.user as any).tenantId;
+      const file = await storage.getKbFileById(id, tenantId);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
       }
@@ -5481,12 +5509,13 @@ The user has agreed to create proposals. Please output your recommended changes 
       const { id } = req.params;
       const { content } = req.body;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
       if (!content) {
         return res.status(400).json({ error: 'Content is required' });
       }
 
-      const file = await storage.getKbFileById(id);
+      const file = await storage.getKbFileById(id, tenantId);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
       }
@@ -5494,12 +5523,13 @@ The user has agreed to create proposals. Please output your recommended changes 
       console.log(`[KB Update] Updating file: ${file.filename}`);
 
       // Get existing versions to determine new version number
-      const versions = await storage.getKbFileVersions(id);
+      const versions = await storage.getKbFileVersions(id, tenantId);
       const latestVersion = versions[0];
       const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
 
       // Create new version
       const newVersion = await storage.createKbFileVersion({
+        tenantId,
         kbFileId: id,
         versionNumber: newVersionNumber,
         content,
@@ -5515,7 +5545,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       );
 
       // Update file with new content and mark as locally updated
-      const updatedFile = await storage.updateKbFile(id, {
+      const updatedFile = await storage.updateKbFile(id, tenantId, {
         currentContent: content,
         currentSyncVersion: newVersion.id,
         localUpdatedAt: new Date(),
@@ -5524,20 +5554,21 @@ The user has agreed to create proposals. Please output your recommended changes 
       console.log(`[KB Update] File updated to version ${newVersionNumber}, syncing to ElevenLabs...`);
 
       // Trigger zero-downtime sync to ElevenLabs
-      const elevenLabsConfig = await storage.getElevenLabsConfig();
+      const elevenLabsConfig = await storage.getElevenLabsConfig(req.user.tenantId);
       if (elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
         const syncResult = await syncKbDocumentToElevenLabs(
           elevenLabsConfig.apiKey,
           file.elevenlabsDocId,
           file.filename,
-          content
+          content,
+          req.user.tenantId
         );
         
         if (syncResult.success && syncResult.newDocId) {
           console.log(`[KB Update] Successfully synced to ElevenLabs (new docId: ${syncResult.newDocId}, agents updated: ${syncResult.agentsUpdated})`);
           
           // Update with new docId and lastSyncedAt
-          await storage.updateKbFile(id, {
+          await storage.updateKbFile(id, tenantId, {
             elevenlabsDocId: syncResult.newDocId,
             lastSyncedAt: new Date(),
           });
@@ -5547,7 +5578,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
 
       // Auto-sync to Aligner's vector store
-      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, content, file.filename);
+      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, content, file.filename, req.user.tenantId);
       if (!alignerSyncResult.success) {
         console.warn(`[KB Update] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
       }
@@ -5563,7 +5594,8 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.get('/api/kb/files/:id/versions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const versions = await storage.getKbFileVersions(id);
+      const tenantId = (req.user as any).tenantId;
+      const versions = await storage.getKbFileVersions(id, tenantId);
       res.json({ versions });
     } catch (error: any) {
       console.error('[KB] Error fetching versions:', error);
@@ -5575,7 +5607,8 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.get('/api/kb/proposals', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { status, fileId } = req.query;
-      const proposals = await storage.getKbProposals({
+      const tenantId = (req.user as any).tenantId;
+      const proposals = await storage.getKbProposals(tenantId, {
         status: status as string,
         kbFileId: fileId as string,
       });
@@ -5589,7 +5622,8 @@ The user has agreed to create proposals. Please output your recommended changes 
   // Delete all proposals (admin only)
   app.delete('/api/kb/proposals', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const deletedCount = await storage.deleteAllKbProposals();
+      const tenantId = (req.user as any).tenantId;
+      const deletedCount = await storage.deleteAllKbProposals(tenantId);
       console.log(`[KB] Deleted ${deletedCount} proposals`);
       res.json({ deletedCount });
     } catch (error: any) {
@@ -5602,7 +5636,8 @@ The user has agreed to create proposals. Please output your recommended changes 
   app.delete('/api/kb/proposals/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const deleted = await storage.deleteKbProposal(id);
+      const tenantId = (req.user as any).tenantId;
+      const deleted = await storage.deleteKbProposal(id, tenantId);
       if (!deleted) {
         return res.status(404).json({ error: 'Proposal not found' });
       }
@@ -5617,8 +5652,9 @@ The user has agreed to create proposals. Please output your recommended changes 
   // Helper: Fuzzy filename matching for KB files
   // Handles variations like underscores vs spaces, case differences
   async function findKbFileByFuzzyFilename(filename: string, allFiles?: any[]): Promise<any> {
-    // Get all KB files if not provided (for caching across multiple calls)
-    const files = allFiles || await storage.getAllKbFiles();
+    // NOTE: This helper function requires allFiles to be passed in by the caller
+    // The caller is responsible for fetching allFiles with the correct tenantId
+    const files = allFiles || [];
     
     // Try exact match first (fast path using cached list)
     const exactMatch = files.find(file => file.filename === filename);
@@ -5690,7 +5726,8 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
 
       // Get KB files based on agent selection
-      const allKbFiles = await storage.getAllKbFiles();
+      const tenantId = (req.user as any).tenantId;
+      const allKbFiles = await storage.getAllKbFiles(tenantId);
       const kbFiles = isAllAgents
         ? allKbFiles.filter(file => file.agentId == null) // Only general files for "all agents"
         : allKbFiles.filter(file => file.agentId === agentId || file.agentId == null); // Specific + general for single agent
@@ -5793,7 +5830,7 @@ ${recommendations || '(none)'}`;
       console.log('[KB Analyze] Calling Aligner assistant with micro-batching...');
 
       // Get OpenAI settings (use Sales Assistant's API key)
-      const openaiSettings = await storage.getOpenaiSettings();
+      const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(500).json({ error: 'OpenAI API key not configured. Please configure your OpenAI API key in the settings first.' });
       }
@@ -5957,7 +5994,7 @@ IMPORTANT:
         }
 
         // Get latest version to use as base
-        const versions = await storage.getKbFileVersions(file.id);
+        const versions = await storage.getKbFileVersions(file.id, tenantId);
         const latestVersion = versions[0];
 
         if (!latestVersion) {
@@ -5972,6 +6009,7 @@ IMPORTANT:
 
         // Store edits as JSON - we'll apply them in order when approved
         const created = await storage.createKbProposal({
+          tenantId,
           kbFileId: file.id,
           baseVersionId: latestVersion.id,
           proposedContent: JSON.stringify(fileEdits), // Store structured edits as JSON
@@ -6020,12 +6058,13 @@ IMPORTANT:
     try {
       const { id } = req.params;
       const { proposedContent } = req.body;
+      const tenantId = (req.user as any).tenantId;
 
       if (!proposedContent) {
         return res.status(400).json({ error: 'proposedContent is required' });
       }
 
-      const proposal = await storage.getKbProposalById(id);
+      const proposal = await storage.getKbProposalById(id, tenantId);
       if (!proposal) {
         return res.status(404).json({ error: 'Proposal not found' });
       }
@@ -6035,7 +6074,7 @@ IMPORTANT:
       }
 
       // Update the proposal with human edits
-      await storage.updateKbProposal(id, {
+      await storage.updateKbProposal(id, tenantId, {
         proposedContent,
         humanEdited: true,
       });
@@ -6052,8 +6091,9 @@ IMPORTANT:
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const proposal = await storage.getKbProposalById(id);
+      const proposal = await storage.getKbProposalById(id, tenantId);
       if (!proposal) {
         return res.status(404).json({ error: 'Proposal not found' });
       }
@@ -6063,7 +6103,7 @@ IMPORTANT:
       }
 
       // Update proposal status to rejected
-      await storage.updateKbProposal(id, {
+      await storage.updateKbProposal(id, tenantId, {
         status: 'rejected',
         reviewedAt: new Date(),
         reviewedBy: userId,
@@ -6081,19 +6121,20 @@ IMPORTANT:
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const proposal = await storage.getKbProposalById(id);
+      const proposal = await storage.getKbProposalById(id, tenantId);
       if (!proposal) {
         return res.status(404).json({ error: 'Proposal not found' });
       }
 
-      const file = await storage.getKbFileById(proposal.kbFileId);
+      const file = await storage.getKbFileById(proposal.kbFileId, tenantId);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
       }
 
       // Optimistic locking check
-      const currentVersions = await storage.getKbFileVersions(file.id);
+      const currentVersions = await storage.getKbFileVersions(file.id, tenantId);
       const latestVersion = currentVersions[0];
 
       if (latestVersion && latestVersion.id !== proposal.baseVersionId) {
@@ -6269,6 +6310,7 @@ IMPORTANT:
       // Create new version
       const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
       const newVersion = await storage.createKbFileVersion({
+        tenantId,
         kbFileId: file.id,
         versionNumber: newVersionNumber,
         content: finalContent,
@@ -6284,14 +6326,14 @@ IMPORTANT:
       );
 
       // Update file with new content
-      await storage.updateKbFile(file.id, {
+      await storage.updateKbFile(file.id, tenantId, {
         currentContent: finalContent,
         currentSyncVersion: newVersion.id,
         localUpdatedAt: new Date(), // Mark as locally updated for sync
       });
 
       // Update proposal status
-      await storage.updateKbProposal(id, {
+      await storage.updateKbProposal(id, tenantId, {
         status: 'approved',
         appliedVersionId: newVersion.id,
         reviewedAt: new Date(),
@@ -6299,7 +6341,7 @@ IMPORTANT:
       });
 
       // Sync to ElevenLabs using zero-downtime document swap (skip for local-only files)
-      const elevenLabsConfig = await storage.getElevenLabsConfig();
+      const elevenLabsConfig = await storage.getElevenLabsConfig(req.user.tenantId);
       let syncSuccess = false;
       let syncError = null;
       let agentsUpdated = 0;
@@ -6311,14 +6353,15 @@ IMPORTANT:
           elevenLabsConfig.apiKey,
           file.elevenlabsDocId,
           file.filename,
-          finalContent
+          finalContent,
+          req.user.tenantId
         );
         
         if (syncResult.success && syncResult.newDocId) {
           console.log(`[KB Approve] Successfully synced to ElevenLabs (new docId: ${syncResult.newDocId}, agents updated: ${syncResult.agentsUpdated})`);
           
           // Update with new docId and lastSyncedAt
-          await storage.updateKbFile(file.id, {
+          await storage.updateKbFile(file.id, tenantId, {
             elevenlabsDocId: syncResult.newDocId,
             lastSyncedAt: new Date(),
           });
@@ -6334,7 +6377,7 @@ IMPORTANT:
       }
 
       // Auto-sync to Aligner's vector store (keeps analysis up-to-date)
-      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, finalContent, file.filename);
+      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, finalContent, file.filename, req.user.tenantId);
       if (!alignerSyncResult.success) {
         console.warn(`[KB Approve] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
       }
@@ -6359,22 +6402,24 @@ IMPORTANT:
       const { id } = req.params;
       const { versionId } = req.body;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const file = await storage.getKbFileById(id);
+      const file = await storage.getKbFileById(id, tenantId);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
       }
 
-      const targetVersion = await storage.getKbFileVersion(versionId);
+      const targetVersion = await storage.getKbFileVersion(versionId, tenantId);
       if (!targetVersion || targetVersion.kbFileId !== id) {
         return res.status(404).json({ error: 'Version not found' });
       }
 
       // Create new version with the rollback content
-      const versions = await storage.getKbFileVersions(id);
+      const versions = await storage.getKbFileVersions(id, tenantId);
       const newVersionNumber = versions[0] ? versions[0].versionNumber + 1 : 1;
 
       const newVersion = await storage.createKbFileVersion({
+        tenantId,
         kbFileId: id,
         versionNumber: newVersionNumber,
         content: targetVersion.content,
@@ -6390,14 +6435,14 @@ IMPORTANT:
       );
 
       // Update file
-      await storage.updateKbFile(id, {
+      await storage.updateKbFile(id, tenantId, {
         currentContent: targetVersion.content,
         currentSyncVersion: newVersion.id,
         localUpdatedAt: new Date(), // Mark as locally updated for sync
       });
 
       // Auto-sync to Aligner's vector store
-      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, targetVersion.content, file.filename);
+      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, targetVersion.content, file.filename, tenantId);
       if (!alignerSyncResult.success) {
         console.warn(`[KB Rollback] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
       }
@@ -6544,7 +6589,7 @@ IMPORTANT:
       }
 
       // Get OpenAI settings
-      const openaiSettings = await storage.getOpenaiSettings();
+      const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
@@ -6656,7 +6701,7 @@ IMPORTANT:
       }
 
       // Get OpenAI settings
-      const openaiSettings = await storage.getOpenaiSettings();
+      const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
@@ -7732,7 +7777,7 @@ IMPORTANT:
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = req.user.tenantId;
-      const selectedCategory = await storage.getSelectedCategory(userId);
+      const selectedCategory = await storage.getSelectedCategory(userId, tenantId);
 
       const clients = await storage.getAllClients(tenantId);
 
@@ -8070,10 +8115,11 @@ IMPORTANT:
   });
 
   // Get client notes
-  app.get('/api/clients/:id/notes', isAuthenticatedCustom, async (req, res) => {
+  app.get('/api/clients/:id/notes', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const notes = await storage.getClientNotes(id);
+      const tenantId = req.user.tenantId;
+      const notes = await storage.getClientNotes(id, tenantId);
       res.json(notes);
     } catch (error: any) {
       console.error("Error fetching notes:", error);
@@ -8200,7 +8246,8 @@ IMPORTANT:
 
       // Set selectedCategory preference if provided
       if (selectedCategory) {
-        await storage.setSelectedCategory(newUser.id, selectedCategory);
+        const tenantId = (req.user as any).tenantId;
+        await storage.setSelectedCategory(newUser.id, tenantId, selectedCategory);
       }
 
       res.json({ user: newUser });
@@ -8772,10 +8819,10 @@ IMPORTANT:
       // 2. Delete OpenAI knowledge base files uploaded by this user
       try {
         // Get global OpenAI settings (admin's API key)
-        const openaiSettings = await storage.getOpenaiSettings();
+        const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
         if (openaiSettings?.apiKey) {
           // Get ALL knowledge base files and filter for this user's uploads
-          const allFiles = await storage.getAllKnowledgeBaseFiles();
+          const allFiles = await storage.getAllKnowledgeBaseFiles(req.user.tenantId);
           const userFiles = allFiles.filter(file => file.uploadedBy === userId);
 
           if (userFiles.length > 0) {
@@ -8875,13 +8922,14 @@ IMPORTANT:
   app.patch('/api/orders/:orderId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { orderId } = req.params;
+      const tenantId = req.user.tenantId;
       const { commissionType, commissionAmount } = req.body;
 
       const updates: any = {};
       if (commissionType !== undefined) updates.commissionType = commissionType;
       if (commissionAmount !== undefined) updates.commissionAmount = commissionAmount;
 
-      const updatedOrder = await storage.updateOrder(orderId, updates);
+      const updatedOrder = await storage.updateOrder(orderId, tenantId, updates);
 
       if (!updatedOrder) {
         return res.status(404).json({ message: "Order not found" });
@@ -8902,7 +8950,8 @@ IMPORTANT:
       const { orderId } = req.params;
       const manualSearch = req.query.search || ''; // Manual search term from query param
 
-      const order = await storage.getOrderById(orderId);
+      const tenantId = req.user.tenantId;
+      const order = await storage.getOrderById(orderId, tenantId);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
@@ -9078,7 +9127,8 @@ IMPORTANT:
         return res.status(400).json({ message: "At least one store must be selected" });
       }
 
-      const order = await storage.getOrderById(orderId);
+      const tenantId = req.user.tenantId;
+      const order = await storage.getOrderById(orderId, tenantId);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
@@ -9304,6 +9354,7 @@ IMPORTANT:
       }
 
       // Step 1: Update database
+      const tenantId = req.user.tenantId;
       let dbUpdated = 0;
       for (const update of orderUpdates) {
         const { orderId, commissionType, commissionAmount } = update;
@@ -9315,7 +9366,7 @@ IMPORTANT:
         if (commissionAmount !== undefined) updates.commissionAmount = commissionAmount;
 
         if (Object.keys(updates).length > 0) {
-          await storage.updateOrder(orderId, updates);
+          await storage.updateOrder(orderId, tenantId, updates);
           dbUpdated++;
           console.log(`DB: Updated order ${orderId} with:`, updates);
         }
@@ -9354,7 +9405,7 @@ IMPORTANT:
             console.log(`\n--- Processing order ${orderId} ---`);
 
             // Get order from database
-            const order = await storage.getOrderById(orderId);
+            const order = await storage.getOrderById(orderId, tenantId);
             if (!order) {
               console.log(`Order ${orderId} not found in database`);
               continue;
@@ -9558,10 +9609,11 @@ IMPORTANT:
       }
 
       // Create or update order
-      const existingOrder = await storage.getOrderById(order.id.toString());
+      // For webhooks: query order directly to check existence (no tenant context yet)
+      const [existingOrder] = await db.select().from(orders).where(eq(orders.id, order.id.toString()));
 
-      // Get tenantId from matched client (webhooks don't have user context)
-      const tenantId = client?.tenantId;
+      // Get tenantId from matched client or existing order (webhooks don't have user context)
+      const tenantId = client?.tenantId || existingOrder?.tenantId;
       
       if (!tenantId && !existingOrder) {
         console.log('[Webhook] Cannot create order - no client matched and no tenantId available');
@@ -9569,7 +9621,7 @@ IMPORTANT:
       }
 
       if (existingOrder) {
-        await storage.updateOrder(order.id.toString(), {
+        await storage.updateOrder(order.id.toString(), existingOrder.tenantId, {
           clientId: client?.id || null,
           orderNumber: order.number || order.id.toString(),
           billingEmail: email,
@@ -9835,13 +9887,14 @@ IMPORTANT:
         }
 
         // Create or update order
-        const existingOrder = await storage.getOrderById(order.id.toString());
+        // For sync: query order directly to check existence (we have user context but need order existence check first)
+        const [existingOrder] = await db.select().from(orders).where(eq(orders.id, order.id.toString()));
 
         // RE-ORDER DETECTION: Check if this is a repeat order from an existing client
         let isReOrder = false;
         if (!existingOrder && client) {
           // This is a new order, check if client has previous orders
-          const clientOrders = await storage.getOrdersByClient(client.id);
+          const clientOrders = await storage.getOrdersByClient(client.id, client.tenantId);
           if (clientOrders.length > 0) {
             isReOrder = true;
             console.log(`Re-order detected for client ${client.id} (${clientOrders.length} previous orders)`);
@@ -9849,7 +9902,7 @@ IMPORTANT:
         }
 
         if (existingOrder) {
-          await storage.updateOrder(order.id.toString(), {
+          await storage.updateOrder(order.id.toString(), existingOrder.tenantId, {
             clientId: client?.id || null,
             orderNumber: order.number || order.id.toString(),
             billingEmail: email,
@@ -9936,7 +9989,7 @@ IMPORTANT:
           console.log(`Deleting order ${localOrder.id} (no longer in WooCommerce)`);
           
           // Get commissions for this order BEFORE deleting (will be cascade deleted)
-          const orderCommissions = await storage.getCommissionsByOrder(localOrder.id);
+          const orderCommissions = await storage.getCommissionsByOrder(localOrder.id, tenantId);
           const totalCommissionAmount = orderCommissions.reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0);
           
           // DELETE COMMISSION TRACKER ROW: Remove the row from Google Sheets for this deleted order
@@ -10008,7 +10061,7 @@ IMPORTANT:
           }
           
           // Delete the order (commissions will cascade delete automatically)
-          await storage.deleteOrder(localOrder.id);
+          await storage.deleteOrder(localOrder.id, tenantId);
           deleted++;
         }
       }
@@ -10532,7 +10585,7 @@ IMPORTANT:
         const { orderId, commissionType, commissionAmount } = orderReq;
 
         // Get order from database
-        const order = await storage.getOrderById(orderId);
+        const order = await storage.getOrderById(orderId, tenantId);
         if (!order) {
           console.log(`Skipping order ${orderId}: not matched to client`);
           continue;
@@ -10873,7 +10926,8 @@ IMPORTANT:
       }
 
       // Get selected category for cache key (lightweight DB query)
-      const selectedCategory = await storage.getSelectedCategory(userId);
+      const tenantId = (req.user as any).tenantId;
+      const selectedCategory = await storage.getSelectedCategory(userId, tenantId);
 
       // Check cache first (30-second TTL)
       const cacheKey = generateCacheKey(userId, storeSheetId, trackerSheetId, selectedCategory);
@@ -13587,7 +13641,7 @@ IMPORTANT:
       
       try {
         // Get OpenAI settings
-        const openaiSettings = await storage.getOpenaiSettings();
+        const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
         
         if (openaiSettings?.apiKey) {
           console.log('[Parse-and-Match] Using OpenAI to clean and extract store locations...');
@@ -15944,8 +15998,9 @@ ${rawText}`;
       // Smart default: Update user preferences if calendar reminders differ from current defaults
       try {
         const calendarReminders = req.body.calendarReminders;
+        const tenantIdForPrefs = (req.user as any).tenantId;
         if (calendarReminders && Array.isArray(calendarReminders)) {
-          const userPreferences = await storage.getUserPreferences(userId);
+          const userPreferences = await storage.getUserPreferences(userId, tenantIdForPrefs);
           const currentDefaults = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }]; // Default to popup 10 mins if not set
 
           // Compare calendar reminders with current defaults (handle empty arrays)
@@ -15956,7 +16011,7 @@ ${rawText}`;
 
           if (remindersChanged) {
             // Update user's default calendar reminders (including empty array for "no reminders")
-            await storage.saveUserPreferences(userId, {
+            await storage.saveUserPreferences(userId, tenantIdForPrefs, {
               defaultCalendarReminders: calendarReminders
             });
           }
@@ -16063,11 +16118,11 @@ ${rawText}`;
       }
 
       // Get user preferences for calendar reminders
-      const userPreferences = await storage.getUserPreferences(userId);
+      const tenantId = (req.user as any).tenantId;
+      const userPreferences = await storage.getUserPreferences(userId, tenantId);
       const defaultCalendarReminders = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }];
 
       // Get all active reminders for this user
-      const tenantId = (req.user as any).tenantId;
       const reminders = await storage.getRemindersByUser(userId, tenantId);
       // Filter to only reminders that are active, have a trigger date, and don't already have a calendar event
       const activeReminders = reminders.filter(r => 
@@ -16590,7 +16645,7 @@ ${rawText}`;
       }
 
       console.log('⚙️ [SETTINGS] Fetching OpenAI settings from database...');
-      const settings = await storage.getOpenaiSettings();
+      const settings = await storage.getOpenaiSettings(req.user.tenantId);
       console.log('⚙️ [SETTINGS] Settings retrieved:', {
         hasSettings: !!settings,
         hasApiKey: !!settings?.apiKey,
@@ -16645,7 +16700,7 @@ ${rawText}`;
       });
 
       console.log('⚙️ [SETTINGS] Saving settings to database...');
-      const settings = await storage.saveOpenaiSettings({ apiKey, aiInstructions, vectorStoreId });
+      const settings = await storage.saveOpenaiSettings(req.user.tenantId, { apiKey, aiInstructions, vectorStoreId });
       console.log('⚙️ [SETTINGS] Settings saved successfully');
 
       const response = { 
@@ -16672,7 +16727,7 @@ ${rawText}`;
       console.log('📁 [FILES] User ID:', userId);
 
       console.log('📁 [FILES] Fetching all knowledge base files from database...');
-      const files = await storage.getAllKnowledgeBaseFiles();
+      const files = await storage.getAllKnowledgeBaseFiles(req.user.tenantId);
       console.log('📁 [FILES] Files retrieved:', {
         count: files.length,
         fileIds: files.map(f => f.id)
@@ -16712,7 +16767,7 @@ ${rawText}`;
       }
 
       // Get OpenAI settings
-      const settings = await storage.getOpenaiSettings();
+      const settings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!settings?.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
       }
@@ -16779,7 +16834,7 @@ ${rawText}`;
         );
         vectorStoreId = vectorStoreResponse.data.id;
         console.log('📤 [FILE UPLOAD] Vector store created:', vectorStoreId);
-        await storage.saveOpenaiSettings({ vectorStoreId });
+        await storage.saveOpenaiSettings(req.user.tenantId, { vectorStoreId });
         console.log('📤 [FILE UPLOAD] Vector store ID saved to database');
       } else {
         console.log('📤 [FILE UPLOAD] Using existing vector store:', vectorStoreId);
@@ -16898,7 +16953,7 @@ ${rawText}`;
       if (productCategory !== undefined) updates.productCategory = productCategory;
       if (description !== undefined) updates.description = description;
 
-      const updatedFile = await storage.updateKnowledgeBaseFile(id, updates);
+      const updatedFile = await storage.updateKnowledgeBaseFile(id, req.user.tenantId, updates);
       console.log('📝 [EDIT FILE] File updated successfully');
 
       res.json(updatedFile);
@@ -16928,7 +16983,7 @@ ${rawText}`;
       console.log('📁 [DELETE FILE] File ID to delete:', fileId);
 
       console.log('📁 [DELETE FILE] Fetching file metadata from database...');
-      const file = await storage.getKnowledgeBaseFile(fileId);
+      const file = await storage.getKnowledgeBaseFile(fileId, req.user.tenantId);
 
       if (!file) {
         console.log('📁 [DELETE FILE] ❌ File not found in database');
@@ -16943,7 +16998,7 @@ ${rawText}`;
 
       // Get OpenAI settings and delete from OpenAI
       console.log('📁 [DELETE FILE] Fetching OpenAI settings...');
-      const settings = await storage.getOpenaiSettings();
+      const settings = await storage.getOpenaiSettings(req.user.tenantId);
       console.log('📁 [DELETE FILE] Settings retrieved:', {
         hasApiKey: !!settings?.apiKey,
         hasOpenaiFileId: !!file.openaiFileId
@@ -16966,7 +17021,7 @@ ${rawText}`;
       }
 
       console.log('📁 [DELETE FILE] Deleting file from database...');
-      await storage.deleteKnowledgeBaseFile(fileId);
+      await storage.deleteKnowledgeBaseFile(fileId, req.user.tenantId);
       console.log('📁 [DELETE FILE] ✅ File deleted successfully');
 
       res.json({ success: true });
@@ -16998,11 +17053,13 @@ ${rawText}`;
       }
 
       // Auto-create conversation if not provided
+      const tenantId = (req.user as any).tenantId;
       let activeConversationId = conversationId;
       if (!activeConversationId) {
         console.log('💬 [CHAT] Creating new conversation...');
         const newConversation = await storage.createConversation({
           userId,
+          tenantId,
           title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
           contextData: contextData || {},
           projectId: null,
@@ -17011,12 +17068,12 @@ ${rawText}`;
         console.log('💬 [CHAT] New conversation created:', activeConversationId);
       } else if (contextData) {
         console.log('💬 [CHAT] Updating conversation with context data...');
-        await storage.updateConversation(activeConversationId, { contextData });
+        await storage.updateConversation(activeConversationId, tenantId, { contextData });
       }
 
       // Get OpenAI settings
       console.log('💬 [CHAT] Fetching OpenAI settings...');
-      const settings = await storage.getOpenaiSettings();
+      const settings = await storage.getOpenaiSettings(req.user.tenantId);
       console.log('💬 [CHAT] Settings retrieved:', {
         hasApiKey: !!settings?.apiKey,
         hasVectorStoreId: !!settings?.vectorStoreId,
@@ -17035,7 +17092,7 @@ ${rawText}`;
 
       // Fetch conversation to get contextData
       console.log('💬 [CHAT] Fetching conversation for contextData...');
-      const conversation = await storage.getConversation(activeConversationId);
+      const conversation = await storage.getConversation(activeConversationId, tenantId);
       const contextInfo = conversation?.contextData as any;
       console.log('💬 [CHAT] Context data available:', !!contextInfo);
 
@@ -17043,6 +17100,7 @@ ${rawText}`;
       console.log('💬 [CHAT] Saving user message to database...');
       await storage.saveChatMessage({
         userId,
+        tenantId,
         conversationId: activeConversationId,
         role: 'user',
         content: message,
@@ -17067,7 +17125,8 @@ ${rawText}`;
       });
 
       // Get user's selected category for category-aware prompting
-      const selectedCategory = await storage.getSelectedCategory(userId);
+      const tenantIdForCategory = (req.user as any).tenantId;
+      const selectedCategory = await storage.getSelectedCategory(userId, tenantIdForCategory);
       console.log('💬 [CHAT] User selected category:', selectedCategory || 'none');
 
       // Get custom instructions or use default
@@ -17282,7 +17341,7 @@ Use this store information to provide context-aware responses. When helping draf
             console.log('💬 [CHAT] New thread created:', threadId);
 
             // Save thread ID to conversation for future reuse
-            await storage.updateConversation(activeConversationId, { threadId });
+            await storage.updateConversation(activeConversationId, tenantId, { threadId });
             console.log('💬 [CHAT] Thread ID saved to conversation');
           }
 
@@ -17350,6 +17409,7 @@ Use this store information to provide context-aware responses. When helping draf
       console.log('💬 [CHAT] Saving assistant message to database...');
       await storage.saveChatMessage({
         userId,
+        tenantId,
         conversationId: activeConversationId,
         role: 'assistant',
         content: assistantMessage,
@@ -17381,6 +17441,7 @@ Use this store information to provide context-aware responses. When helping draf
       console.log('💬 [HISTORY] Starting GET request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const limit = parseInt(req.query.limit as string) || 50;
       console.log('💬 [HISTORY] Request details:', {
         userId,
@@ -17388,7 +17449,7 @@ Use this store information to provide context-aware responses. When helping draf
       });
 
       console.log('💬 [HISTORY] Fetching chat history from database...');
-      const history = await storage.getChatHistory(userId, limit);
+      const history = await storage.getChatHistory(userId, tenantId, limit);
       console.log('💬 [HISTORY] Chat history retrieved:', {
         messageCount: history.length,
         hasMessages: history.length > 0
@@ -17412,10 +17473,11 @@ Use this store information to provide context-aware responses. When helping draf
       console.log('💬 [CLEAR HISTORY] Starting DELETE request...');
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       console.log('💬 [CLEAR HISTORY] User ID:', userId);
 
       console.log('💬 [CLEAR HISTORY] Clearing chat history from database...');
-      await storage.clearChatHistory(userId);
+      await storage.clearChatHistory(userId, tenantId);
       console.log('💬 [CLEAR HISTORY] Chat history cleared successfully');
 
       console.log('💬 [CLEAR HISTORY] ✅ Sending success response');
@@ -17432,7 +17494,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/conversations', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const conversations = await storage.getConversations(userId);
+      const tenantId = (req.user as any).tenantId;
+      const conversations = await storage.getConversations(userId, tenantId);
       res.json(conversations);
     } catch (error: any) {
       console.error('Error fetching conversations:', error);
@@ -17444,8 +17507,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const conversation = await storage.getConversation(id);
+      const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
@@ -17454,7 +17518,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const messages = await storage.getConversationMessages(id);
+      const messages = await storage.getConversationMessages(id, tenantId);
       res.json({ ...conversation, messages });
     } catch (error: any) {
       console.error('Error fetching conversation:', error);
@@ -17465,7 +17529,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/conversations', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const validation = insertConversationSchema.safeParse({ ...req.body, userId });
+      const tenantId = (req.user as any).tenantId;
+      const validation = insertConversationSchema.safeParse({ ...req.body, userId, tenantId });
 
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
@@ -17483,8 +17548,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const conversation = await storage.getConversation(id);
+      const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
@@ -17493,7 +17559,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const messages = await storage.getConversationMessages(id);
+      const messages = await storage.getConversationMessages(id, tenantId);
       res.json(messages);
     } catch (error: any) {
       console.error('Error fetching conversation messages:', error);
@@ -17505,8 +17571,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const conversation = await storage.getConversation(id);
+      const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
@@ -17520,7 +17587,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: 'Title is required' });
       }
 
-      const updated = await storage.updateConversation(id, { title: title.trim() });
+      const updated = await storage.updateConversation(id, tenantId, { title: title.trim() });
       res.json(updated);
     } catch (error: any) {
       console.error('Error renaming conversation:', error);
@@ -17532,8 +17599,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const conversation = await storage.getConversation(id);
+      const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
@@ -17552,7 +17620,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const updated = await storage.updateConversation(id, validation.data);
+      const updated = await storage.updateConversation(id, tenantId, validation.data);
       res.json(updated);
     } catch (error: any) {
       console.error('Error updating conversation:', error);
@@ -17564,8 +17632,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const conversation = await storage.getConversation(id);
+      const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
@@ -17574,7 +17643,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      await storage.deleteConversation(id);
+      await storage.deleteConversation(id, tenantId);
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error deleting conversation:', error);
@@ -17586,8 +17655,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const conversation = await storage.getConversation(id);
+      const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
@@ -17605,7 +17675,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const updated = await storage.moveConversationToProject(id, validation.data.projectId);
+      const updated = await storage.moveConversationToProject(id, tenantId, validation.data.projectId);
       res.json(updated);
     } catch (error: any) {
       console.error('Error moving conversation:', error);
@@ -17617,8 +17687,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const conversation = await storage.getConversation(id);
+      const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
@@ -17627,7 +17698,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const messages = await storage.getConversationMessages(id);
+      const messages = await storage.getConversationMessages(id, tenantId);
 
       let exportText = `Conversation: ${conversation.title}\n`;
       exportText += `Created: ${conversation.createdAt}\n\n`;
@@ -17660,7 +17731,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/projects', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const projects = await storage.getProjects(userId);
+      const tenantId = (req.user as any).tenantId;
+      const projects = await storage.getProjects(userId, tenantId);
       res.json(projects);
     } catch (error: any) {
       console.error('Error fetching projects:', error);
@@ -17671,7 +17743,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/projects', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const validation = insertProjectSchema.safeParse({ ...req.body, userId });
+      const tenantId = (req.user as any).tenantId;
+      const validation = insertProjectSchema.safeParse({ ...req.body, userId, tenantId });
 
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
@@ -17689,8 +17762,9 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const projects = await storage.getProjects(userId);
+      const projects = await storage.getProjects(userId, tenantId);
       const project = projects.find(p => p.id === id);
 
       if (!project) {
@@ -17707,7 +17781,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const updated = await storage.updateProject(id, validation.data);
+      const updated = await storage.updateProject(id, tenantId, validation.data);
       res.json(updated);
     } catch (error: any) {
       console.error('Error updating project:', error);
@@ -17719,15 +17793,16 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
 
-      const projects = await storage.getProjects(userId);
+      const projects = await storage.getProjects(userId, tenantId);
       const project = projects.find(p => p.id === id);
 
       if (!project) {
         return res.status(404).json({ message: 'Project not found' });
       }
 
-      await storage.deleteProject(id);
+      await storage.deleteProject(id, tenantId);
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error deleting project:', error);
@@ -18577,7 +18652,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/maps/last-category', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const lastCategory = await storage.getLastCategory(userId);
+      const tenantId = (req.user as any).tenantId;
+      const lastCategory = await storage.getLastCategory(userId, tenantId);
       res.json({ category: lastCategory || 'Pets' }); // Default to 'Pets'
     } catch (error: any) {
       console.error('Error fetching last category:', error);
@@ -18589,13 +18665,14 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/maps/last-category', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { category } = req.body;
 
       if (!category) {
         return res.status(400).json({ message: 'Category is required' });
       }
 
-      await storage.setLastCategory(userId, category);
+      await storage.setLastCategory(userId, tenantId, category);
       res.json({ message: 'Last category saved successfully', category });
     } catch (error: any) {
       console.error('Error saving last category:', error);
@@ -18607,7 +18684,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/user/selected-category', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const selectedCategory = await storage.getSelectedCategory(userId);
+      const tenantId = (req.user as any).tenantId;
+      const selectedCategory = await storage.getSelectedCategory(userId, tenantId);
       res.json({ category: selectedCategory });
     } catch (error: any) {
       console.error('Error fetching selected category:', error);
@@ -18619,13 +18697,14 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/user/selected-category', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
       const { category } = req.body;
 
       if (!category) {
         return res.status(400).json({ message: 'Category is required' });
       }
 
-      await storage.setSelectedCategory(userId, category);
+      await storage.setSelectedCategory(userId, tenantId, category);
       res.json({ message: 'Selected category saved successfully', category });
     } catch (error: any) {
       console.error('Error saving selected category:', error);
@@ -20596,7 +20675,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/sequences', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { status } = req.query;
-      const sequences = await storage.listSequences({ status });
+      const sequences = await storage.listSequences(req.user.tenantId, { status });
       res.json(sequences);
     } catch (error: any) {
       console.error('Error listing sequences:', error);
@@ -20607,7 +20686,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Sync recipient counts for all sequences (admin only)
   app.post('/api/sequences/sync-recipient-counts', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const result = await storage.syncSequenceRecipientCounts();
+      const result = await storage.syncSequenceRecipientCounts(req.user.tenantId);
       res.json(result);
     } catch (error: any) {
       console.error('Error syncing recipient counts:', error);
@@ -20618,7 +20697,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Get a specific sequence (admin only)
   app.get('/api/sequences/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const sequence = await storage.getSequence(req.params.id);
+      const sequence = await storage.getSequence(req.params.id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
@@ -20639,7 +20718,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       // CRITICAL: Campaign Brief is REQUIRED for activation
       if (updates.status === 'active') {
-        const existingSequence = await storage.getSequence(id);
+        const existingSequence = await storage.getSequence(id, req.user.tenantId);
         if (!existingSequence) {
           return res.status(404).json({ message: 'Sequence not found' });
         }
@@ -20652,7 +20731,7 @@ Use this store information to provide context-aware responses. When helping draf
         }
       }
 
-      const sequence = await storage.updateSequence(id, updates);
+      const sequence = await storage.updateSequence(id, req.user.tenantId, updates);
       
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
@@ -20674,7 +20753,7 @@ Use this store information to provide context-aware responses. When helping draf
       const { id } = req.params;
       
       // Check if sequence is a system sequence (cannot be deleted)
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
@@ -20689,7 +20768,7 @@ Use this store information to provide context-aware responses. When helping draf
       const { clearSlotsForSequence } = await import('./services/Matrix2/slotDb');
       await clearSlotsForSequence(id);
       
-      const deleted = await storage.deleteSequence(id);
+      const deleted = await storage.deleteSequence(id, req.user.tenantId);
       
       if (!deleted) {
         return res.status(404).json({ message: 'Sequence not found' });
@@ -20709,7 +20788,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Get strategy chat transcript (admin only)
   app.get('/api/sequences/:id/strategy-chat', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const sequence = await storage.getSequence(req.params.id);
+      const sequence = await storage.getSequence(req.params.id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
@@ -20735,7 +20814,7 @@ Use this store information to provide context-aware responses. When helping draf
       }).parse(req.body);
 
       // Check sequence exists
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
@@ -20747,7 +20826,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Get OpenAI settings
-      const openaiSettings = await storage.getOpenaiSettings();
+      const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!openaiSettings || !openaiSettings.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
       }
@@ -20876,7 +20955,7 @@ Based on the conversation, help the user design an effective email sequence that
       const { id } = req.params;
       
       // Check sequence exists and has strategy transcript
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
@@ -20892,7 +20971,7 @@ Based on the conversation, help the user design an effective email sequence that
       }
 
       // Get OpenAI settings
-      const openaiSettings = await storage.getOpenaiSettings();
+      const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!openaiSettings || !openaiSettings.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
       }
@@ -21005,13 +21084,13 @@ ${conversationContext}`;
       }).parse(req.body);
       
       // Check sequence exists
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
       
       // Update sequence with finalized strategy
-      const updated = await storage.updateSequence(id, { finalizedStrategy });
+      const updated = await storage.updateSequence(id, req.user.tenantId, { finalizedStrategy });
       
       res.json({ sequence: updated });
     } catch (error: any) {
@@ -21030,7 +21109,7 @@ ${conversationContext}`;
       const userId = req.user.id;
       
       // Get sequence with strategy
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
@@ -21240,19 +21319,19 @@ ${conversationContext}`;
       }
 
       // Check sequence exists
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
 
       // Update sequence with repeatLastStep setting
-      await storage.updateSequence(id, { repeatLastStep });
+      await storage.updateSequence(id, req.user.tenantId, { repeatLastStep });
 
       // Replace sequence steps
       const createdSteps = await storage.replaceSequenceSteps(id, stepDelays);
       
       // Get updated sequence
-      const updatedSequence = await storage.getSequence(id);
+      const updatedSequence = await storage.getSequence(id, req.user.tenantId);
 
       // Matrix2 Note: Queue recalculation removed - Matrix2 slotAssigner handles scheduling
       console.log(`[StepDelays] Step delays updated - Matrix2 slotAssigner will handle rescheduling`);
@@ -21281,7 +21360,7 @@ ${conversationContext}`;
       }).parse(req.body);
 
       // Check sequence exists
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
@@ -21440,7 +21519,7 @@ ${conversationContext}`;
       }
 
       // Update sequence total count
-      await storage.updateSequenceStats(id, {
+      await storage.updateSequenceStats(id, req.user.tenantId, {
         totalRecipients: (sequence.totalRecipients || 0) + created.length,
       });
 
@@ -21466,7 +21545,7 @@ ${conversationContext}`;
       const { contacts, selectAll, search, statusFilter } = req.body;
 
       // Check sequence exists
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
@@ -21624,7 +21703,7 @@ ${conversationContext}`;
       }
 
       // Update sequence total count
-      await storage.updateSequenceStats(id, {
+      await storage.updateSequenceStats(id, req.user.tenantId, {
         totalRecipients: (sequence.totalRecipients || 0) + created.length,
       });
 
@@ -21811,7 +21890,7 @@ ${conversationContext}`;
         return res.status(400).json({ message: 'Test email address required' });
       }
 
-      const sequence = await storage.getSequence(id);
+      const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }

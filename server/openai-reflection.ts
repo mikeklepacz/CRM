@@ -1,11 +1,17 @@
 import OpenAI from 'openai';
 import { storage } from './storage';
 
-export async function analyzeCallTranscript(conversationId: string): Promise<void> {
+export async function analyzeCallTranscript(conversationId: string, tenantId: string): Promise<void> {
   try {
+    // Fetch the call session and transcripts first to get tenant context
+    const session = await storage.getCallSessionByConversationId(conversationId, tenantId);
+    if (!session) {
+      console.error(`Call session not found for conversation: ${conversationId}`);
+      return;
+    }
 
-    // Get OpenAI API key from storage
-    const openaiSettings = await storage.getOpenaiSettings();
+    // Get OpenAI API key from storage (use session's tenantId for proper isolation)
+    const openaiSettings = await storage.getOpenaiSettings(tenantId);
     if (!openaiSettings || !openaiSettings.apiKey) {
       console.error('No OpenAI API key configured - skipping AI reflection');
       return;
@@ -13,13 +19,6 @@ export async function analyzeCallTranscript(conversationId: string): Promise<voi
 
     const apiKey = openaiSettings.apiKey;
     const openai = new OpenAI({ apiKey });
-
-    // Fetch the call session and transcripts
-    const session = await storage.getCallSessionByConversationId(conversationId);
-    if (!session) {
-      console.error(`Call session not found for conversation: ${conversationId}`);
-      return;
-    }
 
     const transcripts = await storage.getCallTranscripts(conversationId);
     if (transcripts.length === 0) {
