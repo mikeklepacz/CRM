@@ -28,9 +28,16 @@ This project started as a Google Sheets-powered CRM for hemp wick sales teams an
   - API: 9 new /api/super-admin/* endpoints (all protected by requireSuperAdmin)
   - Frontend: super-admin.tsx page with Tenants/Users/Metrics tabs
   - Frontend: "Platform" nav link in header (visible only to super admins)
+- **Phase 7**: Org Admin Features
+  - Schema: tenant_user_invites table for invite workflow (token, status, expiry)
+  - Storage layer: listTenantUsers, updateUserRoleInTenant, getTenantSettings, updateTenantSettings
+  - Storage layer: Full invite lifecycle (createTenantInvite, listTenantInvites, getTenantInviteByToken, cancelTenantInvite, acceptTenantInvite)
+  - API: 10 new /api/org-admin/* endpoints (all protected by requireOrgAdmin)
+  - API: Public invite routes for token validation and acceptance
+  - Frontend: org-admin.tsx page with Team/Settings/Stats tabs
+  - Frontend: "Organization" nav link in header (visible to org admins)
 
 ### Pending Phases:
-- **Phase 7**: Build Org Admin features
 - **Phase 8**: Build Pipelines system (workflow definitions, stages, AI prompts)
 
 ### Architecture Decisions:
