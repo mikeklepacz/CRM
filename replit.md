@@ -43,9 +43,22 @@ This project started as a Google Sheets-powered CRM for hemp wick sales teams an
   - Frontend: Pipelines tab in org-admin.tsx with drag-and-drop stage reordering using @dnd-kit
   - Frontend: AI configuration panel for pipelines (Voice Agent selection, AI Prompt Template)
   - Stage types: action, decision, wait, complete (with terminal flag for end stages)
+- **Phase 9**: Projects System & Multi-Campaign Support
+  - Schema: `tenant_projects` table for business campaigns/cases (distinct from `projects` table for AI conversations)
+  - Schema: `assistant_blueprints` table for reusable AI templates (Aligner, Wick Coach patterns)
+  - Schema: Added `project_id` FK to `elevenlabs_agents`, `kb_files`, `pipelines`, `sequences` tables
+  - Storage layer: Full CRUD for tenant projects (list, create, update, archive/restore, set default, delete)
+  - Storage layer: Full CRUD for assistant blueprints (list, create, update, delete)
+  - API: 10 new /api/org-admin/projects/* endpoints (CRUD, archive, restore, set-default, config)
+  - API: 5 new /api/org-admin/blueprints/* endpoints (CRUD operations)
+  - Service: `server/services/projectConfigResolver.ts` for merging tenant E-Hub defaults with project overrides
+  - Frontend: Projects tab in org-admin.tsx with list, create, archive/restore, set default, delete
+  - Frontend: Status badges with colors (active=green, paused=yellow, archived=gray)
+  - Migration: Created default NMU project ('nmu-default-project'), backfilled 25+ records with project_id
+  - Migration: Created 2 assistant blueprints (Aligner, Wick Coach) for NMU tenant
 
 ### Pending Phases:
-- **Phase 9**: Tenant-specific integrations and custom configurations
+- **Phase 10**: Project switcher in Org Admin UI, scoped KB/Pipeline/Voice pages per project
 
 ### Architecture Decisions:
 - **Row-level multi-tenancy**: Same database, tenant_id separation (not separate databases)

@@ -22,7 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil } from "lucide-react";
+import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -105,6 +105,19 @@ interface PipelineWithStages extends Pipeline {
   stages: PipelineStage[];
 }
 
+interface TenantProject {
+  id: string;
+  tenantId: string;
+  name: string;
+  slug: string;
+  projectType: string;
+  description: string | null;
+  status: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const PIPELINE_TYPES = [
   { value: "sales", label: "Sales" },
   { value: "qualification", label: "Qualification" },
@@ -117,6 +130,13 @@ const STAGE_TYPES = [
   { value: "decision", label: "Decision" },
   { value: "wait", label: "Wait" },
   { value: "complete", label: "Complete" },
+];
+
+const PROJECT_TYPES = [
+  { value: "campaign", label: "Campaign" },
+  { value: "case", label: "Case" },
+  { value: "initiative", label: "Initiative" },
+  { value: "custom", label: "Custom" },
 ];
 
 const generateSlug = (name: string): string => {
@@ -147,6 +167,15 @@ const stageFormSchema = z.object({
 });
 
 type StageFormData = z.infer<typeof stageFormSchema>;
+
+const projectFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Slug must be URL-friendly (lowercase, numbers, hyphens only)"),
+  projectType: z.enum(["campaign", "case", "initiative", "custom"]),
+  description: z.string().optional(),
+});
+
+type ProjectFormData = z.infer<typeof projectFormSchema>;
 
 function SortableStageItem({ stage, onEdit, onDelete, isDeleting }: { 
   stage: PipelineStage; 
@@ -277,6 +306,11 @@ export default function OrgAdmin() {
   const [stageToDelete, setStageToDelete] = useState<PipelineStage | null>(null);
   const [deletingStageId, setDeletingStageId] = useState<string | null>(null);
 
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<TenantProject | null>(null);
+  const [projectToArchive, setProjectToArchive] = useState<TenantProject | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<TenantProject | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -325,6 +359,11 @@ export default function OrgAdmin() {
     enabled: canAccessAdminFeatures(user),
   });
 
+  const { data: projectsData, isLoading: projectsLoading } = useQuery<{ projects: TenantProject[] }>({
+    queryKey: ['/api/org-admin/projects'],
+    enabled: canAccessAdminFeatures(user),
+  });
+
   const inviteForm = useForm<InviteFormData>({
     resolver: zodResolver(inviteFormSchema),
     defaultValues: {
@@ -361,6 +400,16 @@ export default function OrgAdmin() {
       name: "",
       stageType: "action",
       isTerminal: false,
+    },
+  });
+
+  const projectForm = useForm<ProjectFormData>({
+    resolver: zodResolver(projectFormSchema),
+    defaultValues: {
+      name: "",
+      slug: "",
+      projectType: "campaign",
+      description: "",
     },
   });
 
@@ -648,6 +697,134 @@ export default function OrgAdmin() {
     },
   });
 
+  const createProjectMutation = useMutation({
+    mutationFn: async (data: ProjectFormData) => {
+      return await apiRequest("POST", "/api/org-admin/projects", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      setIsProjectDialogOpen(false);
+      setEditingProject(null);
+      projectForm.reset();
+      toast({
+        title: "Success",
+        description: "Project created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create project",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: ProjectFormData }) => {
+      return await apiRequest("PATCH", `/api/org-admin/projects/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      setIsProjectDialogOpen(false);
+      setEditingProject(null);
+      projectForm.reset();
+      toast({
+        title: "Success",
+        description: "Project updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update project",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const archiveProjectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("POST", `/api/org-admin/projects/${id}/archive`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      setProjectToArchive(null);
+      toast({
+        title: "Success",
+        description: "Project archived successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to archive project",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const restoreProjectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("POST", `/api/org-admin/projects/${id}/restore`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      toast({
+        title: "Success",
+        description: "Project restored successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to restore project",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const setDefaultProjectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("POST", `/api/org-admin/projects/${id}/set-default`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      toast({
+        title: "Success",
+        description: "Project set as default",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to set project as default",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/org-admin/projects/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      setProjectToDelete(null);
+      toast({
+        title: "Success",
+        description: "Project deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete project",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleInviteSubmit = (data: InviteFormData) => {
     createInviteMutation.mutate(data);
   };
@@ -753,6 +930,54 @@ export default function OrgAdmin() {
     }
   };
 
+  const handleOpenProjectDialog = (project?: TenantProject) => {
+    if (project) {
+      setEditingProject(project);
+      projectForm.reset({
+        name: project.name,
+        slug: project.slug,
+        projectType: project.projectType as "campaign" | "case" | "initiative" | "custom",
+        description: project.description || "",
+      });
+    } else {
+      setEditingProject(null);
+      projectForm.reset({
+        name: "",
+        slug: "",
+        projectType: "campaign",
+        description: "",
+      });
+    }
+    setIsProjectDialogOpen(true);
+  };
+
+  const handleProjectSubmit = (data: ProjectFormData) => {
+    if (editingProject) {
+      updateProjectMutation.mutate({ id: editingProject.id, data });
+    } else {
+      createProjectMutation.mutate(data);
+    }
+  };
+
+  const getProjectStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "active": return "bg-green-500/10 text-green-600 border-green-500/20";
+      case "paused": return "bg-yellow-500/10 text-yellow-600 border-yellow-500/20";
+      case "archived": return "bg-gray-500/10 text-gray-600 border-gray-500/20";
+      default: return "";
+    }
+  };
+
+  const getProjectTypeBadgeVariant = (type: string) => {
+    switch (type) {
+      case "campaign": return "default";
+      case "case": return "secondary";
+      case "initiative": return "outline";
+      case "custom": return "outline";
+      default: return "outline";
+    }
+  };
+
   if (authLoading) return null;
 
   if (!canAccessAdminFeatures(user)) {
@@ -827,6 +1052,10 @@ export default function OrgAdmin() {
           <TabsTrigger value="pipelines" data-testid="tab-pipelines">
             <Workflow className="mr-2 h-4 w-4" />
             Pipelines
+          </TabsTrigger>
+          <TabsTrigger value="projects" data-testid="tab-projects">
+            <FolderKanban className="mr-2 h-4 w-4" />
+            Projects
           </TabsTrigger>
         </TabsList>
 
@@ -1349,6 +1578,139 @@ export default function OrgAdmin() {
             </Card>
           )}
         </TabsContent>
+
+        <TabsContent value="projects">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+              <div>
+                <CardTitle>Projects</CardTitle>
+                <CardDescription>Manage projects for your organization</CardDescription>
+              </div>
+              <Button onClick={() => handleOpenProjectDialog()} data-testid="button-create-project">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Project
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {projectsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Slug</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Default</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(projectsData?.projects?.length || 0) === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
+                          No projects found. Create your first project to get started.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      projectsData?.projects?.map((project) => (
+                        <TableRow key={project.id} data-testid={`row-project-${project.id}`}>
+                          <TableCell className="font-medium" data-testid={`text-project-name-${project.id}`}>
+                            {project.name}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {project.slug}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getProjectTypeBadgeVariant(project.projectType)} className="no-default-hover-elevate no-default-active-elevate">
+                              {project.projectType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant="outline" 
+                              className={`no-default-hover-elevate no-default-active-elevate ${getProjectStatusBadgeClass(project.status)}`}
+                            >
+                              {project.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {project.isDefault && (
+                              <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate">
+                                Default
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatDate(project.createdAt)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleOpenProjectDialog(project)}
+                                data-testid={`button-edit-project-${project.id}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              {project.status === "archived" ? (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => restoreProjectMutation.mutate(project.id)}
+                                  disabled={restoreProjectMutation.isPending}
+                                  data-testid={`button-restore-project-${project.id}`}
+                                >
+                                  <ArchiveRestore className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setProjectToArchive(project)}
+                                  data-testid={`button-archive-project-${project.id}`}
+                                >
+                                  <Archive className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {!project.isDefault && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setDefaultProjectMutation.mutate(project.id)}
+                                  disabled={setDefaultProjectMutation.isPending}
+                                  data-testid={`button-set-default-project-${project.id}`}
+                                >
+                                  <Star className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setProjectToDelete(project)}
+                                disabled={project.isDefault}
+                                data-testid={`button-delete-project-${project.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
@@ -1817,6 +2179,197 @@ export default function OrgAdmin() {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isProjectDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsProjectDialogOpen(false);
+          setEditingProject(null);
+          projectForm.reset();
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingProject ? "Edit Project" : "Create Project"}</DialogTitle>
+            <DialogDescription>
+              {editingProject 
+                ? "Update the project details below" 
+                : "Configure a new project for your organization"}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...projectForm}>
+            <form onSubmit={projectForm.handleSubmit(handleProjectSubmit)} className="space-y-4">
+              <FormField
+                control={projectForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Q1 Campaign" 
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          if (!editingProject) {
+                            const slug = e.target.value
+                              .toLowerCase()
+                              .replace(/[^a-z0-9]+/g, '-')
+                              .replace(/^-+|-+$/g, '');
+                            projectForm.setValue('slug', slug);
+                          }
+                        }}
+                        data-testid="input-project-name" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={projectForm.control}
+                name="slug"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Slug</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="q1-campaign" 
+                        {...field}
+                        data-testid="input-project-slug" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={projectForm.control}
+                name="projectType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-project-type">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {PROJECT_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={projectForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Describe the project..." 
+                        {...field}
+                        data-testid="input-project-description" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsProjectDialogOpen(false);
+                    setEditingProject(null);
+                    projectForm.reset();
+                  }}
+                  data-testid="button-cancel-project-dialog"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createProjectMutation.isPending || updateProjectMutation.isPending}
+                  data-testid="button-submit-project"
+                >
+                  {(createProjectMutation.isPending || updateProjectMutation.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {editingProject ? "Save Changes" : "Create Project"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!projectToArchive} onOpenChange={(open) => !open && setProjectToArchive(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to archive "{projectToArchive?.name}"? Archived projects can be restored later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setProjectToArchive(null)}
+              data-testid="button-cancel-archive-project"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => projectToArchive && archiveProjectMutation.mutate(projectToArchive.id)}
+              disabled={archiveProjectMutation.isPending}
+              data-testid="button-confirm-archive-project"
+            >
+              {archiveProjectMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Archive Project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{projectToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setProjectToDelete(null)}
+              data-testid="button-cancel-delete-project"
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={() => projectToDelete && deleteProjectMutation.mutate(projectToDelete.id)}
+              disabled={deleteProjectMutation.isPending}
+              data-testid="button-confirm-delete-project"
+            >
+              {deleteProjectMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete Project
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
