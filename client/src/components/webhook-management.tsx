@@ -49,7 +49,7 @@ export function WebhookManagement() {
 
   const bulkRegisterMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/admin/webhooks/bulk-register', 'POST', {});
+      return await apiRequest('POST', '/api/admin/webhooks/bulk-register', {});
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/webhooks'] });
@@ -70,7 +70,7 @@ export function WebhookManagement() {
 
   const registerMutation = useMutation({
     mutationFn: async (userId: string) => {
-      return await apiRequest(`/api/admin/webhooks/${userId}/register`, 'POST', {});
+      return await apiRequest('POST', `/api/admin/webhooks/${userId}/register`, {});
     },
     onSuccess: (data: any, userId: string) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/webhooks'] });
