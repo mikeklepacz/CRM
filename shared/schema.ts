@@ -1937,3 +1937,210 @@ export const insertIgnoredHolidaySchema = createInsertSchema(ignoredHolidays).om
 
 export type InsertIgnoredHoliday = z.infer<typeof insertIgnoredHolidaySchema>;
 export type IgnoredHoliday = typeof ignoredHolidays.$inferSelect;
+
+// ============================================================================
+// MULTI-TENANT FOUNDATION TABLES
+// ============================================================================
+
+// Tenants - Core registry of organizations
+export const tenants = pgTable("tenants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(), // URL-friendly identifier (e.g., "nmu", "tire-lawsuit")
+  ownerId: varchar("owner_id"), // Org admin user ID (nullable initially, set after user creation)
+  status: varchar("status", { length: 50 }).notNull().default('active'), // 'active', 'suspended', 'trial', 'inactive'
+  settings: jsonb("settings").$type<{
+    primaryColor?: string;
+    logoUrl?: string;
+    companyName?: string; // For white-label branding
+    enabledModules?: string[]; // ['voice', 'ehub', 'crm', 'kb']
+    timezone?: string; // Default timezone for tenant
+    [key: string]: any;
+  }>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_tenants_slug").on(table.slug),
+  index("idx_tenants_status").on(table.status),
+]);
+
+export const insertTenantSchema = createInsertSchema(tenants).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+export type Tenant = typeof tenants.$inferSelect;
+
+// User Tenants - Maps users to tenants (many-to-many, allows super admin to access all)
+export const userTenants = pgTable("user_tenants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  roleInTenant: varchar("role_in_tenant", { length: 50 }).notNull().default('agent'), // 'org_admin', 'agent'
+  isDefault: boolean("is_default").default(false), // Which tenant to load by default for this user
+  joinedAt: timestamp("joined_at").defaultNow(),
+}, (table) => [
+  index("idx_user_tenants_user").on(table.userId),
+  index("idx_user_tenants_tenant").on(table.tenantId),
+  uniqueIndex("idx_user_tenants_unique").on(table.userId, table.tenantId),
+]);
+
+export const insertUserTenantSchema = createInsertSchema(userTenants).omit({
+  id: true,
+  joinedAt: true,
+});
+
+export type InsertUserTenant = z.infer<typeof insertUserTenantSchema>;
+export type UserTenant = typeof userTenants.$inferSelect;
+
+// Tenant Integrations - Per-tenant API keys and integration settings
+export const tenantIntegrations = pgTable("tenant_integrations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  integrationType: varchar("integration_type", { length: 50 }).notNull(), // 'openai', 'elevenlabs', 'twilio', 'google_sheets', 'woocommerce'
+  
+  // Encrypted credentials (stored securely)
+  apiKey: text("api_key"),
+  apiSecret: text("api_secret"),
+  
+  // OAuth tokens (for Google, etc.)
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  tokenExpiry: bigint("token_expiry", { mode: "number" }),
+  
+  // Integration-specific settings
+  settings: jsonb("settings").$type<{
+    // OpenAI
+    assistantId?: string;
+    vectorStoreId?: string;
+    model?: string;
+    // ElevenLabs
+    agentId?: string;
+    voiceId?: string;
+    // Twilio
+    accountSid?: string;
+    phoneNumber?: string;
+    // Google Sheets
+    spreadsheetId?: string;
+    sheetName?: string;
+    connectedEmail?: string;
+    // WooCommerce
+    storeUrl?: string;
+    [key: string]: any;
+  }>().default(sql`'{}'::jsonb`),
+  
+  isActive: boolean("is_active").default(true),
+  connectedBy: varchar("connected_by").references(() => users.id),
+  connectedAt: timestamp("connected_at"),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_tenant_integrations_tenant").on(table.tenantId),
+  index("idx_tenant_integrations_type").on(table.tenantId, table.integrationType),
+  uniqueIndex("idx_tenant_integrations_unique").on(table.tenantId, table.integrationType),
+]);
+
+export const insertTenantIntegrationSchema = createInsertSchema(tenantIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTenantIntegration = z.infer<typeof insertTenantIntegrationSchema>;
+export type TenantIntegration = typeof tenantIntegrations.$inferSelect;
+
+// Pipelines - Workflow definitions per tenant (sales, qualification, custom)
+export const pipelines = pgTable("pipelines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: varchar("name", { length: 255 }).notNull(), // "Sales Outreach", "Plaintiff Qualification"
+  slug: varchar("slug", { length: 100 }).notNull(), // URL-friendly within tenant
+  pipelineType: varchar("pipeline_type", { length: 50 }).notNull().default('sales'), // 'sales', 'qualification', 'support', 'custom'
+  description: text("description"),
+  
+  // AI configuration for this pipeline
+  aiPromptTemplate: text("ai_prompt_template"), // Voice AI script template
+  aiAssistantId: varchar("ai_assistant_id"), // OpenAI assistant for this pipeline
+  voiceAgentId: varchar("voice_agent_id"), // ElevenLabs agent for this pipeline
+  
+  // Google Sheet configuration for this pipeline
+  googleSheetProfile: jsonb("google_sheet_profile").$type<{
+    spreadsheetId?: string;
+    sheetName?: string;
+    requiredColumns?: string[]; // Columns this pipeline expects
+    columnMappings?: Record<string, string>; // Map standard fields to sheet columns
+    [key: string]: any;
+  }>(),
+  
+  isDefault: boolean("is_default").default(false), // Default pipeline for new leads in this tenant
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_pipelines_tenant").on(table.tenantId),
+  index("idx_pipelines_type").on(table.tenantId, table.pipelineType),
+  uniqueIndex("idx_pipelines_tenant_slug").on(table.tenantId, table.slug),
+]);
+
+export const insertPipelineSchema = createInsertSchema(pipelines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPipeline = z.infer<typeof insertPipelineSchema>;
+export type Pipeline = typeof pipelines.$inferSelect;
+
+// Pipeline Stages - Steps within each pipeline
+export const pipelineStages = pgTable("pipeline_stages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pipelineId: varchar("pipeline_id").notNull().references(() => pipelines.id, { onDelete: 'cascade' }),
+  name: varchar("name", { length: 255 }).notNull(), // "Initial Call", "Qualification Questions", "Follow-up"
+  stageOrder: integer("stage_order").notNull(), // 1, 2, 3...
+  stageType: varchar("stage_type", { length: 50 }).notNull().default('action'), // 'action', 'decision', 'wait', 'complete'
+  
+  // Stage-specific configuration
+  config: jsonb("config").$type<{
+    // For qualification stages
+    questions?: Array<{
+      id: string;
+      question: string;
+      answerType: 'text' | 'yes_no' | 'multiple_choice' | 'number';
+      options?: string[];
+      required?: boolean;
+    }>;
+    // For decision stages
+    conditions?: Array<{
+      field: string;
+      operator: 'equals' | 'contains' | 'greater_than' | 'less_than';
+      value: any;
+      nextStage?: string; // Stage ID to go to if condition met
+    }>;
+    // For wait stages
+    waitDays?: number;
+    // For action stages
+    actionType?: 'call' | 'email' | 'sms' | 'task';
+    aiPrompt?: string;
+    [key: string]: any;
+  }>().default(sql`'{}'::jsonb`),
+  
+  isTerminal: boolean("is_terminal").default(false), // If true, reaching this stage ends the pipeline
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_pipeline_stages_pipeline").on(table.pipelineId),
+  index("idx_pipeline_stages_order").on(table.pipelineId, table.stageOrder),
+]);
+
+export const insertPipelineStageSchema = createInsertSchema(pipelineStages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPipelineStage = z.infer<typeof insertPipelineStageSchema>;
+export type PipelineStage = typeof pipelineStages.$inferSelect;
