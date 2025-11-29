@@ -2060,6 +2060,35 @@ export const insertUserTenantSchema = createInsertSchema(userTenants).omit({
 export type InsertUserTenant = z.infer<typeof insertUserTenantSchema>;
 export type UserTenant = typeof userTenants.$inferSelect;
 
+// Tenant User Invites - Pending invitations for users to join a tenant
+export const tenantUserInvites = pgTable("tenant_user_invites", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  email: varchar("email", { length: 255 }).notNull(),
+  role: varchar("role", { length: 50 }).notNull().default('agent'), // 'org_admin' or 'agent'
+  inviteToken: varchar("invite_token", { length: 64 }).notNull().unique(),
+  status: varchar("status", { length: 20 }).notNull().default('pending'), // 'pending', 'accepted', 'expired', 'cancelled'
+  invitedBy: varchar("invited_by").notNull().references(() => users.id),
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_tenant_user_invites_tenant").on(table.tenantId),
+  index("idx_tenant_user_invites_email").on(table.email),
+  index("idx_tenant_user_invites_token").on(table.inviteToken),
+]);
+
+export const insertTenantUserInviteSchema = createInsertSchema(tenantUserInvites).omit({
+  id: true,
+  inviteToken: true,
+  status: true,
+  acceptedAt: true,
+  createdAt: true,
+});
+
+export type InsertTenantUserInvite = z.infer<typeof insertTenantUserInviteSchema>;
+export type TenantUserInvite = typeof tenantUserInvites.$inferSelect;
+
 // Tenant Integrations - Per-tenant API keys and integration settings
 export const tenantIntegrations = pgTable("tenant_integrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
