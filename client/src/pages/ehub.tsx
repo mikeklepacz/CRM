@@ -1921,7 +1921,10 @@ export default function EHub() {
 
   // Create sequence mutation
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('POST', '/api/sequences', data),
+    mutationFn: (data: any) => apiRequest('POST', '/api/sequences', {
+      ...data,
+      projectId: currentProject?.id,
+    }),
     onSuccess: () => {
       toast({
         title: "Sequence Created",

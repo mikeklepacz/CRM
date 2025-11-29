@@ -569,7 +569,10 @@ export default function OrgAdmin() {
 
   const createPipelineMutation = useMutation({
     mutationFn: async (data: PipelineFormData) => {
-      return await apiRequest("POST", "/api/org-admin/pipelines", data);
+      return await apiRequest("POST", "/api/org-admin/pipelines", {
+        ...data,
+        projectId: currentProject?.id,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/org-admin/pipelines'] });

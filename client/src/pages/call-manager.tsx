@@ -263,6 +263,9 @@ function KBLibraryTab() {
         console.log(`[KB Upload] Adding file ${idx + 1}:`, file.name, file.size, 'bytes');
         formData.append('files', file);
       });
+      if (currentProject?.id) {
+        formData.append('projectId', currentProject.id);
+      }
 
       console.log('[KB Upload] Sending request...');
       const response = await fetch('/api/kb/upload-batch', {
