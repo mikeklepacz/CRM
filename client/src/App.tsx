@@ -30,6 +30,7 @@ import FollowUpCenter from "@/pages/follow-up-center";
 import EHub from "@/pages/ehub";
 import ProductMockup from "@/pages/product-mockup";
 import SuperAdmin from "@/pages/super-admin";
+import OrgAdmin from "@/pages/org-admin";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -74,6 +75,7 @@ function Router() {
             <Switch>
               <Route path="/admin" component={Admin} />
               <Route path="/super-admin" component={SuperAdmin} />
+              <Route path="/org-admin" component={OrgAdmin} />
               <Route path="/settings" component={Settings} />
               <Route path="/clients" component={ClientDashboard} />
               <Route path="/documents" component={Documents} />
