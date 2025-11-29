@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ChatPanelProvider } from "@/hooks/useChatPanel";
 import { AgentFilterProvider } from "@/contexts/agent-filter-context";
+import { ProjectProvider } from "@/contexts/project-context";
 import { EventStreamProvider } from "@/lib/eventStream";
 import { useAuth } from "@/hooks/useAuth";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
@@ -67,12 +68,13 @@ function Router() {
 
   return (
     <EventStreamProvider enabled={isAuthenticated}>
-      <ChatPanelProvider>
-        <TimezoneDetector userTimezone={userPreferences?.timezone} isLoading={prefsLoading} />
-        <div className="h-screen flex flex-col">
-          <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
-          <main className="flex-1 overflow-auto">
-            <Switch>
+      <ProjectProvider>
+        <ChatPanelProvider>
+          <TimezoneDetector userTimezone={userPreferences?.timezone} isLoading={prefsLoading} />
+          <div className="h-screen flex flex-col">
+            <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
+            <main className="flex-1 overflow-auto">
+              <Switch>
               <Route path="/admin" component={Admin} />
               <Route path="/super-admin" component={SuperAdmin} />
               <Route path="/org-admin" component={OrgAdmin} />
@@ -97,10 +99,11 @@ function Router() {
               <Route path="/store/:storeId" component={StoreDetails} />
               <Route path="/" component={Dashboard} />
               <Route component={NotFound} />
-            </Switch>
-          </main>
-        </div>
-      </ChatPanelProvider>
+              </Switch>
+            </main>
+          </div>
+        </ChatPanelProvider>
+      </ProjectProvider>
     </EventStreamProvider>
   );
 }

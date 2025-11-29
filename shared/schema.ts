@@ -2056,6 +2056,7 @@ export const tenantProjects = pgTable("tenant_projects", {
   projectType: varchar("project_type", { length: 50 }).notNull().default('campaign'), // 'campaign', 'case', 'initiative', 'custom'
   status: varchar("status", { length: 50 }).notNull().default('active'), // 'active', 'paused', 'archived'
   description: text("description"),
+  accentColor: varchar("accent_color", { length: 7 }).default('#6366f1'), // Hex color for header theming (Chrome profiles style)
   
   // Project-specific settings that override tenant defaults
   settings: jsonb("settings").$type<{

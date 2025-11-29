@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2 } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -20,6 +20,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { TicketDialog } from "./ticket-dialog";
 import { WebhookStatusBadge } from "./WebhookStatusBadge";
+import { useOptionalProject } from "@/contexts/project-context";
 
 type VisibleModules = {
   admin?: boolean;
@@ -46,6 +47,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
   const [, setLocation] = useLocation();
   const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const projectContext = useOptionalProject();
 
   // Get unread ticket count (admin only)
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -85,9 +87,83 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
     ? `${user.firstName} ${user.lastName}` 
     : user.email || 'User';
 
+  const currentProject = projectContext?.currentProject;
+  const projects = projectContext?.projects || [];
+  const accentColor = currentProject?.accentColor || '#6366f1';
+
+  const getContrastColor = (hexColor: string) => {
+    const r = parseInt(hexColor.slice(1, 3), 16);
+    const g = parseInt(hexColor.slice(3, 5), 16);
+    const b = parseInt(hexColor.slice(5, 7), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.5 ? '#000000' : '#ffffff';
+  };
+
+  const textColor = getContrastColor(accentColor);
+
   return (
-    <header className="border-b bg-card sticky top-0 z-50">
-      <div className="px-2 py-2 md:px-3 flex items-center gap-2">
+    <header className="sticky top-0 z-50">
+      {currentProject && (
+        <div 
+          className="px-2 py-1.5 md:px-3 flex items-center justify-between gap-2"
+          style={{ backgroundColor: accentColor, color: textColor }}
+          data-testid="project-bar"
+        >
+          <div className="flex items-center gap-2">
+            <FolderKanban className="h-4 w-4" style={{ color: textColor }} />
+            <span className="text-sm font-semibold" data-testid="current-project-name">
+              {currentProject.name}
+            </span>
+            {currentProject.status !== 'active' && (
+              <Badge 
+                variant="outline" 
+                className="text-xs border-current"
+                style={{ color: textColor, borderColor: textColor }}
+              >
+                {currentProject.status}
+              </Badge>
+            )}
+          </div>
+          {projects.length > 1 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-7 px-2 hover:bg-white/20"
+                  style={{ color: textColor }}
+                  data-testid="button-switch-project"
+                >
+                  Switch
+                  <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>Switch Project</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {projects.filter(p => p.status === 'active').map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => projectContext?.switchProject(project.id)}
+                    className="flex items-center gap-2"
+                    data-testid={`project-option-${project.id}`}
+                  >
+                    <div 
+                      className="w-3 h-3 rounded-full flex-shrink-0" 
+                      style={{ backgroundColor: project.accentColor || '#6366f1' }}
+                    />
+                    <span className="flex-1 truncate">{project.name}</span>
+                    {project.id === currentProject.id && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
+      <div className="border-b bg-card px-2 py-2 md:px-3 flex items-center gap-2">
         <h1 className="text-xs md:text-sm font-semibold text-foreground whitespace-nowrap">NMU CRM</h1>
         
         {/* Full Navigation - Shows on md+, wraps naturally */}
