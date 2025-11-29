@@ -44,6 +44,7 @@ import {
   insertSequenceRecipientSchema,
   insertSequenceStepSchema,
   insertNoSendDateSchema,
+  insertIgnoredHolidaySchema,
 } from "@shared/schema";
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
@@ -22201,6 +22202,73 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error fetching upcoming blocked days:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch upcoming blocked days' });
+    }
+  });
+
+  // ============================================================================
+  // Holiday Toggle API (Admin can enable/disable holidays for outreach)
+  // ============================================================================
+
+  // Get all holidays with their toggle status
+  app.get('/api/holidays/toggles', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { getAllHolidaysWithStatus } = await import('./services/holidayCalendar');
+      const holidays = await getAllHolidaysWithStatus();
+      res.json(holidays);
+    } catch (error: any) {
+      console.error('Error fetching holiday toggles:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch holiday toggles' });
+    }
+  });
+
+  // Toggle a holiday on/off
+  app.post('/api/holidays/toggle', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.user?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const { holidayId, holidayName, ignore } = req.body;
+      if (!holidayId || !holidayName || typeof ignore !== 'boolean') {
+        return res.status(400).json({ message: 'Missing required fields: holidayId, holidayName, ignore' });
+      }
+
+      const { clearIgnoredHolidaysCache } = await import('./services/holidayCalendar');
+
+      if (ignore) {
+        // Add to ignored list (turn OFF blocking)
+        const existing = await storage.getIgnoredHolidayByHolidayId(holidayId);
+        if (!existing) {
+          await storage.createIgnoredHoliday({
+            holidayId,
+            holidayName,
+            ignoredBy: userId,
+          });
+        }
+      } else {
+        // Remove from ignored list (turn ON blocking)
+        await storage.deleteIgnoredHoliday(holidayId);
+      }
+
+      // Clear cache so changes take effect immediately
+      clearIgnoredHolidaysCache();
+
+      res.json({ success: true, holidayId, ignored: ignore });
+    } catch (error: any) {
+      console.error('Error toggling holiday:', error);
+      res.status(500).json({ message: error.message || 'Failed to toggle holiday' });
+    }
+  });
+
+  // Get list of currently ignored holidays
+  app.get('/api/holidays/ignored', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const ignored = await storage.getIgnoredHolidays();
+      res.json(ignored);
+    } catch (error: any) {
+      console.error('Error fetching ignored holidays:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch ignored holidays' });
     }
   });
 
