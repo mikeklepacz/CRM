@@ -210,6 +210,13 @@ export interface IStorage {
   updateTenant(tenantId: string, updates: Partial<InsertTenant>): Promise<Tenant>;
   getTenantStats(tenantId: string): Promise<{ userCount: number; clientCount: number; callCount: number }>;
 
+  // Cross-tenant user operations (Super Admin)
+  listUsersAcrossTenants(): Promise<Array<User & { tenantMemberships: Array<{ tenantId: string; tenantName: string; roleInTenant: string }> }>>;
+  getUserTenantMemberships(userId: string): Promise<Array<{ tenantId: string; tenantName: string; tenantSlug: string; roleInTenant: string; isDefault: boolean }>>;
+  addUserToTenant(userId: string, tenantId: string, roleInTenant: string, isDefault?: boolean): Promise<void>;
+  removeUserFromTenant(userId: string, tenantId: string): Promise<void>;
+  getPlatformMetrics(): Promise<{ totalTenants: number; totalUsers: number; totalClients: number; activeTenants: number }>;
+
   // System integrations operations
   getSystemIntegration(provider: string): Promise<SystemIntegration | undefined>;
   updateSystemIntegration(provider: string, updates: Partial<InsertSystemIntegration>): Promise<SystemIntegration>;
@@ -828,6 +835,105 @@ export class DatabaseStorage implements IStorage {
       userCount: userCountResult?.count || 0,
       clientCount: clientCountResult?.count || 0,
       callCount: callCountResult?.count || 0,
+    };
+  }
+
+  async listUsersAcrossTenants(): Promise<Array<User & { tenantMemberships: Array<{ tenantId: string; tenantName: string; roleInTenant: string }> }>> {
+    const allUsers = await db
+      .select()
+      .from(users)
+      .orderBy(desc(users.createdAt));
+
+    const memberships = await db
+      .select({
+        userId: userTenants.userId,
+        tenantId: userTenants.tenantId,
+        tenantName: tenants.name,
+        roleInTenant: userTenants.roleInTenant,
+      })
+      .from(userTenants)
+      .innerJoin(tenants, eq(userTenants.tenantId, tenants.id));
+
+    const membershipsByUser = new Map<string, Array<{ tenantId: string; tenantName: string; roleInTenant: string }>>();
+    for (const m of memberships) {
+      if (!membershipsByUser.has(m.userId)) {
+        membershipsByUser.set(m.userId, []);
+      }
+      membershipsByUser.get(m.userId)!.push({
+        tenantId: m.tenantId,
+        tenantName: m.tenantName,
+        roleInTenant: m.roleInTenant,
+      });
+    }
+
+    return allUsers.map(user => ({
+      ...user,
+      tenantMemberships: membershipsByUser.get(user.id) || [],
+    }));
+  }
+
+  async getUserTenantMemberships(userId: string): Promise<Array<{ tenantId: string; tenantName: string; tenantSlug: string; roleInTenant: string; isDefault: boolean }>> {
+    const memberships = await db
+      .select({
+        tenantId: userTenants.tenantId,
+        tenantName: tenants.name,
+        tenantSlug: tenants.slug,
+        roleInTenant: userTenants.roleInTenant,
+        isDefault: userTenants.isDefault,
+      })
+      .from(userTenants)
+      .innerJoin(tenants, eq(userTenants.tenantId, tenants.id))
+      .where(eq(userTenants.userId, userId));
+
+    return memberships.map(m => ({
+      tenantId: m.tenantId,
+      tenantName: m.tenantName,
+      tenantSlug: m.tenantSlug,
+      roleInTenant: m.roleInTenant,
+      isDefault: m.isDefault ?? false,
+    }));
+  }
+
+  async addUserToTenant(userId: string, tenantId: string, roleInTenant: string, isDefault?: boolean): Promise<void> {
+    await db
+      .insert(userTenants)
+      .values({
+        userId,
+        tenantId,
+        roleInTenant,
+        isDefault: isDefault ?? false,
+      });
+  }
+
+  async removeUserFromTenant(userId: string, tenantId: string): Promise<void> {
+    await db
+      .delete(userTenants)
+      .where(and(eq(userTenants.userId, userId), eq(userTenants.tenantId, tenantId)));
+  }
+
+  async getPlatformMetrics(): Promise<{ totalTenants: number; totalUsers: number; totalClients: number; activeTenants: number }> {
+    const [totalTenantsResult] = await db
+      .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+      .from(tenants);
+
+    const [totalUsersResult] = await db
+      .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+      .from(users);
+
+    const [totalClientsResult] = await db
+      .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+      .from(clients);
+
+    const [activeTenantsResult] = await db
+      .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+      .from(tenants)
+      .where(eq(tenants.status, 'active'));
+
+    return {
+      totalTenants: totalTenantsResult?.count || 0,
+      totalUsers: totalUsersResult?.count || 0,
+      totalClients: totalClientsResult?.count || 0,
+      activeTenants: activeTenantsResult?.count || 0,
     };
   }
 
