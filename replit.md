@@ -36,9 +36,16 @@ This project started as a Google Sheets-powered CRM for hemp wick sales teams an
   - API: Public invite routes for token validation and acceptance
   - Frontend: org-admin.tsx page with Team/Settings/Stats tabs
   - Frontend: "Organization" nav link in header (visible to org admins)
+- **Phase 8**: Pipelines System
+  - Storage layer: CRUD operations for pipelines (listPipelines, getPipelineById, getPipelineBySlug, createPipeline, updatePipeline, deletePipeline)
+  - Storage layer: CRUD operations for pipeline stages with reordering (listPipelineStages, createPipelineStage, updatePipelineStage, deletePipelineStage, reorderPipelineStages)
+  - API: 10 new /api/org-admin/pipelines/* endpoints (all protected by requireOrgAdmin)
+  - Frontend: Pipelines tab in org-admin.tsx with drag-and-drop stage reordering using @dnd-kit
+  - Frontend: AI configuration panel for pipelines (Voice Agent selection, AI Prompt Template)
+  - Stage types: action, decision, wait, complete (with terminal flag for end stages)
 
 ### Pending Phases:
-- **Phase 8**: Build Pipelines system (workflow definitions, stages, AI prompts)
+- **Phase 9**: Tenant-specific integrations and custom configurations
 
 ### Architecture Decisions:
 - **Row-level multi-tenancy**: Same database, tenant_id separation (not separate databases)
