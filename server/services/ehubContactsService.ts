@@ -1,4 +1,4 @@
-import { eq, sql, inArray } from 'drizzle-orm';
+import { eq, sql, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
 import * as googleSheets from '../googleSheets';
 import { storage } from '../storage';
@@ -6,8 +6,11 @@ import { sequenceRecipients, sequences } from '../../shared/schema';
 import type { EhubContact, AllContactsResponse } from '../../shared/schema';
 import { detectTimezone } from './timezoneHours';
 
-let cachedContacts: EhubContact[] | null = null;
-let cacheTimestamp: number | null = null;
+interface TenantCache {
+  contacts: EhubContact[];
+  timestamp: number;
+}
+const tenantCacheMap = new Map<string, TenantCache>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Commission Tracker status classification patterns
@@ -72,14 +75,15 @@ export async function getAllContacts(options: {
   } = options;
 
   const now = Date.now();
-  const cacheValid = cachedContacts && cacheTimestamp && (now - cacheTimestamp < CACHE_TTL_MS);
+  const tenantCache = tenantCacheMap.get(tenantId);
+  const cacheValid = tenantCache && (now - tenantCache.timestamp < CACHE_TTL_MS);
 
   if (!cacheValid) {
-    cachedContacts = await fetchAndEnrichContacts(tenantId);
-    cacheTimestamp = now;
+    const contacts = await fetchAndEnrichContacts(tenantId);
+    tenantCacheMap.set(tenantId, { contacts, timestamp: now });
   }
 
-  let filteredContacts = cachedContacts || [];
+  let filteredContacts = tenantCacheMap.get(tenantId)?.contacts || [];
 
   if (search) {
     const searchLower = search.toLowerCase();
@@ -259,7 +263,10 @@ async function fetchAndEnrichContacts(tenantId: string): Promise<EhubContact[]> 
       .from(sequenceRecipients)
       .innerJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
       .where(
-        sql`LOWER(${sequenceRecipients.email}) = ANY(${sql.raw(`ARRAY[${uniqueEmails.map(e => `'${e.replace(/'/g, "''")}'`).join(',')}]`)})`
+        and(
+          eq(sequences.tenantId, tenantId),
+          sql`LOWER(${sequenceRecipients.email}) = ANY(${sql.raw(`ARRAY[${uniqueEmails.map(e => `'${e.replace(/'/g, "''")}'`).join(',')}]`)})`
+        )
       );
   }
 
@@ -335,7 +342,10 @@ async function fetchAndEnrichContacts(tenantId: string): Promise<EhubContact[]> 
   return enrichedContacts;
 }
 
-export function invalidateCache() {
-  cachedContacts = null;
-  cacheTimestamp = null;
+export function invalidateCache(tenantId?: string) {
+  if (tenantId) {
+    tenantCacheMap.delete(tenantId);
+  } else {
+    tenantCacheMap.clear();
+  }
 }
