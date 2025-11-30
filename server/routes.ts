@@ -806,7 +806,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      res.json(user);
+      // Include tenant context from session (set during login via passport.deserializeUser)
+      // This is needed for canAccessAdminFeatures to work on the frontend
+      res.json({
+        ...user,
+        tenantId: req.user.tenantId,
+        roleInTenant: req.user.roleInTenant,
+      });
     } catch (error: any) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: error.message || "Failed to fetch user" });

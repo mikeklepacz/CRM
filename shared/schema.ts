@@ -1726,6 +1726,11 @@ export const insertVoiceProxySessionSchema = createInsertSchema(voiceProxySessio
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+// Extended user type that includes tenant context from session
+export type AuthUser = User & {
+  tenantId?: string;
+  roleInTenant?: 'org_admin' | 'agent';
+};
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Note = typeof notes.$inferSelect;

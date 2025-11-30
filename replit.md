@@ -17,8 +17,15 @@ The application features a client dashboard unifying data, transitioning from a 
 
 **Technical Implementations:**
 - **Multi-tenancy**: Row-level separation with `tenant_id` on all business tables, enforced via composite indexes and API filtering.
-- **Role Hierarchy**: `super_admin` (platform-wide), `org_admin` (tenant management), `agent` (standard user).
-- **Authentication**: Replit Auth with session-based control and `req.user.tenantId` context.
+- **Role Hierarchy**: Three roles in order of access:
+  - `Super Admin` (isSuperAdmin flag): Platform-wide access, manages all tenants via Platform Admin page
+  - `Admin` (roleInTenant='org_admin' in DB): Tenant administrator, has access to Admin page, Call Manager, E-Hub, Organization settings. Has all Agent capabilities plus admin features.
+  - `Agent` (roleInTenant='agent' in DB): Standard user, can make sales calls, use CRM, but no admin access
+  - Note: The database stores 'org_admin' but UI displays 'Admin'. The `canAccessAdminFeatures()` function grants admin access.
+- **Module Access**: Two-layer system:
+  - `allowedModules` (tenant level, Super Admin controls): What modules a tenant CAN use. `null/undefined` = all allowed, `[]` = none allowed.
+  - `visibleModules` (user preference): Personal choice to show/hide modules in navigation.
+- **Authentication**: Replit Auth with session-based control and `req.user.tenantId` context. The `/api/auth/user` endpoint returns user data plus `tenantId` and `roleInTenant` from session.
 - **Google Sheets Integration**: System-wide OAuth for read/write, per-user Google accounts for personalized features (Gmail/Calendar).
 - **Inline Editing**: Dashboard data modification syncing to Google Sheets; role-based read-only access.
 - **Row-Level Security**: Agents see only unclaimed or their own claimed stores.

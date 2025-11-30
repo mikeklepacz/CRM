@@ -1637,7 +1637,7 @@ export default function SuperAdmin() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="org_admin">Org Admin</SelectItem>
+                        <SelectItem value="org_admin">Admin</SelectItem>
                         <SelectItem value="agent">Agent</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1980,7 +1980,7 @@ export default function SuperAdmin() {
                               )}
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="org_admin">Org Admin</SelectItem>
+                              <SelectItem value="org_admin">Admin</SelectItem>
                               <SelectItem value="agent">Agent</SelectItem>
                             </SelectContent>
                           </Select>
@@ -2068,7 +2068,7 @@ export default function SuperAdmin() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="org_admin">Org Admin</SelectItem>
+                              <SelectItem value="org_admin">Admin</SelectItem>
                               <SelectItem value="agent">Agent</SelectItem>
                             </SelectContent>
                           </Select>
