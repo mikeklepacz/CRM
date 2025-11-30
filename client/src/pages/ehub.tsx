@@ -1530,8 +1530,10 @@ export default function EHub() {
   // Strategy chat state
   const [strategyMessage, setStrategyMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollBottomRef = useRef<HTMLDivElement>(null);
   const [stepDelays, setStepDelays] = useState<number[]>([]);
   const [repeatLastStep, setRepeatLastStep] = useState<boolean>(false);
+  const [sequenceKeywords, setSequenceKeywords] = useState<string>("");
 
   // All Contacts tab state
   const [page, setPage] = useState(1);
@@ -1779,6 +1781,27 @@ export default function EHub() {
     },
   });
 
+  // Save sequence keywords mutation
+  const saveKeywordsMutation = useMutation({
+    mutationFn: async (keywords: string) => {
+      return await apiRequest("PUT", `/api/sequences/${selectedSequenceId}/keywords`, { keywords });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      toast({
+        title: "Success",
+        description: "Keywords saved successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save keywords",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Update sequence status mutation
   const updateSequenceStatusMutation = useMutation({
     mutationFn: async ({ sequenceId, status }: { sequenceId: string; status: string }) => {
@@ -1851,8 +1874,8 @@ export default function EHub() {
 
   // Auto-scroll to bottom when transcript changes
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollBottomRef.current) {
+      scrollBottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [strategyTranscript]);
 
@@ -1873,9 +1896,12 @@ export default function EHub() {
         setStepDelays([]);
         setRepeatLastStep(false);
       }
+      // Load keywords for this sequence
+      setSequenceKeywords((selectedSeq as any)?.keywords || "");
     } else {
       setStepDelays([]);
       setRepeatLastStep(false);
+      setSequenceKeywords("");
     }
   }, [selectedSequenceId, sequences]);
 
@@ -3256,6 +3282,7 @@ export default function EHub() {
                               </div>
                             </div>
                           )}
+                          <div ref={scrollBottomRef} />
                         </div>
                       ) : (
                         <div className="flex items-center justify-center h-full">
@@ -3454,6 +3481,43 @@ export default function EHub() {
                         ) : null}
                         Save Delays
                       </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Keyword Bank Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Keyword Bank</CardTitle>
+                    <CardDescription>
+                      Keywords the AI will use when generating emails for this sequence
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Textarea
+                      value={sequenceKeywords}
+                      onChange={(e) => setSequenceKeywords(e.target.value)}
+                      placeholder="Enter keywords separated by commas (e.g., hemp wick, natural, eco-friendly, sustainable)"
+                      className="min-h-[100px]"
+                      data-testid="textarea-sequence-keywords"
+                    />
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {sequenceKeywords.split(',').filter(k => k.trim()).length} keyword{sequenceKeywords.split(',').filter(k => k.trim()).length !== 1 ? 's' : ''}
+                      </p>
+                      {sequenceKeywords !== ((currentSequence as any)?.keywords || "") && (
+                        <Button
+                          size="sm"
+                          onClick={() => saveKeywordsMutation.mutate(sequenceKeywords)}
+                          disabled={saveKeywordsMutation.isPending}
+                          data-testid="button-save-keywords"
+                        >
+                          {saveKeywordsMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : null}
+                          Save Keywords
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

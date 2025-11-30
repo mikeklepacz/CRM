@@ -21421,6 +21421,34 @@ ${conversationContext}`;
     }
   });
 
+  // Update sequence keywords (admin only)
+  app.put('/api/sequences/:id/keywords', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      const { keywords } = z.object({
+        keywords: z.string().optional().default(''),
+      }).parse(req.body);
+
+      // Check sequence exists
+      const sequence = await storage.getSequence(id, req.user.tenantId);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      // Update sequence with keywords
+      const updated = await storage.updateSequence(id, req.user.tenantId, { keywords });
+      
+      res.json(updated);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid keywords', errors: error.errors });
+      }
+      console.error('Error updating keywords:', error);
+      res.status(500).json({ message: error.message || 'Failed to update keywords' });
+    }
+  });
+
   // Import recipients from Google Sheets (admin only)
   app.post('/api/sequences/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
