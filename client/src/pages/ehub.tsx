@@ -1530,7 +1530,6 @@ export default function EHub() {
   // Strategy chat state
   const [strategyMessage, setStrategyMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollBottomRef = useRef<HTMLDivElement>(null);
   const [stepDelays, setStepDelays] = useState<number[]>([]);
   const [repeatLastStep, setRepeatLastStep] = useState<boolean>(false);
   const [sequenceKeywords, setSequenceKeywords] = useState<string>("");
@@ -1874,8 +1873,8 @@ export default function EHub() {
 
   // Auto-scroll to bottom when transcript changes
   useEffect(() => {
-    if (scrollBottomRef.current) {
-      scrollBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [strategyTranscript]);
 
@@ -3282,7 +3281,6 @@ export default function EHub() {
                               </div>
                             </div>
                           )}
-                          <div ref={scrollBottomRef} />
                         </div>
                       ) : (
                         <div className="flex items-center justify-center h-full">
