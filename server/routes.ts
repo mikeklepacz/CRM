@@ -19141,7 +19141,7 @@ Use this store information to provide context-aware responses. When helping draf
       // Get tenant name for the ticket
       let tenantName = 'Unknown Tenant';
       if (ticket.tenantId) {
-        const tenant = await storage.getTenant(ticket.tenantId);
+        const tenant = await storage.getTenantById(ticket.tenantId);
         tenantName = tenant?.name || 'Unknown Tenant';
       }
 
@@ -19320,7 +19320,7 @@ Use this store information to provide context-aware responses. When helping draf
           const ticketUser = await storage.getUser(ticket.userId);
           let tenantName = 'Unknown Tenant';
           if (ticket.tenantId) {
-            const tenant = await storage.getTenant(ticket.tenantId);
+            const tenant = await storage.getTenantById(ticket.tenantId);
             tenantName = tenant?.name || 'Unknown Tenant';
           }
           return {
