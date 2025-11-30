@@ -1701,16 +1701,6 @@ export default function EHub() {
   // Derive current sequence to check for finalized strategy
   const currentSequence = sequences?.find(s => s.id === selectedSequenceId);
 
-  // DEBUG: Log state for troubleshooting
-  console.log('[DEBUG E-Hub] State snapshot:', {
-    selectedSequenceId,
-    sequencesLength: sequences?.length,
-    sequencesIsArray: Array.isArray(sequences),
-    currentSequenceExists: !!currentSequence,
-    currentSequenceName: currentSequence?.name,
-    activeTab,
-  });
-
   // Generate finalized strategy mutation
   const generateFinalizedStrategyMutation = useMutation({
     mutationFn: async () => {
@@ -3146,8 +3136,6 @@ export default function EHub() {
 
         {/* Campaign Strategy Tab */}
         <TabsContent value="strategy" className="space-y-4">
-          {/* DEBUG LOG */}
-          {console.log('[DEBUG Strategy Tab] Rendering:', { selectedSequenceId, currentSequence: currentSequence?.name, hasSequences: !!sequences })}
           {/* Sequence Selector */}
           <Card>
             <CardHeader>
@@ -3214,10 +3202,10 @@ export default function EHub() {
           {/* Content: show only when sequence is selected AND loaded */}
           {selectedSequenceId && currentSequence ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Left Column: Chat Interface */}
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
+              {/* Left Column: AI Chat Interface - takes full height */}
+              <div className="lg:row-span-2">
+                <Card className="h-full flex flex-col">
+                  <CardHeader className="shrink-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
                         <CardTitle>AI Strategy Chat</CardTitle>
@@ -3240,9 +3228,9 @@ export default function EHub() {
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Chat Transcript */}
-                    <ScrollArea className="h-96 border rounded-md p-4 bg-muted/10" ref={scrollRef as any}>
+                  <CardContent className="flex-1 flex flex-col space-y-4 min-h-0">
+                    {/* Chat Transcript - much taller */}
+                    <ScrollArea className="flex-1 min-h-[500px] border rounded-md p-4 bg-muted/10" ref={scrollRef as any}>
                       {strategyTranscript && strategyTranscript.messages && strategyTranscript.messages.length > 0 ? (
                         <div className="space-y-4">
                           {strategyTranscript.messages.map((msg: any) => (
@@ -3497,7 +3485,6 @@ export default function EHub() {
                 </Card>
 
                 {/* Keyword Bank Card */}
-                {console.log('[DEBUG Keywords]', { sequenceKeywords, type: typeof sequenceKeywords, isArray: Array.isArray(sequenceKeywords) })}
                 {currentSequence && (
                   <Card>
                     <CardHeader>
