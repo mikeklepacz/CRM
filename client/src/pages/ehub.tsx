@@ -3505,13 +3505,81 @@ export default function EHub() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <Textarea
-                        value={sequenceKeywords || ''}
-                        onChange={(e) => setSequenceKeywords(e.target.value)}
-                        placeholder="Enter keywords separated by commas (e.g., hemp wick, natural, eco-friendly, sustainable)"
-                        className="min-h-[100px]"
-                        data-testid="textarea-sequence-keywords"
-                      />
+                      {/* Keyword bubbles display */}
+                      <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md bg-muted/20">
+                        {(() => {
+                          const kw = typeof sequenceKeywords === 'string' ? sequenceKeywords : '';
+                          const keywords = kw.split(',').map(k => k.trim()).filter(k => k);
+                          if (keywords.length === 0) {
+                            return <p className="text-sm text-muted-foreground">No keywords added yet</p>;
+                          }
+                          return keywords.map((keyword, index) => (
+                            <Badge 
+                              key={index} 
+                              variant="secondary"
+                              className="flex items-center gap-1 pr-1"
+                              data-testid={`badge-keyword-${index}`}
+                            >
+                              {keyword}
+                              <button
+                                onClick={() => {
+                                  const newKeywords = keywords.filter((_, i) => i !== index).join(', ');
+                                  setSequenceKeywords(newKeywords);
+                                }}
+                                className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
+                                data-testid={`button-remove-keyword-${index}`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ));
+                        })()}
+                      </div>
+
+                      {/* Add keyword input */}
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Add a keyword..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const input = e.currentTarget;
+                              const newKeyword = input.value.trim();
+                              if (newKeyword) {
+                                const kw = typeof sequenceKeywords === 'string' ? sequenceKeywords : '';
+                                const existing = kw.split(',').map(k => k.trim()).filter(k => k);
+                                if (!existing.includes(newKeyword)) {
+                                  const updated = [...existing, newKeyword].join(', ');
+                                  setSequenceKeywords(updated);
+                                }
+                                input.value = '';
+                              }
+                            }
+                          }}
+                          data-testid="input-add-keyword"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                            const newKeyword = input.value.trim();
+                            if (newKeyword) {
+                              const kw = typeof sequenceKeywords === 'string' ? sequenceKeywords : '';
+                              const existing = kw.split(',').map(k => k.trim()).filter(k => k);
+                              if (!existing.includes(newKeyword)) {
+                                const updated = [...existing, newKeyword].join(', ');
+                                setSequenceKeywords(updated);
+                              }
+                              input.value = '';
+                            }
+                          }}
+                          data-testid="button-add-keyword"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      {/* Save button */}
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">
                           {(() => {
@@ -3644,7 +3712,7 @@ export default function EHub() {
                             return currentStatus === 'active' ? (
                               <Button
                                 variant="outline"
-                                onClick={() => updateSequenceStatusMutation.mutate('draft')}
+                                onClick={() => updateSequenceStatusMutation.mutate({ sequenceId: selectedSequenceId!, status: 'draft' })}
                                 disabled={updateSequenceStatusMutation.isPending}
                                 data-testid="button-deactivate-sequence"
                                 className="w-full"
@@ -3692,7 +3760,7 @@ export default function EHub() {
                                       return;
                                     }
                                     
-                                    updateSequenceStatusMutation.mutate('active');
+                                    updateSequenceStatusMutation.mutate({ sequenceId: selectedSequenceId!, status: 'active' });
                                   }}
                                   disabled={!canActivate || updateSequenceStatusMutation.isPending}
                                   data-testid="button-activate-sequence"
