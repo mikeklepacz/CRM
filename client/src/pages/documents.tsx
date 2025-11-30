@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { useLocation } from "wouter";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 
 interface DriveFile {
   id: string;
@@ -207,7 +208,7 @@ export default function Documents() {
           <h2 className="text-2xl font-semibold text-foreground">Documents</h2>
           <p className="text-muted-foreground">Browse files from your Google Drive folders</p>
         </div>
-        {user?.role === 'admin' && (
+        {canAccessAdminFeatures(user) && (
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-folder">
@@ -273,7 +274,7 @@ export default function Documents() {
               <div className="p-6 text-center text-muted-foreground">
                 <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No folders configured</p>
-                {user?.role === 'admin' && (
+                {canAccessAdminFeatures(user) && (
                   <p className="text-xs mt-1">Click "Manage Folders" to add one</p>
                 )}
               </div>
@@ -290,7 +291,7 @@ export default function Documents() {
                       <FolderOpen className="h-4 w-4 mr-2" />
                       {folder.name}
                     </Button>
-                    {user?.role === 'admin' && (
+                    {canAccessAdminFeatures(user) && (
                       <Button
                         size="icon"
                         variant="ghost"

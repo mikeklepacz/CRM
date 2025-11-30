@@ -30,6 +30,7 @@ import { TestTube2, RefreshCw, Reply } from "lucide-react";
 import { useOptionalProject } from "@/contexts/project-context";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { useLocation } from "wouter";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
@@ -1693,7 +1694,7 @@ export default function EHub() {
   // Fetch test email history
   const { data: testEmailHistory, isLoading: isLoadingTestEmails } = useQuery<TestEmailSend[]>({
     queryKey: ['/api/test-email/history'],
-    enabled: activeTab === 'test-emails' && user?.role === 'admin',
+    enabled: activeTab === 'test-emails' && canAccessAdminFeatures(user),
   });
 
   // Derive current sequence to check for finalized strategy
@@ -2476,7 +2477,7 @@ export default function EHub() {
             <Mail className="w-4 h-4 mr-2" />
             Queue
           </TabsTrigger>
-          {user?.role === 'admin' && (
+          {canAccessAdminFeatures(user) && (
             <TabsTrigger value="scanner" data-testid="tab-scanner">
               <Search className="w-4 h-4 mr-2" />
               Scanner
@@ -2486,7 +2487,7 @@ export default function EHub() {
             <Settings className="w-4 h-4 mr-2" />
             Settings
           </TabsTrigger>
-          {user?.role === 'admin' && (
+          {canAccessAdminFeatures(user) && (
             <TabsTrigger value="test-emails" data-testid="tab-test-emails">
               <TestTube2 className="w-4 h-4 mr-2" />
               Test Emails
@@ -3674,7 +3675,7 @@ export default function EHub() {
         </TabsContent>
 
         {/* Scanner Management Tab (Admin Only) */}
-        {user?.role === 'admin' && (
+        {canAccessAdminFeatures(user) && (
           <TabsContent value="scanner" className="space-y-4">
             <ScannerManagementView />
           </TabsContent>
@@ -4176,7 +4177,7 @@ export default function EHub() {
         </TabsContent>
 
         {/* Test Emails Tab */}
-        {user?.role === 'admin' && (
+        {canAccessAdminFeatures(user) && (
           <TabsContent value="test-emails" className="space-y-4">
             {/* Blacklist Toggle */}
             <Card>

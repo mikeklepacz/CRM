@@ -9,6 +9,7 @@ import { Phone, Loader2, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 
 interface CallHistoryDialogProps {
   open: boolean;
@@ -41,7 +42,7 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
   // Fetch all users (for admin agent filter)
   const { data: usersData } = useQuery<any>({
     queryKey: ["/api/users"],
-    enabled: user?.role === 'admin',
+    enabled: canAccessAdminFeatures(user),
   });
 
   const users = usersData?.users || [];
@@ -51,7 +52,7 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
   const { data: callHistory = [], isLoading } = useQuery<CallRecord[]>({
     queryKey: ['/api/call-history', selectedAgent !== 'all' ? { agentId: selectedAgent } : {}],
     queryFn: async () => {
-      const url = user?.role === 'admin' && selectedAgent !== 'all'
+      const url = canAccessAdminFeatures(user) && selectedAgent !== 'all'
         ? `/api/call-history?agentId=${selectedAgent}`
         : '/api/call-history';
       const result = await apiRequest('GET', url);
@@ -133,7 +134,7 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
         </DialogHeader>
 
         {/* Admin Agent Filter */}
-        {user?.role === 'admin' && (
+        {canAccessAdminFeatures(user) && (
           <div className="flex items-center gap-2 pb-4 border-b">
             <label className="text-sm font-medium">Filter by Agent:</label>
             <Select value={selectedAgent} onValueChange={setSelectedAgent}>

@@ -15,7 +15,7 @@ export async function sendGmailNotification(
   try {
     // Get admin user (first user with admin role)
     const users = await storage.getAllUsers();
-    const adminUser = users.find(u => u.role === 'admin');
+    const adminUser = users.find(u => u.role === 'admin' || u.roleInTenant === 'org_admin' || u.isSuperAdmin);
     
     if (!adminUser) {
       console.error('[Gmail] No admin user found');

@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { isUnauthorizedError } from "@/lib/authUtils";
+import { isUnauthorizedError, canAccessAdminFeatures } from "@/lib/authUtils";
 
 // Extended client type with API-enriched fields
 interface EnrichedClient extends Client {
@@ -143,7 +143,7 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
               {clients.map((client) => {
                 const companyName = getCompanyName(client);
                 const canClaim = !client.assignedAgent && currentUser.role === 'agent';
-                const canUnclaim = currentUser.role === 'admin';
+                const canUnclaim = canAccessAdminFeatures(currentUser);
                 const commissionRate = getCommissionRate(client);
                 const daysSinceOrder = client.lastOrderDate
                   ? Math.floor((Date.now() - new Date(client.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24))

@@ -10,6 +10,7 @@ import { ProjectProvider } from "@/contexts/project-context";
 import { EventStreamProvider } from "@/lib/eventStream";
 import { useAuth } from "@/hooks/useAuth";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
+import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { Header } from "@/components/header";
 import { TimezoneDetector } from "@/components/timezone-detector";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +33,8 @@ import EHub from "@/pages/ehub";
 import ProductMockup from "@/pages/product-mockup";
 import SuperAdmin from "@/pages/super-admin";
 import OrgAdmin from "@/pages/org-admin";
+import Analytics from "@/pages/analytics";
+import Pipelines from "@/pages/pipelines";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -87,13 +90,19 @@ function Router() {
               <Route path="/sales" component={SalesDashboard} />
               <Route path="/assistant" component={SalesAssistant} />
               <Route path="/voice">
-                {(user?.role === 'admin' || user?.hasVoiceAccess) ? <Voice /> : <NotFound />}
+                {(canAccessAdminFeatures(user) || user?.hasVoiceAccess) ? <Voice /> : <NotFound />}
               </Route>
               <Route path="/call-manager">
-                {(user?.role === 'admin' || user?.hasVoiceAccess) ? <CallManager /> : <NotFound />}
+                {(canAccessAdminFeatures(user) || user?.hasVoiceAccess) ? <CallManager /> : <NotFound />}
               </Route>
               <Route path="/ehub">
-                {user?.role === 'admin' ? <EHub /> : <NotFound />}
+                {canAccessAdminFeatures(user) ? <EHub /> : <NotFound />}
+              </Route>
+              <Route path="/analytics">
+                {canAccessAdminFeatures(user) ? <Analytics /> : <NotFound />}
+              </Route>
+              <Route path="/pipelines">
+                {canAccessAdminFeatures(user) ? <Pipelines /> : <NotFound />}
               </Route>
               <Route path="/product-mockup" component={ProductMockup} />
               <Route path="/store/:storeId" component={StoreDetails} />

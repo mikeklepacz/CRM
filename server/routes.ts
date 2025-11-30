@@ -1955,7 +1955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Get admin user preferences to check if auto-trigger is enabled
             const allUsers = await storage.getAllUsers();
-            const adminUser = allUsers.find((u: any) => u.role === 'admin');
+            const adminUser = allUsers.find((u: any) => u.roleInTenant === 'org_admin' || u.role === 'admin' || u.isSuperAdmin);
             
             if (!adminUser) {
               return;
@@ -2986,11 +2986,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tenantId = (req.user as any).tenantId;
       const scheduledCampaigns = await storage.getCallCampaigns(tenantId, {
         status: 'scheduled',
-        createdByUserId: user?.role === 'admin' ? undefined : userId,
+        createdByUserId: (user?.roleInTenant === 'org_admin' || user?.role === 'admin') ? undefined : userId,
       });
       const inProgressCampaigns = await storage.getCallCampaigns(tenantId, {
         status: 'in-progress',
-        createdByUserId: user?.role === 'admin' ? undefined : userId,
+        createdByUserId: (user?.roleInTenant === 'org_admin' || user?.role === 'admin') ? undefined : userId,
       });
       const campaigns = [...scheduledCampaigns, ...inProgressCampaigns];
 
@@ -8451,7 +8451,7 @@ IMPORTANT:
   app.get('/api/reports/referral-commissions', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const currentUser = req.currentUser;
-      const isUserAdmin = currentUser.role === 'admin';
+      const isUserAdmin = currentUser.roleInTenant === 'org_admin' || currentUser.role === 'admin' || currentUser.isSuperAdmin;
 
       // Query commissions table directly - filter for referral commissions only
       const allCommissions = await db.query.commissions.findMany({
@@ -17163,7 +17163,7 @@ ${rawText}`;
           console.log('💬 [CHAT] Using auto-generated signature');
           const userFullName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Sales Representative';
           const userEmail = currentUser.email || '';
-          const userRole = currentUser.role === 'admin' ? 'Sales Manager' : 'Sales Representative';
+          const userRole = (currentUser.roleInTenant === 'org_admin' || currentUser.role === 'admin') ? 'Sales Manager' : 'Sales Representative';
 
           signatureText = `${userFullName}\n${userRole}\nNatural Materials Unlimited${userEmail ? `\n${userEmail}` : ''}`;
         }
@@ -19016,7 +19016,7 @@ Use this store information to provide context-aware responses. When helping draf
       const user = await storage.getUser(userId);
 
       let tickets;
-      if (user?.role === 'admin') {
+      if (user?.roleInTenant === 'org_admin' || user?.role === 'admin') {
         tickets = await storage.getAllTickets();
       } else {
         tickets = await storage.getUserTickets(userId);
@@ -19042,7 +19042,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Check access: admin can see all, users can only see their own
-      if (user?.role !== 'admin' && ticket.userId !== userId) {
+      if (!(user?.roleInTenant === 'org_admin' || user?.role === 'admin') && ticket.userId !== userId) {
         return res.status(403).json({ message: 'Access denied' });
       }
 
@@ -19063,7 +19063,7 @@ Use this store information to provide context-aware responses. When helping draf
       );
 
       // Mark as read
-      if (user?.role === 'admin') {
+      if (user?.roleInTenant === 'org_admin' || user?.role === 'admin') {
         await storage.markTicketReadByAdmin(ticketId);
       } else {
         await storage.markTicketReadByUser(ticketId);
@@ -19122,7 +19122,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Check access
-      if (user?.role !== 'admin' && ticket.userId !== userId) {
+      if (!(user?.roleInTenant === 'org_admin' || user?.role === 'admin') && ticket.userId !== userId) {
         return res.status(403).json({ message: 'Access denied' });
       }
 
@@ -19135,7 +19135,7 @@ Use this store information to provide context-aware responses. When helping draf
       const reply = await storage.createTicketReply(validated);
 
       // Mark ticket as having new reply
-      if (user?.role === 'admin') {
+      if (user?.roleInTenant === 'org_admin' || user?.role === 'admin') {
         await storage.updateTicket(ticketId, { isUnreadByUser: true });
         // Admin replied - notify the ticket creator
         const ticketOwner = await storage.getUser(ticket.userId);
@@ -19403,10 +19403,10 @@ Use this store information to provide context-aware responses. When helping draf
       // Admin can filter by agent
       const { agentId } = req.query;
       
-      if (agentId && user.role === 'admin') {
+      if (agentId && (user.roleInTenant === 'org_admin' || user.role === 'admin')) {
         const callHistory = await storage.getAllCallHistory(tenantId, agentId as string);
         res.json(callHistory);
-      } else if (user.role === 'admin' && !agentId) {
+      } else if ((user.roleInTenant === 'org_admin' || user.role === 'admin') && !agentId) {
         // Admin without filter gets all call history
         const callHistory = await storage.getAllCallHistory(tenantId);
         res.json(callHistory);
