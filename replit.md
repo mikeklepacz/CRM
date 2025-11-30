@@ -44,6 +44,19 @@ The application features a client dashboard unifying data, transitioning from a 
 - **Holiday Toggle System**: Admin controls for blocking federal holidays and custom date ranges.
 - **Pipelines System**: Configurable pipelines with stages (action, decision, wait, complete) and AI configuration.
 - **Projects System**: `tenant_projects` for multi-campaign support, enabling isolated configurations and project-specific resources.
+- **Super Admin Dashboard**: Platform-wide management with tenant context selector:
+  - **Tenants Tab**: Create, edit, view all tenants and their status.
+  - **Users Tab**: Manage users across all tenants, reset passwords, toggle super admin/voice access.
+  - **Metrics Tab**: Platform-wide statistics (total tenants, users, clients).
+  - **Tickets Tab**: Platform-wide support ticket management with tenant/status/category filters.
+  - **Webhooks Tab**: Per-tenant Google Calendar webhook configuration (placeholder).
+  - **Voice Tab**: Per-tenant ElevenLabs voice agent settings (placeholder).
+  - **Google Sheets Tab**: Per-tenant Google Sheets sync configuration (placeholder).
+- **Ticket Tenant Isolation**: All ticket endpoints enforce strict tenant isolation:
+  - Super admins can access all tickets across all tenants.
+  - Tenant admins can only view/manage tickets from their own tenant.
+  - Regular users can only see and interact with their own tickets.
+  - Ticket creation automatically assigns the user's tenantId.
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for operational data and user preferences.

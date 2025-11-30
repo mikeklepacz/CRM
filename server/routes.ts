@@ -19016,39 +19016,46 @@ Use this store information to provide context-aware responses. When helping draf
 
   // Ticket Routes
 
-  // Get unread ticket count (admin only)
+  // Get unread ticket count (admin only - scoped to tenant)
   app.get('/api/tickets/unread-count', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
+      const tenantId = req.user.tenantId;
 
-      const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
+      const isAdminUser = await checkAdminAccess(user, tenantId);
       if (!isAdminUser) {
         return res.json({ count: 0 });
       }
 
-      const count = await storage.getUnreadAdminCount();
-      res.json({ count });
+      // Get all tickets and filter by tenant to get accurate count
+      const allTickets = await storage.getAllTickets();
+      const unreadCount = allTickets.filter(t => t.tenantId === tenantId && t.isUnreadByAdmin).length;
+      res.json({ count: unreadCount });
     } catch (error: any) {
       console.error('Error getting unread count:', error);
       res.status(500).json({ message: error.message || 'Failed to get unread count' });
     }
   });
 
-  // Get all tickets with user info (admin only)
+  // Get all tickets with user info (admin only - scoped to their tenant)
   app.get('/api/tickets/admin', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
+      const tenantId = req.user.tenantId;
 
-      const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
+      const isAdminUser = await checkAdminAccess(user, tenantId);
       if (!isAdminUser) {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
       const allTickets = await storage.getAllTickets();
+      // Filter tickets to only show those from the admin's tenant
+      const tenantTickets = allTickets.filter(ticket => ticket.tenantId === tenantId);
+      
       const ticketsWithUserInfo = await Promise.all(
-        allTickets.map(async (ticket) => {
+        tenantTickets.map(async (ticket) => {
           const ticketUser = await storage.getUser(ticket.userId);
           return {
             ...ticket,
@@ -19067,16 +19074,20 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Get all tickets (admin) or user's tickets (regular users)
+  // Get all tickets (scoped to tenant for admins) or user's tickets (regular users)
   app.get('/api/tickets', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
+      const tenantId = req.user.tenantId;
 
       let tickets;
       if (user?.roleInTenant === 'org_admin' || user?.role === 'admin') {
-        tickets = await storage.getAllTickets();
+        // Admin: get all tickets for their tenant only
+        const allTickets = await storage.getAllTickets();
+        tickets = allTickets.filter(ticket => ticket.tenantId === tenantId);
       } else {
+        // Regular user: only their own tickets
         tickets = await storage.getUserTickets(userId);
       }
 
@@ -19099,8 +19110,15 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'Ticket not found' });
       }
 
-      // Check access: admin can see all, users can only see their own
-      if (!(user?.roleInTenant === 'org_admin' || user?.role === 'admin') && ticket.userId !== userId) {
+      // Check access: super admin can see all, tenant admin can see their tenant's tickets, users can see their own
+      const isSuperAdminUser = user?.isSuperAdmin;
+      const isTenantAdmin = user?.roleInTenant === 'org_admin' || user?.role === 'admin';
+      const isTicketOwner = ticket.userId === userId;
+      
+      // Tenant admins can only see tickets from their tenant
+      const isAdminForTicketTenant = isTenantAdmin && ticket.tenantId === req.user.tenantId;
+      
+      if (!isSuperAdminUser && !isAdminForTicketTenant && !isTicketOwner) {
         return res.status(403).json({ message: 'Access denied' });
       }
 
@@ -19120,14 +19138,32 @@ Use this store information to provide context-aware responses. When helping draf
         })
       );
 
-      // Mark as read
-      if (user?.roleInTenant === 'org_admin' || user?.role === 'admin') {
+      // Get tenant name for the ticket
+      let tenantName = 'Unknown Tenant';
+      if (ticket.tenantId) {
+        const tenant = await storage.getTenant(ticket.tenantId);
+        tenantName = tenant?.name || 'Unknown Tenant';
+      }
+
+      // Get user info for the ticket
+      const ticketUser = await storage.getUser(ticket.userId);
+      const ticketWithInfo = {
+        ...ticket,
+        tenantName,
+        userEmail: ticketUser?.email,
+        userName: ticketUser?.firstName && ticketUser?.lastName
+          ? `${ticketUser.firstName} ${ticketUser.lastName}`
+          : undefined,
+      };
+
+      // Mark as read for admins
+      if (isSuperAdminUser || isAdminForTicketTenant) {
         await storage.markTicketReadByAdmin(ticketId);
-      } else {
+      } else if (isTicketOwner) {
         await storage.markTicketReadByUser(ticketId);
       }
 
-      res.json({ ticket, replies: repliesWithUserInfo });
+      res.json({ ticket: ticketWithInfo, replies: repliesWithUserInfo });
     } catch (error: any) {
       console.error('Error fetching ticket:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch ticket' });
@@ -19138,9 +19174,12 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/tickets', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = req.user.tenantId;
+      
       const validated = insertTicketSchema.parse({
         ...req.body,
         userId,
+        tenantId, // Explicitly set tenant from user context
       });
 
       const ticket = await storage.createTicket(validated);
@@ -19179,8 +19218,13 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'Ticket not found' });
       }
 
-      // Check access
-      if (!(user?.roleInTenant === 'org_admin' || user?.role === 'admin') && ticket.userId !== userId) {
+      // Check access: super admin, tenant admin for ticket's tenant, or ticket owner
+      const isSuperAdminUser = user?.isSuperAdmin;
+      const isTenantAdmin = user?.roleInTenant === 'org_admin' || user?.role === 'admin';
+      const isAdminForTicketTenant = isTenantAdmin && ticket.tenantId === req.user.tenantId;
+      const isTicketOwner = ticket.userId === userId;
+
+      if (!isSuperAdminUser && !isAdminForTicketTenant && !isTicketOwner) {
         return res.status(403).json({ message: 'Access denied' });
       }
 
@@ -19193,7 +19237,7 @@ Use this store information to provide context-aware responses. When helping draf
       const reply = await storage.createTicketReply(validated);
 
       // Mark ticket as having new reply
-      if (user?.roleInTenant === 'org_admin' || user?.role === 'admin') {
+      if (isSuperAdminUser || isAdminForTicketTenant) {
         await storage.updateTicket(ticketId, { isUnreadByUser: true });
         // Admin replied - notify the ticket creator
         const ticketOwner = await storage.getUser(ticket.userId);
@@ -19226,21 +19270,29 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Update ticket status (admin only)
+  // Update ticket status (super admin or tenant admin for their tenant's tickets)
   app.patch('/api/tickets/:id/status', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-
-      const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
-      if (!isAdminUser) {
-        return res.status(403).json({ message: 'Admin access required' });
-      }
-
       const ticketId = req.params.id;
       const { status } = req.body;
 
-      if (!['open', 'replied', 'closed'].includes(status)) {
+      const existingTicket = await storage.getTicket(ticketId);
+      if (!existingTicket) {
+        return res.status(404).json({ message: 'Ticket not found' });
+      }
+
+      // Super admin can update any ticket, tenant admin only their tenant's tickets
+      const isSuperAdminUser = user?.isSuperAdmin;
+      const isTenantAdmin = user?.roleInTenant === 'org_admin' || user?.role === 'admin';
+      const isAdminForTicketTenant = isTenantAdmin && existingTicket.tenantId === req.user.tenantId;
+
+      if (!isSuperAdminUser && !isAdminForTicketTenant) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      if (!['open', 'in-progress', 'replied', 'closed'].includes(status)) {
         return res.status(400).json({ message: 'Invalid status' });
       }
 
@@ -19249,6 +19301,75 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error updating ticket status:', error);
       res.status(500).json({ message: error.message || 'Failed to update ticket status' });
+    }
+  });
+
+  // Super Admin: Get all tickets across all tenants
+  app.get('/api/super-admin/tickets', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.isSuperAdmin) {
+        return res.status(403).json({ message: 'Super admin access required' });
+      }
+
+      const allTickets = await storage.getAllTickets();
+      const ticketsWithInfo = await Promise.all(
+        allTickets.map(async (ticket) => {
+          const ticketUser = await storage.getUser(ticket.userId);
+          let tenantName = 'Unknown Tenant';
+          if (ticket.tenantId) {
+            const tenant = await storage.getTenant(ticket.tenantId);
+            tenantName = tenant?.name || 'Unknown Tenant';
+          }
+          return {
+            ...ticket,
+            tenantName,
+            userEmail: ticketUser?.email,
+            userName: ticketUser?.firstName && ticketUser?.lastName
+              ? `${ticketUser.firstName} ${ticketUser.lastName}`
+              : undefined,
+          };
+        })
+      );
+
+      res.json({ tickets: ticketsWithInfo });
+    } catch (error: any) {
+      console.error('Error fetching super admin tickets:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
+    }
+  });
+
+  // Mark ticket as read (for super admin or tenant admin only for their tenant's tickets)
+  app.post('/api/tickets/:id/mark-read', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const ticketId = req.params.id;
+
+      const ticket = await storage.getTicket(ticketId);
+      if (!ticket) {
+        return res.status(404).json({ message: 'Ticket not found' });
+      }
+
+      // Super admin can mark any ticket, tenant admin only their tenant's tickets
+      if (user?.isSuperAdmin) {
+        await storage.markTicketReadByAdmin(ticketId);
+        return res.json({ success: true });
+      }
+
+      // Check if tenant admin for the ticket's tenant
+      const isAdminForTicketTenant = await checkAdminAccess(user, ticket.tenantId);
+      if (!isAdminForTicketTenant) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      await storage.markTicketReadByAdmin(ticketId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error marking ticket as read:', error);
+      res.status(500).json({ message: error.message || 'Failed to mark ticket as read' });
     }
   });
 
