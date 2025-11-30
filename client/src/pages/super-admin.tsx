@@ -100,6 +100,22 @@ interface TicketReply {
   userEmail?: string;
 }
 
+interface WebhookStatus {
+  userId: string;
+  userEmail: string;
+  agentName: string | null;
+  tenantId: string | null;
+  tenantName: string;
+  hasGoogleCalendar: boolean;
+  channelId: string | null;
+  resourceId: string | null;
+  expiry: number | null;
+  expiryDate: string | null;
+  isExpired: boolean | null;
+  registeredUrl: string;
+  environment: 'production' | 'development';
+}
+
 const TICKET_CATEGORIES = [
   'Bug Report',
   'Feature Request',
@@ -238,6 +254,12 @@ export default function SuperAdmin() {
   const { data: ticketDetailData, isLoading: ticketDetailLoading } = useQuery<{ ticket: SuperAdminTicket; replies: TicketReply[] }>({
     queryKey: ['/api/tickets', selectedTicketId],
     enabled: !!selectedTicketId,
+  });
+
+  // Super admin webhooks query - with tenant filtering
+  const { data: webhooksData, isLoading: webhooksLoading, refetch: refetchWebhooks } = useQuery<{ webhooks: WebhookStatus[] }>({
+    queryKey: ['/api/super-admin/webhooks', configTenantId],
+    enabled: isSuperAdmin(user),
   });
 
   const createForm = useForm<TenantFormData>({
@@ -746,6 +768,49 @@ export default function SuperAdmin() {
     },
   });
 
+  // Webhook mutations
+  const bulkRegisterWebhooksMutation = useMutation({
+    mutationFn: async (tenantId: string) => {
+      return await apiRequest('POST', '/api/super-admin/webhooks/bulk-register', { tenantId });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/webhooks'] });
+      toast({
+        title: "Bulk Registration Complete",
+        description: `Successfully registered ${data.successful} webhooks. Failed: ${data.failed}, Skipped: ${data.skipped}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Bulk Registration Failed",
+        description: error.message || "Failed to register webhooks",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const registerSingleWebhookMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest('POST', `/api/super-admin/webhooks/${userId}/register`, {});
+    },
+    onSuccess: (data: any, userId: string) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/webhooks'] });
+      const webhook = webhooksData?.webhooks.find(w => w.userId === userId);
+      toast({
+        title: "Webhook Registered",
+        description: `Successfully registered webhook for ${webhook?.userEmail}`,
+      });
+    },
+    onError: (error: any, userId: string) => {
+      const webhook = webhooksData?.webhooks.find(w => w.userId === userId);
+      toast({
+        title: "Registration Failed",
+        description: `Failed to register webhook for ${webhook?.userEmail}: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateSubmit = (data: TenantFormData) => {
     createTenantMutation.mutate(data);
   };
@@ -901,6 +966,48 @@ export default function SuperAdmin() {
   const ticketDetail = ticketDetailData?.ticket;
   const ticketReplies = ticketDetailData?.replies || [];
   const unreadTicketCount = ticketsData?.tickets?.filter(t => t.isUnreadByAdmin).length ?? 0;
+
+  // Webhook helper data
+  const webhooks = useMemo(() => {
+    if (!webhooksData?.webhooks) return [];
+    // Filter by tenant if one is selected
+    if (configTenantId && configTenantId !== 'all') {
+      return webhooksData.webhooks.filter(w => w.tenantId === configTenantId);
+    }
+    return webhooksData.webhooks;
+  }, [webhooksData?.webhooks, configTenantId]);
+
+  const connectedWebhooks = webhooks.filter(w => w.hasGoogleCalendar);
+  const activeWebhooks = connectedWebhooks.filter(w => w.channelId && !w.isExpired);
+  const expiredWebhooks = connectedWebhooks.filter(w => w.channelId && w.isExpired);
+
+  const getWebhookStatusBadge = (webhook: WebhookStatus) => {
+    if (!webhook.hasGoogleCalendar) {
+      return <Badge variant="outline">No Calendar</Badge>;
+    }
+    if (!webhook.channelId) {
+      return <Badge variant="secondary">Not Registered</Badge>;
+    }
+    if (webhook.isExpired) {
+      return <Badge variant="destructive">Expired</Badge>;
+    }
+    return <Badge className="bg-green-600 hover:bg-green-700">Active</Badge>;
+  };
+
+  const formatWebhookExpiry = (expiryDate: string | null) => {
+    if (!expiryDate) return 'N/A';
+    const date = new Date(expiryDate);
+    const now = new Date();
+    const hoursUntil = (date.getTime() - now.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursUntil < 0) {
+      return `Expired ${Math.abs(hoursUntil).toFixed(0)}h ago`;
+    }
+    if (hoursUntil < 24) {
+      return `${hoursUntil.toFixed(0)}h remaining`;
+    }
+    return `${(hoursUntil / 24).toFixed(1)} days`;
+  };
 
   if (authLoading) return null;
 
@@ -1666,42 +1773,180 @@ export default function SuperAdmin() {
 
         {/* Webhooks - Per tenant config */}
         <TabsContent value="webhooks">
-          <Card>
-            <CardHeader>
-              <CardTitle>Webhook Management</CardTitle>
-              <CardDescription>
-                Google Calendar webhook configuration - Per tenant settings
-              </CardDescription>
-              <div className="pt-2">
-                <Select value={configTenantId} onValueChange={setConfigTenantId}>
-                  <SelectTrigger className="w-[300px]" data-testid="select-webhook-tenant">
-                    <SelectValue placeholder="Select tenant to configure" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Tenants (Overview)</SelectItem>
-                    {tenantsData?.tenants?.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <Webhook className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-2">Webhook Configuration</p>
-                <p className="text-sm">
-                  {configTenantId === 'all' 
-                    ? 'Select a tenant to manage their webhook settings'
-                    : `Webhook settings for ${tenantsData?.tenants?.find(t => t.id === configTenantId)?.name}`
-                  }
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <CardTitle>Google Calendar Webhook Management</CardTitle>
+                    <CardDescription>
+                      Manage webhook registrations for Google Calendar synchronization
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Select value={configTenantId} onValueChange={setConfigTenantId}>
+                      <SelectTrigger className="w-[200px]" data-testid="select-webhook-tenant">
+                        <SelectValue placeholder="Filter by tenant" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Tenants</SelectItem>
+                        {tenantsData?.tenants?.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={() => bulkRegisterWebhooksMutation.mutate(configTenantId)}
+                      disabled={bulkRegisterWebhooksMutation.isPending}
+                      data-testid="button-bulk-register"
+                    >
+                      {bulkRegisterWebhooksMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Registering...
+                        </>
+                      ) : (
+                        <>
+                          <Webhook className="mr-2 h-4 w-4" />
+                          Bulk Re-register
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Webhook Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Total Users</CardDescription>
+                      <CardTitle className="text-2xl">{webhooks.length}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Connected Calendars</CardDescription>
+                      <CardTitle className="text-2xl">{connectedWebhooks.length}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Active Webhooks</CardDescription>
+                      <CardTitle className="text-2xl text-green-600">{activeWebhooks.length}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Expired/Missing</CardDescription>
+                      <CardTitle className="text-2xl text-destructive">
+                        {connectedWebhooks.length - activeWebhooks.length}
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                </div>
+
+                {/* Environment Info */}
+                <div className="mb-4 p-3 bg-muted rounded-md">
+                  <p className="text-sm font-medium">Current Environment: {webhooks[0]?.environment || 'Unknown'}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Webhook URL: <code className="text-xs bg-background px-1 py-0.5 rounded">{webhooks[0]?.registeredUrl || 'Not configured'}</code>
+                  </p>
+                </div>
+
+                {/* Webhook Table */}
+                {webhooksLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Tenant</TableHead>
+                        <TableHead>Agent Name</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Channel ID</TableHead>
+                        <TableHead>Expiry</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {webhooks.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                            No users found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        webhooks.map((webhook) => (
+                          <TableRow key={webhook.userId} data-testid={`webhook-row-${webhook.userId}`}>
+                            <TableCell className="font-medium">{webhook.userEmail}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{webhook.tenantName}</Badge>
+                            </TableCell>
+                            <TableCell>{webhook.agentName || 'N/A'}</TableCell>
+                            <TableCell>{getWebhookStatusBadge(webhook)}</TableCell>
+                            <TableCell>
+                              {webhook.channelId ? (
+                                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                                  {webhook.channelId.slice(0, 16)}...
+                                </code>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">Not registered</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <span className={webhook.isExpired ? 'text-destructive' : ''}>
+                                {formatWebhookExpiry(webhook.expiryDate)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => registerSingleWebhookMutation.mutate(webhook.userId)}
+                                disabled={!webhook.hasGoogleCalendar || registerSingleWebhookMutation.isPending}
+                                data-testid={`button-register-${webhook.userId}`}
+                              >
+                                {registerSingleWebhookMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  'Re-register'
+                                )}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Help Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>About Webhook Management</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  <strong>What are webhooks?</strong> Webhooks allow Google Calendar to notify your application when events are created, updated, or deleted, enabling real-time two-way synchronization with reminders.
                 </p>
-                <p className="text-xs text-muted-foreground mt-4">
-                  Coming soon: Per-tenant webhook configuration
+                <p>
+                  <strong>When to use bulk re-register:</strong> Use this when deploying from development (.replit.dev) to production (.replit.app). Webhooks are tied to specific URLs, so they must be re-registered after deployment.
                 </p>
-              </div>
-            </CardContent>
-          </Card>
+                <p>
+                  <strong>Webhook expiry:</strong> Google Calendar webhooks expire after approximately 7 days. The system automatically renews them, but you can manually re-register if needed.
+                </p>
+                <p>
+                  <strong>Troubleshooting:</strong> If calendar sync is not working for a user, check their webhook status here. Re-register if it shows as "Expired" or "Not Registered".
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Voice Settings - Per tenant config */}

@@ -19373,6 +19373,202 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Super Admin: Get webhook statuses across all tenants (with optional tenant filter)
+  app.get('/api/super-admin/webhooks', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.isSuperAdmin) {
+        return res.status(403).json({ message: 'Super admin access required' });
+      }
+
+      const tenantId = req.query.tenantId as string | undefined;
+      let users = await storage.getAllUsers();
+      
+      // Filter by tenant if specified
+      if (tenantId && tenantId !== 'all') {
+        users = users.filter(u => u.tenantId === tenantId);
+      }
+
+      // Filter to only active users
+      const activeUsers = users.filter(u => u.isActive !== false);
+      const webhookStatuses = [];
+
+      for (const u of activeUsers) {
+        const integration = await storage.getUserIntegration(u.id);
+        
+        // Get tenant name
+        let tenantName = 'Unknown Tenant';
+        if (u.tenantId) {
+          const tenant = await storage.getTenantById(u.tenantId);
+          tenantName = tenant?.name || 'Unknown Tenant';
+        }
+
+        // Determine webhook URL based on environment
+        let registeredUrl = 'Not configured';
+        if (process.env.REPLIT_DOMAINS) {
+          const domains = process.env.REPLIT_DOMAINS.split(',');
+          registeredUrl = `https://${domains[0]}/api/webhooks/google-calendar`;
+        } else if (process.env.REPLIT_DEV_DOMAIN) {
+          registeredUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`;
+        }
+
+        const status: any = {
+          userId: u.id,
+          userEmail: u.email,
+          agentName: u.agentName,
+          tenantId: u.tenantId,
+          tenantName,
+          hasGoogleCalendar: !!integration?.googleCalendarAccessToken,
+          channelId: integration?.googleCalendarWebhookChannelId || null,
+          resourceId: integration?.googleCalendarWebhookResourceId || null,
+          expiry: integration?.googleCalendarWebhookExpiry || null,
+          expiryDate: integration?.googleCalendarWebhookExpiry 
+            ? new Date(integration.googleCalendarWebhookExpiry).toISOString()
+            : null,
+          isExpired: integration?.googleCalendarWebhookExpiry 
+            ? integration.googleCalendarWebhookExpiry < Date.now()
+            : null,
+          registeredUrl,
+          environment: process.env.REPLIT_DOMAINS ? 'production' : 'development'
+        };
+
+        webhookStatuses.push(status);
+      }
+
+      res.json({ webhooks: webhookStatuses });
+    } catch (error: any) {
+      console.error('Error fetching super admin webhook statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch webhook statuses' });
+    }
+  });
+
+  // Super Admin: Bulk re-register webhooks (with optional tenant filter)
+  app.post('/api/super-admin/webhooks/bulk-register', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.isSuperAdmin) {
+        return res.status(403).json({ message: 'Super admin access required' });
+      }
+
+      const { tenantId } = req.body;
+      let users = await storage.getAllUsers();
+      
+      // Filter by tenant if specified
+      if (tenantId && tenantId !== 'all') {
+        users = users.filter(u => u.tenantId === tenantId);
+      }
+
+      const activeUsers = users.filter(u => u.isActive !== false);
+      const results = {
+        total: 0,
+        successful: 0,
+        failed: 0,
+        skipped: 0,
+        details: [] as any[]
+      };
+
+      for (const u of activeUsers) {
+        const integration = await storage.getUserIntegration(u.id);
+
+        if (!integration?.googleCalendarAccessToken) {
+          results.skipped++;
+          results.details.push({
+            userId: u.id,
+            email: u.email,
+            status: 'skipped',
+            reason: 'No Google Calendar connected'
+          });
+          continue;
+        }
+
+        results.total++;
+
+        try {
+          const success = await setupCalendarWatch(u.id);
+          if (success) {
+            results.successful++;
+            results.details.push({
+              userId: u.id,
+              email: u.email,
+              status: 'success'
+            });
+          } else {
+            results.failed++;
+            results.details.push({
+              userId: u.id,
+              email: u.email,
+              status: 'failed',
+              reason: 'Setup returned false'
+            });
+          }
+        } catch (error: any) {
+          results.failed++;
+          results.details.push({
+            userId: u.id,
+            email: u.email,
+            status: 'failed',
+            reason: error.message
+          });
+        }
+      }
+
+      res.json(results);
+    } catch (error: any) {
+      console.error('Error super admin bulk registering webhooks:', error);
+      res.status(500).json({ message: error.message || 'Failed to bulk register webhooks' });
+    }
+  });
+
+  // Super Admin: Register webhook for specific user
+  app.post('/api/super-admin/webhooks/:userId/register', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const authUserId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const authUser = await storage.getUser(authUserId);
+
+      if (!authUser?.isSuperAdmin) {
+        return res.status(403).json({ message: 'Super admin access required' });
+      }
+
+      const { userId: targetUserId } = req.params;
+      const targetUser = await storage.getUser(targetUserId);
+
+      if (!targetUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const integration = await storage.getUserIntegration(targetUserId);
+      if (!integration?.googleCalendarAccessToken) {
+        return res.status(400).json({ message: 'User does not have Google Calendar connected' });
+      }
+
+      const success = await setupCalendarWatch(targetUserId);
+
+      if (success) {
+        const updatedIntegration = await storage.getUserIntegration(targetUserId);
+        res.json({
+          success: true,
+          channelId: updatedIntegration?.googleCalendarWebhookChannelId,
+          expiry: updatedIntegration?.googleCalendarWebhookExpiry,
+          expiryDate: updatedIntegration?.googleCalendarWebhookExpiry 
+            ? new Date(updatedIntegration.googleCalendarWebhookExpiry).toISOString()
+            : null
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Webhook registration failed' 
+        });
+      }
+    } catch (error: any) {
+      console.error('Error registering webhook:', error);
+      res.status(500).json({ message: error.message || 'Failed to register webhook' });
+    }
+  });
+
   // Admin: Get all users' webhook registration status
   app.get('/api/admin/webhooks', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
