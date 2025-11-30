@@ -332,9 +332,9 @@ export interface IStorage {
   getRecentCsvUploads(limit: number): Promise<CsvUpload[]>;
 
   // Google Sheets operations
-  getAllActiveGoogleSheets(): Promise<GoogleSheet[]>;
-  getGoogleSheetById(id: string): Promise<GoogleSheet | null>;
-  getGoogleSheetByPurpose(purpose: string): Promise<GoogleSheet | null>;
+  getAllActiveGoogleSheets(tenantId: string): Promise<GoogleSheet[]>;
+  getGoogleSheetById(id: string, tenantId: string): Promise<GoogleSheet | null>;
+  getGoogleSheetByPurpose(purpose: string, tenantId: string): Promise<GoogleSheet | null>;
   createGoogleSheetConnection(connection: InsertGoogleSheet): Promise<GoogleSheet>;
   disconnectGoogleSheet(id: string): Promise<void>;
   updateGoogleSheetLastSync(id: string): Promise<void>;
@@ -606,8 +606,9 @@ export interface IStorage {
   endVoiceProxySession(streamSid: string): Promise<void>;
 
   // E-Hub Settings operations
-  getEhubSettings(): Promise<EhubSettings | undefined>;
-  updateEhubSettings(updates: Partial<InsertEhubSettings>): Promise<EhubSettings>;
+  getEhubSettings(tenantId: string): Promise<EhubSettings | undefined>;
+  updateEhubSettings(tenantId: string, updates: Partial<InsertEhubSettings>): Promise<EhubSettings>;
+  getOrCreateManualFollowUpsSequence(tenantId: string): Promise<Sequence>;
 
   // E-Hub Sequence operations
   createSequence(sequence: InsertSequence): Promise<Sequence>;
@@ -1871,30 +1872,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Google Sheets operations
-  async getAllActiveGoogleSheets(): Promise<GoogleSheet[]> {
+  async getAllActiveGoogleSheets(tenantId: string): Promise<GoogleSheet[]> {
     return await db
       .select()
       .from(googleSheets)
-      .where(eq(googleSheets.syncStatus, 'active'))
+      .where(and(eq(googleSheets.syncStatus, 'active'), eq(googleSheets.tenantId, tenantId)))
       .orderBy(desc(googleSheets.createdAt));
   }
 
-  async getGoogleSheetById(id: string): Promise<GoogleSheet | null> {
+  async getGoogleSheetById(id: string, tenantId: string): Promise<GoogleSheet | null> {
     const [sheet] = await db
       .select()
       .from(googleSheets)
-      .where(eq(googleSheets.id, id))
+      .where(and(eq(googleSheets.id, id), eq(googleSheets.tenantId, tenantId)))
       .limit(1);
     return sheet || null;
   }
 
-  async getGoogleSheetByPurpose(purpose: string): Promise<GoogleSheet | null> {
+  async getGoogleSheetByPurpose(purpose: string, tenantId: string): Promise<GoogleSheet | null> {
     const [sheet] = await db
       .select()
       .from(googleSheets)
       .where(and(
         eq(googleSheets.sheetPurpose, purpose),
-        eq(googleSheets.syncStatus, 'active')
+        eq(googleSheets.syncStatus, 'active'),
+        eq(googleSheets.tenantId, tenantId)
       ))
       .limit(1);
     return sheet || null;
@@ -3803,16 +3805,17 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getEhubSettings(): Promise<EhubSettings | undefined> {
+  async getEhubSettings(tenantId: string): Promise<EhubSettings | undefined> {
     const [settings] = await db
       .select()
       .from(ehubSettings)
+      .where(eq(ehubSettings.tenantId, tenantId))
       .limit(1);
 
     return settings ? this.normalizeEhubSettings(settings) : undefined;
   }
 
-  async updateEhubSettings(updates: Partial<InsertEhubSettings>): Promise<EhubSettings> {
+  async updateEhubSettings(tenantId: string, updates: Partial<InsertEhubSettings>): Promise<EhubSettings> {
     // Validate settings - skip end > start check when duration is provided (allows midnight wrap)
     if (updates.sendingHoursStart !== undefined && updates.sendingHoursEnd !== undefined && !updates.sendingHoursDuration) {
       if (updates.sendingHoursEnd <= updates.sendingHoursStart) {
@@ -3832,21 +3835,22 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Get existing settings or create if none exist
-    const existing = await this.getEhubSettings();
+    // Get existing settings for this tenant or create if none exist
+    const existing = await this.getEhubSettings(tenantId);
 
     if (existing) {
       const [updated] = await db
         .update(ehubSettings)
         .set({ ...updates, updatedAt: new Date() })
-        .where(eq(ehubSettings.id, existing.id))
+        .where(and(eq(ehubSettings.id, existing.id), eq(ehubSettings.tenantId, tenantId)))
         .returning();
       return this.normalizeEhubSettings(updated);
     } else {
-      // Create default settings with provided updates
+      // Create default settings with provided updates for this tenant
       const [created] = await db
         .insert(ehubSettings)
         .values({
+          tenantId,
           minDelayMinutes: 1,
           maxDelayMinutes: 3,
           dailyEmailLimit: 200,
@@ -3909,19 +3913,19 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getOrCreateManualFollowUpsSequence(): Promise<Sequence> {
-    // Try to find existing "Manual Follow-Ups" system sequence
+  async getOrCreateManualFollowUpsSequence(tenantId: string): Promise<Sequence> {
+    // Try to find existing "Manual Follow-Ups" system sequence for this tenant
     const [existing] = await db
       .select()
       .from(sequences)
-      .where(eq(sequences.isSystem, true))
+      .where(and(eq(sequences.isSystem, true), eq(sequences.tenantId, tenantId)))
       .limit(1);
 
     if (existing) {
       return existing;
     }
 
-    // Create the system sequence
+    // Create the system sequence for this tenant
     const adminUser = await this.getAdminUserForSequences();
     if (!adminUser) {
       throw new Error('No admin user found to create system sequence');
@@ -3930,6 +3934,7 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db
       .insert(sequences)
       .values({
+        tenantId,
         name: 'Manual Follow-Ups',
         isSystem: true,
         status: 'paused', // Start paused - user will activate after adding campaign strategy
@@ -5464,6 +5469,7 @@ export class DatabaseStorage implements IStorage {
         SELECT 
           id,
           name,
+          tenant_id as "tenantId",
           created_by as "createdBy",
           strategy_transcript as "strategyTranscript",
           finalized_strategy as "finalizedStrategy",
@@ -5500,6 +5506,26 @@ export class DatabaseStorage implements IStorage {
       return adminUser;
     } catch (error) {
       console.error(`[Storage] Error fetching admin user:`, error);
+      return null;
+    }
+  }
+
+  // Get admin user's default tenantId (for background services)
+  async getAdminTenantId(): Promise<string | null> {
+    try {
+      const { sql } = await import('drizzle-orm');
+      const result = await db.execute(sql`
+        SELECT ut.tenant_id as "tenantId"
+        FROM users u
+        JOIN user_tenants ut ON u.id = ut.user_id
+        WHERE u.role = 'admin'
+          AND ut.is_default = TRUE
+        ORDER BY u.created_at ASC
+        LIMIT 1
+      `);
+      return (result as any).rows?.[0]?.tenantId || null;
+    } catch (error) {
+      console.error(`[Storage] Error fetching admin tenant:`, error);
       return null;
     }
   }

@@ -49,7 +49,12 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   const userPrefs = await storage.getUserPreferences(adminUserId);
   const adminTz = userPrefs?.timezone || 'America/New_York';
   
-  const settings = await storage.getEhubSettings();
+  const tenantId = await storage.getAdminTenantId();
+  if (!tenantId) {
+    return;
+  }
+  
+  const settings = await storage.getEhubSettings(tenantId);
   if (!settings) {
     return;
   }

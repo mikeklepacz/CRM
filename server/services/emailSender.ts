@@ -370,7 +370,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       return false;
     }
 
-    const settings = await storage.getEhubSettings();
+    const settings = await storage.getEhubSettings(sequence.tenantId);
     if (!settings) {
       return false;
     }
@@ -490,7 +490,8 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
         await updateCommissionTrackerStatus(
           recipient.link,
           agentName,
-          'Emailed'
+          'Emailed',
+          sequence.tenantId
         );
       } catch (error) {
         // Silent failure - don't break email sending for tracker errors

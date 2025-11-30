@@ -40,11 +40,11 @@ export class GmailReplyScanner {
    * Fetch all POC Emails from Commission Tracker sheet
    * ONLY includes prospects (Amount = $0), excludes existing customers (Amount > $0)
    */
-  private async fetchPOCEmails(): Promise<Set<string>> {
+  private async fetchPOCEmails(tenantId: string): Promise<Set<string>> {
     const pocEmails = new Set<string>();
     
     try {
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', tenantId);
       
       if (!trackerSheet) {
         return pocEmails;
@@ -393,7 +393,7 @@ export class GmailReplyScanner {
   /**
    * Main scan function - scans Gmail Sent folder and matches against Commission Tracker
    */
-  async scan(waitDays: number = 3, dryRun: boolean = false, selectedEmails?: string[]): Promise<ScanResult> {
+  async scan(waitDays: number = 3, dryRun: boolean = false, selectedEmails?: string[], tenantId?: string): Promise<ScanResult> {
     this.waitDays = waitDays;
     
 
@@ -461,7 +461,13 @@ export class GmailReplyScanner {
       }
 
       // Fetch POC Emails from Commission Tracker
-      const pocEmails = await this.fetchPOCEmails();
+      // Use provided tenantId or fall back to admin user's tenant
+      const effectiveTenantId = tenantId || adminUser.tenantId;
+      if (!effectiveTenantId) {
+        console.error('[ReplyScanner] No tenantId available');
+        return result;
+      }
+      const pocEmails = await this.fetchPOCEmails(effectiveTenantId);
       
       if (pocEmails.size === 0) {
         return result;

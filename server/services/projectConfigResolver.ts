@@ -103,7 +103,7 @@ export async function resolveProjectConfig(
   const [tenant, project, ehubSettings] = await Promise.all([
     storage.getTenantById(tenantId),
     storage.getTenantProjectById(projectId, tenantId),
-    storage.getEhubSettings(),
+    storage.getEhubSettings(tenantId),
   ]);
 
   if (!tenant || !project) {

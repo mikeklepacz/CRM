@@ -12,7 +12,12 @@ let lastRunHour: number | null = null;
  */
 async function checkAndRunMaintenance() {
   try {
-    const settings = await storage.getEhubSettings();
+    const tenantId = await storage.getAdminTenantId();
+    if (!tenantId) {
+      return;
+    }
+    
+    const settings = await storage.getEhubSettings(tenantId);
     if (!settings) {
       return;
     }

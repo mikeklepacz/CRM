@@ -246,8 +246,8 @@ export async function writeCommissionTrackerTimestamp(
 
 // Sync Commission Tracker data to PostgreSQL clients table
 // Uses Column P (updated) for incremental sync, falls back to full sync if no lastSyncedAt
-export async function syncCommissionTrackerToPostgres(trackerSheetId: string) {
-  const sheet = await storage.getGoogleSheetById(trackerSheetId);
+export async function syncCommissionTrackerToPostgres(trackerSheetId: string, tenantId: string) {
+  const sheet = await storage.getGoogleSheetById(trackerSheetId, tenantId);
   if (!sheet || sheet.sheetPurpose !== 'commissions') {
     throw new Error('Invalid Commission Tracker sheet');
   }
@@ -438,10 +438,11 @@ export async function getUserGoogleClient(userId: string) {
  */
 export async function mergeAndUpdateStore(
   targetLink: string,
-  mergedData: Record<string, any>
+  mergedData: Record<string, any>,
+  tenantId: string
 ) {
   const sheets = await getSystemGoogleSheetClient();
-  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
   
   if (!storeSheet) {
     throw new Error('Store Database sheet ID not configured');
@@ -496,9 +497,9 @@ export async function mergeAndUpdateStore(
  * Delete a store from Store Database by Link value
  * Uses the Google Sheets API to delete the entire row
  */
-export async function deleteStoreFromSheet(link: string) {
+export async function deleteStoreFromSheet(link: string, tenantId: string) {
   const sheets = await getSystemGoogleSheetClient();
-  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
   
   if (!storeSheet) {
     throw new Error('Store Database sheet ID not configured');
@@ -619,9 +620,9 @@ export function convertObjectsToSheetRows(headers: string[], objects: Array<Reco
 /**
  * Update all Commission Tracker rows that reference oldLink to use newLink instead
  */
-export async function updateCommissionTrackerLinks(oldLink: string, newLink: string) {
+export async function updateCommissionTrackerLinks(oldLink: string, newLink: string, tenantId: string) {
   const sheets = await getSystemGoogleSheetClient();
-  const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+  const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', tenantId);
   
   if (!trackerSheet) {
     throw new Error('Commission Tracker sheet ID not configured');

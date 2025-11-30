@@ -151,7 +151,12 @@ export async function generateSlotsForDay(
  * 4. Generates slots for missing days (skipping weekends if configured)
  */
 export async function ensureDailySlots() {
-  const settings = await storage.getEhubSettings();
+  const tenantId = await storage.getAdminTenantId();
+  if (!tenantId) {
+    return;
+  }
+  
+  const settings = await storage.getEhubSettings(tenantId);
   if (!settings) {
     return;
   }

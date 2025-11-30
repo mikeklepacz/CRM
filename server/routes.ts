@@ -1726,7 +1726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Get store data to find row index and sheet info
             const storeSnapshot = clientData.storeSnapshot;
             if (storeSnapshot && storeSnapshot.rowIndex !== undefined && storeSnapshot.sheetId) {
-              const sheet = await storage.getGoogleSheetById(storeSnapshot.sheetId);
+              const sheet = await storage.getGoogleSheetById(storeSnapshot.sheetId, clientData.tenantId);
               
               if (sheet) {
                 const { spreadsheetId, sheetName } = sheet;
@@ -1845,7 +1845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
               
               if (storeDbUpdates.length > 0 && clientData.storeSnapshot.sheetId && clientData.storeSnapshot.rowIndex) {
-                const sheet = await storage.getGoogleSheetById(clientData.storeSnapshot.sheetId);
+                const sheet = await storage.getGoogleSheetById(clientData.storeSnapshot.sheetId, clientData.tenantId);
                 if (sheet) {
                   const { spreadsheetId, sheetName } = sheet;
                   
@@ -1867,7 +1867,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
               
               // Update Commission Tracker fields (POC Title, Follow-up Date, Notes)
-              const sheets = await storage.getAllActiveGoogleSheets();
+              const sheets = await storage.getAllActiveGoogleSheets(clientData.tenantId);
               const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
               
               if (trackerSheet && clientData.clientId) {
@@ -2605,8 +2605,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { scenario } = req.params;
       
       // Get BOTH sheets - Commission Tracker for status/agent, Store Database for business details
-      const commissionSheet = await storage.getGoogleSheetByPurpose('commissions');
-      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      const commissionSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
       
       if (!commissionSheet || !storeSheet) {
         return res.status(404).json({ error: 'Required Google Sheets not configured' });
@@ -7321,7 +7321,7 @@ IMPORTANT:
         const currentUser = await storage.getUser(userId);
         const agentName = currentUser.agentName;
         
-        const trackerResult = await updateCommissionTrackerStatus(clientLink, agentName, 'Emailed');
+        const trackerResult = await updateCommissionTrackerStatus(clientLink, agentName, 'Emailed', (req.user as any).tenantId);
         
         if (trackerResult.success) {
           console.log(`📧 [GMAIL] ✅ Commission Tracker updated: ${trackerResult.message}${trackerResult.created ? ' (new row created)' : ''}`);
@@ -7335,7 +7335,7 @@ IMPORTANT:
         console.log('📧 [MANUAL FOLLOW-UPS] Auto-enrolling recipient in system sequence...');
         
         // Get or create the Manual Follow-Ups system sequence
-        const systemSequence = await storage.getOrCreateManualFollowUpsSequence();
+        const systemSequence = await storage.getOrCreateManualFollowUpsSequence(req.user.tenantId);
         
         // Check if recipient is already enrolled
         const existingRecipient = await db
@@ -7876,7 +7876,7 @@ IMPORTANT:
       }
 
       // Get Commission Tracker sheet (source of truth)
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         return res.json([]);
       }
@@ -7886,7 +7886,7 @@ IMPORTANT:
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
       
       // Get Store Database sheet for later enrichment (needed for hash)
-      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
       let storeRows: any[][] = [];
       if (storeSheet) {
         const storeRange = `${storeSheet.sheetName}!A:S`;
@@ -8595,7 +8595,7 @@ IMPORTANT:
       }
 
       // Find Commission Tracker sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -8721,7 +8721,7 @@ IMPORTANT:
       }
 
       // Find both sheets
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
       const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
@@ -8928,7 +8928,7 @@ IMPORTANT:
       console.log('[GET /api/orders] All orders fetched:', orders.length);
 
       // Check Commission Tracker to see which orders have tracker rows
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       console.log('[GET /api/orders] All sheets:', sheets.map(s => ({ purpose: s.sheetPurpose, name: s.spreadsheetName })));
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
       console.log('[GET /api/orders] Tracker sheet found:', trackerSheet ? trackerSheet.spreadsheetName : 'NONE');
@@ -9016,7 +9016,7 @@ IMPORTANT:
       }
 
       // Find Store Database and Commission Tracker sheets
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
@@ -9024,7 +9024,7 @@ IMPORTANT:
         return res.status(404).json({ message: 'Store Database sheet not found' });
       }
 
-      // Check Commission Tracker for already-matched stores
+      // Check Commission Tracker for already-matched stores (trackerSheet from line above)
       const matchedStoreLinks: string[] = [];
       if (trackerSheet) {
         try {
@@ -9193,7 +9193,7 @@ IMPORTANT:
       }
 
       // Find Commission Tracker sheet (Store Database syncs from Tracker via Google Sheets)
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -9433,7 +9433,7 @@ IMPORTANT:
 
       // Step 2: Write to Google Sheets Commission Tracker
       let sheetsWritten = 0;
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       console.log('Tracker sheet found:', trackerSheet ? `${trackerSheet.spreadsheetName} / ${trackerSheet.sheetName}` : 'NONE');
 
       if (trackerSheet) {
@@ -10053,7 +10053,7 @@ IMPORTANT:
           
           // DELETE COMMISSION TRACKER ROW: Remove the row from Google Sheets for this deleted order
           try {
-            const sheets = await storage.getAllActiveGoogleSheets();
+            const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
             const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
             
             if (trackerSheet) {
@@ -10132,7 +10132,7 @@ IMPORTANT:
       let autoMatched = 0;
 
       try {
-        const sheets = await storage.getAllActiveGoogleSheets();
+        const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
         const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
         const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
@@ -10240,7 +10240,7 @@ IMPORTANT:
       let trackerRows: any[][] = [];
 
       try {
-        const sheets = await storage.getAllActiveGoogleSheets();
+        const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
         trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
         if (trackerSheet) {
@@ -10507,7 +10507,7 @@ IMPORTANT:
       let trackerRowsDeleted = 0;
       
       try {
-        const sheets = await storage.getAllActiveGoogleSheets();
+        const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
         const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
         
         if (trackerSheet) {
@@ -10595,7 +10595,7 @@ IMPORTANT:
       }
 
       // Get Commission Tracker sheet
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         return res.status(400).json({ message: "Commission Tracker sheet not connected" });
       }
@@ -10860,9 +10860,9 @@ IMPORTANT:
   });
 
   // Get active Google Sheet connections (deprecated - use /api/sheets instead)
-  app.get('/api/sheets/active', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.get('/api/sheets/active', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       res.json(sheets.length > 0 ? sheets[0] : null);
     } catch (error: any) {
       console.error("Error getting active sheets:", error);
@@ -10919,9 +10919,9 @@ IMPORTANT:
   });
 
   // List all connected Google Sheets (accessible by all authenticated users including agents)
-  app.get('/api/sheets', isAuthenticatedCustom, async (req, res) => {
+  app.get('/api/sheets', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       res.json({ sheets });
     } catch (error: any) {
       console.error("Error fetching sheets:", error);
@@ -10935,7 +10935,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
 
-      const sheet = await storage.getGoogleSheetById(id);
+      const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: "Google Sheet not found" });
       }
@@ -10999,8 +10999,8 @@ IMPORTANT:
 
       // Cache miss - fetch fresh data from Google Sheets
       // Fetch both sheets
-      const storeSheet = await storage.getGoogleSheetById(storeSheetId);
-      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
+      const storeSheet = await storage.getGoogleSheetById(storeSheetId, (req.user as any).tenantId);
+      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId, (req.user as any).tenantId);
 
       if (!storeSheet || !trackerSheet) {
         return res.status(404).json({ message: "One or both sheets not found" });
@@ -11341,12 +11341,12 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
       // Find Commission Tracker sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (trackerSheet) {
         // Sync Commission Tracker data to PostgreSQL
-        const syncResult = await googleSheets.syncCommissionTrackerToPostgres(trackerSheet.id);
+        const syncResult = await googleSheets.syncCommissionTrackerToPostgres(trackerSheet.id, (req.user as any).tenantId);
         console.log(`📊 Sync result:`, syncResult);
       } else {
         console.log('⚠️ No Commission Tracker sheet found, skipping sync');
@@ -11373,7 +11373,7 @@ IMPORTANT:
         return res.status(400).json({ message: "Row index and column are required" });
       }
 
-      const sheet = await storage.getGoogleSheetById(id);
+      const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: "Google Sheet not found" });
       }
@@ -11405,7 +11405,7 @@ IMPORTANT:
             const linkValue = row[linkIndex];
 
             // Find Commission Tracker and claim the store
-            const sheets = await storage.getAllActiveGoogleSheets();
+            const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
             const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
             if (trackerSheet) {
@@ -11576,11 +11576,12 @@ IMPORTANT:
     link: string,
     name: string,
     email: string,
-    agentName: string
+    agentName: string,
+    tenantId: string
   ): Promise<{ success: boolean; message?: string }> {
     try {
       // Find Commission Tracker sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets(tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -11715,7 +11716,7 @@ IMPORTANT:
       }
 
       // Find Commission Tracker sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -11899,7 +11900,7 @@ IMPORTANT:
       console.log('[Unclaim] Deleting tracker row for link:', link);
       
       // Find Commission Tracker sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
       
       if (!trackerSheet) {
@@ -12001,7 +12002,7 @@ IMPORTANT:
       console.log('[AUTO-CLAIM] Request:', { link, agentName: user.agentName });
 
       // CRITICAL: ONLY write to Commission Tracker - Store Database syncs via Google Sheets formulas
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -12104,7 +12105,7 @@ IMPORTANT:
       console.log('[CLAIM-STORE] Request:', { linkValue, column, value, joinColumn, agentName: user.agentName });
 
       // CRITICAL: ONLY write to Commission Tracker - Store Database syncs via Google Sheets formulas
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -12207,7 +12208,7 @@ IMPORTANT:
       }
 
       // ALWAYS find and use Commission Tracker (source of truth)
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -12320,7 +12321,7 @@ IMPORTANT:
         return res.status(400).json({ message: "Row index is required" });
       }
 
-      const sheet = await storage.getGoogleSheetById(id);
+      const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: "Google Sheet not found" });
       }
@@ -12374,7 +12375,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
 
-      const sheet = await storage.getGoogleSheetById(id);
+      const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
       }
@@ -12441,7 +12442,7 @@ IMPORTANT:
       const tenantId = req.user.tenantId;
       const { id } = req.params;
 
-      const sheet = await storage.getGoogleSheetById(id);
+      const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
       }
@@ -12489,7 +12490,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
 
-      const sheet = await storage.getGoogleSheetById(id);
+      const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
       }
@@ -12561,7 +12562,7 @@ IMPORTANT:
       const decodedId = decodeURIComponent(storeId);
 
       // Find both sheets
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
@@ -12658,7 +12659,7 @@ IMPORTANT:
       const updates = req.body;
 
       // Find the relevant store sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       if (!storeSheet) {
@@ -12881,7 +12882,7 @@ IMPORTANT:
       // If keeperLink is provided, merge data first
       if (keeperLink && statusHierarchy) {
         // Read Store Database to get both stores' data
-        const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+        const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
         if (!storeSheet) {
           return res.status(404).json({ message: 'Store Database not configured' });
         }
@@ -12922,16 +12923,16 @@ IMPORTANT:
         const merged = mergeStoreData(target, source, statusHierarchy);
 
         // Update the keeper with merged data
-        await googleSheets.mergeAndUpdateStore(keeperLink, merged);
+        await googleSheets.mergeAndUpdateStore(keeperLink, merged, (req.user as any).tenantId);
         console.log('[DELETE-STORE] Merged data into keeper:', keeperLink);
 
         // Update Commission Tracker references
-        await googleSheets.updateCommissionTrackerLinks(decodedLink, keeperLink);
+        await googleSheets.updateCommissionTrackerLinks(decodedLink, keeperLink, (req.user as any).tenantId);
         console.log('[DELETE-STORE] Updated Commission Tracker links');
       }
 
       // Delete the store
-      await googleSheets.deleteStoreFromSheet(decodedLink);
+      await googleSheets.deleteStoreFromSheet(decodedLink, (req.user as any).tenantId);
       console.log('[DELETE-STORE] Deleted store:', decodedLink);
 
       res.json({ success: true, message: 'Store deleted successfully' });
@@ -12966,7 +12967,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { sheetId } = req.params;
 
-      const sheet = await storage.getGoogleSheetById(sheetId);
+      const sheet = await storage.getGoogleSheetById(sheetId, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: 'Sheet not found' });
       }
@@ -13018,7 +13019,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { sheetId, dbaName } = req.params;
 
-      const sheet = await storage.getGoogleSheetById(sheetId);
+      const sheet = await storage.getGoogleSheetById(sheetId, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: 'Sheet not found' });
       }
@@ -13089,8 +13090,8 @@ IMPORTANT:
       }
 
       // Get both sheets
-      const storeSheet = await storage.getGoogleSheetById(storeSheetId);
-      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
+      const storeSheet = await storage.getGoogleSheetById(storeSheetId, (req.user as any).tenantId);
+      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId, (req.user as any).tenantId);
 
       if (!storeSheet || !trackerSheet) {
         return res.status(404).json({ message: 'One or both sheets not found' });
@@ -13251,7 +13252,7 @@ IMPORTANT:
       }
 
       // Find Store Database sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       if (!storeSheet) {
@@ -13335,7 +13336,7 @@ IMPORTANT:
       }
 
       // Find Commission Tracker sheet (source of truth)
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -13553,7 +13554,7 @@ IMPORTANT:
       };
 
       // Get Store Database
-      const sheet = await storage.getGoogleSheetById(sheetId);
+      const sheet = await storage.getGoogleSheetById(sheetId, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: 'Sheet not found' });
       }
@@ -14010,7 +14011,7 @@ ${rawText}`;
         return res.json({ stores: [] });
       }
 
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const sheet = sheets.find(s => s.id === sheetId);
       
       if (!sheet) {
@@ -14079,7 +14080,7 @@ ${rawText}`;
         return res.status(400).json({ message: 'Store data is required' });
       }
 
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const sheet = sheets.find(s => s.id === sheetId);
       
       if (!sheet) {
@@ -14373,7 +14374,7 @@ ${rawText}`;
       }
 
       // Find Commission Tracker sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -14576,7 +14577,7 @@ ${rawText}`;
         return res.status(400).json({ message: "Parent link and child links array are required" });
       }
 
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -14652,7 +14653,7 @@ ${rawText}`;
         return res.status(400).json({ message: "Child links array is required" });
       }
 
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -14719,7 +14720,7 @@ ${rawText}`;
         return res.status(400).json({ message: "Head office link is required" });
       }
 
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
@@ -14841,7 +14842,7 @@ ${rawText}`;
     try {
       const { parentLink } = req.params;
 
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
       const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
@@ -14953,7 +14954,7 @@ ${rawText}`;
       }
 
       // Get Commission Tracker sheet
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         return res.json({
           totalEarnings: "0.00",
@@ -15150,7 +15151,7 @@ ${rawText}`;
       }
 
       // Get Commission Tracker sheet
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         return res.json({
           breakdown: {
@@ -15280,7 +15281,7 @@ ${rawText}`;
       }
 
       // Get both sheets
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
@@ -15487,7 +15488,7 @@ ${rawText}`;
       }
 
       // Get Commission Tracker sheet
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         return res.json({ topClients: [] });
       }
@@ -15584,7 +15585,7 @@ ${rawText}`;
       };
 
       // Get Store Database sheet to look up company names by link
-      const allSheets = await storage.getAllActiveGoogleSheets();
+      const allSheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       
       const storeSheet = allSheets.find(s => s.sheetPurpose === 'Store Database');
       const linkToNameMap: { [normalizedLink: string]: string } = {};
@@ -15868,7 +15869,7 @@ ${rawText}`;
           const linkValue = enhancedStoreMetadata.link;
 
           // Find Commission Tracker and claim the store
-          const sheets = await storage.getAllActiveGoogleSheets();
+          const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
           const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
           if (trackerSheet) {
@@ -18924,7 +18925,7 @@ Use this store information to provide context-aware responses. When helping draf
       const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
 
       // Find Store Database sheet for this category
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       if (!storeSheet) {
@@ -19507,7 +19508,7 @@ Use this store information to provide context-aware responses. When helping draf
           console.log('[ManualFollowUps] Auto-enrolling draft recipient:', recipientEmail);
           
           // Get or create Manual Follow-Ups sequence
-          const manualFollowUpsSequence = await storage.getOrCreateManualFollowUpsSequence();
+          const manualFollowUpsSequence = await storage.getOrCreateManualFollowUpsSequence(req.user.tenantId);
           
           // Fetch user preferences to check blacklistCheckEnabled
           const [prefs] = await db
@@ -19631,7 +19632,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Get Commission Tracker sheet
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         console.log('[FOLLOW-UP] ❌ No Commission Tracker sheet found');
         return res.json({ claimedUntouched: [], interestedGoingCold: [], closedWonReorder: [] });
@@ -19755,7 +19756,7 @@ Use this store information to provide context-aware responses. When helping draf
       console.log('[FOLLOW-UP] 🏪 Processed', storesByLink.size, 'unique stores from tracker');
 
       // Enrich with Store Database data (Name, Phone, etc.)
-      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
       if (storeSheet) {
         const storeRange = `${storeSheet.sheetName}!A:ZZ`;
         const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
@@ -20062,7 +20063,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Get E-Hub global settings (admin only)
   app.get('/api/ehub/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const settings = await storage.getEhubSettings();
+      const settings = await storage.getEhubSettings(req.user.tenantId);
       
       // Return default settings if none exist
       if (!settings) {
@@ -20350,7 +20351,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Fetch current settings BEFORE updating to detect changes
-      const oldSettings = await storage.getEhubSettings();
+      const oldSettings = await storage.getEhubSettings(req.user.tenantId);
 
       // Validate using update schema (partial with safe refinements)
       const updates = updateEhubSettingsSchema.parse({
@@ -20358,7 +20359,7 @@ Use this store information to provide context-aware responses. When helping draf
         updatedBy: userId,
       });
 
-      const newSettings = await storage.updateEhubSettings(updates);
+      const newSettings = await storage.updateEhubSettings(req.user.tenantId, updates);
       
       // Detect if scheduling settings changed (NOT content settings like AI prompt or keywords)
       const schedulingSettingsChanged = oldSettings && (
@@ -20409,6 +20410,7 @@ Use this store information to provide context-aware responses. When helping draf
         pageSize,
         search,
         statusFilter: statusFilter as any,
+        tenantId: (req.user as any).tenantId,
       });
 
       res.json(result);
@@ -20606,7 +20608,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       console.log(`[API] Starting reply scan (dryRun: ${dryRun}, waitDays: ${waitDays}, selected: ${selectedEmails?.length || 'all'})`);
       
-      const result = await gmailReplyScanner.scan(waitDays, dryRun, selectedEmails);
+      const result = await gmailReplyScanner.scan(waitDays, dryRun, selectedEmails, (req.user as any).tenantId);
       
       res.json({
         success: true,
@@ -20699,7 +20701,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Ensure Manual Follow-Ups system sequence exists (admin only)
   app.post('/api/sequences/ensure-manual-followups', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const sequence = await storage.getOrCreateManualFollowUpsSequence();
+      const sequence = await storage.getOrCreateManualFollowUpsSequence(req.user.tenantId);
       res.json({
         success: true,
         sequence,
@@ -20900,7 +20902,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Get E-Hub settings for prompt injection and keyword bin
-      const ehubSettings = await storage.getEhubSettings();
+      const ehubSettings = await storage.getEhubSettings(req.user.tenantId);
       const promptInjection = ehubSettings?.promptInjection || '';
       const keywordBin = ehubSettings?.keywordBin || '';
 
@@ -21204,7 +21206,7 @@ ${conversationContext}`;
       }
       
       // Get E-Hub settings for prompt injection, signature, etc.
-      const ehubSettings = await storage.getEhubSettings();
+      const ehubSettings = await storage.getEhubSettings(req.user.tenantId);
       if (!ehubSettings) {
         return res.status(500).json({ message: 'E-Hub settings not configured' });
       }
@@ -21212,7 +21214,7 @@ ${conversationContext}`;
       // Fetch ONE random real store from Store Database
       console.log('[SyntheticTest] Fetching random real store from Store Database...');
       
-      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
       if (!storeSheet) {
         return res.status(500).json({ message: 'Store Database not configured' });
       }
@@ -21629,6 +21631,7 @@ ${conversationContext}`;
           pageSize: 99999, // Get all
           search: search || '',
           statusFilter: statusFilter || 'all',
+          tenantId: (req.user as any).tenantId,
         });
         contactsToAdd = allContacts;
       } else {
@@ -21642,7 +21645,7 @@ ${conversationContext}`;
 
       // ENRICH CONTACTS: Build a lookup map from Store Database to populate missing link fields
       const storeEmailToLink = new Map<string, { link?: string; salesSummary?: string }>();
-      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
       
       if (storeSheet) {
         const storeData = await googleSheets.readSheetData(
@@ -21800,7 +21803,7 @@ ${conversationContext}`;
       const recipients = await storage.getRecipients(id, {});
 
       // Find Commission Tracker sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {

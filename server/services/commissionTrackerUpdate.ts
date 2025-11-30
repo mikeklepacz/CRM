@@ -10,11 +10,12 @@ import { format } from 'date-fns';
 export async function updateCommissionTrackerStatus(
   link: string,
   agentName: string,
-  newStatus: string
+  newStatus: string,
+  tenantId: string
 ): Promise<{ success: boolean; message?: string; created?: boolean }> {
   try {
     // Find Commission Tracker sheet
-    const sheets = await storage.getAllActiveGoogleSheets();
+    const sheets = await storage.getAllActiveGoogleSheets(tenantId);
     const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
     
     if (!trackerSheet) {

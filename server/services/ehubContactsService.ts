@@ -61,19 +61,21 @@ export async function getAllContacts(options: {
   pageSize?: number;
   search?: string;
   statusFilter?: 'all' | 'neverContacted' | 'contacted' | 'inSequence' | 'replied' | 'bounced';
+  tenantId: string;
 }): Promise<AllContactsResponse> {
   const {
     page = 1,
     pageSize = 50,
     search = '',
-    statusFilter = 'all'
+    statusFilter = 'all',
+    tenantId
   } = options;
 
   const now = Date.now();
   const cacheValid = cachedContacts && cacheTimestamp && (now - cacheTimestamp < CACHE_TTL_MS);
 
   if (!cacheValid) {
-    cachedContacts = await fetchAndEnrichContacts();
+    cachedContacts = await fetchAndEnrichContacts(tenantId);
     cacheTimestamp = now;
   }
 
@@ -131,7 +133,7 @@ export async function getAllContacts(options: {
   };
 }
 
-async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
+async function fetchAndEnrichContacts(tenantId: string): Promise<EhubContact[]> {
   const allContacts: Array<{
     name: string;
     email: string;
@@ -141,7 +143,7 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
     salesSummary?: string;
   }> = [];
 
-  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
   
   if (storeSheet) {
     const storeData = await googleSheets.readSheetData(
@@ -179,7 +181,7 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
   // Track emails that have been contacted according to Commission Tracker
   const trackerEmailedMap = new Map<string, boolean>();
   
-  const commissionSheet = await storage.getGoogleSheetByPurpose('commissions');
+  const commissionSheet = await storage.getGoogleSheetByPurpose('commissions', tenantId);
   
   if (commissionSheet) {
     const commissionData = await googleSheets.readSheetData(

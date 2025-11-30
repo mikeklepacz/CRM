@@ -56,7 +56,12 @@ import { isNoSendDay } from '../holidayCalendar';
  * Called when a recipient is enrolled to avoid waiting for the 60s queue cycle
  */
 export async function assignSingleRecipient(recipientId: string) {
-  const settings = await storage.getEhubSettings();
+  const tenantId = await storage.getAdminTenantId();
+  if (!tenantId) {
+    return;
+  }
+  
+  const settings = await storage.getEhubSettings(tenantId);
   if (!settings) {
     return;
   }
@@ -128,7 +133,12 @@ function getPriorityTier(recipient: any): number {
 }
 
 export async function assignRecipientsToSlots() {
-  const settings = await storage.getEhubSettings();
+  const tenantId = await storage.getAdminTenantId();
+  if (!tenantId) {
+    return;
+  }
+  
+  const settings = await storage.getEhubSettings(tenantId);
   if (!settings) {
     return;
   }
