@@ -1701,6 +1701,16 @@ export default function EHub() {
   // Derive current sequence to check for finalized strategy
   const currentSequence = sequences?.find(s => s.id === selectedSequenceId);
 
+  // DEBUG: Log state for troubleshooting
+  console.log('[DEBUG E-Hub] State snapshot:', {
+    selectedSequenceId,
+    sequencesLength: sequences?.length,
+    sequencesIsArray: Array.isArray(sequences),
+    currentSequenceExists: !!currentSequence,
+    currentSequenceName: currentSequence?.name,
+    activeTab,
+  });
+
   // Generate finalized strategy mutation
   const generateFinalizedStrategyMutation = useMutation({
     mutationFn: async () => {
@@ -3135,6 +3145,8 @@ export default function EHub() {
 
         {/* Campaign Strategy Tab */}
         <TabsContent value="strategy" className="space-y-4">
+          {/* DEBUG LOG */}
+          {console.log('[DEBUG Strategy Tab] Rendering:', { selectedSequenceId, currentSequence: currentSequence?.name, hasSequences: !!sequences })}
           {/* Sequence Selector */}
           <Card>
             <CardHeader>
