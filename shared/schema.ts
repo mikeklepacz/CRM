@@ -2025,7 +2025,8 @@ export const tenants = pgTable("tenants", {
     primaryColor?: string;
     logoUrl?: string;
     companyName?: string; // For white-label branding
-    enabledModules?: string[]; // ['voice', 'ehub', 'crm', 'kb']
+    allowedModules?: string[]; // Super Admin controls: modules tenant CAN enable
+    enabledModules?: string[]; // Org Admin controls: modules tenant HAS enabled (subset of allowedModules)
     timezone?: string; // Default timezone for tenant
     [key: string]: any;
   }>().default(sql`'{}'::jsonb`),
