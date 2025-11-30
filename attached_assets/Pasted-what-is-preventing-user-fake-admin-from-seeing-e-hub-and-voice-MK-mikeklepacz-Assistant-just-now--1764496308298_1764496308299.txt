@@ -1,0 +1,68 @@
+what is preventing user fake admin from seeing e-hub and voice?
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 13 files
+Looking at the codebase, I can see that user "fake admin" is likely not seeing E-Hub and Voice modules due to module access restrictions. Let me trace through the access control flow:
+
+The Issue
+From the code analysis, there are two levels of access control:
+
+User-level permissions - hasVoiceAccess flag and role checks
+Tenant-level module settings - allowedModules and enabledModules in tenant settings
+For Voice Module
+From rag://rag_source_0 (client/src/pages/voice.tsx):
+
+// Check if module is enabled for the tenant
+const moduleEnabled = isModuleEnabled("voice_kb");
+// Redirect if user doesn't have voice access or module is disabled
+useEffect(() => {
+  if (user && !canAccessAdminFeatures(user) && !user.hasVoiceAccess) {
+    setLocation('/');
+  }
+}, [user, setLocation]);
+// Check if user should have access (admin always has access, agents need hasVoiceAccess)
+const hasAccess = canAccessAdminFeatures(user) || user?.hasVoiceAccess;
+So for Voice, the user needs:
+
+Either admin role (canAccessAdminFeatures(user)) OR hasVoiceAccess flag set to true
+AND the voice_kb module must be enabled for the tenant
+For E-Hub Module
+From rag://rag_source_3 (client/src/pages/ehub.tsx):
+
+const moduleEnabled = isModuleEnabled("ehub");
+if (!moduleAccessLoading && !moduleEnabled) {
+  return (
+    <div className="h-full overflow-auto p-6">
+      <div className="max-w-2xl mx-auto">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <ShieldAlert className="h-12 w-12 mx-auto text-muted-foreground" />
+              <h2 className="text-xl font-semibold">Module Not Available</h2>
+E-Hub only checks if the module is enabled at the tenant level - it doesn't have user-level permission checks like Voice does.
+
+The Solution
+You need to ensure:
+
+For Voice: The user needs hasVoiceAccess set to true (if not admin)
+For Both: The tenant's enabledModules array must include "voice_kb" and "ehub"
+Check Tenant Settings
+Based on rag://rag_source_2, you should verify in the Super Admin panel:
+
+Go to Super Admin → Tenants tab
+Click "View" on the tenant for user "fake admin"
+Check if voice_kb and ehub are in the "Allowed Modules" list
+If not, click "Edit" and enable those modules
+Grant Voice Access to User
+From [rag://rag_source_10], admins can toggle voice access:
+
+Go to Admin → Users tab (or Super Admin → Users tab)
+Find user "fake admin"
+Check the "Voice Access" checkbox for that user
+The checkbox is shown in the user management table and can be toggled by admins.
+
+Note: If the user's role is already admin or org_admin, they should automatically have access to these features as long as the modules are enabled at the tenant level.

@@ -25,8 +25,7 @@ interface TenantSettingsResponse {
 
 interface ModuleAccessResult {
   isModuleEnabled: (moduleId: string) => boolean;
-  enabledModules: string[];
-  allowedModules: string[];
+  allowedModules: string[] | undefined;
   isLoading: boolean;
   error: Error | null;
 }
@@ -57,26 +56,25 @@ export function useModuleAccess(): ModuleAccessResult {
     staleTime: 5 * 60 * 1000,
   });
 
-  const enabledModules = useMemo(() => {
-    return data?.tenant?.settings?.enabledModules || [];
-  }, [data?.tenant?.settings?.enabledModules]);
-
   const allowedModules = useMemo(() => {
-    return data?.tenant?.settings?.allowedModules || [];
+    return data?.tenant?.settings?.allowedModules;
   }, [data?.tenant?.settings?.allowedModules]);
 
   const isModuleEnabled = useCallback(
     (moduleId: string): boolean => {
       if (isLoading) return true;
-      if (!data?.tenant?.settings?.enabledModules) return true;
-      return enabledModules.includes(moduleId);
+      // If allowedModules is undefined/null, all modules are allowed (no restrictions set)
+      // If allowedModules is an explicit empty array [], no modules are allowed
+      if (allowedModules === undefined || allowedModules === null) {
+        return true;
+      }
+      return allowedModules.includes(moduleId);
     },
-    [isLoading, data?.tenant?.settings?.enabledModules, enabledModules]
+    [isLoading, allowedModules]
   );
 
   return {
     isModuleEnabled,
-    enabledModules,
     allowedModules,
     isLoading,
     error: error as Error | null,
@@ -85,12 +83,14 @@ export function useModuleAccess(): ModuleAccessResult {
 
 export function isNavItemEnabled(
   navKey: string,
-  enabledModules: string[],
+  allowedModules: string[] | null | undefined,
   isLoading: boolean
 ): boolean {
   if (isLoading) return true;
   const moduleId = MODULE_NAV_MAPPING[navKey];
   if (!moduleId) return true;
-  if (enabledModules.length === 0) return true;
-  return enabledModules.includes(moduleId);
+  // If allowedModules is undefined/null, all modules are allowed (no restrictions set)
+  // If allowedModules is an explicit empty array [], no modules are allowed
+  if (allowedModules === undefined || allowedModules === null) return true;
+  return allowedModules.includes(moduleId);
 }

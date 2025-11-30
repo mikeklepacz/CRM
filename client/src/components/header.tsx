@@ -53,7 +53,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
   const projectContext = useOptionalProject();
 
   // Get tenant module access settings
-  const { enabledModules, isLoading: moduleAccessLoading } = useModuleAccess();
+  const { allowedModules, isLoading: moduleAccessLoading } = useModuleAccess();
 
   // Get unread ticket count (admin only)
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -91,7 +91,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
     // Check user preference visibility first
     if (userPrefKey && visibleModules[userPrefKey] === false) return false;
     // Check tenant module access
-    return isNavItemEnabled(navKey, enabledModules, moduleAccessLoading);
+    return isNavItemEnabled(navKey, allowedModules, moduleAccessLoading);
   };
 
   const unreadCount = unreadData?.count || 0;
