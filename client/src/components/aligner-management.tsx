@@ -253,7 +253,12 @@ export function AlignerManagement() {
                   }
                 });
               }}
-              placeholder="You are the Aligner AI, responsible for analyzing call transcripts and AI Insights to propose improvements to the knowledge base..."
+              placeholder="You are the Aligner AI, responsible for analyzing call transcripts and insights to propose improvements to the knowledge base.
+
+Your role:
+- Analyze call performance data
+- Identify patterns and areas for improvement
+- Propose knowledge base updates based on real-world conversations"
               rows={12}
               className="font-mono text-sm"
               data-testid="textarea-aligner-instructions"
@@ -307,7 +312,17 @@ export function AlignerManagement() {
                   }
                 });
               }}
-              placeholder="You are the Aligner assistant analyzing call performance data..."
+              placeholder="MISSION
+Analyze call performance and propose knowledge base improvements.
+
+CONTEXT
+Transcript: {{transcriptContext}}
+Knowledge Base: {{kbContext}}
+
+INSTRUCTIONS
+1. Compare the transcript against knowledge base content
+2. Identify gaps, inconsistencies, or opportunities
+3. Propose specific, actionable improvements"
               rows={16}
               className="font-mono text-sm"
               data-testid="textarea-task-prompt-template"

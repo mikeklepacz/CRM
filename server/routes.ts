@@ -843,10 +843,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Include tenant context from session (set during login via passport.deserializeUser)
       // This is needed for canAccessAdminFeatures to work on the frontend
+      // Also fetch tenant name for branding purposes
+      let tenantName: string | null = null;
+      if (req.user.tenantId) {
+        const tenant = await storage.getTenantById(req.user.tenantId);
+        tenantName = tenant?.name || null;
+      }
+      
       res.json({
         ...user,
         tenantId: req.user.tenantId,
         roleInTenant: req.user.roleInTenant,
+        tenantName,
       });
     } catch (error: any) {
       console.error("Error fetching user:", error);

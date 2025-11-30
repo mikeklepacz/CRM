@@ -180,7 +180,9 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
         </div>
       )}
       <div className="border-b bg-card px-2 py-2 md:px-3 flex items-center gap-2">
-        <h1 className="text-xs md:text-sm font-semibold text-foreground whitespace-nowrap">NMU CRM</h1>
+        <h1 className="text-xs md:text-sm font-semibold text-foreground whitespace-nowrap" data-testid="text-tenant-name">
+          {user.tenantName || 'CRM'}
+        </h1>
         
         {/* Full Navigation - Shows on md+, wraps naturally */}
         <nav className="hidden md:flex items-center gap-0 flex-wrap flex-1">

@@ -409,14 +409,13 @@ export function OpenAIManagement() {
                   id="ai-instructions"
                   value={aiInstructions}
                   onChange={(e) => setAiInstructions(e.target.value)}
-                  placeholder="You are the 'Hemp-Wick Sales Assistant' for Natural Materials Unlimited.
-Your role is to teach sales reps how to sell hemp wick intelligently.
+                  placeholder="You are a Sales Assistant for [Your Company Name].
+Your role is to help sales reps sell effectively and intelligently.
 
 Core truths:
-- All hemp wick is made in Poland.
-- Single beeswax formula only.
-- 3-hour self-dispensing roll.
-- World's largest white-label manufacturer.
+- [Key fact about your product/service]
+- [Unique selling proposition]
+- [Important differentiator]
 
 Rules:
 - Speak in clear, direct English.
