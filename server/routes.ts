@@ -20727,6 +20727,7 @@ Use this store information to provide context-aware responses. When helping draf
       // User must explicitly click resume/play to activate sending
       const sequenceData = insertSequenceSchema.parse({
         ...req.body,
+        tenantId: req.user.tenantId,
         createdBy: userId,
         status: 'paused',
       });
