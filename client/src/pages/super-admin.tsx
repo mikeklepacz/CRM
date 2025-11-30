@@ -230,7 +230,10 @@ export default function SuperAdmin() {
         slug: editingTenant.slug,
         status: editingTenant.status as "active" | "trial" | "suspended",
       });
-      setEditingAllowedModules(editingTenant.settings?.allowedModules || []);
+      // If allowedModules is empty/undefined, default to all modules (matching actual behavior)
+      const currentAllowed = editingTenant.settings?.allowedModules;
+      const allModuleIds = AVAILABLE_MODULES.map(m => m.id);
+      setEditingAllowedModules(currentAllowed && currentAllowed.length > 0 ? currentAllowed : allModuleIds);
     }
   }, [editingTenant, editForm]);
 
@@ -1363,9 +1366,11 @@ export default function SuperAdmin() {
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  {editingAllowedModules.length === 0 
-                    ? "No modules selected - tenant will have access to all modules by default" 
-                    : `${editingAllowedModules.length} module${editingAllowedModules.length === 1 ? '' : 's'} allowed`}
+                  {editingAllowedModules.length === AVAILABLE_MODULES.length 
+                    ? "All modules enabled" 
+                    : editingAllowedModules.length === 0
+                      ? "No modules allowed - tenant cannot access any features"
+                      : `${editingAllowedModules.length} of ${AVAILABLE_MODULES.length} modules allowed`}
                 </p>
               </div>
               <DialogFooter>
