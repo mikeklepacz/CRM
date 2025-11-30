@@ -59,6 +59,7 @@ export const MODULE_NAV_MAPPING: Record<string, string> = {
   "follow-up": "followup",
   "follow-up-center": "followup",
   pipelines: "pipelines",
+  qualification: "qualification",
 };
 
 export function useModuleAccess(): ModuleAccessResult {

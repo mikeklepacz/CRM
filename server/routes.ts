@@ -23882,6 +23882,318 @@ ${conversationContext}`;
     }
   });
 
+  // =============================
+  // Qualification Module Routes
+  // =============================
+
+  // Helper: Check if the qualification module is enabled for the tenant
+  // Priority order: 1) Super admin bypass, 2) Tenant allowedModules, 3) Session enabledModules, 4) Default allow
+  const checkQualificationModuleAccess = async (req: any, res: any): Promise<boolean> => {
+    try {
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) {
+        res.status(401).json({ message: 'Unauthorized - no tenant context' });
+        return false;
+      }
+      
+      // 1. Super admins always bypass module checks
+      if (req.user?.isSuperAdmin) {
+        return true;
+      }
+      
+      const tenant = await storage.getTenantById(tenantId);
+      if (!tenant) {
+        res.status(404).json({ message: 'Tenant not found' });
+        return false;
+      }
+      
+      const allowedModules = tenant.settings?.allowedModules;
+      
+      // 2. If tenant has explicit allowedModules array, it controls access
+      if (Array.isArray(allowedModules)) {
+        if (!allowedModules.includes('qualification')) {
+          res.status(403).json({ message: 'Qualification module is not enabled for this tenant' });
+          return false;
+        }
+        return true;
+      }
+      
+      // 3. Fallback to session-based enabledModules when allowedModules is not set
+      const sessionModules = req.user?.enabledModules;
+      if (Array.isArray(sessionModules)) {
+        if (!sessionModules.includes('qualification')) {
+          res.status(403).json({ message: 'Qualification module is not enabled for your session' });
+          return false;
+        }
+        return true;
+      }
+      
+      // 4. Default: allow if no restrictions are set
+      return true;
+    } catch (error) {
+      console.error('Error checking qualification module access:', error);
+      res.status(500).json({ message: 'Failed to verify module access' });
+      return false;
+    }
+  };
+
+  // Qualification Campaigns (Org Admin)
+  app.get('/api/qualification/campaigns', requireOrgAdmin, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const campaigns = await storage.listQualificationCampaigns(tenantId);
+      res.json({ campaigns });
+    } catch (error: any) {
+      console.error('Error listing qualification campaigns:', error);
+      res.status(500).json({ message: error.message || 'Failed to list campaigns' });
+    }
+  });
+
+  app.get('/api/qualification/campaigns/:id', requireOrgAdmin, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const campaign = await storage.getQualificationCampaign(req.params.id, tenantId);
+      if (!campaign) {
+        return res.status(404).json({ message: 'Campaign not found' });
+      }
+      res.json({ campaign });
+    } catch (error: any) {
+      console.error('Error getting qualification campaign:', error);
+      res.status(500).json({ message: error.message || 'Failed to get campaign' });
+    }
+  });
+
+  app.post('/api/qualification/campaigns', requireOrgAdmin, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const { name, description, kbFileId, fieldDefinitions, scoringRules, isActive } = req.body;
+
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ message: 'Campaign name is required' });
+      }
+
+      const campaign = await storage.createQualificationCampaign({
+        tenantId,
+        name: name.trim(),
+        description: description?.trim(),
+        kbFileId,
+        fieldDefinitions: fieldDefinitions || [],
+        scoringRules: scoringRules || {},
+        isActive: isActive !== false,
+      });
+
+      res.status(201).json({ campaign });
+    } catch (error: any) {
+      console.error('Error creating qualification campaign:', error);
+      res.status(500).json({ message: error.message || 'Failed to create campaign' });
+    }
+  });
+
+  app.patch('/api/qualification/campaigns/:id', requireOrgAdmin, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const { name, description, kbFileId, fieldDefinitions, scoringRules, isActive } = req.body;
+
+      const existing = await storage.getQualificationCampaign(req.params.id, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Campaign not found' });
+      }
+
+      const updates: any = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (description !== undefined) updates.description = description?.trim();
+      if (kbFileId !== undefined) updates.kbFileId = kbFileId;
+      if (fieldDefinitions !== undefined) updates.fieldDefinitions = fieldDefinitions;
+      if (scoringRules !== undefined) updates.scoringRules = scoringRules;
+      if (isActive !== undefined) updates.isActive = isActive;
+
+      const campaign = await storage.updateQualificationCampaign(req.params.id, tenantId, updates);
+      res.json({ campaign });
+    } catch (error: any) {
+      console.error('Error updating qualification campaign:', error);
+      res.status(500).json({ message: error.message || 'Failed to update campaign' });
+    }
+  });
+
+  app.delete('/api/qualification/campaigns/:id', requireOrgAdmin, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const existing = await storage.getQualificationCampaign(req.params.id, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Campaign not found' });
+      }
+
+      await storage.deleteQualificationCampaign(req.params.id, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting qualification campaign:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete campaign' });
+    }
+  });
+
+  // Qualification Leads (all authenticated users)
+  app.get('/api/qualification/leads', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const { campaignId, status, callStatus, limit, offset } = req.query;
+
+      const result = await storage.listQualificationLeads(tenantId, {
+        campaignId: campaignId as string | undefined,
+        status: status as string | undefined,
+        callStatus: callStatus as string | undefined,
+        limit: limit ? parseInt(limit as string, 10) : undefined,
+        offset: offset ? parseInt(offset as string, 10) : undefined,
+      });
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error listing qualification leads:', error);
+      res.status(500).json({ message: error.message || 'Failed to list leads' });
+    }
+  });
+
+  app.get('/api/qualification/leads/stats', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const { campaignId } = req.query;
+      const stats = await storage.getQualificationLeadStats(tenantId, campaignId as string | undefined);
+      res.json({ stats });
+    } catch (error: any) {
+      console.error('Error getting qualification lead stats:', error);
+      res.status(500).json({ message: error.message || 'Failed to get stats' });
+    }
+  });
+
+  app.get('/api/qualification/leads/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const lead = await storage.getQualificationLead(req.params.id, tenantId);
+      if (!lead) {
+        return res.status(404).json({ message: 'Lead not found' });
+      }
+      res.json({ lead });
+    } catch (error: any) {
+      console.error('Error getting qualification lead:', error);
+      res.status(500).json({ message: error.message || 'Failed to get lead' });
+    }
+  });
+
+  app.post('/api/qualification/leads', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const leadData = req.body;
+
+      const lead = await storage.createQualificationLead({
+        ...leadData,
+        tenantId,
+      });
+
+      res.status(201).json({ lead });
+    } catch (error: any) {
+      console.error('Error creating qualification lead:', error);
+      res.status(500).json({ message: error.message || 'Failed to create lead' });
+    }
+  });
+
+  app.post('/api/qualification/leads/bulk', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const { leads } = req.body;
+
+      if (!Array.isArray(leads) || leads.length === 0) {
+        return res.status(400).json({ message: 'Leads array is required' });
+      }
+
+      const leadsWithTenant = leads.map((lead: any) => ({
+        ...lead,
+        tenantId,
+      }));
+
+      const created = await storage.createQualificationLeads(leadsWithTenant);
+      res.status(201).json({ leads: created, count: created.length });
+    } catch (error: any) {
+      console.error('Error creating qualification leads in bulk:', error);
+      res.status(500).json({ message: error.message || 'Failed to create leads' });
+    }
+  });
+
+  app.patch('/api/qualification/leads/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const updates = req.body;
+
+      const existing = await storage.getQualificationLead(req.params.id, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Lead not found' });
+      }
+
+      const lead = await storage.updateQualificationLead(req.params.id, tenantId, updates);
+      res.json({ lead });
+    } catch (error: any) {
+      console.error('Error updating qualification lead:', error);
+      res.status(500).json({ message: error.message || 'Failed to update lead' });
+    }
+  });
+
+  app.delete('/api/qualification/leads/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const existing = await storage.getQualificationLead(req.params.id, tenantId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Lead not found' });
+      }
+
+      await storage.deleteQualificationLead(req.params.id, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting qualification lead:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete lead' });
+    }
+  });
+
+  app.post('/api/qualification/leads/bulk-delete', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: 'Lead IDs array is required' });
+      }
+
+      const deleted = await storage.deleteQualificationLeads(ids, tenantId);
+      res.json({ deleted });
+    } catch (error: any) {
+      console.error('Error bulk deleting qualification leads:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete leads' });
+    }
+  });
+
   // POST /api/invites/:token/accept - Accept an invite (authenticated user)
   app.post('/api/invites/:token/accept', isAuthenticated, async (req: any, res) => {
     try {

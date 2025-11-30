@@ -35,6 +35,7 @@ import SuperAdmin from "@/pages/super-admin";
 import OrgAdmin from "@/pages/org-admin";
 import Analytics from "@/pages/analytics";
 import Pipelines from "@/pages/pipelines";
+import Qualification from "@/pages/qualification";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -104,6 +105,7 @@ function Router() {
               <Route path="/pipelines">
                 {canAccessAdminFeatures(user) ? <Pipelines /> : <NotFound />}
               </Route>
+              <Route path="/qualification" component={Qualification} />
               <Route path="/product-mockup" component={ProductMockup} />
               <Route path="/store/:storeId" component={StoreDetails} />
               <Route path="/" component={Dashboard} />

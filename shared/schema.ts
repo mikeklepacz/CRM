@@ -963,7 +963,8 @@ export const callSessions = pgTable("call_sessions", {
   conversationId: varchar("conversation_id").unique(), // ElevenLabs conversation ID
   callSid: varchar("call_sid"), // Twilio call SID
   agentId: varchar("agent_id").notNull(), // ElevenLabs agent ID used
-  clientId: varchar("client_id").notNull().references(() => clients.id), // Which store/client was called
+  clientId: varchar("client_id").references(() => clients.id), // Which store/client was called (nullable for qualification calls)
+  qualificationLeadId: varchar("qualification_lead_id"), // Which qualification lead was called (for qualification module)
   initiatedByUserId: varchar("initiated_by_user_id").references(() => users.id), // Which user started the call
   phoneNumber: varchar("phone_number", { length: 50 }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default('initiated'), // 'initiated', 'in-progress', 'completed', 'failed', 'no-answer'
@@ -998,6 +999,7 @@ export const callSessions = pgTable("call_sessions", {
   index("idx_call_sessions_status").on(table.status),
   index("idx_call_sessions_started").on(table.startedAt),
   index("idx_call_sessions_agent_analyzed").on(table.agentId, table.lastAnalyzedAt),
+  index("idx_call_sessions_qualification_lead").on(table.qualificationLeadId),
 ]);
 
 // Call Transcripts - conversation messages
@@ -2345,3 +2347,133 @@ export const insertPipelineStageSchema = createInsertSchema(pipelineStages).omit
 
 export type InsertPipelineStage = z.infer<typeof insertPipelineStageSchema>;
 export type PipelineStage = typeof pipelineStages.$inferSelect;
+
+// ============================================================================
+// QUALIFICATION CRM MODULE
+// ============================================================================
+
+// Qualification Campaigns - Question templates per tenant (like Google Forms)
+export const qualificationCampaigns = pgTable("qualification_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: varchar("name", { length: 255 }).notNull(), // "Polish Tyre Cartel 2024", "VW Dieselgate"
+  description: text("description"),
+  kbFileId: varchar("kb_file_id").references(() => kbFiles.id, { onDelete: 'set null' }), // KB doc with questions for ElevenLabs
+  
+  // Dynamic field definitions - CRUD-able by Super Admin
+  fieldDefinitions: jsonb("field_definitions").$type<Array<{
+    key: string; // "boughtTyres", "purchaseYears"
+    label: string; // "Did you purchase tyres?"
+    type: 'text' | 'number' | 'choice' | 'multichoice' | 'date' | 'boolean';
+    options?: string[]; // For choice/multichoice types
+    required?: boolean;
+    weight?: number; // For scoring (0-10)
+    validation?: string; // Regex or rule (e.g., "2016-2024")
+    order?: number; // Display order
+  }>>().default(sql`'[]'::jsonb`),
+  
+  // Scoring configuration
+  scoringRules: jsonb("scoring_rules").$type<{
+    maxScore?: number; // Default 100
+    passingScore?: number; // Minimum to be "qualified"
+    gradeThresholds?: Record<string, number>; // { "A": 90, "B": 80, "C": 70, "D": 60 }
+    customRules?: Array<{
+      condition: string; // "invoicesAvailable === 'full'"
+      scoreAdjustment: number; // +20 or -10
+    }>;
+  }>().default(sql`'{}'::jsonb`),
+  
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_qualification_campaigns_tenant").on(table.tenantId),
+  index("idx_qualification_campaigns_active").on(table.tenantId, table.isActive),
+]);
+
+export const insertQualificationCampaignSchema = createInsertSchema(qualificationCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertQualificationCampaign = z.infer<typeof insertQualificationCampaignSchema>;
+export type QualificationCampaign = typeof qualificationCampaigns.$inferSelect;
+
+// Qualification Leads - Prospects for qualification calls
+export const qualificationLeads = pgTable("qualification_leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  campaignId: varchar("campaign_id").references(() => qualificationCampaigns.id, { onDelete: 'set null' }),
+  
+  // Company information
+  company: varchar("company", { length: 255 }).notNull(),
+  website: varchar("website", { length: 500 }),
+  
+  // Point of Contact
+  pocName: varchar("poc_name", { length: 255 }),
+  pocEmail: varchar("poc_email", { length: 255 }),
+  pocPhone: varchar("poc_phone", { length: 50 }),
+  pocRole: varchar("poc_role", { length: 100 }), // "Fleet Manager", "Owner"
+  
+  // Address (international support)
+  address: text("address"),
+  address2: text("address2"),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 100 }), // Region/Province
+  postalCode: varchar("postal_code", { length: 20 }),
+  country: varchar("country", { length: 100 }),
+  countryCode: varchar("country_code", { length: 3 }), // ISO 3166-1 alpha-2
+  
+  // Call tracking
+  callSessionId: varchar("call_session_id"), // Links to callSessions.id after call
+  callStatus: varchar("call_status", { length: 50 }).default('pending'), // 'pending', 'scheduled', 'in_progress', 'completed', 'failed', 'no_answer'
+  lastCallAt: timestamp("last_call_at"),
+  callAttempts: integer("call_attempts").default(0),
+  
+  // Parsed answers from transcript (JSONB for flexibility)
+  answers: jsonb("answers").$type<Record<string, any>>().default(sql`'{}'::jsonb`),
+  rawAiOutput: jsonb("raw_ai_output").$type<{
+    parsedAt?: string;
+    model?: string;
+    confidence?: number;
+    rawResponse?: any;
+  }>().default(sql`'{}'::jsonb`),
+  
+  // Scoring
+  score: integer("score"), // Calculated quality score (0-100)
+  scoreGrade: varchar("score_grade", { length: 5 }), // "A", "B", "C", "D", "F"
+  scoreBreakdown: jsonb("score_breakdown").$type<Record<string, number>>(), // Per-field scores
+  
+  // Status and workflow
+  status: varchar("status", { length: 50 }).default('new'), // 'new', 'contacted', 'qualified', 'disqualified', 'exported'
+  qualificationResult: varchar("qualification_result", { length: 50 }), // 'qualified', 'not_qualified', 'needs_review'
+  
+  // Import tracking
+  source: varchar("source", { length: 50 }).default('manual'), // 'manual', 'csv_import', 'map_search', 'api'
+  sourceId: varchar("source_id"), // External ID from import source
+  
+  // Meta
+  notes: text("notes"),
+  tags: text("tags").array().default(sql`ARRAY[]::text[]`),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_qualification_leads_tenant").on(table.tenantId),
+  index("idx_qualification_leads_campaign").on(table.campaignId),
+  index("idx_qualification_leads_status").on(table.tenantId, table.status),
+  index("idx_qualification_leads_call_status").on(table.tenantId, table.callStatus),
+  index("idx_qualification_leads_score").on(table.tenantId, table.score),
+]);
+
+export const insertQualificationLeadSchema = createInsertSchema(qualificationLeads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertQualificationLead = z.infer<typeof insertQualificationLeadSchema>;
+export type QualificationLead = typeof qualificationLeads.$inferSelect;

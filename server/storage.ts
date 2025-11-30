@@ -196,6 +196,12 @@ import {
   assistantBlueprints,
   type AssistantBlueprint,
   type InsertAssistantBlueprint,
+  qualificationCampaigns,
+  qualificationLeads,
+  type QualificationCampaign,
+  type InsertQualificationCampaign,
+  type QualificationLead,
+  type InsertQualificationLead,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
@@ -728,6 +734,23 @@ export interface IStorage {
   getIgnoredHolidayByHolidayId(holidayId: string): Promise<IgnoredHoliday | undefined>;
   createIgnoredHoliday(data: InsertIgnoredHoliday): Promise<IgnoredHoliday>;
   deleteIgnoredHoliday(holidayId: string): Promise<void>;
+
+  // Qualification Campaign operations
+  listQualificationCampaigns(tenantId: string): Promise<QualificationCampaign[]>;
+  getQualificationCampaign(id: string, tenantId: string): Promise<QualificationCampaign | undefined>;
+  createQualificationCampaign(data: InsertQualificationCampaign): Promise<QualificationCampaign>;
+  updateQualificationCampaign(id: string, tenantId: string, updates: Partial<InsertQualificationCampaign>): Promise<QualificationCampaign>;
+  deleteQualificationCampaign(id: string, tenantId: string): Promise<boolean>;
+
+  // Qualification Lead operations
+  listQualificationLeads(tenantId: string, filters?: { campaignId?: string; status?: string; callStatus?: string; limit?: number; offset?: number }): Promise<{ leads: QualificationLead[]; total: number }>;
+  getQualificationLead(id: string, tenantId: string): Promise<QualificationLead | undefined>;
+  createQualificationLead(data: InsertQualificationLead): Promise<QualificationLead>;
+  createQualificationLeads(leads: InsertQualificationLead[]): Promise<QualificationLead[]>;
+  updateQualificationLead(id: string, tenantId: string, updates: Partial<InsertQualificationLead>): Promise<QualificationLead>;
+  deleteQualificationLead(id: string, tenantId: string): Promise<boolean>;
+  deleteQualificationLeads(ids: string[], tenantId: string): Promise<number>;
+  getQualificationLeadStats(tenantId: string, campaignId?: string): Promise<{ total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5624,6 +5647,143 @@ export class DatabaseStorage implements IStorage {
 
   async deleteIgnoredHoliday(holidayId: string): Promise<void> {
     await db.delete(ignoredHolidays).where(eq(ignoredHolidays.holidayId, holidayId));
+  }
+
+  // Qualification Campaign operations
+  async listQualificationCampaigns(tenantId: string): Promise<QualificationCampaign[]> {
+    return await db.select()
+      .from(qualificationCampaigns)
+      .where(eq(qualificationCampaigns.tenantId, tenantId))
+      .orderBy(desc(qualificationCampaigns.createdAt));
+  }
+
+  async getQualificationCampaign(id: string, tenantId: string): Promise<QualificationCampaign | undefined> {
+    const [campaign] = await db.select()
+      .from(qualificationCampaigns)
+      .where(and(eq(qualificationCampaigns.id, id), eq(qualificationCampaigns.tenantId, tenantId)));
+    return campaign;
+  }
+
+  async createQualificationCampaign(data: InsertQualificationCampaign): Promise<QualificationCampaign> {
+    const [created] = await db.insert(qualificationCampaigns).values(data).returning();
+    return created;
+  }
+
+  async updateQualificationCampaign(id: string, tenantId: string, updates: Partial<InsertQualificationCampaign>): Promise<QualificationCampaign> {
+    const [updated] = await db.update(qualificationCampaigns)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(qualificationCampaigns.id, id), eq(qualificationCampaigns.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteQualificationCampaign(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(qualificationCampaigns)
+      .where(and(eq(qualificationCampaigns.id, id), eq(qualificationCampaigns.tenantId, tenantId)));
+    return (result as any).rowCount > 0;
+  }
+
+  // Qualification Lead operations
+  async listQualificationLeads(tenantId: string, filters?: { campaignId?: string; status?: string; callStatus?: string; limit?: number; offset?: number }): Promise<{ leads: QualificationLead[]; total: number }> {
+    const conditions = [eq(qualificationLeads.tenantId, tenantId)];
+    
+    if (filters?.campaignId) {
+      conditions.push(eq(qualificationLeads.campaignId, filters.campaignId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(qualificationLeads.status, filters.status));
+    }
+    if (filters?.callStatus) {
+      conditions.push(eq(qualificationLeads.callStatus, filters.callStatus));
+    }
+
+    const limit = filters?.limit || 100;
+    const offset = filters?.offset || 0;
+
+    const leads = await db.select()
+      .from(qualificationLeads)
+      .where(and(...conditions))
+      .orderBy(desc(qualificationLeads.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [{ count }] = await db.select({ count: sql<number>`count(*)` })
+      .from(qualificationLeads)
+      .where(and(...conditions));
+
+    return { leads, total: Number(count) };
+  }
+
+  async getQualificationLead(id: string, tenantId: string): Promise<QualificationLead | undefined> {
+    const [lead] = await db.select()
+      .from(qualificationLeads)
+      .where(and(eq(qualificationLeads.id, id), eq(qualificationLeads.tenantId, tenantId)));
+    return lead;
+  }
+
+  async createQualificationLead(data: InsertQualificationLead): Promise<QualificationLead> {
+    const [created] = await db.insert(qualificationLeads).values(data).returning();
+    return created;
+  }
+
+  async createQualificationLeads(leads: InsertQualificationLead[]): Promise<QualificationLead[]> {
+    if (leads.length === 0) return [];
+    return await db.insert(qualificationLeads).values(leads).returning();
+  }
+
+  async updateQualificationLead(id: string, tenantId: string, updates: Partial<InsertQualificationLead>): Promise<QualificationLead> {
+    const [updated] = await db.update(qualificationLeads)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(qualificationLeads.id, id), eq(qualificationLeads.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteQualificationLead(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(qualificationLeads)
+      .where(and(eq(qualificationLeads.id, id), eq(qualificationLeads.tenantId, tenantId)));
+    return (result as any).rowCount > 0;
+  }
+
+  async deleteQualificationLeads(ids: string[], tenantId: string): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db.delete(qualificationLeads)
+      .where(and(inArray(qualificationLeads.id, ids), eq(qualificationLeads.tenantId, tenantId)));
+    return (result as any).rowCount || 0;
+  }
+
+  async getQualificationLeadStats(tenantId: string, campaignId?: string): Promise<{ total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null }> {
+    const conditions = [eq(qualificationLeads.tenantId, tenantId)];
+    if (campaignId) {
+      conditions.push(eq(qualificationLeads.campaignId, campaignId));
+    }
+
+    const leads = await db.select()
+      .from(qualificationLeads)
+      .where(and(...conditions));
+
+    const byStatus: Record<string, number> = {};
+    const byCallStatus: Record<string, number> = {};
+    let scoreSum = 0;
+    let scoreCount = 0;
+
+    for (const lead of leads) {
+      const status = lead.status || 'new';
+      const callStatus = lead.callStatus || 'pending';
+      byStatus[status] = (byStatus[status] || 0) + 1;
+      byCallStatus[callStatus] = (byCallStatus[callStatus] || 0) + 1;
+      if (lead.score !== null) {
+        scoreSum += lead.score;
+        scoreCount++;
+      }
+    }
+
+    return {
+      total: leads.length,
+      byStatus,
+      byCallStatus,
+      averageScore: scoreCount > 0 ? Math.round(scoreSum / scoreCount) : null
+    };
   }
 }
 

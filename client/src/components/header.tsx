@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check, PieChart, GitBranch } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check, PieChart, GitBranch, ClipboardList } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -37,6 +37,7 @@ type VisibleModules = {
   ehub?: boolean;
   analytics?: boolean;
   pipelines?: boolean;
+  qualification?: boolean;
 };
 
 interface HeaderProps {
@@ -82,6 +83,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
       ehub: true,
       analytics: true,
       pipelines: true,
+      qualification: true,
     };
     return { ...defaults, ...userPreferences?.visibleModules };
   }, [userPreferences?.visibleModules]);
@@ -290,6 +292,14 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
+          {shouldShowNavItem("qualification", "qualification") && (
+            <Link href="/qualification">
+              <Button variant="ghost" size="sm" data-testid="nav-qualification">
+                <ClipboardList className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Qualification
+              </Button>
+            </Link>
+          )}
           {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && shouldShowNavItem("call-manager", "callManager") && (
             <Link href="/call-manager">
               <Button variant="ghost" size="sm" data-testid="nav-call-manager">
@@ -394,6 +404,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <DropdownMenuItem onClick={() => { setLocation('/pipelines'); setMobileMenuOpen(false); }}>
                   <GitBranch className="mr-2 h-4 w-4" />
                   Pipelines
+                </DropdownMenuItem>
+              )}
+              {shouldShowNavItem("qualification", "qualification") && (
+                <DropdownMenuItem onClick={() => { setLocation('/qualification'); setMobileMenuOpen(false); }}>
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  Qualification
                 </DropdownMenuItem>
               )}
               {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && shouldShowNavItem("call-manager", "callManager") && (
