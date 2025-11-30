@@ -530,16 +530,16 @@ export interface IStorage {
   createCallCampaign(campaign: InsertCallCampaign): Promise<CallCampaign>;
   getCallCampaign(id: string, tenantId: string): Promise<CallCampaign | undefined>;
   getCallCampaigns(tenantId: string, filters?: { createdByUserId?: string; status?: string }): Promise<CallCampaign[]>;
-  updateCallCampaign(id: string, updates: Partial<InsertCallCampaign>): Promise<CallCampaign>;
+  updateCallCampaign(id: string, tenantId: string, updates: Partial<InsertCallCampaign>): Promise<CallCampaign>;
 
   // Call Campaign Targets operations
   createCallCampaignTarget(target: InsertCallCampaignTarget): Promise<CallCampaignTarget>;
-  getCallCampaignTarget(id: string): Promise<CallCampaignTarget | undefined>;
-  getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]>;
-  getCallTargetsBySession(conversationId: string): Promise<CallCampaignTarget[]>;
+  getCallCampaignTarget(id: string, tenantId: string): Promise<CallCampaignTarget | undefined>;
+  getCallCampaignTargets(campaignId: string, tenantId: string): Promise<CallCampaignTarget[]>;
+  getCallTargetsBySession(conversationId: string, tenantId: string): Promise<CallCampaignTarget[]>;
   getCallTargetsReadyForCalling(): Promise<CallCampaignTarget[]>;
-  updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget>;
-  incrementCampaignCalls(campaignId: string, type: 'successful' | 'failed'): Promise<void>;
+  updateCallCampaignTarget(id: string, tenantId: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget>;
+  incrementCampaignCalls(campaignId: string, tenantId: string, type: 'successful' | 'failed'): Promise<void>;
 
   // Nuke call test data (for testing)
   nukeAllCallData(): Promise<{ sessionsDeleted: number; historyDeleted: number; transcriptsDeleted: number; eventsDeleted: number; targetsDeleted: number; campaignsDeleted: number }>;
