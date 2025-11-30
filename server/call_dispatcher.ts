@@ -61,13 +61,13 @@ export class CallDispatcher {
         
         for (const target of staleTargets) {
           console.log(`[CallDispatcher][DEBUG] Marking stale target as failed: targetId=${target.id}, campaignId=${target.campaignId}, callSessionId=${target.callSessionId || 'none'}`);
-          await storage.updateCallCampaignTarget(target.id, {
+          await storage.updateCallCampaignTarget(target.id, target.tenantId, {
             targetStatus: 'failed',
             lastError: `Timeout: No status update received after ${staleThresholdMinutes} minutes`,
           });
           
           // Update campaign stats
-          await storage.incrementCampaignCalls(target.campaignId, 'failed');
+          await storage.incrementCampaignCalls(target.campaignId, target.tenantId, 'failed');
         }
       } else {
         console.log('[CallDispatcher][DEBUG] No stale targets found');
@@ -164,13 +164,13 @@ export class CallDispatcher {
     
     try {
       console.log('[CallDispatcher][DEBUG] Updating target status to in-progress...');
-      await storage.updateCallCampaignTarget(target.id, {
+      await storage.updateCallCampaignTarget(target.id, target.tenantId, {
         targetStatus: 'in-progress',
         attemptCount: target.attemptCount + 1,
       });
 
       console.log('[CallDispatcher][DEBUG] Fetching client...');
-      const client = await storage.getClient(target.clientId);
+      const client = await storage.getClient(target.clientId, target.tenantId);
       if (!client) {
         throw new Error(`Client not found: ${target.clientId}`);
       }
@@ -185,7 +185,7 @@ export class CallDispatcher {
       }
 
       console.log('[CallDispatcher][DEBUG] Fetching campaign...');
-      const campaign = await storage.getCallCampaign(target.campaignId);
+      const campaign = await storage.getCallCampaign(target.campaignId, target.tenantId);
       if (!campaign) {
         throw new Error(`Campaign not found: ${target.campaignId}`);
       }
@@ -298,7 +298,7 @@ export class CallDispatcher {
         });
 
         console.log('[CallDispatcher][DEBUG] Updating campaign target...');
-        await storage.updateCallCampaignTarget(target.id, {
+        await storage.updateCallCampaignTarget(target.id, target.tenantId, {
           externalConversationId: result.callSid || null,
           callSessionId: callSession.id,
           lastError: null,
@@ -438,19 +438,19 @@ export class CallDispatcher {
       const retryDelay = RETRY_DELAY_BASE_MS * Math.pow(2, target.attemptCount);
       const nextAttemptAt = new Date(Date.now() + retryDelay);
 
-      await storage.updateCallCampaignTarget(target.id, {
+      await storage.updateCallCampaignTarget(target.id, target.tenantId, {
         targetStatus: 'pending',
         nextAttemptAt,
         lastError: errorMessage,
       });
     } else {
-      await storage.updateCallCampaignTarget(target.id, {
+      await storage.updateCallCampaignTarget(target.id, target.tenantId, {
         targetStatus: 'failed',
         lastError: errorMessage,
         nextAttemptAt: null,
       });
 
-      await storage.incrementCampaignCalls(target.campaignId, 'failed');
+      await storage.incrementCampaignCalls(target.campaignId, target.tenantId, 'failed');
     }
   }
 

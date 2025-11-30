@@ -3256,10 +3256,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(callCampaigns).where(and(...conditions)).orderBy(desc(callCampaigns.createdAt));
   }
 
-  async updateCallCampaign(id: string, updates: Partial<InsertCallCampaign>): Promise<CallCampaign> {
+  async updateCallCampaign(id: string, tenantId: string, updates: Partial<InsertCallCampaign>): Promise<CallCampaign> {
     const [updated] = await db.update(callCampaigns)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(callCampaigns.id, id))
+      .where(and(eq(callCampaigns.id, id), eq(callCampaigns.tenantId, tenantId)))
       .returning();
     return updated;
   }
@@ -3270,19 +3270,19 @@ export class DatabaseStorage implements IStorage {
     return newTarget;
   }
 
-  async getCallCampaignTarget(id: string): Promise<CallCampaignTarget | undefined> {
-    const [target] = await db.select().from(callCampaignTargets).where(eq(callCampaignTargets.id, id));
+  async getCallCampaignTarget(id: string, tenantId: string): Promise<CallCampaignTarget | undefined> {
+    const [target] = await db.select().from(callCampaignTargets).where(and(eq(callCampaignTargets.id, id), eq(callCampaignTargets.tenantId, tenantId)));
     return target;
   }
 
-  async getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]> {
+  async getCallCampaignTargets(campaignId: string, tenantId: string): Promise<CallCampaignTarget[]> {
     return await db.select().from(callCampaignTargets)
-      .where(eq(callCampaignTargets.campaignId, campaignId));
+      .where(and(eq(callCampaignTargets.campaignId, campaignId), eq(callCampaignTargets.tenantId, tenantId)));
   }
 
-  async getCallTargetsBySession(conversationId: string): Promise<CallCampaignTarget[]> {
+  async getCallTargetsBySession(conversationId: string, tenantId: string): Promise<CallCampaignTarget[]> {
     return await db.select().from(callCampaignTargets)
-      .where(eq(callCampaignTargets.externalConversationId, conversationId));
+      .where(and(eq(callCampaignTargets.externalConversationId, conversationId), eq(callCampaignTargets.tenantId, tenantId)));
   }
 
   async getCallTargetsReadyForCalling(): Promise<CallCampaignTarget[]> {
@@ -3301,16 +3301,16 @@ export class DatabaseStorage implements IStorage {
       .limit(50);
   }
 
-  async updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget> {
+  async updateCallCampaignTarget(id: string, tenantId: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget> {
     const [updated] = await db.update(callCampaignTargets)
       .set(updates)
-      .where(eq(callCampaignTargets.id, id))
+      .where(and(eq(callCampaignTargets.id, id), eq(callCampaignTargets.tenantId, tenantId)))
       .returning();
     return updated;
   }
 
-  async incrementCampaignCalls(campaignId: string, type: 'successful' | 'failed'): Promise<void> {
-    const campaign = await this.getCallCampaign(campaignId);
+  async incrementCampaignCalls(campaignId: string, tenantId: string, type: 'successful' | 'failed'): Promise<void> {
+    const campaign = await this.getCallCampaign(campaignId, tenantId);
     if (!campaign) return;
 
     const updates: any = {
@@ -3326,7 +3326,7 @@ export class DatabaseStorage implements IStorage {
 
     await db.update(callCampaigns)
       .set(updates)
-      .where(eq(callCampaigns.id, campaignId));
+      .where(and(eq(callCampaigns.id, campaignId), eq(callCampaigns.tenantId, tenantId)));
   }
 
   // AI Insights operations
