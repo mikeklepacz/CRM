@@ -3486,41 +3486,43 @@ export default function EHub() {
                 </Card>
 
                 {/* Keyword Bank Card */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Keyword Bank</CardTitle>
-                    <CardDescription>
-                      Keywords the AI will use when generating emails for this sequence
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Textarea
-                      value={sequenceKeywords}
-                      onChange={(e) => setSequenceKeywords(e.target.value)}
-                      placeholder="Enter keywords separated by commas (e.g., hemp wick, natural, eco-friendly, sustainable)"
-                      className="min-h-[100px]"
-                      data-testid="textarea-sequence-keywords"
-                    />
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">
-                        {sequenceKeywords.split(',').filter(k => k.trim()).length} keyword{sequenceKeywords.split(',').filter(k => k.trim()).length !== 1 ? 's' : ''}
-                      </p>
-                      {sequenceKeywords !== ((currentSequence as any)?.keywords || "") && (
-                        <Button
-                          size="sm"
-                          onClick={() => saveKeywordsMutation.mutate(sequenceKeywords)}
-                          disabled={saveKeywordsMutation.isPending}
-                          data-testid="button-save-keywords"
-                        >
-                          {saveKeywordsMutation.isPending ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : null}
-                          Save Keywords
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                {currentSequence && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Keyword Bank</CardTitle>
+                      <CardDescription>
+                        Keywords the AI will use when generating emails for this sequence
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Textarea
+                        value={sequenceKeywords || ''}
+                        onChange={(e) => setSequenceKeywords(e.target.value)}
+                        placeholder="Enter keywords separated by commas (e.g., hemp wick, natural, eco-friendly, sustainable)"
+                        className="min-h-[100px]"
+                        data-testid="textarea-sequence-keywords"
+                      />
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          {(sequenceKeywords || '').split(',').filter(k => k.trim()).length} keyword{(sequenceKeywords || '').split(',').filter(k => k.trim()).length !== 1 ? 's' : ''}
+                        </p>
+                        {sequenceKeywords !== ((currentSequence as any)?.keywords || "") && (
+                          <Button
+                            size="sm"
+                            onClick={() => saveKeywordsMutation.mutate(sequenceKeywords)}
+                            disabled={saveKeywordsMutation.isPending}
+                            data-testid="button-save-keywords"
+                          >
+                            {saveKeywordsMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : null}
+                            Save Keywords
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Campaign Brief Card */}
                 <Card>
