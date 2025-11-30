@@ -48,10 +48,22 @@ The application features a client dashboard unifying data, transitioning from a 
   - **Tenants Tab**: Create, edit, view all tenants and their status.
   - **Users Tab**: Manage users across all tenants, reset passwords, toggle super admin/voice access.
   - **Metrics Tab**: Platform-wide statistics (total tenants, users, clients).
-  - **Tickets Tab**: Platform-wide support ticket management with tenant/status/category filters.
-  - **Webhooks Tab**: Per-tenant Google Calendar webhook configuration (placeholder).
-  - **Voice Tab**: Per-tenant ElevenLabs voice agent settings (placeholder).
-  - **Google Sheets Tab**: Per-tenant Google Sheets sync configuration (placeholder).
+  - **Tickets Tab**: Full ticket management with tenant/status/category filters, ticket detail view, reply system, and status updates.
+  - **Webhooks Tab**: Google Calendar webhook management with tenant filtering, bulk registration, individual webhook controls, stats dashboard (Total Users, Connected Calendars, Active Webhooks, Expired/Missing).
+  - **Voice Tab**: Per-tenant ElevenLabs voice agent settings (placeholder with tenant selector).
+  - **Google Sheets Tab**: Per-tenant Google Sheets sync configuration (placeholder with tenant selector).
+- **Admin Page**: Tenant-specific administration:
+  - **Users Tab**: Tenant user management.
+  - **Support Tickets Tab**: Tenant-scoped ticket management.
+  - **Reports Tab**: Sales commission reports.
+  - **Webhooks Tab**: Tenant webhook management.
+  - **Calendar Tab**: Holiday and date range blocking.
+  - **Voice Tab**: ElevenLabs voice agent configuration.
+  - **OpenAI Tab**: OpenAI API management.
+  - **Aligner Tab**: Aligner assistant configuration.
+  - **Google Sheets Tab**: Google Sheets sync settings.
+  - **Docs Tab**: Google Drive folder configuration (renamed from Assets).
+  - **WooCommerce Sync Tab**: WooCommerce order synchronization.
 - **Ticket Tenant Isolation**: All ticket endpoints enforce strict tenant isolation:
   - Super admins can access all tickets across all tenants.
   - Tenant admins can only view/manage tickets from their own tenant.
