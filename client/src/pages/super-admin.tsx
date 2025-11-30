@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { isSuperAdmin } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { AVAILABLE_MODULES } from "@/lib/modules";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,12 @@ interface Tenant {
   status: string;
   createdAt: string;
   userCount?: number;
+  settings?: {
+    allowedModules?: string[];
+    enabledModules?: string[];
+    companyName?: string;
+    timezone?: string;
+  };
 }
 
 interface TenantMembership {
@@ -63,7 +70,14 @@ interface Metrics {
 }
 
 interface TenantDetails {
-  tenant: Tenant;
+  tenant: Tenant & {
+    settings?: {
+      allowedModules?: string[];
+      enabledModules?: string[];
+      companyName?: string;
+      timezone?: string;
+    };
+  };
   stats: {
     userCount: number;
     clientCount: number;
@@ -132,6 +146,7 @@ export default function SuperAdmin() {
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [editingAllowedModules, setEditingAllowedModules] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && user && !isSuperAdmin(user)) {
@@ -215,6 +230,7 @@ export default function SuperAdmin() {
         slug: editingTenant.slug,
         status: editingTenant.status as "active" | "trial" | "suspended",
       });
+      setEditingAllowedModules(editingTenant.settings?.allowedModules || []);
     }
   }, [editingTenant, editForm]);
 
@@ -347,7 +363,7 @@ export default function SuperAdmin() {
   });
 
   const updateTenantMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: TenantFormData }) => {
+    mutationFn: async ({ id, data }: { id: string; data: TenantFormData & { settings?: { allowedModules?: string[] } } }) => {
       return await apiRequest("PATCH", `/api/super-admin/tenants/${id}`, data);
     },
     onSuccess: () => {
@@ -355,6 +371,7 @@ export default function SuperAdmin() {
       queryClient.invalidateQueries({ queryKey: ['/api/super-admin/metrics'] });
       setEditingTenant(null);
       editForm.reset();
+      setEditingAllowedModules([]);
       toast({
         title: "Success",
         description: "Tenant updated successfully",
@@ -575,7 +592,16 @@ export default function SuperAdmin() {
 
   const handleEditSubmit = (data: TenantFormData) => {
     if (editingTenant) {
-      updateTenantMutation.mutate({ id: editingTenant.id, data });
+      updateTenantMutation.mutate({ 
+        id: editingTenant.id, 
+        data: {
+          ...data,
+          settings: {
+            ...editingTenant.settings,
+            allowedModules: editingAllowedModules,
+          }
+        }
+      });
     }
   };
 
@@ -1306,6 +1332,42 @@ export default function SuperAdmin() {
                   </FormItem>
                 )}
               />
+              <Separator className="my-4" />
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Allowed Modules</Label>
+                <p className="text-xs text-muted-foreground">
+                  Select which modules this tenant can enable. The tenant's org admin will only see these options.
+                </p>
+                <div className="grid grid-cols-2 gap-3 pt-2" data-testid="allowed-modules-container">
+                  {AVAILABLE_MODULES.map((module) => (
+                    <div key={module.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`allowed-module-${module.id}`}
+                        checked={editingAllowedModules.includes(module.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setEditingAllowedModules([...editingAllowedModules, module.id]);
+                          } else {
+                            setEditingAllowedModules(editingAllowedModules.filter(id => id !== module.id));
+                          }
+                        }}
+                        data-testid={`checkbox-allowed-module-${module.id}`}
+                      />
+                      <Label 
+                        htmlFor={`allowed-module-${module.id}`}
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        {module.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {editingAllowedModules.length === 0 
+                    ? "No modules selected - tenant will have access to all modules by default" 
+                    : `${editingAllowedModules.length} module${editingAllowedModules.length === 1 ? '' : 's'} allowed`}
+                </p>
+              </div>
               <DialogFooter>
                 <Button
                   type="button"
@@ -1367,6 +1429,24 @@ export default function SuperAdmin() {
                 <div>
                   <p className="text-sm text-muted-foreground">Created</p>
                   <p className="font-medium">{formatDate(tenantDetails.tenant.createdAt)}</p>
+                </div>
+              </div>
+              <Separator />
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Allowed Modules</p>
+                <div className="flex flex-wrap gap-1.5" data-testid="details-allowed-modules">
+                  {tenantDetails.tenant.settings?.allowedModules && tenantDetails.tenant.settings.allowedModules.length > 0 ? (
+                    tenantDetails.tenant.settings.allowedModules.map((moduleId) => {
+                      const module = AVAILABLE_MODULES.find(m => m.id === moduleId);
+                      return module ? (
+                        <Badge key={moduleId} variant="secondary" className="no-default-hover-elevate no-default-active-elevate">
+                          {module.label}
+                        </Badge>
+                      ) : null;
+                    })
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">All modules available (no restrictions)</p>
+                  )}
                 </div>
               </div>
             </div>

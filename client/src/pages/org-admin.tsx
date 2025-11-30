@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +9,7 @@ import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useOptionalProject } from "@/contexts/project-context";
+import { AVAILABLE_MODULES } from "@/lib/modules";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ interface Tenant {
     companyName?: string;
     timezone?: string;
     enabledModules?: string[];
+    allowedModules?: string[];
     primaryColor?: string;
     logoUrl?: string;
   };
@@ -289,18 +291,6 @@ const settingsFormSchema = z.object({
 
 type SettingsFormData = z.infer<typeof settingsFormSchema>;
 
-const AVAILABLE_MODULES = [
-  { id: "voice_kb", label: "Voice & Knowledge Base", description: "AI voice calling with knowledge base" },
-  { id: "ehub", label: "E-Hub", description: "Email campaigns and sequences" },
-  { id: "crm", label: "Sales CRM", description: "Store Database & Commission Tracker" },
-  { id: "assistant", label: "AI Assistant", description: "Sales scripts and objection handling" },
-  { id: "docs", label: "Documents", description: "Google Drive document browser" },
-  { id: "map_search", label: "Map Search", description: "Geographic store search" },
-  { id: "analytics", label: "Sales Analytics", description: "Performance dashboards" },
-  { id: "label_designer", label: "Label Designer", description: "Custom label creation" },
-  { id: "followup", label: "Follow-up", description: "Manual follow-up tracking" },
-  { id: "pipelines", label: "Pipelines", description: "Workflow automation" },
-];
 
 const TIMEZONES = [
   { value: "America/New_York", label: "Eastern Time (ET)" },
@@ -467,6 +457,14 @@ export default function OrgAdmin() {
       });
     }
   }, [settingsData, settingsForm]);
+
+  const availableModulesForTenant = useMemo(() => {
+    const allowedModules = settingsData?.tenant?.settings?.allowedModules;
+    if (!allowedModules || allowedModules.length === 0) {
+      return AVAILABLE_MODULES;
+    }
+    return AVAILABLE_MODULES.filter(module => allowedModules.includes(module.id));
+  }, [settingsData?.tenant?.settings?.allowedModules]);
 
   const createInviteMutation = useMutation({
     mutationFn: async (data: InviteFormData) => {
@@ -1346,8 +1344,12 @@ export default function OrgAdmin() {
                       render={() => (
                         <FormItem>
                           <FormLabel>Enabled Modules</FormLabel>
-                          <div className="grid grid-cols-2 gap-4 pt-2">
-                            {AVAILABLE_MODULES.map((module) => (
+                          <p className="text-xs text-muted-foreground" data-testid="text-module-access-note">
+                            Your organization has access to {availableModulesForTenant.length} module{availableModulesForTenant.length === 1 ? '' : 's'}
+                            {availableModulesForTenant.length < AVAILABLE_MODULES.length && " (restricted by your plan)"}
+                          </p>
+                          <div className="grid grid-cols-2 gap-4 pt-2" data-testid="enabled-modules-container">
+                            {availableModulesForTenant.map((module) => (
                               <FormField
                                 key={module.id}
                                 control={settingsForm.control}
