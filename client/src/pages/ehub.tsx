@@ -3199,8 +3199,8 @@ export default function EHub() {
             </CardContent>
           </Card>
 
-          {/* Content: show only when sequence is selected */}
-          {selectedSequenceId ? (
+          {/* Content: show only when sequence is selected AND loaded */}
+          {selectedSequenceId && currentSequence ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Left Column: Chat Interface */}
               <div className="space-y-4">
@@ -3709,6 +3709,17 @@ export default function EHub() {
                 </Card>
               </div>
             </div>
+          ) : selectedSequenceId ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  <p className="text-center text-muted-foreground">
+                    Loading sequence...
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
             <Card>
               <CardContent className="py-12">
