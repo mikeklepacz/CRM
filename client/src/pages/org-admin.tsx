@@ -1821,7 +1821,7 @@ export default function OrgAdmin() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createInviteMutation.isPending} data-testid="button-submit-invite">
+                <Button type="submit" disabled={createInviteMutation.isPending} data-testid="button-submit-invite" data-primary="true">
                   {createInviteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Send Invitation
                 </Button>
@@ -1852,6 +1852,7 @@ export default function OrgAdmin() {
               onClick={() => roleChangeUser && updateRoleMutation.mutate({ userId: roleChangeUser.user.id, role: roleChangeUser.newRole })}
               disabled={updateRoleMutation.isPending}
               data-testid="button-confirm-role-change"
+              data-primary="true"
             >
               {updateRoleMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirm
@@ -1882,6 +1883,7 @@ export default function OrgAdmin() {
               onClick={() => userToRemove && removeUserMutation.mutate(userToRemove.id)}
               disabled={removeUserMutation.isPending}
               data-testid="button-confirm-remove"
+              data-primary="true"
             >
               {removeUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Remove User
@@ -2083,6 +2085,7 @@ export default function OrgAdmin() {
                   type="submit" 
                   disabled={createPipelineMutation.isPending || updatePipelineMutation.isPending}
                   data-testid="button-submit-pipeline"
+                  data-primary="true"
                 >
                   {(createPipelineMutation.isPending || updatePipelineMutation.isPending) && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2117,6 +2120,7 @@ export default function OrgAdmin() {
               onClick={() => pipelineToDelete && deletePipelineMutation.mutate(pipelineToDelete.id)}
               disabled={deletePipelineMutation.isPending}
               data-testid="button-confirm-delete-pipeline"
+              data-primary="true"
             >
               {deletePipelineMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete Pipeline
@@ -2222,6 +2226,7 @@ export default function OrgAdmin() {
                   type="submit" 
                   disabled={createStageMutation.isPending || updateStageMutation.isPending}
                   data-testid="button-submit-stage"
+                  data-primary="true"
                 >
                   {(createStageMutation.isPending || updateStageMutation.isPending) && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2383,6 +2388,7 @@ export default function OrgAdmin() {
                   type="submit" 
                   disabled={createProjectMutation.isPending || updateProjectMutation.isPending}
                   data-testid="button-submit-project"
+                  data-primary="true"
                 >
                   {(createProjectMutation.isPending || updateProjectMutation.isPending) && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2416,6 +2422,7 @@ export default function OrgAdmin() {
               onClick={() => projectToArchive && archiveProjectMutation.mutate(projectToArchive.id)}
               disabled={archiveProjectMutation.isPending}
               data-testid="button-confirm-archive-project"
+              data-primary="true"
             >
               {archiveProjectMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Archive Project
@@ -2446,6 +2453,7 @@ export default function OrgAdmin() {
               onClick={() => projectToDelete && deleteProjectMutation.mutate(projectToDelete.id)}
               disabled={deleteProjectMutation.isPending}
               data-testid="button-confirm-delete-project"
+              data-primary="true"
             >
               {deleteProjectMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete Project

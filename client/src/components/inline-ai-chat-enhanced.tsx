@@ -2019,6 +2019,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
               onClick={() => createProjectMutation.mutate(newProjectName)}
               disabled={createProjectMutation.isPending || !newProjectName.trim()}
               data-testid="button-create-project"
+              data-primary="true"
             >
               Create
             </Button>
@@ -2066,6 +2067,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
               }}
               disabled={renameConversationMutation.isPending || !newConversationTitle.trim()}
               data-testid="button-save-rename"
+              data-primary="true"
             >
               {renameConversationMutation.isPending ? (
                 <>

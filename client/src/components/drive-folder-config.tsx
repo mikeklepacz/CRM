@@ -271,6 +271,7 @@ export function DriveFolderConfig() {
                                 <AlertDialogAction
                                   onClick={() => deleteMutation.mutate(folder.id)}
                                   data-testid={`button-confirm-delete-${folder.id}`}
+                                  data-primary="true"
                                 >
                                   Delete
                                 </AlertDialogAction>

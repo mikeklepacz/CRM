@@ -515,6 +515,7 @@ export function AlignerManagement() {
               onClick={handleUploadFile}
               disabled={uploadFileMutation.isPending}
               data-testid="button-confirm-aligner-upload"
+              data-primary="true"
             >
               {uploadFileMutation.isPending ? (
                 <>

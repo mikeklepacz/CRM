@@ -176,6 +176,7 @@ export function WebhookStatusBadge() {
               onClick={handleReRegister}
               className="bg-green-600 hover:bg-green-700"
               data-testid="button-reregister-webhook"
+              data-primary="true"
             >
               <LinkIcon className="h-4 w-4 mr-2" />
               Re-register now

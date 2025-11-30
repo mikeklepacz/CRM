@@ -3861,6 +3861,7 @@ export default function ClientDashboard() {
                 }
               }}
               data-testid="button-export-vcard-confirm"
+              data-primary="true"
             >
               <Download className="mr-2 h-4 w-4" />
               Export

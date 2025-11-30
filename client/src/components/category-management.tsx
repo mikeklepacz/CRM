@@ -372,6 +372,7 @@ export function CategoryManagement() {
                 type="submit"
                 disabled={createMutation.isPending || updateMutation.isPending}
                 data-testid="button-save-category"
+                data-primary="true"
               >
                 {createMutation.isPending || updateMutation.isPending
                   ? "Saving..."

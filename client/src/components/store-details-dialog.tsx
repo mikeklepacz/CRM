@@ -1092,7 +1092,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       </AlertDialog>
 
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden flex flex-col" : "max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"}>
+        <DialogContent enableEnterSubmit={false} className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden flex flex-col" : "max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"}>
           <DialogHeader>
             <DialogTitle className="text-center">Store Details</DialogTitle>
             <DialogDescription>
@@ -2479,7 +2479,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
       {/* Store Search Dialog for Multi-Location Selection */}
       <Dialog open={storeSearchDialog} onOpenChange={setStoreSearchDialog}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogContent enableEnterSubmit={false} className="max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Select Multiple Locations</DialogTitle>
             <DialogDescription>

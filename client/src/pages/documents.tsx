@@ -525,6 +525,7 @@ export default function Documents() {
             <AlertDialogAction
               onClick={() => folderToDelete && deleteFolderMutation.mutate(folderToDelete)}
               data-testid="button-confirm-delete-folder"
+              data-primary="true"
             >
               Remove
             </AlertDialogAction>

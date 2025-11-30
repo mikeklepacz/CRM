@@ -296,6 +296,7 @@ export function WebhookManagement() {
               onClick={() => bulkRegisterMutation.mutate()}
               disabled={bulkRegisterMutation.isPending}
               data-testid="button-confirm-bulk"
+              data-primary="true"
             >
               {bulkRegisterMutation.isPending ? 'Registering...' : 'Re-register All'}
             </AlertDialogAction>

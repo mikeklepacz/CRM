@@ -2764,6 +2764,7 @@ export default function EHub() {
                     onClick={handleCreateSequence}
                     disabled={!name || createMutation.isPending}
                     data-testid="button-submit-create"
+                    data-primary="true"
                   >
                     {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Create Sequence
@@ -2980,6 +2981,7 @@ export default function EHub() {
                               }}
                               disabled={bulkDeleteRecipientsMutation.isPending}
                               data-testid="button-confirm-bulk-delete"
+                              data-primary="true"
                             >
                               {bulkDeleteRecipientsMutation.isPending ? (
                                 <>
@@ -4622,6 +4624,7 @@ export default function EHub() {
               disabled={nukeTestDataMutation.isPending}
               className="bg-destructive text-destructive-foreground hover-elevate active-elevate-2"
               data-testid="button-confirm-nuke"
+              data-primary="true"
             >
               {nukeTestDataMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               <Trash2 className="w-4 h-4 mr-2" />

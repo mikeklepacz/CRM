@@ -595,6 +595,7 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
               onClick={confirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete"
+              data-primary="true"
             >
               Delete
             </AlertDialogAction>

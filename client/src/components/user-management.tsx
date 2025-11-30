@@ -846,6 +846,7 @@ export function UserManagement() {
               onClick={handleDeactivateConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deactivateUserMutation.isPending}
+              data-primary="true"
             >
               {deactivateUserMutation.isPending && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -894,6 +895,7 @@ export function UserManagement() {
               onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteUserMutation.isPending}
+              data-primary="true"
             >
               {deleteUserMutation.isPending && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -961,6 +963,7 @@ export function UserManagement() {
               onClick={handleResetPasswordConfirm}
               disabled={resetPasswordMutation.isPending}
               data-testid="button-confirm-reset-password"
+              data-primary="true"
             >
               {resetPasswordMutation.isPending && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

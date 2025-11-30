@@ -1300,7 +1300,7 @@ export default function SuperAdmin() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createTenantMutation.isPending} data-testid="button-submit-create">
+                <Button type="submit" disabled={createTenantMutation.isPending} data-testid="button-submit-create" data-primary="true">
                   {createTenantMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create
                 </Button>
@@ -1413,7 +1413,7 @@ export default function SuperAdmin() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={updateTenantMutation.isPending} data-testid="button-submit-edit">
+                <Button type="submit" disabled={updateTenantMutation.isPending} data-testid="button-submit-edit" data-primary="true">
                   {updateTenantMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Changes
                 </Button>
@@ -1655,7 +1655,7 @@ export default function SuperAdmin() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-create-user">
+                <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-create-user" data-primary="true">
                   {createUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create User
                 </Button>

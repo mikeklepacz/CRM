@@ -4062,6 +4062,7 @@ export default function CallManager() {
               disabled={nukeAnalysisMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-nuke"
+              data-primary="true"
             >
               {nukeAnalysisMutation.isPending ? (
                 <>
@@ -4111,6 +4112,7 @@ export default function CallManager() {
               disabled={nukeCallDataMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-nuke-call-data"
+              data-primary="true"
             >
               {nukeCallDataMutation.isPending ? (
                 <>

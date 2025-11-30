@@ -676,6 +676,7 @@ Rules:
               onClick={editingFile ? handleSaveEdit : handleUploadFile} 
               disabled={editingFile ? editFileMutation.isPending : (uploadFileMutation.isPending || !fileName || !fileContent)}
               data-testid={editingFile ? "button-confirm-edit" : "button-confirm-upload"}
+              data-primary="true"
             >
               {(editingFile ? editFileMutation.isPending : uploadFileMutation.isPending) ? (
                 <>
