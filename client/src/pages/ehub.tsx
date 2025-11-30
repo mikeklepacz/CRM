@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store, Search, CheckCircle2, XCircle, ChevronDown, CalendarOff } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store, Search, CheckCircle2, XCircle, ChevronDown, CalendarOff, ShieldAlert } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -28,6 +28,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
 import { TestTube2, RefreshCw, Reply } from "lucide-react";
 import { useOptionalProject } from "@/contexts/project-context";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
+import { useLocation } from "wouter";
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
@@ -1481,9 +1483,37 @@ function QueueView() {
 export default function EHub() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const { isModuleEnabled, isLoading: moduleAccessLoading } = useModuleAccess();
   const projectContext = useOptionalProject();
   const currentProject = projectContext?.currentProject;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  const moduleEnabled = isModuleEnabled("ehub");
+
+  if (!moduleAccessLoading && !moduleEnabled) {
+    return (
+      <div className="h-full overflow-auto p-6">
+        <div className="max-w-2xl mx-auto">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center space-y-4">
+                <ShieldAlert className="h-12 w-12 mx-auto text-muted-foreground" />
+                <h2 className="text-xl font-semibold">Module Not Available</h2>
+                <p className="text-muted-foreground">
+                  The E-Hub module is not enabled for your organization. 
+                  Contact your administrator to enable this feature.
+                </p>
+                <Button onClick={() => setLocation('/')} data-testid="button-go-home">
+                  Return to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
   const [selectedSequenceId, setSelectedSequenceId] = useState<string | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);

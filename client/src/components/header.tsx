@@ -21,6 +21,7 @@ import { useState, useMemo } from "react";
 import { TicketDialog } from "./ticket-dialog";
 import { WebhookStatusBadge } from "./WebhookStatusBadge";
 import { useOptionalProject } from "@/contexts/project-context";
+import { useModuleAccess, isNavItemEnabled } from "@/hooks/useModuleAccess";
 
 type VisibleModules = {
   admin?: boolean;
@@ -48,6 +49,9 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
   const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const projectContext = useOptionalProject();
+
+  // Get tenant module access settings
+  const { enabledModules, isLoading: moduleAccessLoading } = useModuleAccess();
 
   // Get unread ticket count (admin only)
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -77,6 +81,14 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
     };
     return { ...defaults, ...userPreferences?.visibleModules };
   }, [userPreferences?.visibleModules]);
+
+  // Helper to check if a nav item should be shown (combines user prefs and tenant modules)
+  const shouldShowNavItem = (navKey: string, userPrefKey?: keyof VisibleModules): boolean => {
+    // Check user preference visibility first
+    if (userPrefKey && visibleModules[userPrefKey] === false) return false;
+    // Check tenant module access
+    return isNavItemEnabled(navKey, enabledModules, moduleAccessLoading);
+  };
 
   const unreadCount = unreadData?.count || 0;
 
@@ -200,7 +212,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {visibleModules.clients && (
+          {shouldShowNavItem("clients", "clients") && (
             <Link href="/clients">
               <Button variant="ghost" size="sm" data-testid="nav-clients">
                 <BarChart3 className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -208,7 +220,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {visibleModules.followUp && (
+          {shouldShowNavItem("follow-up-center", "followUp") && (
             <Link href="/follow-up-center">
               <Button variant="ghost" size="sm" data-testid="nav-follow-up-center">
                 <Target className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -216,7 +228,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {visibleModules.mapSearch && (
+          {shouldShowNavItem("map-search", "mapSearch") && (
             <Link href="/map-search">
               <Button variant="ghost" size="sm" data-testid="nav-map-search">
                 <MapPin className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -224,7 +236,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {visibleModules.sales && (
+          {shouldShowNavItem("sales", "sales") && (
             <Link href="/sales">
               <Button variant="ghost" size="sm" data-testid="nav-sales">
                 <TrendingUp className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -232,7 +244,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {visibleModules.assistant && (
+          {shouldShowNavItem("assistant", "assistant") && (
             <Link href="/assistant">
               <Button variant="ghost" size="sm" data-testid="nav-assistant">
                 <Bot className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -240,7 +252,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {visibleModules.docs && (
+          {shouldShowNavItem("documents", "docs") && (
             <Link href="/documents">
               <Button variant="ghost" size="sm" data-testid="nav-documents">
                 <FileText className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -248,7 +260,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {visibleModules.labelDesigner && (
+          {shouldShowNavItem("product-mockup", "labelDesigner") && (
             <Link href="/product-mockup">
               <Button variant="ghost" size="sm" data-testid="nav-product-mockup">
                 <Palette className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -256,7 +268,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && visibleModules.callManager && (
+          {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && shouldShowNavItem("call-manager", "callManager") && (
             <Link href="/call-manager">
               <Button variant="ghost" size="sm" data-testid="nav-call-manager">
                 <Phone className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -264,7 +276,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {canAccessAdminFeatures(user) && visibleModules.ehub && (
+          {canAccessAdminFeatures(user) && shouldShowNavItem("ehub", "ehub") && (
             <Link href="/ehub">
               <Button variant="ghost" size="sm" data-testid="nav-ehub">
                 <Mail className="hidden xl:mr-2 xl:inline h-4 w-4" />
@@ -308,55 +320,55 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   Dashboard
                 </DropdownMenuItem>
               )}
-              {visibleModules.clients && (
+              {shouldShowNavItem("clients", "clients") && (
                 <DropdownMenuItem onClick={() => { setLocation('/clients'); setMobileMenuOpen(false); }}>
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Clients
                 </DropdownMenuItem>
               )}
-              {visibleModules.followUp && (
+              {shouldShowNavItem("follow-up-center", "followUp") && (
                 <DropdownMenuItem onClick={() => { setLocation('/follow-up-center'); setMobileMenuOpen(false); }}>
                   <Target className="mr-2 h-4 w-4" />
                   Follow-Up Center
                 </DropdownMenuItem>
               )}
-              {visibleModules.mapSearch && (
+              {shouldShowNavItem("map-search", "mapSearch") && (
                 <DropdownMenuItem onClick={() => { setLocation('/map-search'); setMobileMenuOpen(false); }}>
                   <MapPin className="mr-2 h-4 w-4" />
                   Map Search
                 </DropdownMenuItem>
               )}
-              {visibleModules.sales && (
+              {shouldShowNavItem("sales", "sales") && (
                 <DropdownMenuItem onClick={() => { setLocation('/sales'); setMobileMenuOpen(false); }}>
                   <TrendingUp className="mr-2 h-4 w-4" />
                   Sales
                 </DropdownMenuItem>
               )}
-              {visibleModules.assistant && (
+              {shouldShowNavItem("assistant", "assistant") && (
                 <DropdownMenuItem onClick={() => { setLocation('/assistant'); setMobileMenuOpen(false); }}>
                   <Bot className="mr-2 h-4 w-4" />
                   Assistant
                 </DropdownMenuItem>
               )}
-              {visibleModules.docs && (
+              {shouldShowNavItem("documents", "docs") && (
                 <DropdownMenuItem onClick={() => { setLocation('/documents'); setMobileMenuOpen(false); }}>
                   <FileText className="mr-2 h-4 w-4" />
                   Documents
                 </DropdownMenuItem>
               )}
-              {visibleModules.labelDesigner && (
+              {shouldShowNavItem("product-mockup", "labelDesigner") && (
                 <DropdownMenuItem onClick={() => { setLocation('/product-mockup'); setMobileMenuOpen(false); }}>
                   <Palette className="mr-2 h-4 w-4" />
                   Label Designer
                 </DropdownMenuItem>
               )}
-              {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && visibleModules.callManager && (
+              {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && shouldShowNavItem("call-manager", "callManager") && (
                 <DropdownMenuItem onClick={() => { setLocation('/call-manager'); setMobileMenuOpen(false); }}>
                   <Phone className="mr-2 h-4 w-4" />
                   Call Manager
                 </DropdownMenuItem>
               )}
-              {canAccessAdminFeatures(user) && visibleModules.ehub && (
+              {canAccessAdminFeatures(user) && shouldShowNavItem("ehub", "ehub") && (
                 <DropdownMenuItem onClick={() => { setLocation('/ehub'); setMobileMenuOpen(false); }}>
                   <Mail className="mr-2 h-4 w-4" />
                   E-Hub

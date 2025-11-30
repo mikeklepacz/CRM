@@ -2,15 +2,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PhoneCall, Clock, Users, BarChart3 } from "lucide-react";
+import { PhoneCall, Clock, Users, BarChart3, ShieldAlert } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 
 export default function Voice() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const { isModuleEnabled, isLoading: moduleAccessLoading } = useModuleAccess();
 
-  // Redirect if user doesn't have voice access
+  // Check if module is enabled for the tenant
+  const moduleEnabled = isModuleEnabled("voice_kb");
+
+  // Redirect if user doesn't have voice access or module is disabled
   useEffect(() => {
     if (user && !canAccessAdminFeatures(user) && !user.hasVoiceAccess) {
       setLocation('/');
@@ -22,6 +27,31 @@ export default function Voice() {
 
   if (!hasAccess) {
     return null; // Will redirect via useEffect
+  }
+
+  // Show access denied if module is not enabled for tenant
+  if (!moduleAccessLoading && !moduleEnabled) {
+    return (
+      <div className="h-full overflow-auto p-6">
+        <div className="max-w-2xl mx-auto">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center space-y-4">
+                <ShieldAlert className="h-12 w-12 mx-auto text-muted-foreground" />
+                <h2 className="text-xl font-semibold">Module Not Available</h2>
+                <p className="text-muted-foreground">
+                  The Voice & Knowledge Base module is not enabled for your organization. 
+                  Contact your administrator to enable this feature.
+                </p>
+                <Button onClick={() => setLocation('/')} data-testid="button-go-home">
+                  Return to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -5,7 +5,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, FileIcon, Download, FolderOpen, Trash2, ExternalLink, Settings, List, LayoutGrid, ArrowUpDown } from "lucide-react";
+import { Loader2, FileIcon, Download, FolderOpen, Trash2, ExternalLink, Settings, List, LayoutGrid, ArrowUpDown, ShieldAlert } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -36,6 +36,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
+import { useLocation } from "wouter";
 
 interface DriveFile {
   id: string;
@@ -60,7 +62,35 @@ type SortOption = 'name-asc' | 'name-desc' | 'size-asc' | 'size-desc' | 'date-as
 export default function Documents() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const { isModuleEnabled, isLoading: moduleAccessLoading } = useModuleAccess();
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+
+  const moduleEnabled = isModuleEnabled("docs");
+
+  if (!moduleAccessLoading && !moduleEnabled) {
+    return (
+      <div className="h-full overflow-auto p-6">
+        <div className="max-w-2xl mx-auto">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center space-y-4">
+                <ShieldAlert className="h-12 w-12 mx-auto text-muted-foreground" />
+                <h2 className="text-xl font-semibold">Module Not Available</h2>
+                <p className="text-muted-foreground">
+                  The Documents module is not enabled for your organization. 
+                  Contact your administrator to enable this feature.
+                </p>
+                <Button onClick={() => setLocation('/')} data-testid="button-go-home">
+                  Return to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderUrl, setNewFolderUrl] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
