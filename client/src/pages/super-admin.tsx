@@ -451,6 +451,37 @@ export default function SuperAdmin() {
     },
   });
 
+  const updateUserRoleInTenantMutation = useMutation({
+    mutationFn: async ({ userId, tenantId, roleInTenant }: { userId: string; tenantId: string; roleInTenant: string }) => {
+      return await apiRequest("PATCH", `/api/super-admin/users/${userId}/tenants/${tenantId}`, { roleInTenant });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/tenants'] });
+      if (selectedUser) {
+        setSelectedUser({
+          ...selectedUser,
+          tenantMemberships: selectedUser.tenantMemberships.map(m => 
+            m.tenantId === variables.tenantId 
+              ? { ...m, roleInTenant: variables.roleInTenant }
+              : m
+          )
+        });
+      }
+      toast({
+        title: "Success",
+        description: "User role updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user role",
+        variant: "destructive",
+      });
+    },
+  });
+
   const createUserMutation = useMutation({
     mutationFn: async (data: CreateUserFormData) => {
       return await apiRequest("POST", "/api/super-admin/users", data);
@@ -1914,32 +1945,63 @@ export default function SuperAdmin() {
                 <p className="text-sm text-muted-foreground">This user is not a member of any tenant.</p>
               ) : (
                 <div className="space-y-2">
-                  {selectedUser?.tenantMemberships?.map((m) => (
-                    <div 
-                      key={m.tenantId} 
-                      className="flex items-center justify-between p-2 rounded-md border"
-                      data-testid={`membership-${m.tenantId}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{m.tenantName}</Badge>
-                        <span className="text-sm text-muted-foreground">({m.roleInTenant})</span>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRemoveUserFromTenant(selectedUser!.id, m.tenantId)}
-                        disabled={removeUserFromTenantMutation.isPending}
-                        data-testid={`button-remove-from-${m.tenantId}`}
+                  {selectedUser?.tenantMemberships?.map((m) => {
+                    const isUpdatingRole = updateUserRoleInTenantMutation.isPending && 
+                      updateUserRoleInTenantMutation.variables?.tenantId === m.tenantId;
+                    return (
+                      <div 
+                        key={m.tenantId} 
+                        className="flex items-center justify-between p-2 rounded-md border"
+                        data-testid={`membership-${m.tenantId}`}
                       >
-                        {removeUserFromTenantMutation.isPending && 
-                          removeUserFromTenantMutation.variables?.tenantId === m.tenantId ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        )}
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">{m.tenantName}</Badge>
+                          <Select
+                            value={m.roleInTenant}
+                            onValueChange={(newRole) => {
+                              if (newRole !== m.roleInTenant) {
+                                updateUserRoleInTenantMutation.mutate({
+                                  userId: selectedUser!.id,
+                                  tenantId: m.tenantId,
+                                  roleInTenant: newRole
+                                });
+                              }
+                            }}
+                            disabled={isUpdatingRole}
+                          >
+                            <SelectTrigger 
+                              className="w-[130px] h-8"
+                              data-testid={`select-role-${m.tenantId}`}
+                            >
+                              {isUpdatingRole ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <SelectValue />
+                              )}
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="org_admin">Org Admin</SelectItem>
+                              <SelectItem value="agent">Agent</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRemoveUserFromTenant(selectedUser!.id, m.tenantId)}
+                          disabled={removeUserFromTenantMutation.isPending}
+                          data-testid={`button-remove-from-${m.tenantId}`}
+                        >
+                          {removeUserFromTenantMutation.isPending && 
+                            removeUserFromTenantMutation.variables?.tenantId === m.tenantId ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

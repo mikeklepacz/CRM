@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check, PieChart, GitBranch } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -35,6 +35,8 @@ type VisibleModules = {
   labelDesigner?: boolean;
   callManager?: boolean;
   ehub?: boolean;
+  analytics?: boolean;
+  pipelines?: boolean;
 };
 
 interface HeaderProps {
@@ -78,6 +80,8 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
       labelDesigner: true,
       callManager: true,
       ehub: true,
+      analytics: true,
+      pipelines: true,
     };
     return { ...defaults, ...userPreferences?.visibleModules };
   }, [userPreferences?.visibleModules]);
@@ -268,6 +272,22 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
+          {shouldShowNavItem("analytics", "analytics") && (
+            <Link href="/analytics">
+              <Button variant="ghost" size="sm" data-testid="nav-analytics">
+                <PieChart className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Analytics
+              </Button>
+            </Link>
+          )}
+          {shouldShowNavItem("pipelines", "pipelines") && (
+            <Link href="/pipelines">
+              <Button variant="ghost" size="sm" data-testid="nav-pipelines">
+                <GitBranch className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Pipelines
+              </Button>
+            </Link>
+          )}
           {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && shouldShowNavItem("call-manager", "callManager") && (
             <Link href="/call-manager">
               <Button variant="ghost" size="sm" data-testid="nav-call-manager">
@@ -360,6 +380,18 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <DropdownMenuItem onClick={() => { setLocation('/product-mockup'); setMobileMenuOpen(false); }}>
                   <Palette className="mr-2 h-4 w-4" />
                   Label Designer
+                </DropdownMenuItem>
+              )}
+              {shouldShowNavItem("analytics", "analytics") && (
+                <DropdownMenuItem onClick={() => { setLocation('/analytics'); setMobileMenuOpen(false); }}>
+                  <PieChart className="mr-2 h-4 w-4" />
+                  Analytics
+                </DropdownMenuItem>
+              )}
+              {shouldShowNavItem("pipelines", "pipelines") && (
+                <DropdownMenuItem onClick={() => { setLocation('/pipelines'); setMobileMenuOpen(false); }}>
+                  <GitBranch className="mr-2 h-4 w-4" />
+                  Pipelines
                 </DropdownMenuItem>
               )}
               {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && shouldShowNavItem("call-manager", "callManager") && (
