@@ -6,17 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocation } from "wouter";
 
-// Admin components
+// Admin components (tenant-level only - Webhooks, Voice, Google Sheets moved to Super Admin)
 import { WooCommerceSync } from "@/components/woocommerce-sync";
-import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { UserManagement } from "@/components/user-management";
 import { SalesReports } from "@/components/sales-reports";
 import { OpenAIManagement } from "@/components/openai-management";
 import { AlignerManagement } from "@/components/aligner-management";
 import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
-import { WebhookManagement } from "@/components/webhook-management";
 import { DriveFolderConfig } from "@/components/drive-folder-config";
-import { VoiceSettings } from "@/components/voice-settings";
 import { HolidayCalendar } from "@/components/holiday-calendar";
 
 export default function Admin() {
@@ -59,12 +56,9 @@ export default function Admin() {
               <SelectItem value="users" data-testid="tab-users">Users</SelectItem>
               <SelectItem value="tickets" data-testid="tab-tickets">Support Tickets</SelectItem>
               <SelectItem value="reports" data-testid="tab-reports">Reports</SelectItem>
-              <SelectItem value="webhooks" data-testid="tab-webhooks">Webhooks</SelectItem>
               <SelectItem value="calendar" data-testid="tab-calendar">Calendar</SelectItem>
-              <SelectItem value="voice" data-testid="tab-voice">Voice</SelectItem>
               <SelectItem value="openai" data-testid="tab-openai">OpenAI</SelectItem>
               <SelectItem value="aligner" data-testid="tab-aligner">Aligner</SelectItem>
-              <SelectItem value="sheets" data-testid="tab-sheets">Google Sheets</SelectItem>
               <SelectItem value="docs" data-testid="tab-docs">Docs</SelectItem>
               <SelectItem value="sync" data-testid="tab-sync">WooCommerce Sync</SelectItem>
             </SelectContent>
@@ -75,12 +69,9 @@ export default function Admin() {
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
             <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
             <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
-            <TabsTrigger value="webhooks" data-testid="tab-webhooks">Webhooks</TabsTrigger>
             <TabsTrigger value="calendar" data-testid="tab-calendar">Calendar</TabsTrigger>
-            <TabsTrigger value="voice" data-testid="tab-voice">Voice</TabsTrigger>
             <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
             <TabsTrigger value="aligner" data-testid="tab-aligner">Aligner</TabsTrigger>
-            <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
             <TabsTrigger value="docs" data-testid="tab-docs">Docs</TabsTrigger>
             <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
           </TabsList>
@@ -98,17 +89,8 @@ export default function Admin() {
           <SalesReports />
         </TabsContent>
 
-        <TabsContent value="webhooks">
-          <WebhookManagement />
-        </TabsContent>
-
         <TabsContent value="calendar">
           <HolidayCalendar />
-        </TabsContent>
-
-        {/* AI CALL HISTORY SYSTEM - Admin-only ElevenLabs AI voice calling (call_sessions table) */}
-        <TabsContent value="voice">
-          <VoiceSettings />
         </TabsContent>
 
         <TabsContent value="openai">
@@ -117,10 +99,6 @@ export default function Admin() {
 
         <TabsContent value="aligner">
           <AlignerManagement />
-        </TabsContent>
-
-        <TabsContent value="sheets">
-          <GoogleSheetsSync />
         </TabsContent>
 
         <TabsContent value="docs">
