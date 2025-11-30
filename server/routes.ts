@@ -1531,13 +1531,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Update campaign target if applicable
         if (clientData.campaignTargetId) {
-          const target = await storage.getCallCampaignTarget(clientData.campaignTargetId);
+          const target = await storage.getCallCampaignTarget(clientData.campaignTargetId, clientData.tenantId);
           if (target && target.targetStatus === 'in-progress') {
             console.log('[ElevenLabs Webhook][DEBUG] Marking campaign target as failed:', clientData.campaignTargetId);
-            await storage.updateCallCampaignTarget(clientData.campaignTargetId, {
+            await storage.updateCallCampaignTarget(clientData.campaignTargetId, clientData.tenantId, {
               targetStatus: 'failed',
             });
-            await storage.incrementCampaignCalls(target.campaignId, 'failed');
+            await storage.incrementCampaignCalls(target.campaignId, clientData.tenantId, 'failed');
           }
         }
         
@@ -1653,14 +1653,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const callSuccessful = analysis.call_successful;
           const newStatus = callSuccessful ? 'completed' : 'failed';
           
-          const target = await storage.getCallCampaignTarget(targetId);
+          const target = await storage.getCallCampaignTarget(targetId, clientData.tenantId);
           if (target && target.targetStatus === 'in-progress') {
-            await storage.updateCallCampaignTarget(targetId, {
+            await storage.updateCallCampaignTarget(targetId, clientData.tenantId, {
               targetStatus: newStatus,
               externalConversationId: conversationId,
             });
             
-            await storage.incrementCampaignCalls(target.campaignId, callSuccessful ? 'successful' : 'failed');
+            await storage.incrementCampaignCalls(target.campaignId, clientData.tenantId, callSuccessful ? 'successful' : 'failed');
             
             console.log(`Updated campaign target ${targetId} status to ${newStatus}`);
           }
@@ -2333,7 +2333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Get campaign data by finding campaign target
         try {
-          const targets = await storage.getCallTargetsBySession(session.conversationId);
+          const targets = await storage.getCallTargetsBySession(session.conversationId, tenantId);
           if (targets && targets.length > 0) {
             const target = targets[0];
             if (target.campaignId) {
@@ -2978,8 +2978,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Try to find campaign target using conversationId
       let campaignTarget = null;
+      const tenantId = (req.user as any).tenantId;
       if (session?.conversationId) {
-        const targets = await storage.getCallTargetsBySession(session.conversationId);
+        const targets = await storage.getCallTargetsBySession(session.conversationId, tenantId);
         if (targets.length > 0) {
           campaignTarget = targets[0];
         }
@@ -3046,7 +3047,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       for (const campaign of campaigns) {
-        const targets = await storage.getCallCampaignTargets(campaign.id);
+        const targets = await storage.getCallCampaignTargets(campaign.id, tenantId);
         const pending = targets.filter((t: any) => t.targetStatus === 'pending').length;
         const completed = targets.filter((t: any) => t.targetStatus === 'completed').length;
         const failed = targets.filter((t: any) => t.targetStatus === 'failed').length;
