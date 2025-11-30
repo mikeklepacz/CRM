@@ -3134,78 +3134,78 @@ export default function EHub() {
           )}
         </TabsContent>
 
-        {/* Campaign Strategy Tab */}
-        <TabsContent value="strategy" className="space-y-4">
-          {/* Sequence Selector */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaign Strategy</CardTitle>
-              <CardDescription>
-                Create sequences, chat with AI to plan campaigns, and configure timing
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Inline Create Form */}
-              <div className="p-4 border rounded-lg bg-muted/30">
-                <Label className="text-sm font-medium">Create New Sequence</Label>
-                <p className="text-xs text-muted-foreground mb-3">
-                  AI will generate all email content based on your strategy conversation
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="e.g., Cold Outreach Q1 2025"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && name) {
-                        handleCreateSequence();
-                      }
-                    }}
-                    data-testid="input-sequence-name-inline"
-                  />
-                  <Button
-                    onClick={handleCreateSequence}
-                    disabled={!name || createMutation.isPending}
-                    data-testid="button-create-sequence-inline"
-                  >
-                    {createMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Plus className="w-4 h-4 mr-2" />
-                    )}
-                    Create
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Existing Sequence Selector */}
-              <div>
-                <Label htmlFor="strategy-sequence-select">Or Select Existing Sequence</Label>
-                <select
-                  id="strategy-sequence-select"
-                  data-testid="select-sequence-strategy"
-                  className="w-full mt-2 rounded-md border border-input bg-background px-3 py-2"
-                  value={selectedSequenceId || ''}
-                  onChange={(e) => setSelectedSequenceId(e.target.value || null)}
-                >
-                  <option value="">Select a sequence...</option>
-                  {sequences?.map((seq) => (
-                    <option key={seq.id} value={seq.id}>
-                      {seq.name} ({seq.status})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Campaign Strategy Tab - Two Column Layout */}
+        <TabsContent value="strategy">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Left Column: Sequence Selector + AI Chat */}
+            <div className="space-y-4">
+              {/* Sequence Selector Card */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle>Campaign Strategy</CardTitle>
+                  <CardDescription>
+                    Create sequences, chat with AI to plan campaigns, and configure timing
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Inline Create Form */}
+                  <div className="p-3 border rounded-lg bg-muted/30">
+                    <Label className="text-sm font-medium">Create New Sequence</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      AI will generate email content based on your strategy
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g., Cold Outreach Q1 2025"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && name) {
+                            handleCreateSequence();
+                          }
+                        }}
+                        data-testid="input-sequence-name-inline"
+                      />
+                      <Button
+                        onClick={handleCreateSequence}
+                        disabled={!name || createMutation.isPending}
+                        data-testid="button-create-sequence-inline"
+                      >
+                        {createMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4 mr-2" />
+                        )}
+                        Create
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Existing Sequence Selector */}
+                  <div>
+                    <Label htmlFor="strategy-sequence-select">Or Select Existing Sequence</Label>
+                    <select
+                      id="strategy-sequence-select"
+                      data-testid="select-sequence-strategy"
+                      className="w-full mt-2 rounded-md border border-input bg-background px-3 py-2"
+                      value={selectedSequenceId || ''}
+                      onChange={(e) => setSelectedSequenceId(e.target.value || null)}
+                    >
+                      <option value="">Select a sequence...</option>
+                      {sequences?.map((seq) => (
+                        <option key={seq.id} value={seq.id}>
+                          {seq.name} ({seq.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {/* Content: show only when sequence is selected AND loaded */}
-          {selectedSequenceId && currentSequence ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Left Column: AI Chat Interface - takes full height */}
-              <div className="lg:row-span-2">
-                <Card className="h-full flex flex-col">
-                  <CardHeader className="shrink-0">
+              {/* AI Strategy Chat Card */}
+              {selectedSequenceId && currentSequence ? (
+                <Card className="flex flex-col">
+                  <CardHeader className="shrink-0 pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
                         <CardTitle>AI Strategy Chat</CardTitle>
@@ -3228,9 +3228,9 @@ export default function EHub() {
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="flex-1 flex flex-col space-y-4 min-h-0">
-                    {/* Chat Transcript - much taller */}
-                    <ScrollArea className="flex-1 min-h-[500px] border rounded-md p-4 bg-muted/10" ref={scrollRef as any}>
+                  <CardContent className="flex-1 flex flex-col space-y-4">
+                    {/* Chat Transcript - tall for long conversations */}
+                    <ScrollArea className="h-[600px] border rounded-md p-4 bg-muted/10" ref={scrollRef as any}>
                       {strategyTranscript && strategyTranscript.messages && strategyTranscript.messages.length > 0 ? (
                         <div className="space-y-4">
                           {strategyTranscript.messages.map((msg: any) => (
@@ -3325,10 +3325,21 @@ export default function EHub() {
                     </div>
                   </CardContent>
                 </Card>
-              </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-12">
+                    <p className="text-center text-muted-foreground">
+                      Select a sequence above to begin planning your campaign strategy
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
 
-              {/* Right Column: Configuration */}
-              <div className="space-y-4">
+            {/* Right Column: Configuration - only show when sequence selected */}
+            <div className="space-y-4 lg:self-start">
+              {selectedSequenceId && currentSequence ? (
+                <>
                 {/* Step Delays Card */}
                 <Card>
                   <CardHeader>
@@ -3710,28 +3721,18 @@ export default function EHub() {
                     )}
                   </CardContent>
                 </Card>
-              </div>
+                </>
+              ) : (
+                <Card>
+                  <CardContent className="py-12">
+                    <p className="text-center text-muted-foreground">
+                      Configuration options will appear here when you select a sequence
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          ) : selectedSequenceId ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  <p className="text-center text-muted-foreground">
-                    Loading sequence...
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="py-12">
-                <p className="text-center text-muted-foreground">
-                  Select a sequence to begin planning your campaign strategy
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          </div>
         </TabsContent>
 
         {/* Queue Tab with sub-tabs */}
