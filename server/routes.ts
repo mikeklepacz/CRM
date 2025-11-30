@@ -746,7 +746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      if (!user || user.role !== 'admin') {
+      if (!user || (user.role !== 'admin' && user.roleInTenant !== 'org_admin' && !user.isSuperAdmin)) {
         return res.status(403).json({ message: "Admin access required" });
       }
       req.currentUser = user;
@@ -2137,7 +2137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       // Check voice access
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
@@ -2178,14 +2178,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { limit, offset, clientId, status } = req.query;
 
       // If user is not admin and doesn't have voice access, deny
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
       // Agent users can only see their own initiated calls
       const tenantId = (req.user as any).tenantId;
       const filters: any = {};
-      if (user?.role !== 'admin') {
+      const isAdminUser = user?.role === 'admin' || user?.roleInTenant === 'org_admin' || user?.isSuperAdmin;
+      if (!isAdminUser) {
         filters.initiatedByUserId = userId;
       }
       if (clientId) {
@@ -2217,7 +2218,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check access: admin can see all, agents can only see their own
-      if (user?.role !== 'admin' && session.initiatedByUserId !== userId) {
+      const isAdminUser = user?.role === 'admin' || user?.roleInTenant === 'org_admin' || user?.isSuperAdmin;
+      if (!isAdminUser && session.initiatedByUserId !== userId) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -2239,7 +2241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
@@ -2558,7 +2560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       // Check voice access
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
@@ -2734,7 +2736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       // Check voice access
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
@@ -2978,7 +2980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       // Check voice access
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
@@ -3038,7 +3040,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       // Check voice access
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
@@ -3217,7 +3219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       // Check voice access
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
@@ -3326,7 +3328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       // Check voice access
-      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
@@ -7528,7 +7530,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
@@ -7548,7 +7550,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
@@ -7573,7 +7575,7 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
@@ -11260,7 +11262,8 @@ IMPORTANT:
       ].filter(col => allHeaders.some(h => h.toLowerCase() === col.toLowerCase())); // Only include if they exist
 
       // For agents (non-admins), remove the read-only columns
-      if (user?.role !== 'admin') {
+      const isAdminUser = user?.role === 'admin' || user?.roleInTenant === 'org_admin' || user?.isSuperAdmin;
+      if (!isAdminUser) {
         editableColumns = editableColumns.filter(col => 
           !agentReadOnlyColumns.includes(col.toLowerCase())
         );
@@ -16650,7 +16653,7 @@ ${rawText}`;
       const user = await storage.getUser(userId);
       console.log('⚙️ [SETTINGS] User role:', user?.role);
 
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
@@ -16696,7 +16699,7 @@ ${rawText}`;
       const user = await storage.getUser(userId);
       console.log('⚙️ [SETTINGS] User role:', user?.role);
 
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
@@ -16760,7 +16763,7 @@ ${rawText}`;
       console.log('📤 [FILE UPLOAD] Starting file upload...');
 
       const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
@@ -16949,7 +16952,7 @@ ${rawText}`;
       console.log('📝 [EDIT FILE] Starting PUT request...');
 
       const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
@@ -16985,7 +16988,7 @@ ${rawText}`;
       const user = await storage.getUser(userId);
       console.log('📁 [DELETE FILE] User role:', user?.role);
 
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         console.log('📁 [DELETE FILE] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
@@ -18966,7 +18969,7 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
 
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         return res.json({ count: 0 });
       }
 
@@ -18984,7 +18987,7 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
 
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
@@ -19174,7 +19177,7 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
 
-      if (user?.role !== 'admin') {
+      if (user?.role !== 'admin' && user?.roleInTenant !== 'org_admin' && !user?.isSuperAdmin) {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
