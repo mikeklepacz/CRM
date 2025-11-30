@@ -227,6 +227,7 @@ export interface IStorage {
   // Cross-tenant user operations (Super Admin)
   listUsersAcrossTenants(): Promise<Array<User & { tenantMemberships: Array<{ tenantId: string; tenantName: string; roleInTenant: string }> }>>;
   getUserTenantMemberships(userId: string): Promise<Array<{ tenantId: string; tenantName: string; tenantSlug: string; roleInTenant: string; isDefault: boolean }>>;
+  getUserTenantRole(userId: string, tenantId: string): Promise<string | null>;
   addUserToTenant(userId: string, tenantId: string, roleInTenant: string, isDefault?: boolean): Promise<void>;
   removeUserFromTenant(userId: string, tenantId: string): Promise<void>;
   getPlatformMetrics(): Promise<{ totalTenants: number; totalUsers: number; totalClients: number; activeTenants: number }>;
@@ -954,6 +955,14 @@ export class DatabaseStorage implements IStorage {
       roleInTenant: m.roleInTenant,
       isDefault: m.isDefault ?? false,
     }));
+  }
+
+  async getUserTenantRole(userId: string, tenantId: string): Promise<string | null> {
+    const [membership] = await db
+      .select({ roleInTenant: userTenants.roleInTenant })
+      .from(userTenants)
+      .where(and(eq(userTenants.userId, userId), eq(userTenants.tenantId, tenantId)));
+    return membership?.roleInTenant ?? null;
   }
 
   async addUserToTenant(userId: string, tenantId: string, roleInTenant: string, isDefault?: boolean): Promise<void> {
