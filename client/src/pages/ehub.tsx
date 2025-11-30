@@ -3582,13 +3582,13 @@ export default function EHub() {
                             <span className="text-sm font-medium">Current Status:</span>
                             <Badge
                               variant={
-                                sequences.find((s) => s.id === selectedSequenceId)?.status === 'active'
+                                sequences?.find((s) => s.id === selectedSequenceId)?.status === 'active'
                                   ? 'default'
                                   : 'secondary'
                               }
                               data-testid="badge-sequence-status"
                             >
-                              {sequences.find((s) => s.id === selectedSequenceId)?.status || 'draft'}
+                              {sequences?.find((s) => s.id === selectedSequenceId)?.status || 'draft'}
                             </Badge>
                           </div>
                           
@@ -3618,8 +3618,8 @@ export default function EHub() {
 
                         <div className="pt-2">
                           {(() => {
-                            const currentStatus = sequences.find((s) => s.id === selectedSequenceId)?.status || 'draft';
-                            const currentSequence = sequences.find((s) => s.id === selectedSequenceId);
+                            const currentStatus = sequences?.find((s) => s.id === selectedSequenceId)?.status || 'draft';
+                            const currentSequence = sequences?.find((s) => s.id === selectedSequenceId);
                             const hasCampaignBrief = !!(currentSequence as any)?.finalizedStrategy?.trim();
                             const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
                             const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0);
@@ -3643,7 +3643,7 @@ export default function EHub() {
                                 <Button
                                   onClick={() => {
                                     // Double-check validation before activating
-                                    const currentSequence = sequences.find((s) => s.id === selectedSequenceId);
+                                    const currentSequence = sequences?.find((s) => s.id === selectedSequenceId);
                                     const hasCampaignBrief = !!(currentSequence as any)?.finalizedStrategy?.trim();
                                     const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
                                     const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0) && 
@@ -4328,7 +4328,7 @@ export default function EHub() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {(() => {
-                  const currentSequence = sequences.find((s) => s.id === selectedSequenceId);
+                  const currentSequence = sequences?.find((s) => s.id === selectedSequenceId);
                   const hasCampaignBrief = !!(currentSequence as any)?.finalizedStrategy?.trim();
                   const canTest = selectedSequenceId && hasCampaignBrief;
                   
