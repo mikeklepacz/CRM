@@ -65,7 +65,7 @@ export default function Admin() {
               <SelectItem value="openai" data-testid="tab-openai">OpenAI</SelectItem>
               <SelectItem value="aligner" data-testid="tab-aligner">Aligner</SelectItem>
               <SelectItem value="sheets" data-testid="tab-sheets">Google Sheets</SelectItem>
-              <SelectItem value="assets" data-testid="tab-assets">Assets</SelectItem>
+              <SelectItem value="docs" data-testid="tab-docs">Docs</SelectItem>
               <SelectItem value="sync" data-testid="tab-sync">WooCommerce Sync</SelectItem>
             </SelectContent>
           </Select>
@@ -81,7 +81,7 @@ export default function Admin() {
             <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
             <TabsTrigger value="aligner" data-testid="tab-aligner">Aligner</TabsTrigger>
             <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
-            <TabsTrigger value="assets" data-testid="tab-assets">Assets</TabsTrigger>
+            <TabsTrigger value="docs" data-testid="tab-docs">Docs</TabsTrigger>
             <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
           </TabsList>
         )}
@@ -123,7 +123,7 @@ export default function Admin() {
           <GoogleSheetsSync />
         </TabsContent>
 
-        <TabsContent value="assets">
+        <TabsContent value="docs">
           <DriveFolderConfig />
         </TabsContent>
 

@@ -19304,7 +19304,7 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Super Admin: Get all tickets across all tenants
+  // Super Admin: Get all tickets across all tenants with optional tenant filtering
   app.get('/api/super-admin/tickets', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
@@ -19314,7 +19314,14 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(403).json({ message: 'Super admin access required' });
       }
 
-      const allTickets = await storage.getAllTickets();
+      const tenantId = req.query.tenantId as string | undefined;
+      let allTickets = await storage.getAllTickets();
+      
+      // Filter by tenant if specified
+      if (tenantId && tenantId !== 'all') {
+        allTickets = allTickets.filter(t => t.tenantId === tenantId);
+      }
+
       const ticketsWithInfo = await Promise.all(
         allTickets.map(async (ticket) => {
           const ticketUser = await storage.getUser(ticket.userId);
