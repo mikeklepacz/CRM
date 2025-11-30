@@ -1905,8 +1905,9 @@ export default function EHub() {
         setStepDelays([]);
         setRepeatLastStep(false);
       }
-      // Load keywords for this sequence
-      setSequenceKeywords((selectedSeq as any)?.keywords || "");
+      // Load keywords for this sequence (handle both string and array from DB)
+      const kw = (selectedSeq as any)?.keywords;
+      setSequenceKeywords(Array.isArray(kw) ? kw.join(', ') : (kw || ""));
     } else {
       setStepDelays([]);
       setRepeatLastStep(false);
@@ -3496,6 +3497,7 @@ export default function EHub() {
                 </Card>
 
                 {/* Keyword Bank Card */}
+                {console.log('[DEBUG Keywords]', { sequenceKeywords, type: typeof sequenceKeywords, isArray: Array.isArray(sequenceKeywords) })}
                 {currentSequence && (
                   <Card>
                     <CardHeader>
@@ -3514,7 +3516,11 @@ export default function EHub() {
                       />
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">
-                          {(sequenceKeywords || '').split(',').filter(k => k.trim()).length} keyword{(sequenceKeywords || '').split(',').filter(k => k.trim()).length !== 1 ? 's' : ''}
+                          {(() => {
+                            const kw = typeof sequenceKeywords === 'string' ? sequenceKeywords : '';
+                            const count = kw.split(',').filter(k => k.trim()).length;
+                            return `${count} keyword${count !== 1 ? 's' : ''}`;
+                          })()}
                         </p>
                         {sequenceKeywords !== ((currentSequence as any)?.keywords || "") && (
                           <Button

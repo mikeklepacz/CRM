@@ -1,0 +1,157 @@
+useModuleAccess.ts:82 [ModuleAccess] Checking module access: {moduleId: 'ehub', tenantId: 'test-tenant-id', enabledModules: Array(2), hasAccess: true}
+ehub.tsx:1705 [DEBUG E-Hub] State snapshot: {selectedSequenceId: null, sequencesLength: 1, sequencesIsArray: true, currentSequenceExists: false, currentSequenceName: undefined, …}
+ehub.tsx:3149 [DEBUG Strategy Tab] Rendering: {selectedSequenceId: null, currentSequence: undefined, hasSequences: true}
+useModuleAccess.ts:82 [ModuleAccess] Checking module access: {moduleId: 'ehub', tenantId: 'test-tenant-id', enabledModules: Array(2), hasAccess: true}
+ehub.tsx:1705 [DEBUG E-Hub] State snapshot: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', sequencesLength: 1, sequencesIsArray: true, currentSequenceExists: true, currentSequenceName: 'test seq 1', …}
+ehub.tsx:3149 [DEBUG Strategy Tab] Rendering: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', currentSequence: 'test seq 1', hasSequences: true}
+useModuleAccess.ts:82 [ModuleAccess] Checking module access: {moduleId: 'ehub', tenantId: 'test-tenant-id', enabledModules: Array(2), hasAccess: true}
+ehub.tsx:1705 [DEBUG E-Hub] State snapshot: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', sequencesLength: 1, sequencesIsArray: true, currentSequenceExists: true, currentSequenceName: 'test seq 1', …}
+ehub.tsx:3149 [DEBUG Strategy Tab] Rendering: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', currentSequence: 'test seq 1', hasSequences: true}
+useModuleAccess.ts:82 [ModuleAccess] Checking module access: {moduleId: 'ehub', tenantId: 'test-tenant-id', enabledModules: Array(2), hasAccess: true}
+ehub.tsx:1705 [DEBUG E-Hub] State snapshot: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', sequencesLength: 1, sequencesIsArray: true, currentSequenceExists: true, currentSequenceName: 'test seq 1', …}
+ehub.tsx:3149 [DEBUG Strategy Tab] Rendering: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', currentSequence: 'test seq 1', hasSequences: true}
+ehub.tsx:3517 Uncaught TypeError: (sequenceKeywords || "").split is not a function
+    at EHub (ehub.tsx:3517:53)
+    at renderWithHooks (chunk-NFC5BX5N.js?v=f40340f9:11548:26)
+    at updateFunctionComponent (chunk-NFC5BX5N.js?v=f40340f9:14582:28)
+    at beginWork (chunk-NFC5BX5N.js?v=f40340f9:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=f40340f9:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=f40340f9:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=f40340f9:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=f40340f9:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=f40340f9:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=f40340f9:19137:13)
+EHub @ ehub.tsx:3517
+renderWithHooks @ chunk-NFC5BX5N.js?v=f40340f9:11548
+updateFunctionComponent @ chunk-NFC5BX5N.js?v=f40340f9:14582
+beginWork @ chunk-NFC5BX5N.js?v=f40340f9:15924
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=f40340f9:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=f40340f9:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=f40340f9:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=f40340f9:19116
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=f40340f9:18678
+workLoop @ chunk-NFC5BX5N.js?v=f40340f9:197
+flushWork @ chunk-NFC5BX5N.js?v=f40340f9:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=f40340f9:384
+useModuleAccess.ts:82 [ModuleAccess] Checking module access: {moduleId: 'ehub', tenantId: 'test-tenant-id', enabledModules: Array(2), hasAccess: true}
+ehub.tsx:1705 [DEBUG E-Hub] State snapshot: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', sequencesLength: 1, sequencesIsArray: true, currentSequenceExists: true, currentSequenceName: 'test seq 1', …}
+ehub.tsx:3149 [DEBUG Strategy Tab] Rendering: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', currentSequence: 'test seq 1', hasSequences: true}
+useModuleAccess.ts:82 [ModuleAccess] Checking module access: {moduleId: 'ehub', tenantId: 'test-tenant-id', enabledModules: Array(2), hasAccess: true}
+ehub.tsx:1705 [DEBUG E-Hub] State snapshot: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', sequencesLength: 1, sequencesIsArray: true, currentSequenceExists: true, currentSequenceName: 'test seq 1', …}
+ehub.tsx:3149 [DEBUG Strategy Tab] Rendering: {selectedSequenceId: '12840bce-c961-4b23-b00a-3ec32d83598c', currentSequence: 'test seq 1', hasSequences: true}
+ehub.tsx:3517 Uncaught TypeError: (sequenceKeywords || "").split is not a function
+    at EHub (ehub.tsx:3517:53)
+    at renderWithHooks (chunk-NFC5BX5N.js?v=f40340f9:11548:26)
+    at updateFunctionComponent (chunk-NFC5BX5N.js?v=f40340f9:14582:28)
+    at beginWork (chunk-NFC5BX5N.js?v=f40340f9:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=f40340f9:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=f40340f9:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=f40340f9:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=f40340f9:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=f40340f9:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=f40340f9:19137:13)
+EHub @ ehub.tsx:3517
+renderWithHooks @ chunk-NFC5BX5N.js?v=f40340f9:11548
+updateFunctionComponent @ chunk-NFC5BX5N.js?v=f40340f9:14582
+beginWork @ chunk-NFC5BX5N.js?v=f40340f9:15924
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=f40340f9:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=f40340f9:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=f40340f9:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=f40340f9:19116
+recoverFromConcurrentError @ chunk-NFC5BX5N.js?v=f40340f9:18736
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=f40340f9:18684
+workLoop @ chunk-NFC5BX5N.js?v=f40340f9:197
+flushWork @ chunk-NFC5BX5N.js?v=f40340f9:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=f40340f9:384
+chunk-NFC5BX5N.js?v=f40340f9:14032 The above error occurred in the <EHub> component:
+
+    at EHub (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/pages/ehub.tsx:2362:21)
+    at Route (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f40340f9:323:16)
+    at Switch (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f40340f9:379:17)
+    at main
+    at div
+    at ChatPanelProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/hooks/useChatPanel.tsx:20:37)
+    at ProjectProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/contexts/project-context.tsx:23:35)
+    at EventStreamProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/lib/eventStream.tsx:57:39)
+    at Router (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/App.tsx?v=Sahzec1RSiK_PLSdFxOxV:57:48)
+    at Provider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-FYP7TLMM.js?v=f40340f9:38:15)
+    at TooltipProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=f40340f9:64:5)
+    at AgentFilterProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/contexts/agent-filter-context.tsx:22:39)
+    at ThemeProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/src/components/theme-provider.tsx:26:3)
+    at QueryClientProvider (https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=f40340f9:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+logCapturedError @ chunk-NFC5BX5N.js?v=f40340f9:14032
+update.callback @ chunk-NFC5BX5N.js?v=f40340f9:14052
+callCallback @ chunk-NFC5BX5N.js?v=f40340f9:11248
+commitUpdateQueue @ chunk-NFC5BX5N.js?v=f40340f9:11265
+commitLayoutEffectOnFiber @ chunk-NFC5BX5N.js?v=f40340f9:17093
+commitLayoutMountEffects_complete @ chunk-NFC5BX5N.js?v=f40340f9:17980
+commitLayoutEffects_begin @ chunk-NFC5BX5N.js?v=f40340f9:17969
+commitLayoutEffects @ chunk-NFC5BX5N.js?v=f40340f9:17920
+commitRootImpl @ chunk-NFC5BX5N.js?v=f40340f9:19353
+commitRoot @ chunk-NFC5BX5N.js?v=f40340f9:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=f40340f9:18760
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=f40340f9:18718
+workLoop @ chunk-NFC5BX5N.js?v=f40340f9:197
+flushWork @ chunk-NFC5BX5N.js?v=f40340f9:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=f40340f9:384
+chunk-NFC5BX5N.js?v=f40340f9:19413 Uncaught TypeError: (sequenceKeywords || "").split is not a function
+    at EHub (ehub.tsx:3517:53)
+    at renderWithHooks (chunk-NFC5BX5N.js?v=f40340f9:11548:26)
+    at updateFunctionComponent (chunk-NFC5BX5N.js?v=f40340f9:14582:28)
+    at beginWork (chunk-NFC5BX5N.js?v=f40340f9:15924:22)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=f40340f9:19753:22)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=f40340f9:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=f40340f9:19137:13)
+    at renderRootSync (chunk-NFC5BX5N.js?v=f40340f9:19116:15)
+    at recoverFromConcurrentError (chunk-NFC5BX5N.js?v=f40340f9:18736:28)
+    at performConcurrentWorkOnRoot (chunk-NFC5BX5N.js?v=f40340f9:18684:30)
+EHub @ ehub.tsx:3517
+renderWithHooks @ chunk-NFC5BX5N.js?v=f40340f9:11548
+updateFunctionComponent @ chunk-NFC5BX5N.js?v=f40340f9:14582
+beginWork @ chunk-NFC5BX5N.js?v=f40340f9:15924
+beginWork$1 @ chunk-NFC5BX5N.js?v=f40340f9:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=f40340f9:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=f40340f9:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=f40340f9:19116
+recoverFromConcurrentError @ chunk-NFC5BX5N.js?v=f40340f9:18736
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=f40340f9:18684
+workLoop @ chunk-NFC5BX5N.js?v=f40340f9:197
+flushWork @ chunk-NFC5BX5N.js?v=f40340f9:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=f40340f9:384
+ehub.tsx:1974  GET https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/api/sequences/12840bce-c961-4b23-b00a-3ec32d83598c/recipients? 503 (Service Unavailable)
+queryFn @ ehub.tsx:1974
+fetchFn @ @tanstack_react-query.js?v=f40340f9:840
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+fetch @ @tanstack_react-query.js?v=f40340f9:926
+executeFetch_fn @ @tanstack_react-query.js?v=f40340f9:2211
+setOptions @ @tanstack_react-query.js?v=f40340f9:1955
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=f40340f9:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=f40340f9:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=f40340f9:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=f40340f9:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=f40340f9:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=f40340f9:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=f40340f9:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=f40340f9:19416
+commitRoot @ chunk-NFC5BX5N.js?v=f40340f9:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=f40340f9:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=f40340f9:9119
+flushSync @ chunk-NFC5BX5N.js?v=f40340f9:18959
+finishEventHandler @ chunk-NFC5BX5N.js?v=f40340f9:3569
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3582
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
