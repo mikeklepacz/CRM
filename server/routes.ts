@@ -22763,6 +22763,22 @@ ${conversationContext}`;
         return res.status(400).json({ message: 'Invalid settings object' });
       }
 
+      // Get current settings to check for module changes
+      const currentTenant = await storage.getTenantById(tenantId);
+      const previousModules = currentTenant?.settings?.enabledModules || [];
+      const newModules = settings.enabledModules || previousModules;
+
+      // Handle hard-off for disabled modules (cancel queued items)
+      if (settings.enabledModules) {
+        const { handleModuleHardOff } = await import('./services/moduleHardOff');
+        const hardOffResults = await handleModuleHardOff(tenantId, previousModules, newModules);
+        
+        // Log results for audit
+        if (hardOffResults.length > 0) {
+          console.log(`[OrgAdmin] Module hard-off results for tenant ${tenantId}:`, hardOffResults);
+        }
+      }
+
       const updated = await storage.updateTenantSettings(tenantId, settings);
       res.json({ tenant: updated });
     } catch (error: any) {
