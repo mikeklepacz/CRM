@@ -15,6 +15,7 @@ import { AlignerManagement } from "@/components/aligner-management";
 import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
 import { DriveFolderConfig } from "@/components/drive-folder-config";
 import { HolidayCalendar } from "@/components/holiday-calendar";
+import { QualificationCampaignManagement } from "@/components/qualification-campaign-management";
 
 export default function Admin() {
   const { user, isLoading: authLoading } = useAuth();
@@ -55,6 +56,7 @@ export default function Admin() {
             <SelectContent>
               <SelectItem value="users" data-testid="tab-users">Users</SelectItem>
               <SelectItem value="tickets" data-testid="tab-tickets">Support Tickets</SelectItem>
+              <SelectItem value="campaigns" data-testid="tab-campaigns">Campaigns</SelectItem>
               <SelectItem value="reports" data-testid="tab-reports">Reports</SelectItem>
               <SelectItem value="calendar" data-testid="tab-calendar">Calendar</SelectItem>
               <SelectItem value="openai" data-testid="tab-openai">OpenAI</SelectItem>
@@ -68,6 +70,7 @@ export default function Admin() {
           <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
             <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
+            <TabsTrigger value="campaigns" data-testid="tab-campaigns">Campaigns</TabsTrigger>
             <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
             <TabsTrigger value="calendar" data-testid="tab-calendar">Calendar</TabsTrigger>
             <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
@@ -83,6 +86,10 @@ export default function Admin() {
 
         <TabsContent value="tickets">
           <AdminTicketInbox />
+        </TabsContent>
+
+        <TabsContent value="campaigns">
+          <QualificationCampaignManagement />
         </TabsContent>
 
         <TabsContent value="reports">

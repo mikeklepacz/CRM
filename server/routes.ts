@@ -24194,6 +24194,302 @@ ${conversationContext}`;
     }
   });
 
+  // Calculate qualification score for a lead based on campaign field definitions
+  app.post('/api/qualification/leads/:id/calculate-score', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const lead = await storage.getQualificationLead(req.params.id, tenantId);
+      
+      if (!lead) {
+        return res.status(404).json({ message: 'Lead not found' });
+      }
+
+      // Get campaign for field definitions
+      const campaign = lead.campaignId 
+        ? await storage.getQualificationCampaign(lead.campaignId, tenantId)
+        : null;
+
+      // Calculate score based on answers and field definitions
+      const answers = (lead.answers || {}) as Record<string, any>;
+      const fieldDefinitions = (campaign?.fieldDefinitions || []) as Array<{
+        key: string;
+        label: string;
+        type: string;
+        weight?: number;
+        required?: boolean;
+      }>;
+
+      let totalWeight = 0;
+      let earnedScore = 0;
+      const scoreBreakdownNumeric: Record<string, number> = {}; // For database storage
+      const detailedBreakdown: Record<string, { answer: any; weight: number; points: number }> = {}; // For response
+
+      for (const field of fieldDefinitions) {
+        const weight = field.weight || 1;
+        totalWeight += weight;
+        
+        const answer = answers[field.key];
+        let points = 0;
+
+        // Score based on field type and answer
+        if (answer !== undefined && answer !== null && answer !== '') {
+          switch (field.type) {
+            case 'boolean':
+              // Yes/true answers get full points
+              points = (answer === true || answer === 'yes' || answer === 'true') ? weight : 0;
+              break;
+            case 'number':
+              // Number answers get points if positive
+              points = (typeof answer === 'number' && answer > 0) ? weight : weight * 0.5;
+              break;
+            case 'choice':
+            case 'multichoice':
+              // Having a choice selected gets full points
+              points = weight;
+              break;
+            case 'text':
+            case 'date':
+            default:
+              // Having any answer gets full points
+              points = weight;
+              break;
+          }
+        }
+
+        earnedScore += points;
+        scoreBreakdownNumeric[field.key] = points; // Store just the numeric score
+        detailedBreakdown[field.key] = { answer, weight, points }; // For API response
+      }
+
+      // Calculate final score as percentage (0-100)
+      const score = totalWeight > 0 
+        ? Math.round((earnedScore / totalWeight) * 100)
+        : 0;
+
+      // Determine score grade
+      const scoreGrade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F';
+
+      // Update lead with calculated score (scoreBreakdown is Record<string, number>)
+      const updatedLead = await storage.updateQualificationLead(req.params.id, tenantId, {
+        score,
+        scoreGrade,
+        scoreBreakdown: scoreBreakdownNumeric,
+      });
+
+      res.json({
+        lead: updatedLead,
+        scoreDetails: {
+          score,
+          scoreGrade,
+          totalWeight,
+          earnedScore,
+          breakdown: detailedBreakdown,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error calculating qualification score:', error);
+      res.status(500).json({ message: error.message || 'Failed to calculate score' });
+    }
+  });
+
+  // Parse transcript with AI to extract structured answers
+  app.post('/api/qualification/leads/:id/parse-transcript', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!await checkQualificationModuleAccess(req, res)) return;
+      
+      const tenantId = req.user.tenantId;
+      const { transcript } = req.body;
+
+      if (!transcript || typeof transcript !== 'string') {
+        return res.status(400).json({ message: 'Transcript is required' });
+      }
+
+      const lead = await storage.getQualificationLead(req.params.id, tenantId);
+      if (!lead) {
+        return res.status(404).json({ message: 'Lead not found' });
+      }
+
+      // Get campaign for field definitions
+      const campaign = lead.campaignId
+        ? await storage.getQualificationCampaign(lead.campaignId, tenantId)
+        : null;
+
+      if (!campaign) {
+        return res.status(400).json({ message: 'Lead must be assigned to a campaign to parse transcript' });
+      }
+
+      const fieldDefinitions = (campaign.fieldDefinitions || []) as Array<{
+        key: string;
+        label: string;
+        type: string;
+        options?: string[];
+        required?: boolean;
+      }>;
+
+      if (fieldDefinitions.length === 0) {
+        return res.status(400).json({ message: 'Campaign has no field definitions' });
+      }
+
+      // Use OpenAI to parse transcript
+      const { openai, getModel, chatCompletionCreateParams } = await import('./services/openai');
+      
+      // Check if OpenAI is configured
+      const tenantSettings = await storage.getTenantSettings(tenantId);
+      const openAiApiKey = tenantSettings?.openaiApiKey || process.env.OPENAI_API_KEY;
+      
+      if (!openAiApiKey) {
+        return res.status(400).json({ message: 'OpenAI API key not configured' });
+      }
+
+      // Build detailed field schema for AI extraction
+      const fieldsSchema = fieldDefinitions.map(f => {
+        const fieldInfo: any = {
+          key: f.key,
+          question: f.label,
+          type: f.type,
+          required: f.required || false,
+        };
+        if (f.options?.length) {
+          fieldInfo.allowedValues = f.options;
+        }
+        return fieldInfo;
+      });
+
+      const systemPrompt = `You are an AI assistant that extracts structured qualification data from call transcripts.
+
+Your task is to analyze the transcript and extract answers for the following fields:
+
+${JSON.stringify(fieldsSchema, null, 2)}
+
+IMPORTANT RULES:
+1. Use ONLY the exact field keys provided (e.g., "${fieldDefinitions[0]?.key || 'field_key'}")
+2. For "boolean" type: return true or false (not strings)
+3. For "number" type: return a numeric value (not a string)
+4. For "choice" type: return EXACTLY one of the allowedValues if found
+5. For "multichoice" type: return an array of matching allowedValues
+6. For "text" type: return the extracted text as a string
+7. For "date" type: return in ISO format (YYYY-MM-DD)
+8. If information is not clearly stated in the transcript, omit that field
+9. Focus on what the caller explicitly stated, not inferences
+
+Return a JSON object with only the field keys and their extracted values. No additional fields.`;
+
+      const response = await openai.chat.completions.create({
+        ...chatCompletionCreateParams,
+        model: getModel('gpt-4o-mini'),
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `CALL TRANSCRIPT:\n\n${transcript}` },
+        ],
+        response_format: { type: 'json_object' },
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ message: 'AI returned empty response' });
+      }
+
+      let rawExtracted: Record<string, any>;
+      try {
+        rawExtracted = JSON.parse(content);
+      } catch {
+        return res.status(500).json({ message: 'AI returned invalid JSON' });
+      }
+
+      // Normalize and validate extracted answers against known field keys
+      const validFieldKeys = new Set(fieldDefinitions.map(f => f.key));
+      const extractedAnswers: Record<string, any> = {};
+      
+      for (const [key, value] of Object.entries(rawExtracted)) {
+        // Only accept answers for defined fields
+        if (validFieldKeys.has(key) && value !== null && value !== undefined) {
+          const field = fieldDefinitions.find(f => f.key === key);
+          if (field) {
+            // Normalize boolean values - handle both affirmative and negative
+            if (field.type === 'boolean') {
+              if (typeof value === 'boolean') {
+                extractedAnswers[key] = value;
+              } else if (typeof value === 'string') {
+                const lowerVal = value.toLowerCase().trim();
+                if (['true', 'yes', '1'].includes(lowerVal)) {
+                  extractedAnswers[key] = true;
+                } else if (['false', 'no', '0'].includes(lowerVal)) {
+                  extractedAnswers[key] = false;
+                }
+                // If neither, skip (indeterminate)
+              } else if (typeof value === 'number') {
+                extractedAnswers[key] = value !== 0;
+              }
+            }
+            // Normalize number values
+            else if (field.type === 'number') {
+              if (typeof value === 'number') {
+                extractedAnswers[key] = value;
+              } else if (typeof value === 'string') {
+                const parsed = parseFloat(value);
+                if (!isNaN(parsed)) {
+                  extractedAnswers[key] = parsed;
+                }
+              }
+            }
+            // Validate choice against allowed options
+            else if (field.type === 'choice' && field.options?.length) {
+              const strVal = String(value).trim();
+              const matched = field.options.find(opt => 
+                opt.toLowerCase() === strVal.toLowerCase()
+              );
+              if (matched) {
+                extractedAnswers[key] = matched;
+              }
+            }
+            // Handle multichoice - support both arrays and comma-delimited strings
+            else if (field.type === 'multichoice' && field.options?.length) {
+              let values: string[] = [];
+              if (Array.isArray(value)) {
+                values = value.map(v => String(v).trim());
+              } else if (typeof value === 'string') {
+                // Split comma-delimited strings
+                values = value.split(',').map(v => v.trim()).filter(v => v);
+              }
+              // Match against allowed options (case-insensitive)
+              const matched = values
+                .map(v => field.options!.find(opt => opt.toLowerCase() === v.toLowerCase()))
+                .filter((v): v is string => v !== undefined);
+              if (matched.length > 0) {
+                extractedAnswers[key] = matched;
+              }
+            }
+            // Accept text and date as-is
+            else {
+              extractedAnswers[key] = value;
+            }
+          }
+        }
+      }
+
+      // Merge with existing answers
+      const existingAnswers = (lead.answers || {}) as Record<string, any>;
+      const mergedAnswers = { ...existingAnswers, ...extractedAnswers };
+
+      // Update lead with extracted answers and transcript
+      const updatedLead = await storage.updateQualificationLead(req.params.id, tenantId, {
+        answers: mergedAnswers,
+        callTranscript: transcript,
+      });
+
+      res.json({
+        lead: updatedLead,
+        extractedAnswers,
+        mergedAnswers,
+      });
+    } catch (error: any) {
+      console.error('Error parsing transcript:', error);
+      res.status(500).json({ message: error.message || 'Failed to parse transcript' });
+    }
+  });
+
   // POST /api/invites/:token/accept - Accept an invite (authenticated user)
   app.post('/api/invites/:token/accept', isAuthenticated, async (req: any, res) => {
     try {

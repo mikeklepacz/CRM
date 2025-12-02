@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Plus, Filter, Phone, Mail, Building2, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Trash2, Download, Upload, RefreshCw, MoreVertical, Eye, Edit, PhoneCall, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Search, Plus, Filter, Phone, Mail, Building2, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Trash2, Download, Upload, RefreshCw, MoreVertical, Eye, Edit, PhoneCall, FileSpreadsheet, AlertCircle, CheckCircle2, Map, Globe } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient as globalQueryClient } from "@/lib/queryClient";
@@ -77,7 +77,7 @@ type SortDirection = 'asc' | 'desc';
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'not_qualified', 'followup', 'closed'];
 const CALL_STATUS_OPTIONS = ['pending', 'scheduled', 'in_progress', 'completed', 'failed', 'no_answer'];
 
-const getStatusBadgeVariant = (status?: string): "default" | "secondary" | "destructive" | "outline" => {
+const getStatusBadgeVariant = (status?: string | null): "default" | "secondary" | "destructive" | "outline" => {
   switch (status) {
     case 'qualified':
       return 'default';
@@ -91,7 +91,7 @@ const getStatusBadgeVariant = (status?: string): "default" | "secondary" | "dest
   }
 };
 
-const getCallStatusBadgeVariant = (status?: string): "default" | "secondary" | "destructive" | "outline" => {
+const getCallStatusBadgeVariant = (status?: string | null): "default" | "secondary" | "destructive" | "outline" => {
   switch (status) {
     case 'completed':
       return 'default';
@@ -109,6 +109,7 @@ const getCallStatusBadgeVariant = (status?: string): "default" | "secondary" | "
 export default function Qualification() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -119,6 +120,18 @@ export default function Qualification() {
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<QualificationLead | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [csvData, setCsvData] = useState<{ headers: string[]; rows: string[][] } | null>(null);
+  const [columnMapping, setColumnMapping] = useState<Record<number, string>>({});
+  const [importStep, setImportStep] = useState<'upload' | 'map' | 'preview'>('upload');
+  
+  const [isMapSearchOpen, setIsMapSearchOpen] = useState(false);
+  const [mapSearchQuery, setMapSearchQuery] = useState("");
+  const [mapSearchLocation, setMapSearchLocation] = useState("");
+  const [mapSearchResults, setMapSearchResults] = useState<any[]>([]);
+  const [selectedMapResults, setSelectedMapResults] = useState<Set<string>>(new Set());
+  const [isSearching, setIsSearching] = useState(false);
   
   const [newLead, setNewLead] = useState({
     company: '',
@@ -189,6 +202,199 @@ export default function Qualification() {
       toast({ title: "Failed to delete leads", description: error.message, variant: "destructive" });
     },
   });
+
+  const bulkImportMutation = useMutation({
+    mutationFn: async (leads: any[]) => {
+      return apiRequest('POST', '/api/qualification/leads/bulk', { leads });
+    },
+    onSuccess: (data: any) => {
+      toast({ title: `${data.count} leads imported successfully` });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
+      resetImport();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to import leads", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const parsed = parseCSV(text);
+      setCsvData(parsed);
+      
+      const autoMapping: Record<number, string> = {};
+      parsed.headers.forEach((header, index) => {
+        const lowerHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (lowerHeader.includes('company') || lowerHeader.includes('business') || lowerHeader.includes('name')) {
+          autoMapping[index] = 'company';
+        } else if (lowerHeader.includes('contact') || lowerHeader.includes('poc') || lowerHeader.includes('person')) {
+          autoMapping[index] = 'pocName';
+        } else if (lowerHeader.includes('email') || lowerHeader.includes('mail')) {
+          autoMapping[index] = 'pocEmail';
+        } else if (lowerHeader.includes('phone') || lowerHeader.includes('tel') || lowerHeader.includes('mobile')) {
+          autoMapping[index] = 'pocPhone';
+        } else if (lowerHeader.includes('role') || lowerHeader.includes('title') || lowerHeader.includes('position')) {
+          autoMapping[index] = 'pocRole';
+        } else if (lowerHeader.includes('address') || lowerHeader.includes('street')) {
+          autoMapping[index] = 'address';
+        } else if (lowerHeader.includes('city') || lowerHeader.includes('town')) {
+          autoMapping[index] = 'city';
+        } else if (lowerHeader.includes('state') || lowerHeader.includes('region') || lowerHeader.includes('province')) {
+          autoMapping[index] = 'state';
+        } else if (lowerHeader.includes('zip') || lowerHeader.includes('postal') || lowerHeader.includes('post')) {
+          autoMapping[index] = 'postalCode';
+        } else if (lowerHeader.includes('country')) {
+          autoMapping[index] = 'country';
+        } else if (lowerHeader.includes('website') || lowerHeader.includes('url') || lowerHeader.includes('web')) {
+          autoMapping[index] = 'website';
+        } else if (lowerHeader.includes('note') || lowerHeader.includes('comment')) {
+          autoMapping[index] = 'notes';
+        }
+      });
+      setColumnMapping(autoMapping);
+      setImportStep('map');
+    };
+    reader.readAsText(file);
+  };
+
+  const getPreviewLeads = (): any[] => {
+    if (!csvData) return [];
+    return csvData.rows.slice(0, 5).map(row => {
+      const lead: any = { source: 'csv_import' };
+      Object.entries(columnMapping).forEach(([index, field]) => {
+        if (field && field !== 'skip') {
+          lead[field] = row[parseInt(index)] || '';
+        }
+      });
+      return lead;
+    });
+  };
+
+  const handleImport = () => {
+    if (!csvData) return;
+    const leads = csvData.rows.map(row => {
+      const lead: any = { source: 'csv_import' };
+      Object.entries(columnMapping).forEach(([index, field]) => {
+        if (field && field !== 'skip') {
+          lead[field] = row[parseInt(index)] || '';
+        }
+      });
+      return lead;
+    }).filter(lead => lead.company || lead.pocName || lead.pocEmail);
+    
+    if (leads.length === 0) {
+      toast({ title: "No valid leads found", description: "Please map at least company, contact name, or email column", variant: "destructive" });
+      return;
+    }
+    
+    bulkImportMutation.mutate(leads);
+  };
+
+  const resetImport = () => {
+    setIsImportOpen(false);
+    setCsvData(null);
+    setColumnMapping({});
+    setImportStep('upload');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleMapSearch = async () => {
+    if (!mapSearchQuery.trim()) {
+      toast({ title: "Please enter a search query", variant: "destructive" });
+      return;
+    }
+    
+    setIsSearching(true);
+    setMapSearchResults([]);
+    setSelectedMapResults(new Set());
+    
+    try {
+      const response = await fetch('/api/maps/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: mapSearchQuery,
+          location: mapSearchLocation || undefined,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+      
+      const data = await response.json();
+      setMapSearchResults(data.results || []);
+      
+      if (data.results?.length === 0) {
+        toast({ title: "No results found", description: "Try a different search query or location" });
+      }
+    } catch (error) {
+      toast({ title: "Search failed", description: "Please try again", variant: "destructive" });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const addMapSearchMutation = useMutation({
+    mutationFn: async (places: any[]) => {
+      const leads = places.map(place => {
+        const addressParts = (place.formatted_address || '').split(',').map((p: string) => p.trim());
+        return {
+          company: place.name,
+          address: addressParts[0] || '',
+          city: addressParts[1] || '',
+          state: addressParts[2]?.split(' ')[0] || '',
+          country: addressParts[addressParts.length - 1] || 'USA',
+          website: place.website || '',
+          source: 'map_search',
+          sourceId: place.place_id,
+        };
+      });
+      return apiRequest('POST', '/api/qualification/leads/bulk', { leads });
+    },
+    onSuccess: (data: any) => {
+      toast({ title: `${data.count} leads added from map search` });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
+      setIsMapSearchOpen(false);
+      setMapSearchQuery("");
+      setMapSearchLocation("");
+      setMapSearchResults([]);
+      setSelectedMapResults(new Set());
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to add leads", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleAddFromMapSearch = () => {
+    const selected = mapSearchResults.filter(r => selectedMapResults.has(r.place_id));
+    if (selected.length === 0) {
+      toast({ title: "Please select at least one result", variant: "destructive" });
+      return;
+    }
+    addMapSearchMutation.mutate(selected);
+  };
+
+  const toggleMapResult = (placeId: string) => {
+    setSelectedMapResults(prev => {
+      const next = new Set(prev);
+      if (next.has(placeId)) {
+        next.delete(placeId);
+      } else {
+        next.add(placeId);
+      }
+      return next;
+    });
+  };
 
   const leads = leadsData?.leads || [];
   const stats = statsData?.stats;
@@ -306,7 +512,11 @@ export default function Qualification() {
           <Button variant="outline" size="icon" onClick={() => refetchLeads()} data-testid="button-refresh">
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button variant="outline" data-testid="button-import">
+          <Button variant="outline" onClick={() => setIsMapSearchOpen(true)} data-testid="button-map-search">
+            <Map className="h-4 w-4 mr-2" />
+            Map Search
+          </Button>
+          <Button variant="outline" onClick={() => setIsImportOpen(true)} data-testid="button-import">
             <Upload className="h-4 w-4 mr-2" />
             Import CSV
           </Button>
@@ -752,12 +962,43 @@ export default function Qualification() {
                 )}
               </TabsContent>
               <TabsContent value="answers" className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={selectedLead.score !== null && selectedLead.score !== undefined ? (selectedLead.score >= 70 ? 'default' : selectedLead.score >= 40 ? 'secondary' : 'destructive') : 'outline'}>
+                      Score: {selectedLead.score !== null && selectedLead.score !== undefined ? `${selectedLead.score}% (${selectedLead.scoreGrade || '-'})` : 'Not calculated'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(`/api/qualification/leads/${selectedLead.id}/calculate-score`, {
+                            method: 'POST',
+                          });
+                          if (!response.ok) throw new Error('Failed to calculate score');
+                          const data = await response.json();
+                          toast({ title: `Score calculated: ${data.scoreDetails.score}% (Grade ${data.scoreDetails.scoreGrade})` });
+                          queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
+                          setSelectedLead(data.lead);
+                        } catch (error) {
+                          toast({ title: 'Failed to calculate score', variant: 'destructive' });
+                        }
+                      }}
+                      data-testid="button-calculate-score"
+                    >
+                      Calculate Score
+                    </Button>
+                  </div>
+                </div>
+
                 {selectedLead.answers && Object.keys(selectedLead.answers).length > 0 ? (
                   <div className="space-y-3">
                     {Object.entries(selectedLead.answers).map(([key, value]) => (
                       <div key={key} className="border rounded-lg p-3">
                         <Label className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</Label>
-                        <p className="font-medium mt-1">{String(value)}</p>
+                        <p className="font-medium mt-1">{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</p>
                       </div>
                     ))}
                   </div>
@@ -766,6 +1007,52 @@ export default function Qualification() {
                     No parsed answers available. Complete a qualification call to populate this data.
                   </div>
                 )}
+
+                <Separator className="my-4" />
+
+                <div className="space-y-3">
+                  <Label>Parse Call Transcript</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Paste a call transcript below to automatically extract answers using AI
+                  </p>
+                  <Textarea
+                    placeholder="Paste the call transcript here..."
+                    className="min-h-[120px]"
+                    id="transcript-input"
+                    data-testid="textarea-transcript"
+                  />
+                  <Button
+                    onClick={async () => {
+                      const textarea = document.getElementById('transcript-input') as HTMLTextAreaElement;
+                      const transcript = textarea?.value;
+                      if (!transcript?.trim()) {
+                        toast({ title: 'Please enter a transcript', variant: 'destructive' });
+                        return;
+                      }
+                      try {
+                        const response = await fetch(`/api/qualification/leads/${selectedLead.id}/parse-transcript`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ transcript }),
+                        });
+                        if (!response.ok) {
+                          const error = await response.json();
+                          throw new Error(error.message || 'Failed to parse transcript');
+                        }
+                        const data = await response.json();
+                        toast({ title: `Extracted ${Object.keys(data.extractedAnswers).length} answers from transcript` });
+                        queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
+                        setSelectedLead(data.lead);
+                        textarea.value = '';
+                      } catch (error: any) {
+                        toast({ title: error.message || 'Failed to parse transcript', variant: 'destructive' });
+                      }
+                    }}
+                    data-testid="button-parse-transcript"
+                  >
+                    Parse Transcript with AI
+                  </Button>
+                </div>
               </TabsContent>
               <TabsContent value="history" className="space-y-4">
                 <div className="text-center p-8 text-muted-foreground">
@@ -774,6 +1061,279 @@ export default function Qualification() {
               </TabsContent>
             </Tabs>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isImportOpen} onOpenChange={(open) => { if (!open) resetImport(); else setIsImportOpen(true); }}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5" />
+                Import Leads from CSV
+              </div>
+            </DialogTitle>
+            <DialogDescription>
+              {importStep === 'upload' && 'Upload a CSV file with your lead data'}
+              {importStep === 'map' && 'Map CSV columns to lead fields'}
+              {importStep === 'preview' && 'Review the data before importing'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {importStep === 'upload' && (
+            <div className="space-y-4">
+              <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="csv-upload"
+                  data-testid="input-csv-file"
+                />
+                <label htmlFor="csv-upload" className="cursor-pointer">
+                  <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium">Click to upload CSV file</p>
+                  <p className="text-sm text-muted-foreground mt-1">or drag and drop</p>
+                </label>
+              </div>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  CSV should have headers in the first row. Supported fields: Company, Contact Name, Email, Phone, Address, City, State, Country, Website, Notes.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          {importStep === 'map' && csvData && (
+            <div className="space-y-4">
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertDescription>
+                  Found {csvData.rows.length} rows in your CSV. Map each column to a lead field.
+                </AlertDescription>
+              </Alert>
+              <ScrollArea className="h-[300px]">
+                <div className="space-y-3">
+                  {csvData.headers.map((header, index) => (
+                    <div key={index} className="flex items-center gap-4 p-3 border rounded-lg">
+                      <div className="w-1/3">
+                        <p className="font-medium text-sm">{header}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          Sample: {csvData.rows[0]?.[index] || '(empty)'}
+                        </p>
+                      </div>
+                      <div className="w-1/3">
+                        <Select
+                          value={columnMapping[index] || 'skip'}
+                          onValueChange={(value) => setColumnMapping(prev => ({ ...prev, [index]: value }))}
+                        >
+                          <SelectTrigger data-testid={`select-mapping-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LEAD_FIELD_OPTIONS.map(option => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setImportStep('upload'); setCsvData(null); }} data-testid="button-back-upload">
+                  Back
+                </Button>
+                <Button onClick={() => setImportStep('preview')} data-testid="button-preview">
+                  Preview Import
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {importStep === 'preview' && csvData && (
+            <div className="space-y-4">
+              <Alert>
+                <AlertDescription>
+                  Preview of first 5 leads. Total: {csvData.rows.filter(row => {
+                    const lead: any = {};
+                    Object.entries(columnMapping).forEach(([index, field]) => {
+                      if (field && field !== 'skip') lead[field] = row[parseInt(index)];
+                    });
+                    return lead.company || lead.pocName || lead.pocEmail;
+                  }).length} valid leads will be imported.
+                </AlertDescription>
+              </Alert>
+              <ScrollArea className="h-[300px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Company</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Location</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getPreviewLeads().map((lead, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{lead.company || '-'}</TableCell>
+                        <TableCell>{lead.pocName || '-'}</TableCell>
+                        <TableCell>{lead.pocEmail || '-'}</TableCell>
+                        <TableCell>{lead.pocPhone || '-'}</TableCell>
+                        <TableCell>{[lead.city, lead.state].filter(Boolean).join(', ') || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setImportStep('map')} data-testid="button-back-map">
+                  Back to Mapping
+                </Button>
+                <Button onClick={handleImport} disabled={bulkImportMutation.isPending} data-testid="button-import-confirm">
+                  {bulkImportMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                  Import {csvData.rows.length} Leads
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isMapSearchOpen} onOpenChange={setIsMapSearchOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>
+              <div className="flex items-center gap-2">
+                <Map className="h-5 w-5" />
+                Find Leads via Map Search
+              </div>
+            </DialogTitle>
+            <DialogDescription>
+              Search for businesses on Google Maps and add them as leads
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="map-query">Business Type</Label>
+                <Input
+                  id="map-query"
+                  value={mapSearchQuery}
+                  onChange={(e) => setMapSearchQuery(e.target.value)}
+                  placeholder="e.g., tyre shops, law firms, car dealerships"
+                  onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
+                  data-testid="input-map-query"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="map-location">Location</Label>
+                <Input
+                  id="map-location"
+                  value={mapSearchLocation}
+                  onChange={(e) => setMapSearchLocation(e.target.value)}
+                  placeholder="e.g., London, UK or New York, NY"
+                  onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
+                  data-testid="input-map-location"
+                />
+              </div>
+            </div>
+            
+            <Button onClick={handleMapSearch} disabled={isSearching} className="w-full" data-testid="button-search-map">
+              {isSearching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+              {isSearching ? 'Searching...' : 'Search'}
+            </Button>
+
+            {mapSearchResults.length > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Found {mapSearchResults.length} results. Select the ones you want to add as leads.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (selectedMapResults.size === mapSearchResults.length) {
+                          setSelectedMapResults(new Set());
+                        } else {
+                          setSelectedMapResults(new Set(mapSearchResults.map(r => r.place_id)));
+                        }
+                      }}
+                      data-testid="button-toggle-all-map"
+                    >
+                      {selectedMapResults.size === mapSearchResults.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                  </div>
+                </div>
+                
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-2">
+                    {mapSearchResults.map((place) => (
+                      <div
+                        key={place.place_id}
+                        className={`p-3 border rounded-lg cursor-pointer hover-elevate transition-colors ${selectedMapResults.has(place.place_id) ? 'border-primary bg-primary/5' : ''}`}
+                        onClick={() => toggleMapResult(place.place_id)}
+                        data-testid={`map-result-${place.place_id}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedMapResults.has(place.place_id)}
+                            onCheckedChange={() => toggleMapResult(place.place_id)}
+                            data-testid={`checkbox-map-${place.place_id}`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium truncate">{place.name}</p>
+                              {place.rating && (
+                                <Badge variant="secondary" className="shrink-0">
+                                  {place.rating} ({place.user_ratings_total || 0})
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{place.formatted_address}</span>
+                            </p>
+                            {place.website && (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                                <Globe className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{place.website}</span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsMapSearchOpen(false)} data-testid="button-cancel-map">
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleAddFromMapSearch}
+                    disabled={selectedMapResults.size === 0 || addMapSearchMutation.isPending}
+                    data-testid="button-add-from-map"
+                  >
+                    {addMapSearchMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                    Add {selectedMapResults.size} Lead{selectedMapResults.size !== 1 ? 's' : ''}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
