@@ -2893,6 +2893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             clientId: client.id,
             targetStatus: 'pending',
             attemptCount: 0,
+            tenantId: tenantId,
           };
 
           // Auto-schedule: calculate optimal call time based on business hours

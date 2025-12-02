@@ -1,0 +1,414 @@
+client:536 WebSocket connection to 'wss://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/?token=I0qz48LdvorO' failed: 
+setupWebSocket @ client:536
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=I0qz48LdvorO' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+chunk-NFC5BX5N.js?v=f40340f9:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+call-manager.tsx:2151 [CallManager] Agent selected: 4e19ea3c-28c3-45b1-8b96-8648700fa075
+call-manager.tsx:1463 [CallManager][DEBUG] ========== BATCH CALL INITIATED ==========
+call-manager.tsx:1464 [CallManager][DEBUG] Timestamp: 2025-12-02T14:21:05.761Z
+call-manager.tsx:1465 [CallManager][DEBUG] Agent ID: agent_7201k8xa9cshfmqvkd8tx3xf2j7a
+call-manager.tsx:1466 [CallManager][DEBUG] Store count: 1
+call-manager.tsx:1467 [CallManager][DEBUG] Scenario: cold_calls
+call-manager.tsx:1468 [CallManager][DEBUG] Scheduled for: immediate
+call-manager.tsx:1469 [CallManager][DEBUG] Auto schedule: undefined
+queryClient.ts:31  POST https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/api/elevenlabs/batch-call 500 (Internal Server Error)
+apiRequest @ queryClient.ts:31
+mutationFn @ call-manager.tsx:1473
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1478 [CallManager][DEBUG] *** API ERROR ***
+mutationFn @ call-manager.tsx:1478
+await in mutationFn
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1479 [CallManager][DEBUG] Error: Error: 500: null value in column "tenant_id" of relation "call_campaigns" violates not-null constraint
+    at throwIfResNotOk (queryClient.ts:17:24)
+    at async apiRequest (queryClient.ts:38:3)
+    at async Object.mutationFn (call-manager.tsx:1473:24)
+mutationFn @ call-manager.tsx:1479
+await in mutationFn
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1495 [CallManager][DEBUG] ========== BATCH CALL ERROR ==========
+onError @ call-manager.tsx:1495
+execute @ @tanstack_react-query.js?v=f40340f9:1254
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1496 [CallManager][DEBUG] Error: Error: 500: null value in column "tenant_id" of relation "call_campaigns" violates not-null constraint
+    at throwIfResNotOk (queryClient.ts:17:24)
+    at async apiRequest (queryClient.ts:38:3)
+    at async Object.mutationFn (call-manager.tsx:1473:24)
+onError @ call-manager.tsx:1496
+execute @ @tanstack_react-query.js?v=f40340f9:1254
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+events:1  GET https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/api/events 502 (Bad Gateway)
+call-manager.tsx:1463 [CallManager][DEBUG] ========== BATCH CALL INITIATED ==========
+call-manager.tsx:1464 [CallManager][DEBUG] Timestamp: 2025-12-02T14:25:30.660Z
+call-manager.tsx:1465 [CallManager][DEBUG] Agent ID: agent_7201k8xa9cshfmqvkd8tx3xf2j7a
+call-manager.tsx:1466 [CallManager][DEBUG] Store count: 1
+call-manager.tsx:1467 [CallManager][DEBUG] Scenario: cold_calls
+call-manager.tsx:1468 [CallManager][DEBUG] Scheduled for: immediate
+call-manager.tsx:1469 [CallManager][DEBUG] Auto schedule: undefined
+queryClient.ts:31  POST https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/api/elevenlabs/batch-call 500 (Internal Server Error)
+apiRequest @ queryClient.ts:31
+mutationFn @ call-manager.tsx:1473
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1478 [CallManager][DEBUG] *** API ERROR ***
+mutationFn @ call-manager.tsx:1478
+await in mutationFn
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1479 [CallManager][DEBUG] Error: Error: 500: null value in column "tenant_id" of relation "call_campaign_targets" violates not-null constraint
+    at throwIfResNotOk (queryClient.ts:17:24)
+    at async apiRequest (queryClient.ts:38:3)
+    at async Object.mutationFn (call-manager.tsx:1473:24)
+mutationFn @ call-manager.tsx:1479
+await in mutationFn
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1495 [CallManager][DEBUG] ========== BATCH CALL ERROR ==========
+onError @ call-manager.tsx:1495
+execute @ @tanstack_react-query.js?v=f40340f9:1254
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1496 [CallManager][DEBUG] Error: Error: 500: null value in column "tenant_id" of relation "call_campaign_targets" violates not-null constraint
+    at throwIfResNotOk (queryClient.ts:17:24)
+    at async apiRequest (queryClient.ts:38:3)
+    at async Object.mutationFn (call-manager.tsx:1473:24)
+onError @ call-manager.tsx:1496
+execute @ @tanstack_react-query.js?v=f40340f9:1254
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1463 [CallManager][DEBUG] ========== BATCH CALL INITIATED ==========
+call-manager.tsx:1464 [CallManager][DEBUG] Timestamp: 2025-12-02T14:25:38.847Z
+call-manager.tsx:1465 [CallManager][DEBUG] Agent ID: agent_7201k8xa9cshfmqvkd8tx3xf2j7a
+call-manager.tsx:1466 [CallManager][DEBUG] Store count: 1
+call-manager.tsx:1467 [CallManager][DEBUG] Scenario: cold_calls
+call-manager.tsx:1468 [CallManager][DEBUG] Scheduled for: immediate
+call-manager.tsx:1469 [CallManager][DEBUG] Auto schedule: undefined
+queryClient.ts:31  POST https://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/api/elevenlabs/batch-call 500 (Internal Server Error)
+apiRequest @ queryClient.ts:31
+mutationFn @ call-manager.tsx:1473
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1478 [CallManager][DEBUG] *** API ERROR ***
+mutationFn @ call-manager.tsx:1478
+await in mutationFn
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1479 [CallManager][DEBUG] Error: Error: 500: null value in column "tenant_id" of relation "call_campaign_targets" violates not-null constraint
+    at throwIfResNotOk (queryClient.ts:17:24)
+    at async apiRequest (queryClient.ts:38:3)
+    at async Object.mutationFn (call-manager.tsx:1473:24)
+mutationFn @ call-manager.tsx:1479
+await in mutationFn
+fn @ @tanstack_react-query.js?v=f40340f9:1189
+run @ @tanstack_react-query.js?v=f40340f9:494
+start @ @tanstack_react-query.js?v=f40340f9:536
+execute @ @tanstack_react-query.js?v=f40340f9:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1495 [CallManager][DEBUG] ========== BATCH CALL ERROR ==========
+onError @ call-manager.tsx:1495
+execute @ @tanstack_react-query.js?v=f40340f9:1254
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
+call-manager.tsx:1496 [CallManager][DEBUG] Error: Error: 500: null value in column "tenant_id" of relation "call_campaign_targets" violates not-null constraint
+    at throwIfResNotOk (queryClient.ts:17:24)
+    at async apiRequest (queryClient.ts:38:3)
+    at async Object.mutationFn (call-manager.tsx:1473:24)
+onError @ call-manager.tsx:1496
+execute @ @tanstack_react-query.js?v=f40340f9:1254
+await in execute
+mutate @ @tanstack_react-query.js?v=f40340f9:2630
+(anonymous) @ @tanstack_react-query.js?v=f40340f9:3295
+handleBatchCall @ call-manager.tsx:1611
+callCallback2 @ chunk-NFC5BX5N.js?v=f40340f9:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=f40340f9:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=f40340f9:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=f40340f9:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=f40340f9:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=f40340f9:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=f40340f9:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=f40340f9:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=f40340f9:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=f40340f9:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=f40340f9:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=f40340f9:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=f40340f9:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=f40340f9:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=f40340f9:5449
