@@ -32,6 +32,7 @@ import {
   UserX, UserCheck, Phone, Ticket, Webhook, Mic, FileSpreadsheet, Send, XCircle
 } from "lucide-react";
 import { VoiceSettings } from "@/components/voice-settings";
+import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 
 interface Tenant {
   id: string;
@@ -2011,19 +2012,17 @@ export default function SuperAdmin() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <FileSpreadsheet className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-2">Google Sheets Configuration</p>
-                <p className="text-sm">
-                  {configTenantId === 'all' 
-                    ? 'Select a tenant to manage their Google Sheets connections'
-                    : `Google Sheets settings for ${tenantsData?.tenants?.find(t => t.id === configTenantId)?.name}`
-                  }
-                </p>
-                <p className="text-xs text-muted-foreground mt-4">
-                  Coming soon: Per-tenant Google Sheets sync configuration
-                </p>
-              </div>
+              {configTenantId === 'all' ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <FileSpreadsheet className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Google Sheets Configuration</p>
+                  <p className="text-sm">
+                    Select a tenant to manage their Google Sheets connections
+                  </p>
+                </div>
+              ) : (
+                <GoogleSheetsSync tenantId={configTenantId} />
+              )}
             </CardContent>
           </Card>
         </TabsContent>

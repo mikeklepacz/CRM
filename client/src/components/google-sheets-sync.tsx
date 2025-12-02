@@ -58,7 +58,11 @@ type ConnectedSheet = {
   createdAt: string;
 };
 
-export function GoogleSheetsSync() {
+interface GoogleSheetsSyncProps {
+  tenantId?: string;
+}
+
+export function GoogleSheetsSync({ tenantId }: GoogleSheetsSyncProps = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -67,22 +71,30 @@ export function GoogleSheetsSync() {
   const [sheetPurpose, setSheetPurpose] = useState("clients");
   const [uniqueIdColumn, setUniqueIdColumn] = useState("link");
 
+  // Determine API base path based on whether we're in super-admin mode
+  const isSuperAdminMode = !!tenantId;
+  const apiBase = isSuperAdminMode 
+    ? `/api/super-admin/tenants/${tenantId}/sheets`
+    : '/api/sheets';
+
   // Fetch list of user's Google Sheets from Drive
   const { data: availableSheets = [] } = useQuery<GoogleSheet[]>({
-    queryKey: ["/api/sheets/list"],
+    queryKey: isSuperAdminMode ? [apiBase, 'list'] : ["/api/sheets/list"],
     retry: false,
   });
 
   // Fetch all connected sheets
   const { data: connectedSheetsData, isLoading: sheetsLoading } = useQuery<{ sheets: ConnectedSheet[] }>({
-    queryKey: ["/api/sheets"],
+    queryKey: isSuperAdminMode ? [apiBase] : ["/api/sheets"],
   });
 
   const connectedSheets = connectedSheetsData?.sheets || [];
 
   // Fetch sheet info (tabs/worksheets) for selected spreadsheet
   const { data: sheetInfo } = useQuery<SheetInfo>({
-    queryKey: [`/api/sheets/${selectedSpreadsheet}/info`],
+    queryKey: isSuperAdminMode 
+      ? [apiBase, selectedSpreadsheet, 'info']
+      : [`/api/sheets/${selectedSpreadsheet}/info`],
     enabled: !!selectedSpreadsheet,
   });
 
@@ -94,10 +106,11 @@ export function GoogleSheetsSync() {
       sheetPurpose: string;
       uniqueIdentifierColumn: string;
     }) => {
-      return await apiRequest("POST", "/api/sheets/connect", data);
+      const url = isSuperAdminMode ? `${apiBase}/connect` : "/api/sheets/connect";
+      return await apiRequest("POST", url, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+      queryClient.invalidateQueries({ queryKey: isSuperAdminMode ? [apiBase] : ["/api/sheets"] });
       setShowAddForm(false);
       setSelectedSpreadsheet("");
       setSelectedSheetName("");
@@ -119,10 +132,13 @@ export function GoogleSheetsSync() {
 
   const disconnectMutation = useMutation({
     mutationFn: async (sheetId: string) => {
-      return await apiRequest("POST", `/api/sheets/${sheetId}/disconnect`, {});
+      const url = isSuperAdminMode 
+        ? `${apiBase}/${sheetId}/disconnect`
+        : `/api/sheets/${sheetId}/disconnect`;
+      return await apiRequest("POST", url, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+      queryClient.invalidateQueries({ queryKey: isSuperAdminMode ? [apiBase] : ["/api/sheets"] });
       toast({
         title: "Success",
         description: "Google Sheet disconnected",
@@ -140,14 +156,17 @@ export function GoogleSheetsSync() {
   const importMutation = useMutation({
     mutationFn: async (sheetId: string) => {
       console.log('🔄 Starting import for sheet:', sheetId);
-      const result = await apiRequest("POST", `/api/sheets/${sheetId}/sync/import`, {});
+      const url = isSuperAdminMode 
+        ? `${apiBase}/${sheetId}/sync/import`
+        : `/api/sheets/${sheetId}/sync/import`;
+      const result = await apiRequest("POST", url, {});
       console.log('✅ Import completed:', result);
       return result;
     },
     onSuccess: (data) => {
       console.log('🎉 Import mutation onSuccess triggered with data:', data);
       try {
-        queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+        queryClient.invalidateQueries({ queryKey: isSuperAdminMode ? [apiBase] : ["/api/sheets"] });
         queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
         console.log('✅ Queries invalidated, showing toast');
         toast({
@@ -171,10 +190,13 @@ export function GoogleSheetsSync() {
 
   const exportMutation = useMutation({
     mutationFn: async (sheetId: string) => {
-      return await apiRequest("POST", `/api/sheets/${sheetId}/sync/export`, {});
+      const url = isSuperAdminMode 
+        ? `${apiBase}/${sheetId}/sync/export`
+        : `/api/sheets/${sheetId}/sync/export`;
+      return await apiRequest("POST", url, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+      queryClient.invalidateQueries({ queryKey: isSuperAdminMode ? [apiBase] : ["/api/sheets"] });
       toast({
         title: "Export Complete",
         description: "Data exported to Google Sheets successfully",
@@ -191,10 +213,13 @@ export function GoogleSheetsSync() {
 
   const bidirectionalSyncMutation = useMutation({
     mutationFn: async (sheetId: string) => {
-      return await apiRequest("POST", `/api/sheets/${sheetId}/sync/bidirectional`, {});
+      const url = isSuperAdminMode 
+        ? `${apiBase}/${sheetId}/sync/bidirectional`
+        : `/api/sheets/${sheetId}/sync/bidirectional`;
+      return await apiRequest("POST", url, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+      queryClient.invalidateQueries({ queryKey: isSuperAdminMode ? [apiBase] : ["/api/sheets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       toast({
         title: "Sync Complete",
