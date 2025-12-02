@@ -1,0 +1,44 @@
+client:536 WebSocket connection to 'wss://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/?token=3krhucGzF8iw' failed: 
+setupWebSocket @ client:536
+(anonymous) @ client:531
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=3krhucGzF8iw' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+setupWebSocket @ client:536
+fallback @ client:509
+(anonymous) @ client:555
+chunk-NFC5BX5N.js?v=f40340f9:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+call-manager.tsx:2151 [CallManager] Agent selected: 3f3982fe-7438-42ea-8075-8870c2cc0ce6
+call-manager.tsx:2151 [CallManager] Agent selected: 4e19ea3c-28c3-45b1-8b96-8648700fa075
+call-manager.tsx:1463 [CallManager][DEBUG] ========== BATCH CALL INITIATED ==========
+call-manager.tsx:1464 [CallManager][DEBUG] Timestamp: 2025-12-02T21:56:55.765Z
+call-manager.tsx:1465 [CallManager][DEBUG] Agent ID: agent_7201k8xa9cshfmqvkd8tx3xf2j7a
+call-manager.tsx:1466 [CallManager][DEBUG] Store count: 1
+call-manager.tsx:1467 [CallManager][DEBUG] Scenario: cold_calls
+call-manager.tsx:1468 [CallManager][DEBUG] Scheduled for: immediate
+call-manager.tsx:1469 [CallManager][DEBUG] Auto schedule: undefined
+call-manager.tsx:1474 [CallManager][DEBUG] API response in 889ms
+call-manager.tsx:1475 [CallManager][DEBUG] Response: {campaignId: '21d102e2-da77-4b4f-8fc1-8a1e4ff7e0c0', totalStores: 1, createdTargets: 1, skippedStores: 0, status: 'processing', …}
+call-manager.tsx:1484 [CallManager][DEBUG] ========== BATCH CALL SUCCESS ==========
+call-manager.tsx:1485 [CallManager][DEBUG] Response data: {campaignId: '21d102e2-da77-4b4f-8fc1-8a1e4ff7e0c0', totalStores: 1, createdTargets: 1, skippedStores: 0, status: 'processing', …}
+eventStream.tsx:154 [Call Debug] dispatcher: Initiating outbound call {toNumber: '***3530', agentId: 'agent_7201k8xa9cshfmqvkd8tx3xf2j7a'}
+eventStream.tsx:154 [Call Debug] twiml: Generated TwiML with Fly.io WebSocket URL {wsUrl: 'wss://hemp-voice-proxy.fly.dev/media-stream', isFlyio: true}
+eventStream.tsx:154 [Call Debug] dispatcher: TwiML generated, calling Twilio {from: '***4367', to: '***3530'}
+eventStream.tsx:154 [Call Debug] dispatcher: Twilio call initiated {callSid: 'CA8a...e3c1', success: true}
+call-manager.tsx:2151 [CallManager] Agent selected: 3f3982fe-7438-42ea-8075-8870c2cc0ce6
+call-manager.tsx:1463 [CallManager][DEBUG] ========== BATCH CALL INITIATED ==========
+call-manager.tsx:1464 [CallManager][DEBUG] Timestamp: 2025-12-02T21:57:56.146Z
+call-manager.tsx:1465 [CallManager][DEBUG] Agent ID: agent_3301k8c1mtghe7v9pdfr3znjnk82
+call-manager.tsx:1466 [CallManager][DEBUG] Store count: 1
+call-manager.tsx:1467 [CallManager][DEBUG] Scenario: cold_calls
+call-manager.tsx:1468 [CallManager][DEBUG] Scheduled for: immediate
+call-manager.tsx:1469 [CallManager][DEBUG] Auto schedule: undefined
+call-manager.tsx:1474 [CallManager][DEBUG] API response in 1459ms
+call-manager.tsx:1475 [CallManager][DEBUG] Response: {campaignId: '1051c19e-bbc0-4c4a-a55a-6e83163d06a1', totalStores: 1, createdTargets: 1, skippedStores: 0, status: 'processing', …}
+call-manager.tsx:1484 [CallManager][DEBUG] ========== BATCH CALL SUCCESS ==========
+call-manager.tsx:1485 [CallManager][DEBUG] Response data: {campaignId: '1051c19e-bbc0-4c4a-a55a-6e83163d06a1', totalStores: 1, createdTargets: 1, skippedStores: 0, status: 'processing', …}
+eventStream.tsx:154 [Call Debug] dispatcher: Initiating outbound call {toNumber: '***3530', agentId: 'agent_3301k8c1mtghe7v9pdfr3znjnk82'}
+eventStream.tsx:154 [Call Debug] twiml: Generated TwiML with Fly.io WebSocket URL {wsUrl: 'wss://hemp-voice-proxy.fly.dev/media-stream', isFlyio: true}
+eventStream.tsx:154 [Call Debug] dispatcher: TwiML generated, calling Twilio {from: '***4367', to: '***3530'}
+eventStream.tsx:154 [Call Debug] dispatcher: Twilio call initiated {callSid: 'CAd4...cb5c', success: true}
