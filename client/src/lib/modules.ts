@@ -15,6 +15,7 @@ export const AVAILABLE_MODULES: ModuleDefinition[] = [
   { id: "label_designer", label: "Label Designer", description: "Custom label creation" },
   { id: "followup", label: "Follow-up", description: "Manual follow-up tracking" },
   { id: "pipelines", label: "Pipelines", description: "Workflow automation" },
+  { id: "qualification", label: "Qualification", description: "Lead qualification campaigns and scoring" },
 ];
 
 export function getModuleById(id: string): ModuleDefinition | undefined {
