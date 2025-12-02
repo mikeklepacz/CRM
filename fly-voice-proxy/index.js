@@ -167,8 +167,8 @@ async function connectToElevenLabs(params) {
   const connectStart = Date.now();
   const { agentId, phoneNumberId, dynamicVariables, clientData, basePrompt } = params;
 
-  console.log('[VoiceProxy][DEBUG] ========== CONNECTING TO ELEVENLABS ==========');
-  console.log('[VoiceProxy][DEBUG] Timestamp:', new Date().toISOString());
+  console.log('[VoiceProxy][TIMING] ========== CONNECTING TO ELEVENLABS ==========');
+  console.log('[VoiceProxy][TIMING] Timestamp:', new Date().toISOString());
   console.log('[VoiceProxy][DEBUG] Agent ID:', agentId);
   console.log('[VoiceProxy][DEBUG] Phone Number ID:', phoneNumberId);
   console.log('[VoiceProxy][DEBUG] Has dynamic variables:', !!dynamicVariables);
@@ -182,7 +182,7 @@ async function connectToElevenLabs(params) {
   console.log('[VoiceProxy][DEBUG] API key configured: yes (length:', ELEVENLABS_API_KEY.length, ')');
 
   try {
-    console.log('[VoiceProxy][DEBUG] Calling ElevenLabs get-signed-url API (GET)...');
+    console.log('[VoiceProxy][TIMING] Calling ElevenLabs get-signed-url API (GET)...');
     
     const apiStart = Date.now();
     const response = await fetch(
@@ -194,7 +194,8 @@ async function connectToElevenLabs(params) {
         },
       }
     );
-    console.log(`[VoiceProxy][DEBUG] API response in ${Date.now() - apiStart}ms`);
+    const apiLatency = Date.now() - apiStart;
+    console.log(`[VoiceProxy][TIMING] ⏱️  API response in ${apiLatency}ms`);
     console.log('[VoiceProxy][DEBUG] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
@@ -217,8 +218,9 @@ async function connectToElevenLabs(params) {
     }
 
     console.log('[VoiceProxy][DEBUG] Got signed URL (length:', signed_url.length, ')');
-    console.log('[VoiceProxy][DEBUG] Connecting ElevenLabs WebSocket...');
+    console.log('[VoiceProxy][TIMING] Connecting ElevenLabs WebSocket...');
     
+    const wsConnectStart = Date.now();
     const ws = new WebSocket(signed_url);
 
     // Build conversation_initiation_client_data message to send after WebSocket opens
@@ -250,14 +252,17 @@ async function connectToElevenLabs(params) {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        console.error('[VoiceProxy][DEBUG] *** ELEVENLABS WEBSOCKET TIMEOUT (10s) ***');
+        console.error('[VoiceProxy][TIMING] *** ELEVENLABS WEBSOCKET TIMEOUT (10s) ***');
         reject(new Error('WebSocket connection timeout'));
       }, 10000);
 
       ws.on('open', () => {
         clearTimeout(timeout);
-        console.log('[VoiceProxy][DEBUG] ========== ELEVENLABS WEBSOCKET CONNECTED ==========');
-        console.log(`[VoiceProxy][DEBUG] Total connection time: ${Date.now() - connectStart}ms`);
+        const wsLatency = Date.now() - wsConnectStart;
+        const totalLatency = Date.now() - connectStart;
+        console.log('[VoiceProxy][TIMING] ========== ELEVENLABS WEBSOCKET CONNECTED ==========');
+        console.log(`[VoiceProxy][TIMING] ⏱️  WebSocket handshake: ${wsLatency}ms`);
+        console.log(`[VoiceProxy][TIMING] ⏱️  Total connection time: ${totalLatency}ms`);
         
         // Send conversation_initiation_client_data message with dynamic variables
         const hasDataToSend = initMessage.dynamic_variables || initMessage.conversation_config_override || initMessage.custom_llm_extra_body;
@@ -288,29 +293,45 @@ async function connectToElevenLabs(params) {
 // Handle ElevenLabs messages
 function handleElevenLabsMessage(session, data) {
   try {
+    const receiveTime = Date.now();
     const message = JSON.parse(data.toString());
 
     if (message.type === 'audio' && message.audio_event) {
       // ElevenLabs Conversational AI sends audio in audio_event.audio_base_64
       const audioBase64 = message.audio_event.audio_base_64;
       if (audioBase64) {
+        const decodeStart = Date.now();
         const audioData = Buffer.from(audioBase64, 'base64');
         // ElevenLabs sends PCM 16-bit at 16kHz
         const pcm16k = new Int16Array(audioData.buffer, audioData.byteOffset, audioData.byteLength / 2);
+        const decodeTime = Date.now() - decodeStart;
+        
         session.outputBuffer.push(pcm16k);
-        console.log('[VoiceProxy][DEBUG] Received audio chunk:', pcm16k.length, 'samples');
+        
+        // Log timing every 10th audio chunk to avoid spam
+        if (!session.audioChunkCount) session.audioChunkCount = 0;
+        session.audioChunkCount++;
+        if (session.audioChunkCount % 10 === 0) {
+          console.log(`[VoiceProxy][TIMING] ⏱️  Audio chunk #${session.audioChunkCount}: ${pcm16k.length} samples, decode: ${decodeTime}ms, buffer depth: ${session.outputBuffer.length}`);
+        }
       }
     }
 
     if (message.type === 'interruption') {
+      console.log('[VoiceProxy][TIMING] 🛑 Interruption received, clearing output buffer');
       session.outputBuffer = [];
     }
 
     if (message.type === 'ping' && message.ping_event?.event_id) {
+      const pingStart = Date.now();
       session.elevenLabsWs.send(JSON.stringify({
         type: 'pong',
         event_id: message.ping_event.event_id
       }));
+      const pongTime = Date.now() - pingStart;
+      if (pongTime > 5) {
+        console.log(`[VoiceProxy][TIMING] ⏱️  Pong response: ${pongTime}ms`);
+      }
     }
 
   } catch (error) {
@@ -322,12 +343,21 @@ function handleElevenLabsMessage(session, data) {
 function startMixingLoop(session) {
   const intervalMs = FRAME_SIZE_MS;
   const samplesPerFrame = Math.floor((SAMPLE_RATE_TWILIO * intervalMs) / 1000);
+  
+  let frameCount = 0;
+  let totalMixTime = 0;
+  let totalResampleTime = 0;
+  let totalEncodeTime = 0;
+  let totalSendTime = 0;
 
   const mixInterval = setInterval(() => {
     if (!session.isActive) {
       clearInterval(mixInterval);
       return;
     }
+
+    const loopStart = Date.now();
+    frameCount++;
 
     let outputFrame16k = null;
     if (session.outputBuffer.length > 0) {
@@ -342,6 +372,7 @@ function startMixingLoop(session) {
     }
 
     // Add background audio
+    const mixStart = Date.now();
     if (backgroundAudioBuffer && backgroundAudioBuffer.length > 0) {
       for (let i = 0; i < mixed16k.length; i++) {
         const bgSample = backgroundAudioBuffer[session.backgroundAudioPosition];
@@ -355,18 +386,46 @@ function startMixingLoop(session) {
         }
       }
     }
+    const mixTime = Date.now() - mixStart;
+    totalMixTime += mixTime;
 
     // Resample and encode
+    const resampleStart = Date.now();
     const mixed8k = resample16to8(mixed16k);
+    const resampleTime = Date.now() - resampleStart;
+    totalResampleTime += resampleTime;
+    
+    const encodeStart = Date.now();
     const mulawData = alawmulaw.mulaw.encode(mixed8k);
     const payload = Buffer.from(mulawData).toString('base64');
+    const encodeTime = Date.now() - encodeStart;
+    totalEncodeTime += encodeTime;
 
     try {
+      const sendStart = Date.now();
       session.twilioWs.send(JSON.stringify({
         event: 'media',
         streamSid: session.streamSid,
         media: { payload }
       }));
+      const sendTime = Date.now() - sendStart;
+      totalSendTime += sendTime;
+      
+      const loopTime = Date.now() - loopStart;
+      
+      // Log timing every 100 frames (every 2 seconds)
+      if (frameCount % 100 === 0) {
+        const avgMix = (totalMixTime / frameCount).toFixed(2);
+        const avgResample = (totalResampleTime / frameCount).toFixed(2);
+        const avgEncode = (totalEncodeTime / frameCount).toFixed(2);
+        const avgSend = (totalSendTime / frameCount).toFixed(2);
+        console.log(`[VoiceProxy][TIMING] ⏱️  Mix loop stats (${frameCount} frames): mix=${avgMix}ms, resample=${avgResample}ms, encode=${avgEncode}ms, send=${avgSend}ms, buffer_depth=${session.outputBuffer.length}`);
+      }
+      
+      // Warn if loop is taking too long
+      if (loopTime > intervalMs * 0.8) {
+        console.warn(`[VoiceProxy][TIMING] ⚠️  Mix loop slow: ${loopTime}ms (target: ${intervalMs}ms)`);
+      }
     } catch (error) {
       console.error('[VoiceProxy] Error sending to Twilio:', error);
       session.isActive = false;
@@ -655,25 +714,40 @@ fastify.register(async function (fastify) {
           case 'media':
             if (!session || !session.isActive) return;
 
+            const mediaStart = Date.now();
+
             // Log first media frame
             if (!firstMediaReceived) {
               firstMediaReceived = true;
-              console.log('[VoiceProxy][DEBUG] ========== FIRST MEDIA FRAME RECEIVED ==========');
-              console.log('[VoiceProxy][DEBUG] Time since connect:', Date.now() - connectTime, 'ms');
+              console.log('[VoiceProxy][TIMING] ========== FIRST MEDIA FRAME RECEIVED ==========');
+              console.log('[VoiceProxy][TIMING] ⏱️  Time since connect:', Date.now() - connectTime, 'ms');
               console.log('[VoiceProxy][DEBUG] Payload length:', message.media?.payload?.length);
             }
 
             // Decode mulaw to PCM16
+            const decodeStart = Date.now();
             const mulawData = Buffer.from(message.media.payload, 'base64');
             const pcm8k = alawmulaw.mulaw.decode(mulawData);
+            const decodeTime = Date.now() - decodeStart;
+            
+            const resampleStart = Date.now();
             const pcm16k = resample8to16(pcm8k);
+            const resampleTime = Date.now() - resampleStart;
 
             // Send to ElevenLabs
             if (session.elevenLabsWs?.readyState === WebSocket.OPEN) {
+              const sendStart = Date.now();
               const base64Audio = Buffer.from(pcm16k.buffer).toString('base64');
               session.elevenLabsWs.send(JSON.stringify({
                 user_audio_chunk: base64Audio,
               }));
+              const sendTime = Date.now() - sendStart;
+              const totalTime = Date.now() - mediaStart;
+              
+              // Log timing every 50th frame
+              if (messageCount % 50 === 0) {
+                console.log(`[VoiceProxy][TIMING] ⏱️  Media frame #${messageCount}: decode=${decodeTime}ms, resample=${resampleTime}ms, send=${sendTime}ms, total=${totalTime}ms`);
+              }
             } else if (messageCount % 50 === 0) {
               console.log('[VoiceProxy][DEBUG] ElevenLabs WS not open, state:', session.elevenLabsWs?.readyState);
             }
