@@ -5797,6 +5797,35 @@ The user has agreed to create proposals. Please output your recommended changes 
         ? allKbFiles.filter(file => file.agentId == null) // Only general files for "all agents"
         : allKbFiles.filter(file => file.agentId === agentId || file.agentId == null); // Specific + general for single agent
       
+
+
+  // Get voice proxy latency metrics
+  app.get('/api/voice-proxy/metrics', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Check voice access
+      const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
+      if (!isAdminUser && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
+      const activeSessions = voiceProxyServer.getActiveSessionCount();
+      const metrics = {
+        activeSessions,
+        message: activeSessions === 0 
+          ? 'No active calls - start a call to see latency metrics'
+          : 'Check server logs for detailed latency metrics (logged every 100 frames)',
+      };
+
+      res.json(metrics);
+    } catch (error: any) {
+      console.error('Error fetching voice proxy metrics:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
       if (kbFiles.length === 0) {
         return res.status(404).json({ 
           error: isAllAgents
@@ -19022,79 +19051,6 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Save place from Map Search to Qualification Leads
-  app.post('/api/maps/save-to-qualification', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const { placeId, category } = req.body;
-
-      if (!placeId) {
-        return res.status(400).json({ message: 'Place ID is required' });
-      }
-
-      // Get place details from Google Maps
-      const placeDetails = await googleMaps.getPlaceDetails(placeId);
-
-      if (!placeDetails) {
-        return res.status(404).json({ message: 'Place not found' });
-      }
-
-      // Parse address into street, city, state, zip components
-      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
-
-      // Check for existing lead with same Google Maps place ID (stored in sourceId)
-      const existingLead = await storage.findQualificationLeadBySourceId(tenantId, placeId);
-      if (existingLead) {
-        return res.status(409).json({ 
-          message: 'This business has already been imported as a qualification lead',
-          existingLead
-        });
-      }
-
-      // Create qualification lead from place details
-      const leadData = {
-        tenantId,
-        company: placeDetails.name || 'Unknown Business',
-        pocName: null,
-        pocEmail: null,
-        pocPhone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || null,
-        address: street || null,
-        city: city || null,
-        state: state || null,
-        postalCode: zip || null,
-        country: 'United States',
-        website: placeDetails.website || null,
-        source: 'map_search' as const,
-        sourceId: placeId, // Store place ID for deduplication
-        tags: category ? [category] : [], // Use tags array for category in qualification mode
-        customData: {
-          googleMapsUrl: placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-          rating: placeDetails.rating || null,
-          reviewCount: placeDetails.user_ratings_total || null,
-          businessStatus: placeDetails.business_status || null,
-          types: placeDetails.types || [],
-          priceLevel: placeDetails.price_level,
-          openingHours: placeDetails.opening_hours?.weekday_text || []
-        }
-      };
-
-      const newLead = await storage.createQualificationLead(leadData);
-
-      res.json({ 
-        message: 'Lead saved successfully to Qualification Leads',
-        place: {
-          name: placeDetails.name,
-          address: placeDetails.formatted_address,
-          category
-        },
-        lead: newLead
-      });
-    } catch (error: any) {
-      console.error('Error saving place to qualification leads:', error);
-      res.status(500).json({ message: error.message || 'Failed to save place to qualification leads' });
-    }
-  });
-
   // Ticket Routes
 
   // Get unread ticket count (admin only - scoped to tenant)
@@ -23664,7 +23620,7 @@ ${conversationContext}`;
     try {
       const tenantId = req.user.tenantId;
       const userId = req.user.id;
-      const { name, slug, projectType, description, settings, isDefault, accentColor } = req.body;
+      const { name, slug, projectType, description, settings, isDefault } = req.body;
 
       if (!name || typeof name !== 'string' || name.trim().length === 0) {
         return res.status(400).json({ message: 'Project name is required' });
@@ -23685,7 +23641,6 @@ ${conversationContext}`;
         description: description?.trim(),
         settings: settings || {},
         isDefault: isDefault || false,
-        accentColor: accentColor || '#6366f1',
         createdBy: userId,
       });
 
@@ -23705,7 +23660,7 @@ ${conversationContext}`;
     try {
       const { projectId } = req.params;
       const tenantId = req.user.tenantId;
-      const { name, slug, projectType, description, settings, status, accentColor } = req.body;
+      const { name, slug, projectType, description, settings, status } = req.body;
 
       const existing = await storage.getTenantProjectById(projectId, tenantId);
       if (!existing) {
@@ -23726,7 +23681,6 @@ ${conversationContext}`;
       if (description !== undefined) updates.description = description?.trim();
       if (settings !== undefined) updates.settings = settings;
       if (status !== undefined) updates.status = status;
-      if (accentColor !== undefined) updates.accentColor = accentColor;
 
       const project = await storage.updateTenantProject(projectId, tenantId, updates);
       res.json({ project });
@@ -24266,358 +24220,6 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error bulk deleting qualification leads:', error);
       res.status(500).json({ message: error.message || 'Failed to delete leads' });
-    }
-  });
-
-  // Calculate qualification score for a lead based on campaign field definitions
-  app.post('/api/qualification/leads/:id/calculate-score', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const lead = await storage.getQualificationLead(req.params.id, tenantId);
-      
-      if (!lead) {
-        return res.status(404).json({ message: 'Lead not found' });
-      }
-
-      // Get campaign for field definitions
-      const campaign = lead.campaignId 
-        ? await storage.getQualificationCampaign(lead.campaignId, tenantId)
-        : null;
-
-      // Calculate score based on answers and field definitions
-      const answers = (lead.answers || {}) as Record<string, any>;
-      const fieldDefinitions = (campaign?.fieldDefinitions || []) as Array<{
-        key: string;
-        label: string;
-        type: string;
-        weight?: number;
-        required?: boolean;
-        isKnockout?: boolean;
-        knockoutAnswer?: string | string[] | boolean;
-      }>;
-
-      let totalWeight = 0;
-      let earnedScore = 0;
-      let isDisqualified = false;
-      let disqualifiedReason = '';
-      const scoreBreakdownNumeric: Record<string, number> = {}; // For database storage
-      const detailedBreakdown: Record<string, { answer: any; weight: number; points: number; knockout?: boolean; passed?: boolean }> = {}; // For response
-
-      for (const field of fieldDefinitions) {
-        const weight = field.weight || 1;
-        totalWeight += weight;
-        
-        const answer = answers[field.key];
-        let points = 0;
-        let knockoutPassed = true;
-
-        // Check knockout logic first
-        if (field.isKnockout && field.knockoutAnswer !== undefined) {
-          knockoutPassed = false; // Assume fail until proven otherwise
-          
-          switch (field.type) {
-            case 'boolean':
-              // For boolean, answer must match expected
-              knockoutPassed = answer === field.knockoutAnswer;
-              break;
-            case 'choice':
-              // For single choice, answer must match expected
-              knockoutPassed = answer === field.knockoutAnswer;
-              break;
-            case 'multichoice':
-              // For multichoice, at least one of the expected options must be selected
-              if (Array.isArray(field.knockoutAnswer) && Array.isArray(answer)) {
-                knockoutPassed = field.knockoutAnswer.some(expected => answer.includes(expected));
-              }
-              break;
-            case 'number':
-              // For number, answer must be >= expected minimum
-              const minValue = parseFloat(String(field.knockoutAnswer));
-              knockoutPassed = !isNaN(minValue) && typeof answer === 'number' && answer >= minValue;
-              break;
-            case 'text':
-            case 'date':
-              // For text/date, answer must match (or contain) expected
-              if (typeof answer === 'string' && typeof field.knockoutAnswer === 'string') {
-                knockoutPassed = answer.toLowerCase().includes(field.knockoutAnswer.toLowerCase());
-              }
-              break;
-          }
-
-          if (!knockoutPassed) {
-            isDisqualified = true;
-            disqualifiedReason = `Failed knockout question: ${field.label}`;
-          }
-        }
-
-        // Score based on field type and answer
-        if (answer !== undefined && answer !== null && answer !== '') {
-          switch (field.type) {
-            case 'boolean':
-              // Yes/true answers get full points
-              points = (answer === true || answer === 'yes' || answer === 'true') ? weight : 0;
-              break;
-            case 'number':
-              // Number answers get points if positive
-              points = (typeof answer === 'number' && answer > 0) ? weight : weight * 0.5;
-              break;
-            case 'choice':
-            case 'multichoice':
-              // Having a choice selected gets full points
-              points = weight;
-              break;
-            case 'text':
-            case 'date':
-            default:
-              // Having any answer gets full points
-              points = weight;
-              break;
-          }
-        }
-
-        earnedScore += points;
-        scoreBreakdownNumeric[field.key] = points; // Store just the numeric score
-        detailedBreakdown[field.key] = { 
-          answer, 
-          weight, 
-          points,
-          knockout: field.isKnockout,
-          passed: field.isKnockout ? knockoutPassed : undefined,
-        }; // For API response
-      }
-
-      // Calculate final score as percentage (0-100)
-      const score = totalWeight > 0 
-        ? Math.round((earnedScore / totalWeight) * 100)
-        : 0;
-
-      // Determine score grade - if disqualified, grade is 'DQ'
-      const scoreGrade = isDisqualified ? 'DQ' : (score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F');
-
-      // Update lead status to disqualified if knockout failed
-      const statusUpdate = isDisqualified ? { status: 'disqualified' } : {};
-
-      // Update lead with calculated score (scoreBreakdown is Record<string, number>)
-      const updatedLead = await storage.updateQualificationLead(req.params.id, tenantId, {
-        score,
-        scoreGrade,
-        scoreBreakdown: scoreBreakdownNumeric,
-        ...statusUpdate,
-      });
-
-      res.json({
-        lead: updatedLead,
-        scoreDetails: {
-          score,
-          scoreGrade,
-          totalWeight,
-          earnedScore,
-          breakdown: detailedBreakdown,
-          isDisqualified,
-          disqualifiedReason: isDisqualified ? disqualifiedReason : undefined,
-        },
-      });
-    } catch (error: any) {
-      console.error('Error calculating qualification score:', error);
-      res.status(500).json({ message: error.message || 'Failed to calculate score' });
-    }
-  });
-
-  // Parse transcript with AI to extract structured answers
-  app.post('/api/qualification/leads/:id/parse-transcript', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const { transcript } = req.body;
-
-      if (!transcript || typeof transcript !== 'string') {
-        return res.status(400).json({ message: 'Transcript is required' });
-      }
-
-      const lead = await storage.getQualificationLead(req.params.id, tenantId);
-      if (!lead) {
-        return res.status(404).json({ message: 'Lead not found' });
-      }
-
-      // Get campaign for field definitions
-      const campaign = lead.campaignId
-        ? await storage.getQualificationCampaign(lead.campaignId, tenantId)
-        : null;
-
-      if (!campaign) {
-        return res.status(400).json({ message: 'Lead must be assigned to a campaign to parse transcript' });
-      }
-
-      const fieldDefinitions = (campaign.fieldDefinitions || []) as Array<{
-        key: string;
-        label: string;
-        type: string;
-        options?: string[];
-        required?: boolean;
-      }>;
-
-      if (fieldDefinitions.length === 0) {
-        return res.status(400).json({ message: 'Campaign has no field definitions' });
-      }
-
-      // Use OpenAI to parse transcript
-      const { openai, getModel, chatCompletionCreateParams } = await import('./services/openai');
-      
-      // Check if OpenAI is configured
-      const tenantSettings = await storage.getTenantSettings(tenantId);
-      const openAiApiKey = tenantSettings?.openaiApiKey || process.env.OPENAI_API_KEY;
-      
-      if (!openAiApiKey) {
-        return res.status(400).json({ message: 'OpenAI API key not configured' });
-      }
-
-      // Build detailed field schema for AI extraction
-      const fieldsSchema = fieldDefinitions.map(f => {
-        const fieldInfo: any = {
-          key: f.key,
-          question: f.label,
-          type: f.type,
-          required: f.required || false,
-        };
-        if (f.options?.length) {
-          fieldInfo.allowedValues = f.options;
-        }
-        return fieldInfo;
-      });
-
-      const systemPrompt = `You are an AI assistant that extracts structured qualification data from call transcripts.
-
-Your task is to analyze the transcript and extract answers for the following fields:
-
-${JSON.stringify(fieldsSchema, null, 2)}
-
-IMPORTANT RULES:
-1. Use ONLY the exact field keys provided (e.g., "${fieldDefinitions[0]?.key || 'field_key'}")
-2. For "boolean" type: return true or false (not strings)
-3. For "number" type: return a numeric value (not a string)
-4. For "choice" type: return EXACTLY one of the allowedValues if found
-5. For "multichoice" type: return an array of matching allowedValues
-6. For "text" type: return the extracted text as a string
-7. For "date" type: return in ISO format (YYYY-MM-DD)
-8. If information is not clearly stated in the transcript, omit that field
-9. Focus on what the caller explicitly stated, not inferences
-
-Return a JSON object with only the field keys and their extracted values. No additional fields.`;
-
-      const response = await openai.chat.completions.create({
-        ...chatCompletionCreateParams,
-        model: getModel('gpt-4o-mini'),
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `CALL TRANSCRIPT:\n\n${transcript}` },
-        ],
-        response_format: { type: 'json_object' },
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        return res.status(500).json({ message: 'AI returned empty response' });
-      }
-
-      let rawExtracted: Record<string, any>;
-      try {
-        rawExtracted = JSON.parse(content);
-      } catch {
-        return res.status(500).json({ message: 'AI returned invalid JSON' });
-      }
-
-      // Normalize and validate extracted answers against known field keys
-      const validFieldKeys = new Set(fieldDefinitions.map(f => f.key));
-      const extractedAnswers: Record<string, any> = {};
-      
-      for (const [key, value] of Object.entries(rawExtracted)) {
-        // Only accept answers for defined fields
-        if (validFieldKeys.has(key) && value !== null && value !== undefined) {
-          const field = fieldDefinitions.find(f => f.key === key);
-          if (field) {
-            // Normalize boolean values - handle both affirmative and negative
-            if (field.type === 'boolean') {
-              if (typeof value === 'boolean') {
-                extractedAnswers[key] = value;
-              } else if (typeof value === 'string') {
-                const lowerVal = value.toLowerCase().trim();
-                if (['true', 'yes', '1'].includes(lowerVal)) {
-                  extractedAnswers[key] = true;
-                } else if (['false', 'no', '0'].includes(lowerVal)) {
-                  extractedAnswers[key] = false;
-                }
-                // If neither, skip (indeterminate)
-              } else if (typeof value === 'number') {
-                extractedAnswers[key] = value !== 0;
-              }
-            }
-            // Normalize number values
-            else if (field.type === 'number') {
-              if (typeof value === 'number') {
-                extractedAnswers[key] = value;
-              } else if (typeof value === 'string') {
-                const parsed = parseFloat(value);
-                if (!isNaN(parsed)) {
-                  extractedAnswers[key] = parsed;
-                }
-              }
-            }
-            // Validate choice against allowed options
-            else if (field.type === 'choice' && field.options?.length) {
-              const strVal = String(value).trim();
-              const matched = field.options.find(opt => 
-                opt.toLowerCase() === strVal.toLowerCase()
-              );
-              if (matched) {
-                extractedAnswers[key] = matched;
-              }
-            }
-            // Handle multichoice - support both arrays and comma-delimited strings
-            else if (field.type === 'multichoice' && field.options?.length) {
-              let values: string[] = [];
-              if (Array.isArray(value)) {
-                values = value.map(v => String(v).trim());
-              } else if (typeof value === 'string') {
-                // Split comma-delimited strings
-                values = value.split(',').map(v => v.trim()).filter(v => v);
-              }
-              // Match against allowed options (case-insensitive)
-              const matched = values
-                .map(v => field.options!.find(opt => opt.toLowerCase() === v.toLowerCase()))
-                .filter((v): v is string => v !== undefined);
-              if (matched.length > 0) {
-                extractedAnswers[key] = matched;
-              }
-            }
-            // Accept text and date as-is
-            else {
-              extractedAnswers[key] = value;
-            }
-          }
-        }
-      }
-
-      // Merge with existing answers
-      const existingAnswers = (lead.answers || {}) as Record<string, any>;
-      const mergedAnswers = { ...existingAnswers, ...extractedAnswers };
-
-      // Update lead with extracted answers and transcript
-      const updatedLead = await storage.updateQualificationLead(req.params.id, tenantId, {
-        answers: mergedAnswers,
-        callTranscript: transcript,
-      });
-
-      res.json({
-        lead: updatedLead,
-        extractedAnswers,
-        mergedAnswers,
-      });
-    } catch (error: any) {
-      console.error('Error parsing transcript:', error);
-      res.status(500).json({ message: error.message || 'Failed to parse transcript' });
     }
   });
 

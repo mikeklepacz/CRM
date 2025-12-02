@@ -74,6 +74,16 @@ interface SessionState {
   volumeScalar: number;
   isActive: boolean;
   clientData?: Record<string, any>;
+  // Latency tracking
+  latencyMetrics: {
+    twilioReceiveTimestamps: Map<string, number>; // chunk -> timestamp
+    elevenLabsReceiveTimestamps: Map<number, number>; // sequence -> timestamp
+    totalFramesProcessed: number;
+    avgTwilioToElevenLabsMs: number;
+    avgElevenLabsToTwilioMs: number;
+    avgResamplingMs: number;
+    avgMixingMs: number;
+  };
 }
 
 class VoiceProxyServer {
@@ -256,6 +266,15 @@ class VoiceProxyServer {
       volumeScalar,
       isActive: true,
       clientData,
+      latencyMetrics: {
+        twilioReceiveTimestamps: new Map(),
+        elevenLabsReceiveTimestamps: new Map(),
+        totalFramesProcessed: 0,
+        avgTwilioToElevenLabsMs: 0,
+        avgElevenLabsToTwilioMs: 0,
+        avgResamplingMs: 0,
+        avgMixingMs: 0,
+      },
     };
 
     this.sessions.set(streamSid, session);
@@ -409,22 +428,51 @@ class VoiceProxyServer {
     const session = this.sessions.get(message.streamSid);
     if (!session || !session.isActive) return;
 
+    const twilioReceiveTime = Date.now();
+    const chunkId = message.media.chunk;
+    
+    // Track when we received this from Twilio
+    session.latencyMetrics.twilioReceiveTimestamps.set(chunkId, twilioReceiveTime);
+
     // Decode mulaw to PCM16
+    const decodeStart = Date.now();
     const mulawData = Buffer.from(message.media.payload, 'base64');
     const pcm8k = alawmulaw.mulaw.decode(mulawData);
 
     // Resample from 8kHz to 16kHz (simple linear interpolation)
+    const resampleStart = Date.now();
     const pcm16k = this.resample8to16(pcm8k);
+    const resampleTime = Date.now() - resampleStart;
+    
+    // Update average resampling time
+    const metrics = session.latencyMetrics;
+    metrics.avgResamplingMs = (metrics.avgResamplingMs * metrics.totalFramesProcessed + resampleTime) / (metrics.totalFramesProcessed + 1);
 
     // Add to input buffer
     session.inputBuffer.push(pcm16k);
 
     // Send to ElevenLabs if connected
     if (session.elevenLabsWs?.readyState === WSClient.OPEN) {
+      const sendStart = Date.now();
       const base64Audio = Buffer.from(pcm16k.buffer).toString('base64');
       session.elevenLabsWs.send(JSON.stringify({
         user_audio_chunk: base64Audio,
       }));
+      
+      const totalLatency = Date.now() - twilioReceiveTime;
+      metrics.avgTwilioToElevenLabsMs = (metrics.avgTwilioToElevenLabsMs * metrics.totalFramesProcessed + totalLatency) / (metrics.totalFramesProcessed + 1);
+    }
+    
+    metrics.totalFramesProcessed++;
+    
+    // Log every 100 frames
+    if (metrics.totalFramesProcessed % 100 === 0) {
+      console.log(`[VoiceProxy][Latency] Session ${session.streamSid}:`, {
+        avgTwilioToElevenLabs: `${metrics.avgTwilioToElevenLabsMs.toFixed(2)}ms`,
+        avgResampling: `${metrics.avgResamplingMs.toFixed(2)}ms`,
+        avgMixing: `${metrics.avgMixingMs.toFixed(2)}ms`,
+        totalFrames: metrics.totalFramesProcessed,
+      });
     }
   }
 
@@ -483,6 +531,8 @@ class VoiceProxyServer {
         return;
       }
 
+      const mixStartTime = Date.now();
+
       // Get ElevenLabs output frame (16kHz)
       let outputFrame16k: Int16Array | null = null;
       if (session.outputBuffer.length > 0) {
@@ -501,6 +551,7 @@ class VoiceProxyServer {
         mixed16k = new Int16Array(samplesPerFrame * 2); // 16kHz is 2x 8kHz
       }
 
+      const bgMixStart = Date.now();
       // Add background audio
       if (session.backgroundAudioBuffer && session.backgroundAudioBuffer.length > 0) {
         for (let i = 0; i < mixed16k.length; i++) {
@@ -517,8 +568,10 @@ class VoiceProxyServer {
           }
         }
       }
+      const bgMixTime = Date.now() - bgMixStart;
 
       // Resample 16kHz to 8kHz
+      const resampleStart = Date.now();
       const mixed8k = this.resample16to8(mixed16k);
 
       // Encode to mulaw
@@ -533,6 +586,10 @@ class VoiceProxyServer {
           payload,
         },
       }));
+      
+      const totalMixTime = Date.now() - mixStartTime;
+      const metrics = session.latencyMetrics;
+      metrics.avgMixingMs = (metrics.avgMixingMs * metrics.totalFramesProcessed + totalMixTime) / (metrics.totalFramesProcessed + 1);
     }, intervalMs);
   }
 
