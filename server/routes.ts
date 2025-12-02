@@ -23574,11 +23574,16 @@ ${conversationContext}`;
       if (!tenant) {
         return res.status(404).json({ message: 'Tenant not found' });
       }
-      const tenantId = tenant.id;
       
-      // Get all users for this tenant
-      let users = await storage.getAllUsers();
-      users = users.filter(u => u.tenantId === tenantId && u.isActive !== false);
+      // Get users via the user_tenants junction table
+      // Try both UUID and slug since data may use either
+      let tenantUsers = await storage.listTenantUsers(tenant.id);
+      if (tenantUsers.length === 0 && tenant.slug) {
+        tenantUsers = await storage.listTenantUsers(tenant.slug);
+      }
+      
+      // Filter to active users only
+      const users = tenantUsers.filter(u => u.isActive !== false);
       
       const webhookStatuses = [];
 
@@ -23598,7 +23603,7 @@ ${conversationContext}`;
           userId: u.id,
           userEmail: u.email,
           agentName: u.agentName,
-          tenantId: u.tenantId,
+          tenantId: tenant.id,
           hasGoogleCalendar: !!integration?.googleCalendarAccessToken,
           channelId: integration?.googleCalendarWebhookChannelId || null,
           resourceId: integration?.googleCalendarWebhookResourceId || null,
@@ -23633,10 +23638,16 @@ ${conversationContext}`;
       if (!tenant) {
         return res.status(404).json({ message: 'Tenant not found' });
       }
-      const tenantId = tenant.id;
       
-      let users = await storage.getAllUsers();
-      users = users.filter(u => u.tenantId === tenantId && u.isActive !== false);
+      // Get users via the user_tenants junction table
+      // Try both UUID and slug since data may use either
+      let tenantUsers = await storage.listTenantUsers(tenant.id);
+      if (tenantUsers.length === 0 && tenant.slug) {
+        tenantUsers = await storage.listTenantUsers(tenant.slug);
+      }
+      
+      // Filter to active users only
+      const users = tenantUsers.filter(u => u.isActive !== false);
       
       const results = {
         total: 0,
@@ -23708,7 +23719,6 @@ ${conversationContext}`;
       if (!tenant) {
         return res.status(404).json({ message: 'Tenant not found' });
       }
-      const tenantId = tenant.id;
       
       const targetUser = await storage.getUser(targetUserId);
 
@@ -23716,8 +23726,13 @@ ${conversationContext}`;
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Verify user belongs to the specified tenant
-      if (targetUser.tenantId !== tenantId) {
+      // Verify user belongs to the specified tenant via user_tenants
+      // Try both UUID and slug since data may use either
+      let userRole = await storage.getUserTenantRole(targetUserId, tenant.id);
+      if (!userRole && tenant.slug) {
+        userRole = await storage.getUserTenantRole(targetUserId, tenant.slug);
+      }
+      if (!userRole) {
         return res.status(404).json({ message: 'User not found in this tenant' });
       }
 
