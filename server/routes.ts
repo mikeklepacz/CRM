@@ -2838,6 +2838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'scheduled',
         scheduledStart,
         ivrBehavior: ivr_behavior || 'flag_and_end',
+        tenantId: tenantId,
       });
 
       // Create map of store link to store data for efficient lookup
