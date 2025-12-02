@@ -101,13 +101,6 @@ export class CallDispatcher {
         return;
       }
 
-      const config = await storage.getElevenLabsConfig();
-      if (!config?.apiKey) {
-        console.log('[CallDispatcher][DEBUG] No API key configured, skipping');
-        return;
-      }
-      console.log('[CallDispatcher][DEBUG] API key found, twilioNumber:', config.twilioNumber ? 'configured' : 'NOT SET');
-
       // Cleanup stale in-progress targets (older than 10 minutes)
       await this.cleanupStaleTargets();
 
@@ -120,10 +113,27 @@ export class CallDispatcher {
         return;
       }
 
+      // Cache configs by tenant to avoid redundant lookups
+      const configCache: Map<string, { apiKey: string; twilioNumber?: string } | null> = new Map();
+
       for (let i = 0; i < targets.length; i++) {
         const target = targets[i];
-        console.log(`[CallDispatcher][DEBUG] Processing target ${i + 1}/${targets.length}: ${target.id}`);
-        await this.processCallTarget(target, config.apiKey);
+        console.log(`[CallDispatcher][DEBUG] Processing target ${i + 1}/${targets.length}: ${target.id}, tenantId: ${target.tenantId}`);
+        
+        // Get config for this target's tenant (cached)
+        if (!configCache.has(target.tenantId)) {
+          const config = await storage.getElevenLabsConfig(target.tenantId);
+          configCache.set(target.tenantId, config || null);
+          console.log(`[CallDispatcher][DEBUG] Loaded config for tenant ${target.tenantId}: ${config?.apiKey ? 'API key found' : 'NO API key'}`);
+        }
+        
+        const tenantConfig = configCache.get(target.tenantId);
+        if (!tenantConfig?.apiKey) {
+          console.log(`[CallDispatcher][DEBUG] Skipping target ${target.id} - no API key for tenant ${target.tenantId}`);
+          continue;
+        }
+        
+        await this.processCallTarget(target, tenantConfig.apiKey);
       }
       
       // Emit WebSocket event for real-time UI updates

@@ -60,7 +60,11 @@ type Agent = {
   is_default: boolean;
 };
 
-export function VoiceSettings() {
+interface VoiceSettingsProps {
+  tenantId?: string;
+}
+
+export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showApiKey, setShowApiKey] = useState(false);
@@ -70,23 +74,41 @@ export function VoiceSettings() {
   const [localVolumeDb, setLocalVolumeDb] = useState<number | null>(null);
   const volumeDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
+  const isSuperAdminMode = !!tenantId;
+  const apiBase = isSuperAdminMode ? `/api/super-admin/tenants/${tenantId}/elevenlabs` : '/api/elevenlabs';
+
   // Fetch config (API key + Twilio number)
   const { data: configData } = useQuery<{ apiKey: string; twilioNumber?: string }>({
-    queryKey: ['/api/elevenlabs/config'],
+    queryKey: [apiBase, 'config'],
+    queryFn: async () => {
+      const res = await fetch(`${apiBase}/config`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch config');
+      return res.json();
+    },
   });
 
   // Fetch agents
   const { data: agents = [] } = useQuery<Agent[]>({
-    queryKey: ['/api/elevenlabs/agents'],
+    queryKey: [apiBase, 'agents'],
+    queryFn: async () => {
+      const res = await fetch(`${apiBase}/agents`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch agents');
+      return res.json();
+    },
   });
   const hasApiKey = !!configData?.apiKey;
 
   // Fetch webhook status
   const { data: webhookStatus } = useQuery<{ webhookUrl: string | null; hasSecret: boolean; hasApiKey: boolean }>({
-    queryKey: ['/api/elevenlabs/webhook-status'],
+    queryKey: [apiBase, 'webhook-status'],
+    queryFn: async () => {
+      const res = await fetch(`${apiBase}/webhook-status`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch webhook status');
+      return res.json();
+    },
   });
 
-  // Fetch background audio settings
+  // Fetch background audio settings (global, not tenant-specific)
   const { data: backgroundAudioSettings } = useQuery<{
     fileName: string | null;
     volumeDb: number;
@@ -144,10 +166,10 @@ export function VoiceSettings() {
 
   const updateConfigMutation = useMutation({
     mutationFn: async (data: z.infer<typeof configSchema>) => {
-      return await apiRequest("PUT", "/api/elevenlabs/config", data);
+      return await apiRequest("PUT", `${apiBase}/config`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/config'] });
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'config'] });
       toast({
         title: "Success",
         description: "Configuration updated successfully",
@@ -164,10 +186,10 @@ export function VoiceSettings() {
 
   const createAgentMutation = useMutation({
     mutationFn: async (data: z.infer<typeof agentSchema>) => {
-      return await apiRequest("POST", "/api/elevenlabs/agents", data);
+      return await apiRequest("POST", `${apiBase}/agents`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'agents'] });
       setIsAddAgentOpen(false);
       agentForm.reset();
       toast({
@@ -186,10 +208,10 @@ export function VoiceSettings() {
 
   const deleteAgentMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest("DELETE", `/api/elevenlabs/agents/${id}`);
+      return await apiRequest("DELETE", `${apiBase}/agents/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'agents'] });
       toast({
         title: "Success",
         description: "Agent deleted successfully",
@@ -206,10 +228,10 @@ export function VoiceSettings() {
 
   const syncPhoneNumbersMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", "/api/elevenlabs/sync-phone-numbers");
+      return await apiRequest("POST", `${apiBase}/sync-phone-numbers`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'agents'] });
       toast({
         title: "Success",
         description: "Phone numbers synced from ElevenLabs successfully",
@@ -226,10 +248,10 @@ export function VoiceSettings() {
 
   const setDefaultMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest("PUT", `/api/elevenlabs/agents/${id}/set-default`);
+      return await apiRequest("PUT", `${apiBase}/agents/${id}/set-default`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'agents'] });
       toast({
         title: "Success",
         description: "Default agent updated",
@@ -246,10 +268,10 @@ export function VoiceSettings() {
 
   const registerWebhookMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", "/api/elevenlabs/register-webhook");
+      return await apiRequest("POST", `${apiBase}/register-webhook`);
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/webhook-status'] });
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'webhook-status'] });
       toast({
         title: "Success",
         description: data.message || "Webhook registered successfully",

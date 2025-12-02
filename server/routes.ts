@@ -23179,6 +23179,215 @@ ${conversationContext}`;
   });
 
   // ============================================================================
+  // SUPER ADMIN ELEVENLABS ROUTES - Per-tenant voice configuration
+  // ============================================================================
+
+  // GET /api/super-admin/tenants/:tenantId/elevenlabs/config - Get tenant's ElevenLabs config
+  app.get('/api/super-admin/tenants/:tenantId/elevenlabs/config', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const config = await storage.getElevenLabsConfig(tenantId);
+      res.json(config || { apiKey: "", twilioNumber: "" });
+    } catch (error: any) {
+      console.error("Error fetching ElevenLabs config:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch config" });
+    }
+  });
+
+  // PUT /api/super-admin/tenants/:tenantId/elevenlabs/config - Update tenant's ElevenLabs config
+  app.put('/api/super-admin/tenants/:tenantId/elevenlabs/config', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const validation = elevenLabsConfigSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      await storage.updateElevenLabsConfig(tenantId, validation.data);
+      res.json({ message: "ElevenLabs configuration updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating ElevenLabs config:", error);
+      res.status(500).json({ message: error.message || "Failed to update config" });
+    }
+  });
+
+  // GET /api/super-admin/tenants/:tenantId/elevenlabs/agents - Get tenant's agents
+  app.get('/api/super-admin/tenants/:tenantId/elevenlabs/agents', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const agents = await storage.getAllElevenLabsAgents(tenantId);
+      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(tenantId);
+      
+      const phoneNumberMap = new Map(phoneNumbers.map(pn => [pn.phoneNumberId, pn]));
+      const enrichedAgents = agents.map(agent => {
+        const phone = agent.phoneNumberId ? phoneNumberMap.get(agent.phoneNumberId) : null;
+        return {
+          id: agent.id,
+          name: agent.name,
+          agent_id: agent.agentId,
+          phone_number_id: agent.phoneNumberId,
+          phone_number: phone?.phoneNumber || null,
+          phone_label: phone?.label || null,
+          description: agent.description,
+          is_default: agent.isDefault,
+        };
+      });
+      
+      res.json(enrichedAgents);
+    } catch (error: any) {
+      console.error("Error fetching ElevenLabs agents:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch agents" });
+    }
+  });
+
+  // POST /api/super-admin/tenants/:tenantId/elevenlabs/agents - Create agent for tenant
+  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/agents', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const validation = elevenLabsAgentSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const agent = await storage.createElevenLabsAgent({ ...validation.data, tenantId });
+      res.json(agent);
+    } catch (error: any) {
+      console.error("Error creating ElevenLabs agent:", error);
+      res.status(500).json({ message: error.message || "Failed to create agent" });
+    }
+  });
+
+  // PUT /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id - Update agent
+  app.put('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId, id } = req.params;
+      const validation = elevenLabsAgentSchema.partial().safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const agent = await storage.updateElevenLabsAgent(id, tenantId, validation.data);
+      res.json(agent);
+    } catch (error: any) {
+      console.error("Error updating ElevenLabs agent:", error);
+      res.status(500).json({ message: error.message || "Failed to update agent" });
+    }
+  });
+
+  // DELETE /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id - Delete agent
+  app.delete('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId, id } = req.params;
+      await storage.deleteElevenLabsAgent(id, tenantId);
+      res.json({ message: "Agent deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting ElevenLabs agent:", error);
+      res.status(500).json({ message: error.message || "Failed to delete agent" });
+    }
+  });
+
+  // PUT /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/set-default - Set default agent
+  app.put('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/set-default', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId, id } = req.params;
+      await storage.setDefaultElevenLabsAgent(id, tenantId);
+      res.json({ message: "Default agent set successfully" });
+    } catch (error: any) {
+      console.error("Error setting default agent:", error);
+      res.status(500).json({ message: error.message || "Failed to set default agent" });
+    }
+  });
+
+  // POST /api/super-admin/tenants/:tenantId/elevenlabs/sync-phone-numbers - Sync phone numbers from ElevenLabs
+  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/sync-phone-numbers', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const config = await storage.getElevenLabsConfig(tenantId);
+      
+      if (!config?.apiKey) {
+        return res.status(400).json({ message: "ElevenLabs API key not configured for this tenant" });
+      }
+
+      const response = await axios.get("https://api.elevenlabs.io/v1/convai/phone-numbers", {
+        headers: { "xi-api-key": config.apiKey },
+      });
+
+      const phoneNumbers = response.data.phone_numbers || [];
+      for (const pn of phoneNumbers) {
+        await storage.upsertElevenLabsPhoneNumber({
+          phoneNumberId: pn.phone_number_id,
+          phoneNumber: pn.phone_number,
+          label: pn.label || null,
+          agentId: pn.agent_id || null,
+          tenantId,
+        });
+      }
+
+      res.json({ message: "Phone numbers synced successfully", count: phoneNumbers.length });
+    } catch (error: any) {
+      console.error("Error syncing phone numbers:", error);
+      res.status(500).json({ message: error.message || "Failed to sync phone numbers" });
+    }
+  });
+
+  // GET /api/super-admin/tenants/:tenantId/elevenlabs/webhook-status - Get webhook status
+  app.get('/api/super-admin/tenants/:tenantId/elevenlabs/webhook-status', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const config = await storage.getElevenLabsConfig(tenantId);
+      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'https';
+      const host = req.get('host') || 'localhost:5000';
+      const webhookUrl = `${protocol}://${host}/api/elevenlabs/webhook`;
+      
+      res.json({
+        webhookUrl,
+        hasSecret: !!config?.webhookSecret,
+        hasApiKey: !!config?.apiKey,
+      });
+    } catch (error: any) {
+      console.error("Error fetching webhook status:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch webhook status" });
+    }
+  });
+
+  // POST /api/super-admin/tenants/:tenantId/elevenlabs/register-webhook - Register webhook
+  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/register-webhook', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const config = await storage.getElevenLabsConfig(tenantId);
+      
+      if (!config?.apiKey) {
+        return res.status(400).json({ message: "ElevenLabs API key not configured for this tenant" });
+      }
+
+      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'https';
+      const host = req.get('host') || 'localhost:5000';
+      const webhookUrl = `${protocol}://${host}/api/elevenlabs/webhook`;
+
+      const response = await axios.post(
+        "https://api.elevenlabs.io/v1/convai/webhook/register",
+        {
+          url: webhookUrl,
+          events: ["conversation_initiation", "conversation_update", "conversation_end"],
+        },
+        {
+          headers: { "xi-api-key": config.apiKey },
+        }
+      );
+
+      const webhookSecret = response.data.secret;
+      if (webhookSecret) {
+        await storage.updateElevenLabsConfig(tenantId, { webhookSecret });
+      }
+
+      res.json({ message: "Webhook registered successfully", webhookUrl });
+    } catch (error: any) {
+      console.error("Error registering webhook:", error);
+      res.status(500).json({ message: error.message || "Failed to register webhook" });
+    }
+  });
+
+  // ============================================================================
   // ORG ADMIN ROUTES - Tenant-scoped management for org admins
   // ============================================================================
 

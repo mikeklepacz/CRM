@@ -31,6 +31,7 @@ import {
   Search, ArrowUpDown, ArrowUp, ArrowDown, Mail, Lock, Briefcase, KeyRound, 
   UserX, UserCheck, Phone, Ticket, Webhook, Mic, FileSpreadsheet, Send, XCircle
 } from "lucide-react";
+import { VoiceSettings } from "@/components/voice-settings";
 
 interface Tenant {
   id: string;
@@ -1972,19 +1973,17 @@ export default function SuperAdmin() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <Mic className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-2">Voice Configuration</p>
-                <p className="text-sm">
-                  {configTenantId === 'all' 
-                    ? 'Select a tenant to manage their voice settings'
-                    : `Voice settings for ${tenantsData?.tenants?.find(t => t.id === configTenantId)?.name}`
-                  }
-                </p>
-                <p className="text-xs text-muted-foreground mt-4">
-                  Coming soon: Per-tenant voice agent configuration
-                </p>
-              </div>
+              {configTenantId === 'all' ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Mic className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Voice Configuration</p>
+                  <p className="text-sm">
+                    Select a tenant to manage their voice settings
+                  </p>
+                </div>
+              ) : (
+                <VoiceSettings tenantId={configTenantId} />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
