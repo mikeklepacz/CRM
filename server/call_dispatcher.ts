@@ -286,6 +286,7 @@ export class CallDispatcher {
           agentId: agent.agentId,
           phoneNumberId: agent.phoneNumberId || '',
           toNumber: phoneNumber,
+          tenantId: target.tenantId,
           userId,
           dynamicVariables,
           clientData: {
@@ -343,6 +344,7 @@ export class CallDispatcher {
     agentId: string;
     phoneNumberId: string;
     toNumber: string;
+    tenantId: string;
     userId?: string;
     dynamicVariables?: Record<string, string>;
     clientData?: any;
@@ -374,8 +376,8 @@ export class CallDispatcher {
       throw new Error('Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN environment variables.');
     }
 
-    // Get the Twilio phone number from ElevenLabs config
-    const config = await storage.getElevenLabsConfig();
+    // Get the Twilio phone number from ElevenLabs config for this tenant
+    const config = await storage.getElevenLabsConfig(params.tenantId);
     if (!config?.twilioNumber) {
       eventGateway.emit('call:debug', {
         stage: 'dispatcher',
