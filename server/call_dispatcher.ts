@@ -202,7 +202,7 @@ export class CallDispatcher {
       console.log('[CallDispatcher][DEBUG] Campaign found:', campaign.name, 'agentId:', campaign.agentId);
 
       console.log('[CallDispatcher][DEBUG] Fetching agent...');
-      const agent = await storage.getElevenLabsAgent(campaign.agentId);
+      const agent = await storage.getElevenLabsAgent(campaign.agentId, target.tenantId);
       if (!agent) {
         throw new Error(`Agent not found: ${campaign.agentId}`);
       }
