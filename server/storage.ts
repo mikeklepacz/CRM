@@ -226,6 +226,7 @@ export interface IStorage {
   getUserDefaultTenant(userId: string): Promise<{ tenantId: string; roleInTenant: string } | undefined>;
   listTenants(): Promise<Array<Tenant & { userCount: number }>>;
   getTenantById(tenantId: string): Promise<Tenant | undefined>;
+  getTenantByIdOrSlug(idOrSlug: string): Promise<Tenant | undefined>;
   createTenant(data: InsertTenant): Promise<Tenant>;
   updateTenant(tenantId: string, updates: Partial<InsertTenant>): Promise<Tenant>;
   getTenantStats(tenantId: string): Promise<{ userCount: number; clientCount: number; callCount: number }>;
@@ -867,6 +868,14 @@ export class DatabaseStorage implements IStorage {
 
   async getTenantById(tenantId: string): Promise<Tenant | undefined> {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    return tenant;
+  }
+
+  async getTenantByIdOrSlug(idOrSlug: string): Promise<Tenant | undefined> {
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(or(eq(tenants.id, idOrSlug), eq(tenants.slug, idOrSlug)));
     return tenant;
   }
 

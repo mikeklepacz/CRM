@@ -23567,7 +23567,14 @@ ${conversationContext}`;
   // GET /api/super-admin/tenants/:tenantId/webhooks - Get webhook statuses for tenant
   app.get('/api/super-admin/tenants/:tenantId/webhooks', requireSuperAdmin, async (req: any, res) => {
     try {
-      const { tenantId } = req.params;
+      const { tenantId: tenantIdOrSlug } = req.params;
+      
+      // Resolve tenant by ID or slug
+      const tenant = await storage.getTenantByIdOrSlug(tenantIdOrSlug);
+      if (!tenant) {
+        return res.status(404).json({ message: 'Tenant not found' });
+      }
+      const tenantId = tenant.id;
       
       // Get all users for this tenant
       let users = await storage.getAllUsers();
@@ -23619,7 +23626,14 @@ ${conversationContext}`;
   // POST /api/super-admin/tenants/:tenantId/webhooks/bulk-register - Bulk re-register webhooks for tenant
   app.post('/api/super-admin/tenants/:tenantId/webhooks/bulk-register', requireSuperAdmin, async (req: any, res) => {
     try {
-      const { tenantId } = req.params;
+      const { tenantId: tenantIdOrSlug } = req.params;
+      
+      // Resolve tenant by ID or slug
+      const tenant = await storage.getTenantByIdOrSlug(tenantIdOrSlug);
+      if (!tenant) {
+        return res.status(404).json({ message: 'Tenant not found' });
+      }
+      const tenantId = tenant.id;
       
       let users = await storage.getAllUsers();
       users = users.filter(u => u.tenantId === tenantId && u.isActive !== false);
@@ -23687,7 +23701,15 @@ ${conversationContext}`;
   // POST /api/super-admin/tenants/:tenantId/webhooks/:userId/register - Register webhook for specific user in tenant
   app.post('/api/super-admin/tenants/:tenantId/webhooks/:userId/register', requireSuperAdmin, async (req: any, res) => {
     try {
-      const { tenantId, userId: targetUserId } = req.params;
+      const { tenantId: tenantIdOrSlug, userId: targetUserId } = req.params;
+      
+      // Resolve tenant by ID or slug
+      const tenant = await storage.getTenantByIdOrSlug(tenantIdOrSlug);
+      if (!tenant) {
+        return res.status(404).json({ message: 'Tenant not found' });
+      }
+      const tenantId = tenant.id;
+      
       const targetUser = await storage.getUser(targetUserId);
 
       if (!targetUser) {
