@@ -21151,18 +21151,42 @@ Use this store information to provide context-aware responses. When helping draf
       // Validate update payload
       const updates = insertSequenceSchema.partial().parse(req.body);
 
+      // Get existing sequence to check status transitions
+      const existingSequence = await storage.getSequence(id, req.user.tenantId);
+      if (!existingSequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
       // CRITICAL: Campaign Brief is REQUIRED for activation
       if (updates.status === 'active') {
-        const existingSequence = await storage.getSequence(id, req.user.tenantId);
-        if (!existingSequence) {
-          return res.status(404).json({ message: 'Sequence not found' });
-        }
-        
         const finalizedStrategy = (existingSequence as any).finalizedStrategy || (updates as any).finalizedStrategy;
         if (!finalizedStrategy || finalizedStrategy.trim() === '') {
           return res.status(422).json({ 
             message: 'Campaign Brief is required before activation. Complete "Finalize Strategy" in the Strategy tab first.' 
           });
+        }
+      }
+
+      // FIRE-HOSE PREVENTION: Handle status transitions
+      const oldStatus = existingSequence.status;
+      const newStatus = updates.status;
+      
+      if (newStatus && newStatus !== oldStatus) {
+        const { clearUnsentSlotsForSequence } = await import('./services/Matrix2/slotDb');
+        
+        if (newStatus === 'paused') {
+          // ON PAUSE: Clear all unsent slots - recipients go back to assignment pool
+          const clearedCount = await clearUnsentSlotsForSequence(id);
+          console.log(`[Sequence ${id}] Paused: Cleared ${clearedCount} unsent slots`);
+        } else if (newStatus === 'active') {
+          // ON UNPAUSE: Clear any stray unsent slots (idempotent), then rebuild queue
+          const clearedCount = await clearUnsentSlotsForSequence(id);
+          console.log(`[Sequence ${id}] Activated: Cleared ${clearedCount} stray unsent slots`);
+          
+          // Trigger slot assignment so recipients get fresh future slots
+          const { assignRecipientsToSlots } = await import('./services/Matrix2/slotAssigner');
+          await assignRecipientsToSlots();
+          console.log(`[Sequence ${id}] Activated: Triggered slot assignment for fresh future slots`);
         }
       }
 

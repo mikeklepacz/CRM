@@ -152,3 +152,24 @@ export async function clearOrphanedSlots() {
   const affectedRows = (result as any).rowCount || 0;
   return affectedRows;
 }
+
+/**
+ * Clear all UNSENT slots for a sequence's recipients
+ * Called when a sequence is PAUSED to prevent fire-hose on unpause
+ * Only clears slots where sent=FALSE, preserving send history
+ * Recipients go back to the assignment pool and get fresh future slots on unpause
+ */
+export async function clearUnsentSlotsForSequence(sequenceId: string): Promise<number> {
+  const result = await db.execute(sql`
+    UPDATE daily_send_slots
+    SET filled = FALSE, recipient_id = NULL
+    WHERE sent = FALSE
+      AND recipient_id IS NOT NULL
+      AND recipient_id::VARCHAR IN (
+        SELECT id FROM sequence_recipients WHERE sequence_id = ${sequenceId}
+      )
+  `);
+  
+  const affectedRows = (result as any).rowCount || 0;
+  return affectedRows;
+}
