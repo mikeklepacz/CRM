@@ -23561,6 +23561,174 @@ ${conversationContext}`;
   });
 
   // ============================================================================
+  // SUPER ADMIN: Per-Tenant Webhook Management
+  // ============================================================================
+
+  // GET /api/super-admin/tenants/:tenantId/webhooks - Get webhook statuses for tenant
+  app.get('/api/super-admin/tenants/:tenantId/webhooks', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      
+      // Get all users for this tenant
+      let users = await storage.getAllUsers();
+      users = users.filter(u => u.tenantId === tenantId && u.isActive !== false);
+      
+      const webhookStatuses = [];
+
+      for (const u of users) {
+        const integration = await storage.getUserIntegration(u.id);
+        
+        // Determine webhook URL based on environment
+        let registeredUrl = 'Not configured';
+        if (process.env.REPLIT_DOMAINS) {
+          const domains = process.env.REPLIT_DOMAINS.split(',');
+          registeredUrl = `https://${domains[0]}/api/webhooks/google-calendar`;
+        } else if (process.env.REPLIT_DEV_DOMAIN) {
+          registeredUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`;
+        }
+
+        const status: any = {
+          userId: u.id,
+          userEmail: u.email,
+          agentName: u.agentName,
+          tenantId: u.tenantId,
+          hasGoogleCalendar: !!integration?.googleCalendarAccessToken,
+          channelId: integration?.googleCalendarWebhookChannelId || null,
+          resourceId: integration?.googleCalendarWebhookResourceId || null,
+          expiry: integration?.googleCalendarWebhookExpiry || null,
+          expiryDate: integration?.googleCalendarWebhookExpiry 
+            ? new Date(integration.googleCalendarWebhookExpiry).toISOString()
+            : null,
+          isExpired: integration?.googleCalendarWebhookExpiry 
+            ? integration.googleCalendarWebhookExpiry < Date.now()
+            : null,
+          registeredUrl,
+          environment: process.env.REPLIT_DOMAINS ? 'production' : 'development'
+        };
+
+        webhookStatuses.push(status);
+      }
+
+      res.json({ webhooks: webhookStatuses });
+    } catch (error: any) {
+      console.error('Error fetching tenant webhook statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch webhook statuses' });
+    }
+  });
+
+  // POST /api/super-admin/tenants/:tenantId/webhooks/bulk-register - Bulk re-register webhooks for tenant
+  app.post('/api/super-admin/tenants/:tenantId/webhooks/bulk-register', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      
+      let users = await storage.getAllUsers();
+      users = users.filter(u => u.tenantId === tenantId && u.isActive !== false);
+      
+      const results = {
+        total: 0,
+        successful: 0,
+        failed: 0,
+        skipped: 0,
+        details: [] as any[]
+      };
+
+      for (const u of users) {
+        const integration = await storage.getUserIntegration(u.id);
+
+        if (!integration?.googleCalendarAccessToken) {
+          results.skipped++;
+          results.details.push({
+            userId: u.id,
+            email: u.email,
+            status: 'skipped',
+            reason: 'No Google Calendar connected'
+          });
+          continue;
+        }
+
+        results.total++;
+
+        try {
+          const success = await setupCalendarWatch(u.id);
+          if (success) {
+            results.successful++;
+            results.details.push({
+              userId: u.id,
+              email: u.email,
+              status: 'success'
+            });
+          } else {
+            results.failed++;
+            results.details.push({
+              userId: u.id,
+              email: u.email,
+              status: 'failed',
+              reason: 'Setup returned false'
+            });
+          }
+        } catch (error: any) {
+          results.failed++;
+          results.details.push({
+            userId: u.id,
+            email: u.email,
+            status: 'failed',
+            reason: error.message
+          });
+        }
+      }
+
+      res.json(results);
+    } catch (error: any) {
+      console.error('Error bulk registering tenant webhooks:', error);
+      res.status(500).json({ message: error.message || 'Failed to bulk register webhooks' });
+    }
+  });
+
+  // POST /api/super-admin/tenants/:tenantId/webhooks/:userId/register - Register webhook for specific user in tenant
+  app.post('/api/super-admin/tenants/:tenantId/webhooks/:userId/register', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId, userId: targetUserId } = req.params;
+      const targetUser = await storage.getUser(targetUserId);
+
+      if (!targetUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Verify user belongs to the specified tenant
+      if (targetUser.tenantId !== tenantId) {
+        return res.status(404).json({ message: 'User not found in this tenant' });
+      }
+
+      const integration = await storage.getUserIntegration(targetUserId);
+      if (!integration?.googleCalendarAccessToken) {
+        return res.status(400).json({ message: 'User does not have Google Calendar connected' });
+      }
+
+      const success = await setupCalendarWatch(targetUserId);
+
+      if (success) {
+        const updatedIntegration = await storage.getUserIntegration(targetUserId);
+        res.json({
+          success: true,
+          channelId: updatedIntegration?.googleCalendarWebhookChannelId,
+          expiry: updatedIntegration?.googleCalendarWebhookExpiry,
+          expiryDate: updatedIntegration?.googleCalendarWebhookExpiry 
+            ? new Date(updatedIntegration.googleCalendarWebhookExpiry).toISOString()
+            : null
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Webhook registration failed' 
+        });
+      }
+    } catch (error: any) {
+      console.error('Error registering tenant webhook:', error);
+      res.status(500).json({ message: error.message || 'Failed to register webhook' });
+    }
+  });
+
+  // ============================================================================
   // ORG ADMIN ROUTES - Tenant-scoped management for org admins
   // ============================================================================
 
