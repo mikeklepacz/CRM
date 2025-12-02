@@ -19022,6 +19022,79 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Save place from Map Search to Qualification Leads
+  app.post('/api/maps/save-to-qualification', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { placeId, category } = req.body;
+
+      if (!placeId) {
+        return res.status(400).json({ message: 'Place ID is required' });
+      }
+
+      // Get place details from Google Maps
+      const placeDetails = await googleMaps.getPlaceDetails(placeId);
+
+      if (!placeDetails) {
+        return res.status(404).json({ message: 'Place not found' });
+      }
+
+      // Parse address into street, city, state, zip components
+      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
+
+      // Check for existing lead with same Google Maps place ID (stored in sourceId)
+      const existingLead = await storage.findQualificationLeadBySourceId(tenantId, placeId);
+      if (existingLead) {
+        return res.status(409).json({ 
+          message: 'This business has already been imported as a qualification lead',
+          existingLead
+        });
+      }
+
+      // Create qualification lead from place details
+      const leadData = {
+        tenantId,
+        company: placeDetails.name || 'Unknown Business',
+        pocName: null,
+        pocEmail: null,
+        pocPhone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || null,
+        address: street || null,
+        city: city || null,
+        state: state || null,
+        postalCode: zip || null,
+        country: 'United States',
+        website: placeDetails.website || null,
+        source: 'map_search' as const,
+        sourceId: placeId, // Store place ID for deduplication
+        tags: category ? [category] : [], // Use tags array for category in qualification mode
+        customData: {
+          googleMapsUrl: placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+          rating: placeDetails.rating || null,
+          reviewCount: placeDetails.user_ratings_total || null,
+          businessStatus: placeDetails.business_status || null,
+          types: placeDetails.types || [],
+          priceLevel: placeDetails.price_level,
+          openingHours: placeDetails.opening_hours?.weekday_text || []
+        }
+      };
+
+      const newLead = await storage.createQualificationLead(leadData);
+
+      res.json({ 
+        message: 'Lead saved successfully to Qualification Leads',
+        place: {
+          name: placeDetails.name,
+          address: placeDetails.formatted_address,
+          category
+        },
+        lead: newLead
+      });
+    } catch (error: any) {
+      console.error('Error saving place to qualification leads:', error);
+      res.status(500).json({ message: error.message || 'Failed to save place to qualification leads' });
+    }
+  });
+
   // Ticket Routes
 
   // Get unread ticket count (admin only - scoped to tenant)
@@ -24219,12 +24292,16 @@ ${conversationContext}`;
         type: string;
         weight?: number;
         required?: boolean;
+        isKnockout?: boolean;
+        knockoutAnswer?: string | string[] | boolean;
       }>;
 
       let totalWeight = 0;
       let earnedScore = 0;
+      let isDisqualified = false;
+      let disqualifiedReason = '';
       const scoreBreakdownNumeric: Record<string, number> = {}; // For database storage
-      const detailedBreakdown: Record<string, { answer: any; weight: number; points: number }> = {}; // For response
+      const detailedBreakdown: Record<string, { answer: any; weight: number; points: number; knockout?: boolean; passed?: boolean }> = {}; // For response
 
       for (const field of fieldDefinitions) {
         const weight = field.weight || 1;
@@ -24232,6 +24309,46 @@ ${conversationContext}`;
         
         const answer = answers[field.key];
         let points = 0;
+        let knockoutPassed = true;
+
+        // Check knockout logic first
+        if (field.isKnockout && field.knockoutAnswer !== undefined) {
+          knockoutPassed = false; // Assume fail until proven otherwise
+          
+          switch (field.type) {
+            case 'boolean':
+              // For boolean, answer must match expected
+              knockoutPassed = answer === field.knockoutAnswer;
+              break;
+            case 'choice':
+              // For single choice, answer must match expected
+              knockoutPassed = answer === field.knockoutAnswer;
+              break;
+            case 'multichoice':
+              // For multichoice, at least one of the expected options must be selected
+              if (Array.isArray(field.knockoutAnswer) && Array.isArray(answer)) {
+                knockoutPassed = field.knockoutAnswer.some(expected => answer.includes(expected));
+              }
+              break;
+            case 'number':
+              // For number, answer must be >= expected minimum
+              const minValue = parseFloat(String(field.knockoutAnswer));
+              knockoutPassed = !isNaN(minValue) && typeof answer === 'number' && answer >= minValue;
+              break;
+            case 'text':
+            case 'date':
+              // For text/date, answer must match (or contain) expected
+              if (typeof answer === 'string' && typeof field.knockoutAnswer === 'string') {
+                knockoutPassed = answer.toLowerCase().includes(field.knockoutAnswer.toLowerCase());
+              }
+              break;
+          }
+
+          if (!knockoutPassed) {
+            isDisqualified = true;
+            disqualifiedReason = `Failed knockout question: ${field.label}`;
+          }
+        }
 
         // Score based on field type and answer
         if (answer !== undefined && answer !== null && answer !== '') {
@@ -24260,7 +24377,13 @@ ${conversationContext}`;
 
         earnedScore += points;
         scoreBreakdownNumeric[field.key] = points; // Store just the numeric score
-        detailedBreakdown[field.key] = { answer, weight, points }; // For API response
+        detailedBreakdown[field.key] = { 
+          answer, 
+          weight, 
+          points,
+          knockout: field.isKnockout,
+          passed: field.isKnockout ? knockoutPassed : undefined,
+        }; // For API response
       }
 
       // Calculate final score as percentage (0-100)
@@ -24268,14 +24391,18 @@ ${conversationContext}`;
         ? Math.round((earnedScore / totalWeight) * 100)
         : 0;
 
-      // Determine score grade
-      const scoreGrade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F';
+      // Determine score grade - if disqualified, grade is 'DQ'
+      const scoreGrade = isDisqualified ? 'DQ' : (score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F');
+
+      // Update lead status to disqualified if knockout failed
+      const statusUpdate = isDisqualified ? { status: 'disqualified' } : {};
 
       // Update lead with calculated score (scoreBreakdown is Record<string, number>)
       const updatedLead = await storage.updateQualificationLead(req.params.id, tenantId, {
         score,
         scoreGrade,
         scoreBreakdown: scoreBreakdownNumeric,
+        ...statusUpdate,
       });
 
       res.json({
@@ -24286,6 +24413,8 @@ ${conversationContext}`;
           totalWeight,
           earnedScore,
           breakdown: detailedBreakdown,
+          isDisqualified,
+          disqualifiedReason: isDisqualified ? disqualifiedReason : undefined,
         },
       });
     } catch (error: any) {

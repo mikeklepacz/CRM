@@ -745,6 +745,7 @@ export interface IStorage {
   // Qualification Lead operations
   listQualificationLeads(tenantId: string, filters?: { campaignId?: string; status?: string; callStatus?: string; limit?: number; offset?: number }): Promise<{ leads: QualificationLead[]; total: number }>;
   getQualificationLead(id: string, tenantId: string): Promise<QualificationLead | undefined>;
+  findQualificationLeadBySourceId(tenantId: string, sourceId: string): Promise<QualificationLead | undefined>;
   createQualificationLead(data: InsertQualificationLead): Promise<QualificationLead>;
   createQualificationLeads(leads: InsertQualificationLead[]): Promise<QualificationLead[]>;
   updateQualificationLead(id: string, tenantId: string, updates: Partial<InsertQualificationLead>): Promise<QualificationLead>;
@@ -5718,6 +5719,16 @@ export class DatabaseStorage implements IStorage {
     const [lead] = await db.select()
       .from(qualificationLeads)
       .where(and(eq(qualificationLeads.id, id), eq(qualificationLeads.tenantId, tenantId)));
+    return lead;
+  }
+
+  async findQualificationLeadBySourceId(tenantId: string, sourceId: string): Promise<QualificationLead | undefined> {
+    const [lead] = await db.select()
+      .from(qualificationLeads)
+      .where(and(
+        eq(qualificationLeads.tenantId, tenantId),
+        eq(qualificationLeads.sourceId, sourceId)
+      ));
     return lead;
   }
 

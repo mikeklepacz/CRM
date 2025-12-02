@@ -25,6 +25,8 @@ interface FieldDefinition {
   required?: boolean;
   weight?: number;
   order?: number;
+  isKnockout?: boolean;
+  knockoutAnswer?: string | string[] | boolean;
 }
 
 const FIELD_TYPES = [
@@ -59,8 +61,11 @@ export function QualificationCampaignManagement() {
     required: false,
     weight: 1,
     order: 0,
+    isKnockout: false,
+    knockoutAnswer: undefined,
   });
   const [newOption, setNewOption] = useState('');
+  const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
 
   const { data: campaignsData, isLoading } = useQuery<{ campaigns: QualificationCampaign[] }>({
     queryKey: ['/api/qualification/campaigns'],
@@ -113,7 +118,40 @@ export function QualificationCampaignManagement() {
   const resetForm = () => {
     setFormData({ name: '', description: '', isActive: true });
     setFieldDefinitions([]);
-    setNewField({ key: '', label: '', type: 'text', required: false, weight: 1, order: 0 });
+    resetFieldForm();
+  };
+
+  const resetFieldForm = () => {
+    setNewField({ key: '', label: '', type: 'text', required: false, weight: 1, order: 0, isKnockout: false, knockoutAnswer: undefined });
+    setEditingFieldIndex(null);
+    setNewOption('');
+  };
+
+  const startEditField = (index: number) => {
+    const field = fieldDefinitions[index];
+    setNewField({ ...field });
+    setEditingFieldIndex(index);
+  };
+
+  const saveField = () => {
+    if (!newField.key.trim() || !newField.label.trim()) {
+      toast({ title: "Field key and label are required", variant: "destructive" });
+      return;
+    }
+    const key = newField.key.trim().toLowerCase().replace(/\s+/g, '_');
+    
+    if (editingFieldIndex !== null) {
+      // Update existing field
+      setFieldDefinitions(prev => prev.map((f, i) => i === editingFieldIndex ? { ...newField, key } : f));
+    } else {
+      // Add new field
+      if (fieldDefinitions.some(f => f.key === key)) {
+        toast({ title: "Field key already exists", variant: "destructive" });
+        return;
+      }
+      setFieldDefinitions(prev => [...prev, { ...newField, key, order: prev.length }]);
+    }
+    resetFieldForm();
   };
 
   const openEdit = (campaign: QualificationCampaign) => {
@@ -157,19 +195,6 @@ export function QualificationCampaignManagement() {
     });
   };
 
-  const addField = () => {
-    if (!newField.key.trim() || !newField.label.trim()) {
-      toast({ title: "Field key and label are required", variant: "destructive" });
-      return;
-    }
-    const key = newField.key.trim().toLowerCase().replace(/\s+/g, '_');
-    if (fieldDefinitions.some(f => f.key === key)) {
-      toast({ title: "Field key already exists", variant: "destructive" });
-      return;
-    }
-    setFieldDefinitions(prev => [...prev, { ...newField, key, order: prev.length }]);
-    setNewField({ key: '', label: '', type: 'text', required: false, weight: 1, order: 0 });
-  };
 
   const removeField = (index: number) => {
     setFieldDefinitions(prev => prev.filter((_, i) => i !== index));
@@ -344,18 +369,29 @@ export function QualificationCampaignManagement() {
               {fieldDefinitions.length > 0 && (
                 <div className="space-y-2">
                   {fieldDefinitions.map((field, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
+                    <div 
+                      key={index} 
+                      className={`flex items-center gap-2 p-2 border rounded-md cursor-pointer transition-colors ${editingFieldIndex === index ? 'bg-primary/10 border-primary' : 'bg-muted/30 hover-elevate'}`}
+                      onClick={() => startEditField(index)}
+                      data-testid={`field-item-${index}`}
+                    >
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <span className="font-medium">{field.label}</span>
                         <span className="text-muted-foreground ml-2 text-sm">({field.key})</span>
                       </div>
                       <Badge variant="outline">{field.type}</Badge>
                       {field.required && <Badge variant="secondary">Required</Badge>}
+                      {field.isKnockout && <Badge variant="destructive">Knockout</Badge>}
                       {field.weight && field.weight > 1 && (
                         <Badge variant="secondary">Weight: {field.weight}</Badge>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => removeField(index)}>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={(e) => { e.stopPropagation(); removeField(index); }}
+                        data-testid={`button-remove-field-${index}`}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -363,9 +399,16 @@ export function QualificationCampaignManagement() {
                 </div>
               )}
 
-              <Card>
-                <CardHeader className="py-3">
-                  <CardTitle className="text-sm">Add New Field</CardTitle>
+              <Card className={editingFieldIndex !== null ? 'border-primary' : ''}>
+                <CardHeader className="py-3 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm">
+                    {editingFieldIndex !== null ? 'Edit Field' : 'Add New Field'}
+                  </CardTitle>
+                  {editingFieldIndex !== null && (
+                    <Button variant="ghost" size="sm" onClick={resetFieldForm} data-testid="button-cancel-edit-field">
+                      Cancel
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -395,7 +438,12 @@ export function QualificationCampaignManagement() {
                       <Label htmlFor="field-type">Type</Label>
                       <Select
                         value={newField.type}
-                        onValueChange={(value: any) => setNewField(prev => ({ ...prev, type: value, options: value === 'choice' || value === 'multichoice' ? [] : undefined }))}
+                        onValueChange={(value: any) => setNewField(prev => ({ 
+                          ...prev, 
+                          type: value, 
+                          options: value === 'choice' || value === 'multichoice' ? (prev.options || []) : undefined,
+                          knockoutAnswer: undefined,
+                        }))}
                       >
                         <SelectTrigger data-testid="select-field-type">
                           <SelectValue />
@@ -459,9 +507,110 @@ export function QualificationCampaignManagement() {
                     </div>
                   )}
 
-                  <Button type="button" onClick={addField} className="w-full" variant="outline" data-testid="button-add-field">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Field
+                  <Separator />
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="field-knockout"
+                        checked={newField.isKnockout}
+                        onCheckedChange={(checked) => setNewField(prev => ({ 
+                          ...prev, 
+                          isKnockout: checked,
+                          knockoutAnswer: checked ? (prev.type === 'boolean' ? true : '') : undefined,
+                        }))}
+                        data-testid="switch-field-knockout"
+                      />
+                      <Label htmlFor="field-knockout" className="font-medium">Knockout Question</Label>
+                    </div>
+                    {newField.isKnockout && (
+                      <p className="text-xs text-muted-foreground">
+                        If the answer doesn't match the expected value, the lead will be disqualified.
+                      </p>
+                    )}
+
+                    {newField.isKnockout && (
+                      <div className="space-y-2 p-3 border rounded-md bg-destructive/5">
+                        <Label>Expected Answer (to qualify)</Label>
+                        {newField.type === 'boolean' && (
+                          <Select
+                            value={String(newField.knockoutAnswer)}
+                            onValueChange={(value) => setNewField(prev => ({ ...prev, knockoutAnswer: value === 'true' }))}
+                          >
+                            <SelectTrigger data-testid="select-knockout-answer">
+                              <SelectValue placeholder="Select expected answer" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="true">Yes</SelectItem>
+                              <SelectItem value="false">No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {newField.type === 'choice' && newField.options && newField.options.length > 0 && (
+                          <Select
+                            value={String(newField.knockoutAnswer || '')}
+                            onValueChange={(value) => setNewField(prev => ({ ...prev, knockoutAnswer: value }))}
+                          >
+                            <SelectTrigger data-testid="select-knockout-answer">
+                              <SelectValue placeholder="Select expected answer" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {newField.options.map((opt) => (
+                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {newField.type === 'multichoice' && newField.options && newField.options.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Select options that qualify (at least one must match):</p>
+                            <div className="flex flex-wrap gap-2">
+                              {newField.options.map((opt) => {
+                                const selected = Array.isArray(newField.knockoutAnswer) && newField.knockoutAnswer.includes(opt);
+                                return (
+                                  <Badge 
+                                    key={opt} 
+                                    variant={selected ? "default" : "outline"}
+                                    className="cursor-pointer"
+                                    onClick={() => {
+                                      const current = Array.isArray(newField.knockoutAnswer) ? newField.knockoutAnswer : [];
+                                      const updated = selected 
+                                        ? current.filter(v => v !== opt)
+                                        : [...current, opt];
+                                      setNewField(prev => ({ ...prev, knockoutAnswer: updated }));
+                                    }}
+                                  >
+                                    {opt}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {(newField.type === 'text' || newField.type === 'number' || newField.type === 'date') && (
+                          <Input
+                            value={String(newField.knockoutAnswer || '')}
+                            onChange={(e) => setNewField(prev => ({ ...prev, knockoutAnswer: e.target.value }))}
+                            placeholder={newField.type === 'number' ? "Minimum value" : "Expected value or pattern"}
+                            data-testid="input-knockout-answer"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button type="button" onClick={saveField} className="w-full" variant={editingFieldIndex !== null ? "default" : "outline"} data-testid="button-save-field">
+                    {editingFieldIndex !== null ? (
+                      <>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Update Field
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Field
+                      </>
+                    )}
                   </Button>
                 </CardContent>
               </Card>

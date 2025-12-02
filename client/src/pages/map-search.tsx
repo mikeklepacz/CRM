@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,8 +27,8 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/components/theme-provider";
-import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X, Settings2, Bone, ExternalLink, Download } from "lucide-react";
-import { Link } from "wouter";
+import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X, Settings2, Bone, ExternalLink, Download, ArrowLeft } from "lucide-react";
+import { Link, useSearch } from "wouter";
 import {
   Table,
   TableBody,
@@ -197,8 +197,17 @@ const DARK_MAP_STYLES = [
 export default function MapSearch() {
   const { toast } = useToast();
   const { actualTheme } = useTheme();
+  const searchString = useSearch();
+  
+  // Parse mode from URL query params
+  const isQualificationMode = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get('mode') === 'qualification';
+  }, [searchString]);
+  
   const [businessType, setBusinessType] = useState("");
   const [category, setCategory] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [country, setCountry] = useState("United States");
@@ -501,9 +510,41 @@ export default function MapSearch() {
     },
   });
 
+  // Mutation for saving to qualification leads
+  const saveToQualificationMutation = useMutation({
+    mutationFn: async ({ placeId, category }: { placeId: string; category: string }) => {
+      return await apiRequest("POST", "/api/maps/save-to-qualification", {
+        placeId,
+        category,
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `${data.place?.name || 'Lead'} added to Qualification Leads`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to save",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Get the effective category to use (allow custom categories in qualification mode)
+  const getEffectiveCategory = () => {
+    if (isQualificationMode && customCategory.trim()) {
+      return customCategory.trim();
+    }
+    return category;
+  };
+
   // Export to CRM functionality with batched processing
   const handleExportSelected = async () => {
-    if (!category) {
+    const effectiveCategory = getEffectiveCategory();
+    if (!effectiveCategory) {
       toast({ title: "Category required", variant: "destructive" });
       return;
     }
@@ -517,6 +558,11 @@ export default function MapSearch() {
     let successCount = 0;
     let failedCount = 0;
 
+    // Choose endpoint based on mode
+    const endpoint = isQualificationMode 
+      ? "/api/maps/save-to-qualification" 
+      : "/api/maps/save-to-sheet";
+
     // Process in batches of 5
     for (let i = 0; i < selectedArray.length; i += BATCH_SIZE) {
       const batch = selectedArray.slice(i, i + BATCH_SIZE);
@@ -524,7 +570,7 @@ export default function MapSearch() {
       // Process current batch in parallel
       const results = await Promise.allSettled(
         batch.map(placeId =>
-          apiRequest("POST", "/api/maps/save-to-sheet", { placeId, category })
+          apiRequest("POST", endpoint, { placeId, category: effectiveCategory })
         )
       );
 
@@ -548,10 +594,12 @@ export default function MapSearch() {
     // Clear progress and show final toast
     setExportProgress(null);
     
+    const destination = isQualificationMode ? "Qualification Leads" : "CRM";
+    
     if (failedCount === 0) {
       toast({
         title: "Export Complete",
-        description: `Successfully exported ${successCount} stores to CRM`
+        description: `Successfully exported ${successCount} ${isQualificationMode ? 'leads' : 'stores'} to ${destination}`
       });
     } else {
       toast({
@@ -566,6 +614,11 @@ export default function MapSearch() {
     
     // Invalidate the search results query to refresh imported status
     queryClient.invalidateQueries({ queryKey: ['/api/maps/search'] });
+    
+    // If in qualification mode, also invalidate qualification leads
+    if (isQualificationMode) {
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
+    }
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -598,10 +651,14 @@ export default function MapSearch() {
       return;
     }
     
-    if (!category) {
+    // In qualification mode, allow custom category OR dropdown category
+    const effectiveCategory = getEffectiveCategory();
+    if (!effectiveCategory) {
       toast({
         title: "Category required",
-        description: "Please select a category",
+        description: isQualificationMode 
+          ? "Please select or enter a category" 
+          : "Please select a category",
         variant: "destructive",
       });
       return;
@@ -611,15 +668,23 @@ export default function MapSearch() {
   };
 
   const handleSavePlace = (placeId: string) => {
-    if (!category) {
+    const effectiveCategory = getEffectiveCategory();
+    if (!effectiveCategory) {
       toast({
         title: "Category required",
-        description: "Please select a category before saving",
+        description: isQualificationMode 
+          ? "Please select or enter a category before saving" 
+          : "Please select a category before saving",
         variant: "destructive",
       });
       return;
     }
-    saveToSheetMutation.mutate({ placeId, category });
+    
+    if (isQualificationMode) {
+      saveToQualificationMutation.mutate({ placeId, category: effectiveCategory });
+    } else {
+      saveToSheetMutation.mutate({ placeId, category: effectiveCategory });
+    }
   };
 
   // Toggle place selection
@@ -815,9 +880,24 @@ export default function MapSearch() {
         {/* Search Businesses Card */}
         <Card className="backdrop-blur-md bg-background/80 flex flex-col max-h-[65vh] overflow-hidden">
           <CardHeader className="flex-shrink-0 p-4 pb-2">
-            <CardTitle className="text-lg">Search Businesses</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-lg">
+                {isQualificationMode ? 'Find Qualification Leads' : 'Search Businesses'}
+              </CardTitle>
+              {isQualificationMode && (
+                <Link href="/qualification">
+                  <Button variant="outline" size="sm" data-testid="button-back-qualification">
+                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    Back
+                  </Button>
+                </Link>
+              )}
+            </div>
             <CardDescription className="text-sm">
-              Find local businesses using Google Maps and add them to your database
+              {isQualificationMode 
+                ? 'Search Google Maps for businesses to add as qualification leads'
+                : 'Find local businesses using Google Maps and add them to your database'
+              }
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-y-auto flex-1 p-4 pt-2">
@@ -893,21 +973,33 @@ export default function MapSearch() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger data-testid="select-category">
-                      <SelectValue placeholder="Select category..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categoriesData?.categories
-                        .filter((cat) => cat.isActive)
-                        .map((cat) => (
-                          <SelectItem key={cat.id} value={cat.name}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="category">
+                    {isQualificationMode ? 'Category/Tag' : 'Category'}
+                  </Label>
+                  {isQualificationMode ? (
+                    <Input
+                      id="custom-category"
+                      placeholder="e.g., Tyre Shops, Fleet Managers..."
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      data-testid="input-custom-category"
+                    />
+                  ) : (
+                    <Select value={category} onValueChange={setCategory}>
+                      <SelectTrigger data-testid="select-category">
+                        <SelectValue placeholder="Select category..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categoriesData?.categories
+                          .filter((cat) => cat.isActive)
+                          .map((cat) => (
+                            <SelectItem key={cat.id} value={cat.name}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
 
@@ -1350,11 +1442,11 @@ export default function MapSearch() {
                             <Button
                               size="sm"
                               onClick={() => handleSavePlace(place.place_id)}
-                              disabled={saveToSheetMutation.isPending}
+                              disabled={saveToSheetMutation.isPending || saveToQualificationMutation.isPending}
                               data-testid={`button-save-${place.place_id}`}
                             >
                               <Plus className="mr-1 h-3 w-3" />
-                              Add to Database
+                              {isQualificationMode ? 'Add Lead' : 'Add to Database'}
                             </Button>
                           </TableCell>
                         )}
@@ -1409,7 +1501,10 @@ export default function MapSearch() {
                   ) : (
                     <>
                       <Download className="mr-2 h-4 w-4" />
-                      Export to CRM ({selectedPlaces.size})
+                      {isQualificationMode 
+                        ? `Add to Leads (${selectedPlaces.size})`
+                        : `Export to CRM (${selectedPlaces.size})`
+                      }
                     </>
                   )}
                 </Button>

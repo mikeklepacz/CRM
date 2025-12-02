@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Plus, Filter, Phone, Mail, Building2, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Trash2, Download, Upload, RefreshCw, MoreVertical, Eye, Edit, PhoneCall, FileSpreadsheet, AlertCircle, CheckCircle2, Map, Globe } from "lucide-react";
+import { Search, Plus, Filter, Phone, Mail, Building2, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Trash2, Download, Upload, RefreshCw, MoreVertical, Eye, Edit, PhoneCall, FileSpreadsheet, AlertCircle, CheckCircle2, Map } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient as globalQueryClient } from "@/lib/queryClient";
@@ -126,12 +127,6 @@ export default function Qualification() {
   const [columnMapping, setColumnMapping] = useState<Record<number, string>>({});
   const [importStep, setImportStep] = useState<'upload' | 'map' | 'preview'>('upload');
   
-  const [isMapSearchOpen, setIsMapSearchOpen] = useState(false);
-  const [mapSearchQuery, setMapSearchQuery] = useState("");
-  const [mapSearchLocation, setMapSearchLocation] = useState("");
-  const [mapSearchResults, setMapSearchResults] = useState<any[]>([]);
-  const [selectedMapResults, setSelectedMapResults] = useState<Set<string>>(new Set());
-  const [isSearching, setIsSearching] = useState(false);
   
   const [newLead, setNewLead] = useState({
     company: '',
@@ -306,95 +301,6 @@ export default function Qualification() {
     }
   };
 
-  const handleMapSearch = async () => {
-    if (!mapSearchQuery.trim()) {
-      toast({ title: "Please enter a search query", variant: "destructive" });
-      return;
-    }
-    
-    setIsSearching(true);
-    setMapSearchResults([]);
-    setSelectedMapResults(new Set());
-    
-    try {
-      const response = await fetch('/api/maps/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: mapSearchQuery,
-          location: mapSearchLocation || undefined,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Search failed');
-      }
-      
-      const data = await response.json();
-      setMapSearchResults(data.results || []);
-      
-      if (data.results?.length === 0) {
-        toast({ title: "No results found", description: "Try a different search query or location" });
-      }
-    } catch (error) {
-      toast({ title: "Search failed", description: "Please try again", variant: "destructive" });
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const addMapSearchMutation = useMutation({
-    mutationFn: async (places: any[]) => {
-      const leads = places.map(place => {
-        const addressParts = (place.formatted_address || '').split(',').map((p: string) => p.trim());
-        return {
-          company: place.name,
-          address: addressParts[0] || '',
-          city: addressParts[1] || '',
-          state: addressParts[2]?.split(' ')[0] || '',
-          country: addressParts[addressParts.length - 1] || 'USA',
-          website: place.website || '',
-          source: 'map_search',
-          sourceId: place.place_id,
-        };
-      });
-      return apiRequest('POST', '/api/qualification/leads/bulk', { leads });
-    },
-    onSuccess: (data: any) => {
-      toast({ title: `${data.count} leads added from map search` });
-      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
-      setIsMapSearchOpen(false);
-      setMapSearchQuery("");
-      setMapSearchLocation("");
-      setMapSearchResults([]);
-      setSelectedMapResults(new Set());
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to add leads", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const handleAddFromMapSearch = () => {
-    const selected = mapSearchResults.filter(r => selectedMapResults.has(r.place_id));
-    if (selected.length === 0) {
-      toast({ title: "Please select at least one result", variant: "destructive" });
-      return;
-    }
-    addMapSearchMutation.mutate(selected);
-  };
-
-  const toggleMapResult = (placeId: string) => {
-    setSelectedMapResults(prev => {
-      const next = new Set(prev);
-      if (next.has(placeId)) {
-        next.delete(placeId);
-      } else {
-        next.add(placeId);
-      }
-      return next;
-    });
-  };
 
   const leads = leadsData?.leads || [];
   const stats = statsData?.stats;
@@ -512,10 +418,12 @@ export default function Qualification() {
           <Button variant="outline" size="icon" onClick={() => refetchLeads()} data-testid="button-refresh">
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button variant="outline" onClick={() => setIsMapSearchOpen(true)} data-testid="button-map-search">
-            <Map className="h-4 w-4 mr-2" />
-            Map Search
-          </Button>
+          <Link href="/map-search?mode=qualification">
+            <Button variant="outline" data-testid="button-map-search">
+              <Map className="h-4 w-4 mr-2" />
+              Map Search
+            </Button>
+          </Link>
           <Button variant="outline" onClick={() => setIsImportOpen(true)} data-testid="button-import">
             <Upload className="h-4 w-4 mr-2" />
             Import CSV
@@ -1208,134 +1116,6 @@ export default function Qualification() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isMapSearchOpen} onOpenChange={setIsMapSearchOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
-          <DialogHeader>
-            <DialogTitle>
-              <div className="flex items-center gap-2">
-                <Map className="h-5 w-5" />
-                Find Leads via Map Search
-              </div>
-            </DialogTitle>
-            <DialogDescription>
-              Search for businesses on Google Maps and add them as leads
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="map-query">Business Type</Label>
-                <Input
-                  id="map-query"
-                  value={mapSearchQuery}
-                  onChange={(e) => setMapSearchQuery(e.target.value)}
-                  placeholder="e.g., tyre shops, law firms, car dealerships"
-                  onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
-                  data-testid="input-map-query"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="map-location">Location</Label>
-                <Input
-                  id="map-location"
-                  value={mapSearchLocation}
-                  onChange={(e) => setMapSearchLocation(e.target.value)}
-                  placeholder="e.g., London, UK or New York, NY"
-                  onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
-                  data-testid="input-map-location"
-                />
-              </div>
-            </div>
-            
-            <Button onClick={handleMapSearch} disabled={isSearching} className="w-full" data-testid="button-search-map">
-              {isSearching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
-              {isSearching ? 'Searching...' : 'Search'}
-            </Button>
-
-            {mapSearchResults.length > 0 && (
-              <>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Found {mapSearchResults.length} results. Select the ones you want to add as leads.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (selectedMapResults.size === mapSearchResults.length) {
-                          setSelectedMapResults(new Set());
-                        } else {
-                          setSelectedMapResults(new Set(mapSearchResults.map(r => r.place_id)));
-                        }
-                      }}
-                      data-testid="button-toggle-all-map"
-                    >
-                      {selectedMapResults.size === mapSearchResults.length ? 'Deselect All' : 'Select All'}
-                    </Button>
-                  </div>
-                </div>
-                
-                <ScrollArea className="h-[300px]">
-                  <div className="space-y-2">
-                    {mapSearchResults.map((place) => (
-                      <div
-                        key={place.place_id}
-                        className={`p-3 border rounded-lg cursor-pointer hover-elevate transition-colors ${selectedMapResults.has(place.place_id) ? 'border-primary bg-primary/5' : ''}`}
-                        onClick={() => toggleMapResult(place.place_id)}
-                        data-testid={`map-result-${place.place_id}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <Checkbox
-                            checked={selectedMapResults.has(place.place_id)}
-                            onCheckedChange={() => toggleMapResult(place.place_id)}
-                            data-testid={`checkbox-map-${place.place_id}`}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium truncate">{place.name}</p>
-                              {place.rating && (
-                                <Badge variant="secondary" className="shrink-0">
-                                  {place.rating} ({place.user_ratings_total || 0})
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                              <MapPin className="h-3 w-3 shrink-0" />
-                              <span className="truncate">{place.formatted_address}</span>
-                            </p>
-                            {place.website && (
-                              <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                                <Globe className="h-3 w-3 shrink-0" />
-                                <span className="truncate">{place.website}</span>
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsMapSearchOpen(false)} data-testid="button-cancel-map">
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleAddFromMapSearch}
-                    disabled={selectedMapResults.size === 0 || addMapSearchMutation.isPending}
-                    data-testid="button-add-from-map"
-                  >
-                    {addMapSearchMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                    Add {selectedMapResults.size} Lead{selectedMapResults.size !== 1 ? 's' : ''}
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
