@@ -1,17 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useCallback } from "react";
-
-// Mock useAuth and useOptionalProject for demonstration purposes if not provided elsewhere
-// In a real scenario, these would be imported from your authentication and context modules.
-const useAuth = () => ({
-  user: {
-    tenantId: "test-tenant-id", // Example tenant ID
-    isSuperAdmin: false,
-    enabledModules: ["ehub", "crm"] // Example enabled modules
-  }
-});
-
-const useOptionalProject = () => null; // Example return value
+import { useAuth } from "@/hooks/useAuth";
 
 interface TenantSettings {
   companyName?: string;
@@ -63,36 +51,44 @@ export const MODULE_NAV_MAPPING: Record<string, string> = {
 };
 
 export function useModuleAccess(): ModuleAccessResult {
-  const { user } = useAuth();
-  const projectContext = useOptionalProject();
+  const { user, isLoading: authLoading } = useAuth();
+
+  // Fetch tenant settings to get allowedModules
+  const { data: settingsData, isLoading: settingsLoading, error } = useQuery<TenantSettingsResponse>({
+    queryKey: ['/api/org-admin/settings'],
+    enabled: !!user?.tenantId && !user?.isSuperAdmin,
+    retry: false,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  const allowedModules = user?.isSuperAdmin 
+    ? undefined // Super admins have no restrictions
+    : settingsData?.tenant?.settings?.allowedModules;
 
   const isModuleEnabled = (moduleId: string): boolean => {
     if (!user?.tenantId) {
-      console.log('[ModuleAccess] No tenantId found for user');
       return false;
     }
 
     // Super admins have access to everything
     if (user.isSuperAdmin) {
-      console.log('[ModuleAccess] Super admin - granting access to', moduleId);
       return true;
     }
 
-    // Get tenant's enabled modules from session
-    const tenantModules = (user as any).enabledModules || [];
-    console.log('[ModuleAccess] Checking module access:', {
-      moduleId,
-      tenantId: user.tenantId,
-      enabledModules: tenantModules,
-      hasAccess: tenantModules.includes(moduleId)
-    });
+    // If allowedModules is null/undefined, all modules are allowed (no restrictions set)
+    // If allowedModules is an explicit empty array [], no modules are allowed
+    if (allowedModules === undefined || allowedModules === null) {
+      return true;
+    }
 
-    return tenantModules.includes(moduleId);
+    return allowedModules.includes(moduleId);
   };
 
   return {
     isModuleEnabled,
-    isLoading: !user,
+    allowedModules,
+    isLoading: authLoading || (!!user?.tenantId && !user?.isSuperAdmin && settingsLoading),
+    error: error as Error | null,
   };
 }
 
