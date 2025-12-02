@@ -261,6 +261,7 @@ export class CallDispatcher {
       // Store prompt data in storeSnapshot since metadata field doesn't exist in schema
       console.log('[CallDispatcher][DEBUG] Creating call session...');
       const callSession = await storage.createCallSession({
+        tenantId: target.tenantId, // Required for multi-tenant isolation
         callSid: null, // Will be updated after Twilio call creation
         agentId: agent.agentId,
         phoneNumber,
@@ -303,7 +304,7 @@ export class CallDispatcher {
 
         // Update call session with Twilio SID
         console.log('[CallDispatcher][DEBUG] Updating call session with callSid...');
-        await storage.updateCallSession(callSession.id, {
+        await storage.updateCallSession(callSession.id, target.tenantId, {
           callSid: result.callSid,
         });
 
@@ -322,7 +323,7 @@ export class CallDispatcher {
         console.error(`[CallDispatcher][DEBUG] Error:`, twilioError);
         console.error(`[CallDispatcher][DEBUG] Cleaning up orphaned session: ${callSession.id}`);
         try {
-          await storage.deleteCallSession(callSession.id);
+          await storage.deleteCallSession(callSession.id, target.tenantId);
           console.log(`[CallDispatcher][DEBUG] Deleted orphaned call session ${callSession.id}`);
         } catch (cleanupError) {
           console.error(`[CallDispatcher][DEBUG] Failed to delete orphaned session ${callSession.id}:`, cleanupError);
