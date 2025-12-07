@@ -283,6 +283,16 @@ const inviteFormSchema = z.object({
 
 type InviteFormData = z.infer<typeof inviteFormSchema>;
 
+const createUserFormSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  role: z.enum(["org_admin", "agent"]),
+});
+
+type CreateUserFormData = z.infer<typeof createUserFormSchema>;
+
 const settingsFormSchema = z.object({
   companyName: z.string().optional(),
   timezone: z.string().optional(),
@@ -310,6 +320,7 @@ export default function OrgAdmin() {
   const currentProject = projectContext?.currentProject;
   const [activeTab, setActiveTab] = useState("team");
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false);
   const [userToRemove, setUserToRemove] = useState<TenantUser | null>(null);
   const [roleChangeUser, setRoleChangeUser] = useState<{ user: TenantUser; newRole: string } | null>(null);
   
@@ -406,6 +417,17 @@ export default function OrgAdmin() {
     },
   });
 
+  const createUserForm = useForm<CreateUserFormData>({
+    resolver: zodResolver(createUserFormSchema),
+    defaultValues: {
+      email: "",
+      firstName: "",
+      lastName: "",
+      password: "",
+      role: "agent",
+    },
+  });
+
   const settingsForm = useForm<SettingsFormData>({
     resolver: zodResolver(settingsFormSchema),
     defaultValues: {
@@ -483,6 +505,28 @@ export default function OrgAdmin() {
       toast({
         title: "Error",
         description: error.message || "Failed to send invitation",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: CreateUserFormData) => {
+      return await apiRequest("POST", "/api/org-admin/users", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/users'] });
+      setIsCreateUserDialogOpen(false);
+      createUserForm.reset();
+      toast({
+        title: "Success",
+        description: "User created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
         variant: "destructive",
       });
     },
@@ -875,6 +919,10 @@ export default function OrgAdmin() {
     createInviteMutation.mutate(data);
   };
 
+  const handleCreateUserSubmit = (data: CreateUserFormData) => {
+    createUserMutation.mutate(data);
+  };
+
   const handleSettingsSubmit = (data: SettingsFormData) => {
     updateSettingsMutation.mutate(data);
   };
@@ -1115,9 +1163,9 @@ export default function OrgAdmin() {
                   <CardTitle>Team Members</CardTitle>
                   <CardDescription>Manage users in your organization</CardDescription>
                 </div>
-                <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-invite-user">
+                <Button onClick={() => setIsCreateUserDialogOpen(true)} data-testid="button-create-user">
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Invite User
+                  Create User
                 </Button>
               </CardHeader>
               <CardContent>
@@ -1824,6 +1872,126 @@ export default function OrgAdmin() {
                 <Button type="submit" disabled={createInviteMutation.isPending} data-testid="button-submit-invite" data-primary="true">
                   {createInviteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Send Invitation
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCreateUserDialogOpen} onOpenChange={setIsCreateUserDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create User</DialogTitle>
+            <DialogDescription>Create a new user in your organization</DialogDescription>
+          </DialogHeader>
+          <Form {...createUserForm}>
+            <form onSubmit={createUserForm.handleSubmit(handleCreateUserSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={createUserForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="John" 
+                          {...field} 
+                          data-testid="input-create-firstname" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createUserForm.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Doe" 
+                          {...field} 
+                          data-testid="input-create-lastname" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={createUserForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email Address</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="email"
+                        placeholder="user@example.com" 
+                        {...field} 
+                        data-testid="input-create-email" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={createUserForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="password"
+                        placeholder="Enter password" 
+                        {...field} 
+                        data-testid="input-create-password" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={createUserForm.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-create-role">
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="agent">Agent</SelectItem>
+                        <SelectItem value="org_admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCreateUserDialogOpen(false)}
+                  data-testid="button-cancel-create-dialog"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-create" data-primary="true">
+                  {createUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create User
                 </Button>
               </DialogFooter>
             </form>

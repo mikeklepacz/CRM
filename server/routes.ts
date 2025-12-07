@@ -8262,16 +8262,18 @@ IMPORTANT:
     }
   });
 
-  // Get all users with sales metrics (admin only)
+  // Get all users with sales metrics (admin only) - filtered by tenant
   app.get('/api/users', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const tenantId = req.user.tenantId;
-      const users = await storage.getAllUsers();
+      
+      // Get users for this tenant only (not all platform users)
+      const tenantUsers = await storage.listTenantUsers(tenantId);
 
       // Get all orders from database to calculate sales metrics
       const allOrders = await storage.getAllOrders(tenantId);
 
-      const usersWithMetrics = users.map((user) => {
+      const usersWithMetrics = tenantUsers.map((user) => {
         let totalSales = 0;
         let grossIncome = 0;
 
@@ -8279,7 +8281,7 @@ IMPORTANT:
         if (user.agentName) {
           const userOrders = allOrders.filter(order => {
             if (!order.salesAgentName) return false;
-            return order.salesAgentName.toLowerCase().trim() === user.agentName.toLowerCase().trim();
+            return order.salesAgentName.toLowerCase().trim() === user.agentName!.toLowerCase().trim();
           });
 
           totalSales = userOrders.length;
@@ -8295,6 +8297,7 @@ IMPORTANT:
           lastName: user.lastName,
           agentName: user.agentName,
           role: user.role,
+          roleInTenant: user.roleInTenant,
           isActive: user.isActive ?? (user as any).is_active ?? true,
           hasVoiceAccess: user.hasVoiceAccess ?? false,
           totalSales,
@@ -8311,10 +8314,11 @@ IMPORTANT:
     }
   });
 
-  // Create new user (admin only)
-  app.post('/api/users', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  // Create new user (admin only) - adds user to current tenant
+  app.post('/api/users', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { email, firstName, lastName, agentName, password, role, selectedCategory, referredBy } = req.body;
+      const tenantId = req.user.tenantId;
 
       if (!email || !agentName || !password) {
         return res.status(400).json({ message: "Email, agent name, and password are required" });
@@ -8323,6 +8327,12 @@ IMPORTANT:
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
+        // Check if user is already a member of this tenant
+        const tenantUsers = await storage.listTenantUsers(tenantId);
+        const alreadyMember = tenantUsers.some(u => u.id === existingUser.id);
+        if (alreadyMember) {
+          return res.status(400).json({ message: "User is already a member of this organization" });
+        }
         return res.status(400).json({ message: "User with this email already exists" });
       }
 
@@ -8343,9 +8353,13 @@ IMPORTANT:
         referredBy: referredBy || null,
       });
 
+      // Add user to the current tenant with appropriate role
+      // Accept both 'admin' and 'org_admin' as indicating an admin role in the tenant
+      const roleInTenant = (role === 'admin' || role === 'org_admin') ? 'org_admin' : 'agent';
+      await storage.addUserToTenant(newUser.id, tenantId, roleInTenant, true);
+
       // Set selectedCategory preference if provided
       if (selectedCategory) {
-        const tenantId = (req.user as any).tenantId;
         await storage.setSelectedCategory(newUser.id, tenantId, selectedCategory);
       }
 
@@ -23778,6 +23792,65 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error listing tenant users:', error);
       res.status(500).json({ message: error.message || 'Failed to list users' });
+    }
+  });
+
+  // POST /api/org-admin/users - Create a new user directly in current tenant (like super admin)
+  app.post('/api/org-admin/users', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { email, firstName, lastName, agentName, password, role } = req.body;
+      const tenantId = req.user.tenantId;
+
+      if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required' });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        // Check if user is already a member of this tenant
+        const tenantUsers = await storage.listTenantUsers(tenantId);
+        const alreadyMember = tenantUsers.some(u => u.id === existingUser.id);
+        if (alreadyMember) {
+          return res.status(400).json({ message: 'User is already a member of this organization' });
+        }
+        return res.status(400).json({ message: 'User with this email already exists' });
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
+      const username = email;
+
+      // Create the new user
+      const newUser = await storage.createUser({
+        email,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        agentName: agentName || email.split('@')[0],
+        username,
+        passwordHash,
+        role: role === 'org_admin' ? 'admin' : 'agent',
+        referredBy: null,
+      });
+
+      // Add user to the current tenant with appropriate role
+      const roleInTenant = role === 'org_admin' ? 'org_admin' : 'agent';
+      await storage.addUserToTenant(newUser.id, tenantId, roleInTenant, true);
+
+      res.json({ 
+        success: true, 
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          agentName: newUser.agentName,
+          roleInTenant,
+        }
+      });
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      res.status(500).json({ message: error.message || 'Failed to create user' });
     }
   });
 
