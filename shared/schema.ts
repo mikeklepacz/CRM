@@ -290,6 +290,7 @@ export const userPreferences = pgTable("user_preferences", {
   lastCategory: varchar("last_category", { length: 100 }), // Last selected category for Map Search (defaults to 'pet')
   selectedCategory: varchar("selected_category", { length: 100 }), // Category filter for CRM dashboard - users only see stores from this category
   defaultMapCountry: varchar("default_map_country", { length: 100 }), // Default country for Map Search
+  defaultMapView: jsonb("default_map_view").$type<{ lat: number; lng: number; zoom: number }>(), // Default map center and zoom for Map Search
   autoLoadScript: boolean("auto_load_script").default(true), // Auto-load default script when clicking phone numbers
   viewAsAgent: boolean("view_as_agent").default(false), // For admins: toggle to view dashboard as an agent would see it
   splitScreenProposals: boolean("split_screen_proposals").default(false), // Split-screen mode for KB proposals (desktop only)

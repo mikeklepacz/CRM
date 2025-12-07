@@ -1023,6 +1023,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }).optional(),
     visibleModules: z.record(z.boolean()).optional(),
     defaultMapCountry: z.string().nullable().optional(),
+    defaultMapView: z.object({
+      lat: z.number(),
+      lng: z.number(),
+      zoom: z.number(),
+    }).nullable().optional(),
     cylinderPos: z.object({
       x: z.number(),
       y: z.number(),

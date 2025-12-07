@@ -264,11 +264,12 @@ export default function MapSearch() {
     queryKey: ["/api/exclusions"],
   });
 
-  // Fetch user preferences to get active exclusions and default country
+  // Fetch user preferences to get active exclusions, default country, and map view
   const { data: preferencesData } = useQuery<{
     activeExcludedKeywords?: string[];
     activeExcludedTypes?: string[];
     defaultMapCountry?: string | null;
+    defaultMapView?: { lat: number; lng: number; zoom: number } | null;
   }>({
     queryKey: ["/api/user/preferences"],
   });
