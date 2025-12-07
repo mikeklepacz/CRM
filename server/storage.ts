@@ -434,7 +434,7 @@ export interface IStorage {
 
   // Search History operations
   getAllSearchHistory(): Promise<SearchHistory[]>;
-  recordSearch(businessType: string, city: string, state: string, country: string, excludedKeywords?: string[], excludedTypes?: string[], category?: string): Promise<SearchHistory>;
+  recordSearch(tenantId: string, businessType: string, city: string, state: string, country: string, excludedKeywords?: string[], excludedTypes?: string[], category?: string): Promise<SearchHistory>;
   deleteSearchHistory(id: string): Promise<void>;
 
   // Saved Exclusions operations
@@ -2544,6 +2544,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async recordSearch(
+    tenantId: string,
     businessType: string, 
     city: string, 
     state: string, 
@@ -2552,12 +2553,13 @@ export class DatabaseStorage implements IStorage {
     excludedTypes: string[] = [],
     category?: string
   ): Promise<SearchHistory> {
-    // Check if this exact search already exists
+    // Check if this exact search already exists for this tenant
     const [existing] = await db
       .select()
       .from(searchHistory)
       .where(
         and(
+          eq(searchHistory.tenantId, tenantId),
           eq(searchHistory.businessType, businessType),
           eq(searchHistory.city, city),
           eq(searchHistory.state, state),
@@ -2584,6 +2586,7 @@ export class DatabaseStorage implements IStorage {
       const [newEntry] = await db
         .insert(searchHistory)
         .values({
+          tenantId,
           businessType,
           city,
           state,

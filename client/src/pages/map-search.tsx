@@ -107,9 +107,17 @@ const US_STATES = [
   "Wisconsin", "Wyoming"
 ];
 
-const COUNTRIES = [
+const BASE_COUNTRIES = [
   "United States", "Canada", "United Kingdom", "Australia", "Germany", "France",
-  "Spain", "Italy", "Japan", "Mexico", "Brazil", "India", "China"
+  "Spain", "Italy", "Japan", "Mexico", "Brazil", "India", "China", "Poland",
+  "Netherlands", "Belgium", "Sweden", "Norway", "Denmark", "Finland", "Ireland",
+  "Austria", "Switzerland", "Portugal", "Greece", "Czech Republic", "Hungary",
+  "Romania", "Bulgaria", "Croatia", "Slovakia", "Slovenia", "Lithuania", "Latvia",
+  "Estonia", "Luxembourg", "Malta", "Cyprus", "Iceland", "New Zealand", "Singapore",
+  "South Korea", "Taiwan", "Hong Kong", "Thailand", "Vietnam", "Philippines",
+  "Indonesia", "Malaysia", "South Africa", "Egypt", "Nigeria", "Kenya", "Morocco",
+  "Argentina", "Chile", "Colombia", "Peru", "Venezuela", "Ecuador", "Uruguay",
+  "Saudi Arabia", "United Arab Emirates", "Israel", "Turkey", "Russia", "Ukraine"
 ];
 
 // Dark mode styles for Google Maps
@@ -1012,11 +1020,16 @@ export default function MapSearch() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {COUNTRIES.map((countryName) => (
-                        <SelectItem key={countryName} value={countryName}>
-                          {countryName}
-                        </SelectItem>
-                      ))}
+                      {(() => {
+                        const countries = country && !BASE_COUNTRIES.includes(country)
+                          ? [country, ...BASE_COUNTRIES]
+                          : BASE_COUNTRIES;
+                        return countries.map((countryName) => (
+                          <SelectItem key={countryName} value={countryName}>
+                            {countryName}
+                          </SelectItem>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1032,7 +1045,7 @@ export default function MapSearch() {
                         className="w-full justify-between"
                         data-testid="button-state-select"
                       >
-                        {state || "Select state..."}
+                        <span className="truncate">{state || "Select state..."}</span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>

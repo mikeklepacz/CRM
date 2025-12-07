@@ -18836,6 +18836,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {
       const { query, location, excludedKeywords, excludedTypes, category, pageToken } = req.body;
+      const tenantId = (req.user as any).tenantId;
 
       if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
@@ -18875,7 +18876,11 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Record this search in history only for new searches (not pagination)
       if (!pageToken) {
-        await storage.recordSearch(query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
+        if (tenantId) {
+          await storage.recordSearch(tenantId, query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
+        } else {
+          console.warn('[Map Search] Skipping search history recording - no tenant ID found in session');
+        }
       }
 
       // Get search results from Google Maps with API-level type filtering and pagination
