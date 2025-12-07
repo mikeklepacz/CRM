@@ -1102,13 +1102,11 @@ export default function MapSearch() {
                         <SelectValue placeholder="Select category..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {categoriesData?.categories
-                          .filter((cat) => cat.isActive)
-                          .map((cat) => (
-                            <SelectItem key={cat.id} value={cat.name}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
+                        {categoriesData?.categories?.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   )}
