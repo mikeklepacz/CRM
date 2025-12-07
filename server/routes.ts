@@ -19073,6 +19073,82 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Save place to Qualification Leads database table
+  app.post('/api/maps/save-to-qualification', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { placeId, category } = req.body;
+
+      if (!placeId) {
+        return res.status(400).json({ message: 'Place ID is required' });
+      }
+
+      if (!tenantId) {
+        return res.status(400).json({ message: 'Tenant context required' });
+      }
+
+      // Get place details from Google Maps
+      const placeDetails = await googleMaps.getPlaceDetails(placeId);
+
+      if (!placeDetails) {
+        return res.status(404).json({ message: 'Place not found' });
+      }
+
+      // Parse address into components
+      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
+
+      // Extract country from address_components if available
+      let country = 'United States';
+      let countryCode = 'US';
+      if (placeDetails.address_components) {
+        const countryComponent = placeDetails.address_components.find(
+          (c: any) => c.types?.includes('country')
+        );
+        if (countryComponent) {
+          country = countryComponent.long_name || country;
+          countryCode = countryComponent.short_name || countryCode;
+        }
+      }
+
+      // Create qualification lead from place data
+      const leadData = {
+        tenantId,
+        company: placeDetails.name || 'Unknown Business',
+        website: placeDetails.website || null,
+        category: category || null,
+        pocPhone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || null,
+        address: street || null,
+        city: city || null,
+        state: state || null,
+        postalCode: zip || null,
+        country,
+        countryCode,
+        source: 'map_search',
+        callStatus: 'pending',
+        tags: placeDetails.types || [],
+      };
+
+      const createdLead = await storage.createQualificationLead(leadData);
+
+      // Record this place_id to prevent duplicates in future searches
+      await storage.recordImportedPlace(placeId);
+
+      res.json({ 
+        message: 'Lead saved successfully to Qualification Leads',
+        lead: {
+          id: createdLead.id,
+          company: createdLead.company,
+          city: createdLead.city,
+          state: createdLead.state,
+          category: createdLead.category
+        }
+      });
+    } catch (error: any) {
+      console.error('Error saving place to qualification leads:', error);
+      res.status(500).json({ message: error.message || 'Failed to save lead' });
+    }
+  });
+
   // Ticket Routes
 
   // Get unread ticket count (admin only - scoped to tenant)

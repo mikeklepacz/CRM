@@ -264,8 +264,12 @@ export default function MapSearch() {
     queryKey: ["/api/exclusions"],
   });
 
-  // Fetch user preferences to get active exclusions
-  const { data: preferencesData } = useQuery<{ preferences: any }>({
+  // Fetch user preferences to get active exclusions and default country
+  const { data: preferencesData } = useQuery<{
+    activeExcludedKeywords?: string[];
+    activeExcludedTypes?: string[];
+    defaultMapCountry?: string | null;
+  }>({
     queryKey: ["/api/user/preferences"],
   });
 
@@ -291,17 +295,17 @@ export default function MapSearch() {
 
   // Initialize active exclusions from user preferences
   useEffect(() => {
-    if (preferencesData?.preferences) {
-      setActiveKeywords(preferencesData.preferences.activeExcludedKeywords || []);
-      setActiveTypes(preferencesData.preferences.activeExcludedTypes || []);
+    if (preferencesData) {
+      setActiveKeywords(preferencesData.activeExcludedKeywords || []);
+      setActiveTypes(preferencesData.activeExcludedTypes || []);
     }
   }, [preferencesData]);
 
   // Initialize default country from user preferences
   useEffect(() => {
-    if (!defaultCountryLoaded && preferencesData?.preferences) {
-      if (preferencesData.preferences.defaultMapCountry) {
-        setCountry(preferencesData.preferences.defaultMapCountry);
+    if (!defaultCountryLoaded && preferencesData !== undefined) {
+      if (preferencesData?.defaultMapCountry) {
+        setCountry(preferencesData.defaultMapCountry);
       }
       setDefaultCountryLoaded(true);
     }
@@ -1046,7 +1050,7 @@ export default function MapSearch() {
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="save-default-country"
-                      checked={preferencesData?.preferences?.defaultMapCountry === country}
+                      checked={preferencesData?.defaultMapCountry === country}
                       onCheckedChange={async (checked) => {
                         try {
                           await apiRequest("PUT", "/api/user/preferences", {
