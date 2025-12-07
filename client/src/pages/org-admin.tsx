@@ -9,7 +9,6 @@ import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useOptionalProject } from "@/contexts/project-context";
-import { AVAILABLE_MODULES } from "@/lib/modules";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star, MapPin } from "lucide-react";
 import { TIMEZONE_DATA } from "@shared/timezoneUtils";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
@@ -297,7 +295,6 @@ type CreateUserFormData = z.infer<typeof createUserFormSchema>;
 const settingsFormSchema = z.object({
   companyName: z.string().optional(),
   timezone: z.string().optional(),
-  enabledModules: z.array(z.string()).optional(),
 });
 
 type SettingsFormData = z.infer<typeof settingsFormSchema>;
@@ -435,7 +432,6 @@ export default function OrgAdmin() {
     defaultValues: {
       companyName: "",
       timezone: "",
-      enabledModules: [],
     },
   });
 
@@ -477,18 +473,9 @@ export default function OrgAdmin() {
       settingsForm.reset({
         companyName: settingsData.tenant.settings.companyName || "",
         timezone: settingsData.tenant.settings.timezone || "",
-        enabledModules: settingsData.tenant.settings.enabledModules || [],
       });
     }
   }, [settingsData, settingsForm]);
-
-  const availableModulesForTenant = useMemo(() => {
-    const allowedModules = settingsData?.tenant?.settings?.allowedModules;
-    if (!allowedModules || allowedModules.length === 0) {
-      return AVAILABLE_MODULES;
-    }
-    return AVAILABLE_MODULES.filter(module => allowedModules.includes(module.id));
-  }, [settingsData?.tenant?.settings?.allowedModules]);
 
   const createInviteMutation = useMutation({
     mutationFn: async (data: InviteFormData) => {
@@ -1402,51 +1389,6 @@ export default function OrgAdmin() {
                             >
                               <MapPin className="h-4 w-4" />
                             </Button>
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={settingsForm.control}
-                      name="enabledModules"
-                      render={() => (
-                        <FormItem>
-                          <FormLabel>Enabled Modules</FormLabel>
-                          <p className="text-xs text-muted-foreground" data-testid="text-module-access-note">
-                            Your organization has access to {availableModulesForTenant.length} module{availableModulesForTenant.length === 1 ? '' : 's'}
-                            {availableModulesForTenant.length < AVAILABLE_MODULES.length && " (restricted by your plan)"}
-                          </p>
-                          <div className="grid grid-cols-2 gap-4 pt-2" data-testid="enabled-modules-container">
-                            {availableModulesForTenant.map((module) => (
-                              <FormField
-                                key={module.id}
-                                control={settingsForm.control}
-                                name="enabledModules"
-                                render={({ field }) => (
-                                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value?.includes(module.id)}
-                                        onCheckedChange={(checked) => {
-                                          const current = field.value || [];
-                                          if (checked) {
-                                            field.onChange([...current, module.id]);
-                                          } else {
-                                            field.onChange(current.filter((v) => v !== module.id));
-                                          }
-                                        }}
-                                        data-testid={`checkbox-module-${module.id}`}
-                                      />
-                                    </FormControl>
-                                    <FormLabel className="font-normal cursor-pointer">
-                                      {module.label}
-                                    </FormLabel>
-                                  </FormItem>
-                                )}
-                              />
-                            ))}
                           </div>
                           <FormMessage />
                         </FormItem>
