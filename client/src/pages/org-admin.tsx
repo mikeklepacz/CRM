@@ -9,6 +9,7 @@ import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useOptionalProject } from "@/contexts/project-context";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1105,8 +1106,8 @@ export default function OrgAdmin() {
 
   const pendingInvites = invitesData?.invites?.filter(i => i.status === "pending") || [];
 
-  const allowedModules = settingsData?.tenant?.settings?.allowedModules;
-  const isPipelinesAllowed = !allowedModules || allowedModules.includes('pipelines');
+  const { isModuleEnabled } = useModuleAccess();
+  const isPipelinesAllowed = isModuleEnabled('pipelines');
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
