@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/components/theme-provider";
+import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X, Settings2, Bone, ExternalLink, Download, ArrowLeft } from "lucide-react";
 import { Link, useSearch } from "wouter";
 import {
@@ -206,12 +207,27 @@ export default function MapSearch() {
   const { toast } = useToast();
   const { actualTheme } = useTheme();
   const searchString = useSearch();
+  const { isModuleEnabled } = useModuleAccess();
   
   // Parse mode from URL query params
-  const isQualificationMode = useMemo(() => {
+  const isQualificationModeFromUrl = useMemo(() => {
     const params = new URLSearchParams(searchString);
     return params.get('mode') === 'qualification';
   }, [searchString]);
+  
+  // Determine if we should use SQL (qualification) mode:
+  // - If URL says qualification mode, use SQL
+  // - If qualification module is active AND clients module is NOT active, use SQL
+  // - Otherwise use Google Sheets
+  const useSqlMode = useMemo(() => {
+    if (isQualificationModeFromUrl) return true;
+    const qualificationEnabled = isModuleEnabled('qualification');
+    const clientsEnabled = isModuleEnabled('clients');
+    return qualificationEnabled && !clientsEnabled;
+  }, [isQualificationModeFromUrl, isModuleEnabled]);
+  
+  // Keep isQualificationMode for backward compatibility in UI rendering
+  const isQualificationMode = useSqlMode;
   
   const [businessType, setBusinessType] = useState("");
   const [category, setCategory] = useState("");
