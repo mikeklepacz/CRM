@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessAdminFeatures } from "@/lib/authUtils";
+import { useModuleAccess, isNavItemEnabled } from "@/hooks/useModuleAccess";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,6 +85,7 @@ export default function Settings() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { allowedModules, isLoading: moduleAccessLoading } = useModuleAccess();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [loadingLogoPreview, setLoadingLogoPreview] = useState<string | null>(null);
 
@@ -155,8 +157,32 @@ export default function Settings() {
     ehub: true,
     analytics: true,
     pipelines: true,
+    qualification: true,
   };
   const [visibleModules, setVisibleModules] = useState<Record<string, boolean>>(defaultModules);
+
+  // Map visibility module keys to nav keys used in MODULE_NAV_MAPPING
+  const visibilityToNavKey: Record<string, string> = {
+    clients: "clients",
+    followUp: "follow-up-center",
+    mapSearch: "map-search",
+    sales: "sales",
+    assistant: "assistant",
+    docs: "documents",
+    labelDesigner: "product-mockup",
+    analytics: "analytics",
+    pipelines: "pipelines",
+    callManager: "call-manager",
+    ehub: "ehub",
+    qualification: "qualification",
+  };
+
+  // Helper to check if a module should be shown in visibility settings (based on tenant access)
+  const shouldShowModuleOption = (moduleKey: string): boolean => {
+    const navKey = visibilityToNavKey[moduleKey];
+    if (!navKey) return true; // Admin, Dashboard don't need tenant check
+    return isNavItemEnabled(navKey, allowedModules, moduleAccessLoading);
+  };
 
   // Update state when preferences load
   useEffect(() => {
@@ -1050,70 +1076,84 @@ export default function Settings() {
                   />
                   <Label htmlFor="module-dashboard" className="font-normal cursor-pointer">Dashboard</Label>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="module-clients"
-                    checked={visibleModules.clients}
-                    onCheckedChange={(checked) => handleModuleToggle('clients', !!checked)}
-                    data-testid="checkbox-module-clients"
-                  />
-                  <Label htmlFor="module-clients" className="font-normal cursor-pointer">Clients</Label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="module-followUp"
-                    checked={visibleModules.followUp}
-                    onCheckedChange={(checked) => handleModuleToggle('followUp', !!checked)}
-                    data-testid="checkbox-module-followUp"
-                  />
-                  <Label htmlFor="module-followUp" className="font-normal cursor-pointer">Follow-Up</Label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="module-mapSearch"
-                    checked={visibleModules.mapSearch}
-                    onCheckedChange={(checked) => handleModuleToggle('mapSearch', !!checked)}
-                    data-testid="checkbox-module-mapSearch"
-                  />
-                  <Label htmlFor="module-mapSearch" className="font-normal cursor-pointer">Map Search</Label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="module-sales"
-                    checked={visibleModules.sales}
-                    onCheckedChange={(checked) => handleModuleToggle('sales', !!checked)}
-                    data-testid="checkbox-module-sales"
-                  />
-                  <Label htmlFor="module-sales" className="font-normal cursor-pointer">Sales</Label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="module-assistant"
-                    checked={visibleModules.assistant}
-                    onCheckedChange={(checked) => handleModuleToggle('assistant', !!checked)}
-                    data-testid="checkbox-module-assistant"
-                  />
-                  <Label htmlFor="module-assistant" className="font-normal cursor-pointer">Assistant</Label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="module-docs"
-                    checked={visibleModules.docs}
-                    onCheckedChange={(checked) => handleModuleToggle('docs', !!checked)}
-                    data-testid="checkbox-module-docs"
-                  />
-                  <Label htmlFor="module-docs" className="font-normal cursor-pointer">Docs</Label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="module-labelDesigner"
-                    checked={visibleModules.labelDesigner}
-                    onCheckedChange={(checked) => handleModuleToggle('labelDesigner', !!checked)}
-                    data-testid="checkbox-module-labelDesigner"
-                  />
-                  <Label htmlFor="module-labelDesigner" className="font-normal cursor-pointer">Label Designer</Label>
-                </div>
-                {canAccessAdminFeatures(user) && (
+                {shouldShowModuleOption('clients') && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-clients"
+                      checked={visibleModules.clients}
+                      onCheckedChange={(checked) => handleModuleToggle('clients', !!checked)}
+                      data-testid="checkbox-module-clients"
+                    />
+                    <Label htmlFor="module-clients" className="font-normal cursor-pointer">Clients</Label>
+                  </div>
+                )}
+                {shouldShowModuleOption('followUp') && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-followUp"
+                      checked={visibleModules.followUp}
+                      onCheckedChange={(checked) => handleModuleToggle('followUp', !!checked)}
+                      data-testid="checkbox-module-followUp"
+                    />
+                    <Label htmlFor="module-followUp" className="font-normal cursor-pointer">Follow-Up</Label>
+                  </div>
+                )}
+                {shouldShowModuleOption('mapSearch') && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-mapSearch"
+                      checked={visibleModules.mapSearch}
+                      onCheckedChange={(checked) => handleModuleToggle('mapSearch', !!checked)}
+                      data-testid="checkbox-module-mapSearch"
+                    />
+                    <Label htmlFor="module-mapSearch" className="font-normal cursor-pointer">Map Search</Label>
+                  </div>
+                )}
+                {shouldShowModuleOption('sales') && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-sales"
+                      checked={visibleModules.sales}
+                      onCheckedChange={(checked) => handleModuleToggle('sales', !!checked)}
+                      data-testid="checkbox-module-sales"
+                    />
+                    <Label htmlFor="module-sales" className="font-normal cursor-pointer">Sales</Label>
+                  </div>
+                )}
+                {shouldShowModuleOption('assistant') && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-assistant"
+                      checked={visibleModules.assistant}
+                      onCheckedChange={(checked) => handleModuleToggle('assistant', !!checked)}
+                      data-testid="checkbox-module-assistant"
+                    />
+                    <Label htmlFor="module-assistant" className="font-normal cursor-pointer">Assistant</Label>
+                  </div>
+                )}
+                {shouldShowModuleOption('docs') && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-docs"
+                      checked={visibleModules.docs}
+                      onCheckedChange={(checked) => handleModuleToggle('docs', !!checked)}
+                      data-testid="checkbox-module-docs"
+                    />
+                    <Label htmlFor="module-docs" className="font-normal cursor-pointer">Docs</Label>
+                  </div>
+                )}
+                {shouldShowModuleOption('labelDesigner') && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-labelDesigner"
+                      checked={visibleModules.labelDesigner}
+                      onCheckedChange={(checked) => handleModuleToggle('labelDesigner', !!checked)}
+                      data-testid="checkbox-module-labelDesigner"
+                    />
+                    <Label htmlFor="module-labelDesigner" className="font-normal cursor-pointer">Label Designer</Label>
+                  </div>
+                )}
+                {canAccessAdminFeatures(user) && shouldShowModuleOption('analytics') && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-analytics"
@@ -1124,7 +1164,7 @@ export default function Settings() {
                     <Label htmlFor="module-analytics" className="font-normal cursor-pointer">Analytics</Label>
                   </div>
                 )}
-                {canAccessAdminFeatures(user) && (
+                {canAccessAdminFeatures(user) && shouldShowModuleOption('pipelines') && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-pipelines"
@@ -1135,7 +1175,7 @@ export default function Settings() {
                     <Label htmlFor="module-pipelines" className="font-normal cursor-pointer">Pipelines</Label>
                   </div>
                 )}
-                {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && (
+                {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && shouldShowModuleOption('callManager') && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-callManager"
@@ -1146,7 +1186,7 @@ export default function Settings() {
                     <Label htmlFor="module-callManager" className="font-normal cursor-pointer">Call Manager</Label>
                   </div>
                 )}
-                {canAccessAdminFeatures(user) && (
+                {canAccessAdminFeatures(user) && shouldShowModuleOption('ehub') && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-ehub"
@@ -1155,6 +1195,17 @@ export default function Settings() {
                       data-testid="checkbox-module-ehub"
                     />
                     <Label htmlFor="module-ehub" className="font-normal cursor-pointer">E-Hub</Label>
+                  </div>
+                )}
+                {shouldShowModuleOption('qualification') && (
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="module-qualification"
+                      checked={visibleModules.qualification}
+                      onCheckedChange={(checked) => handleModuleToggle('qualification', !!checked)}
+                      data-testid="checkbox-module-qualification"
+                    />
+                    <Label htmlFor="module-qualification" className="font-normal cursor-pointer">Qualification</Label>
                   </div>
                 )}
               </div>
