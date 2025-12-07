@@ -2411,6 +2411,7 @@ export const qualificationLeads = pgTable("qualification_leads", {
   // Company information
   company: varchar("company", { length: 255 }).notNull(),
   website: varchar("website", { length: 500 }),
+  category: varchar("category", { length: 100 }), // Business type/category from map search
   
   // Point of Contact
   pocName: varchar("poc_name", { length: 255 }),
