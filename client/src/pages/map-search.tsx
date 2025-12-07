@@ -219,6 +219,7 @@ export default function MapSearch() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [country, setCountry] = useState("United States");
+  const [defaultCountryLoaded, setDefaultCountryLoaded] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [businessTypeOpen, setBusinessTypeOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
@@ -295,6 +296,16 @@ export default function MapSearch() {
       setActiveTypes(preferencesData.preferences.activeExcludedTypes || []);
     }
   }, [preferencesData]);
+
+  // Initialize default country from user preferences
+  useEffect(() => {
+    if (!defaultCountryLoaded && preferencesData?.preferences) {
+      if (preferencesData.preferences.defaultMapCountry) {
+        setCountry(preferencesData.preferences.defaultMapCountry);
+      }
+      setDefaultCountryLoaded(true);
+    }
+  }, [preferencesData, defaultCountryLoaded]);
 
   // Save active exclusions to user preferences whenever they change
   useEffect(() => {
@@ -1032,6 +1043,40 @@ export default function MapSearch() {
                       })()}
                     </SelectContent>
                   </Select>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="save-default-country"
+                      checked={preferencesData?.preferences?.defaultMapCountry === country}
+                      onCheckedChange={async (checked) => {
+                        try {
+                          await apiRequest("PUT", "/api/user/preferences", {
+                            defaultMapCountry: checked ? country : null,
+                          });
+                          queryClient.invalidateQueries({ queryKey: ["/api/user/preferences"] });
+                          toast({
+                            title: checked ? "Default saved" : "Default cleared",
+                            description: checked 
+                              ? `${country} is now your default country`
+                              : "Default country has been cleared",
+                          });
+                        } catch (error) {
+                          console.error("Failed to save default country:", error);
+                          toast({
+                            title: "Error",
+                            description: "Failed to save preference",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      data-testid="checkbox-save-default-country"
+                    />
+                    <Label
+                      htmlFor="save-default-country"
+                      className="text-xs text-muted-foreground cursor-pointer"
+                    >
+                      Save as default
+                    </Label>
+                  </div>
                 </div>
 
                 <div className="space-y-2">

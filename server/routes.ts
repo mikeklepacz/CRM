@@ -1022,6 +1022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       reorderDays: z.tuple([z.number(), z.number()])
     }).optional(),
     visibleModules: z.record(z.boolean()).optional(),
+    defaultMapCountry: z.string().nullable().optional(),
     cylinderPos: z.object({
       x: z.number(),
       y: z.number(),
