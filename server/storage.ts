@@ -432,7 +432,7 @@ export interface IStorage {
 
   // Imported Places operations
   checkImportedPlaces(placeIds: string[]): Promise<Set<string>>;
-  recordImportedPlace(placeId: string): Promise<void>;
+  recordImportedPlace(placeId: string, tenantId: string): Promise<void>;
 
   // Search History operations
   getAllSearchHistory(): Promise<SearchHistory[]>;
@@ -2551,10 +2551,10 @@ export class DatabaseStorage implements IStorage {
     return new Set(results.map(r => r.placeId));
   }
 
-  async recordImportedPlace(placeId: string): Promise<void> {
+  async recordImportedPlace(placeId: string, tenantId: string): Promise<void> {
     await db
       .insert(importedPlaces)
-      .values({ placeId })
+      .values({ placeId, tenantId })
       .onConflictDoNothing(); // Ignore if already exists
   }
 

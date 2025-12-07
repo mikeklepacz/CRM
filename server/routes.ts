@@ -19068,7 +19068,7 @@ Use this store information to provide context-aware responses. When helping draf
       await googleSheets.appendSheetData(storeSheet.spreadsheetId, range, [row]);
 
       // Record this place_id to prevent duplicates in future searches
-      await storage.recordImportedPlace(placeId);
+      await storage.recordImportedPlace(placeId, req.user.tenantId);
 
       res.json({ 
         message: 'Place saved successfully to Store Database',
@@ -19147,7 +19147,7 @@ Use this store information to provide context-aware responses. When helping draf
       const createdLead = await storage.createQualificationLead(leadData);
 
       // Record this place_id to prevent duplicates in future searches
-      await storage.recordImportedPlace(placeId);
+      await storage.recordImportedPlace(placeId, tenantId);
 
       res.json({ 
         message: 'Lead saved successfully to Qualification Leads',
