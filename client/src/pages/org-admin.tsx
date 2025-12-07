@@ -1105,6 +1105,9 @@ export default function OrgAdmin() {
 
   const pendingInvites = invitesData?.invites?.filter(i => i.status === "pending") || [];
 
+  const allowedModules = settingsData?.tenant?.settings?.allowedModules;
+  const isPipelinesAllowed = !allowedModules || allowedModules.includes('pipelines');
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       <div className="mb-6">
@@ -1134,10 +1137,12 @@ export default function OrgAdmin() {
             <BarChart3 className="mr-2 h-4 w-4" />
             Stats
           </TabsTrigger>
-          <TabsTrigger value="pipelines" data-testid="tab-pipelines">
-            <Workflow className="mr-2 h-4 w-4" />
-            Pipelines
-          </TabsTrigger>
+          {isPipelinesAllowed && (
+            <TabsTrigger value="pipelines" data-testid="tab-pipelines">
+              <Workflow className="mr-2 h-4 w-4" />
+              Pipelines
+            </TabsTrigger>
+          )}
           <TabsTrigger value="projects" data-testid="tab-projects">
             <FolderKanban className="mr-2 h-4 w-4" />
             Projects
@@ -1462,8 +1467,9 @@ export default function OrgAdmin() {
           </div>
         </TabsContent>
 
-        <TabsContent value="pipelines">
-          {selectedPipelineId ? (
+        {isPipelinesAllowed && (
+          <TabsContent value="pipelines">
+            {selectedPipelineId ? (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
                 <div className="flex items-center gap-4">
@@ -1641,7 +1647,8 @@ export default function OrgAdmin() {
               </CardContent>
             </Card>
           )}
-        </TabsContent>
+          </TabsContent>
+        )}
 
         <TabsContent value="projects">
           <Card>
