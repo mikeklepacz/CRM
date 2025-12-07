@@ -18989,6 +18989,12 @@ Use this store information to provide context-aware responses. When helping draf
       // Parse address into street, city, state, zip components for separate CRM columns
       const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
 
+      // Auto-create category if it doesn't exist (frictionless category creation)
+      const tenantId = (req.user as any).tenantId;
+      if (category && category.trim() && tenantId) {
+        await storage.getOrCreateCategoryByName(tenantId, category.trim());
+      }
+
       // Find Store Database sheet for this category
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
@@ -19113,6 +19119,11 @@ Use this store information to provide context-aware responses. When helping draf
           country = countryComponent.long_name || country;
           countryCode = countryComponent.short_name || countryCode;
         }
+      }
+
+      // Auto-create category if it doesn't exist (frictionless category creation)
+      if (category && category.trim()) {
+        await storage.getOrCreateCategoryByName(tenantId, category.trim());
       }
 
       // Create qualification lead from place data
