@@ -12,10 +12,49 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Edit, Loader2, GripVertical, Settings } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
+import { Plus, Trash2, Edit, Loader2, GripVertical, Settings, Copy, Check, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import type { QualificationCampaign } from "@shared/schema";
+
+// Predefined data collection placeholders matching ElevenLabs configuration
+const DATA_COLLECTION_PLACEHOLDERS = [
+  // Interest & Outcome
+  { key: "interest_level", label: "Interest Level", category: "Interest & Outcome" },
+  { key: "objections", label: "Objections", category: "Interest & Outcome" },
+  { key: "follow_up_needed", label: "Follow-up Needed", category: "Interest & Outcome" },
+  { key: "follow_up_date", label: "Follow-up Date", category: "Interest & Outcome" },
+  // Point of Contact
+  { key: "poc_name", label: "Contact Name", category: "Point of Contact" },
+  { key: "poc_email", label: "Contact Email", category: "Point of Contact" },
+  { key: "poc_phone", label: "Contact Phone", category: "Point of Contact" },
+  { key: "poc_title", label: "Contact Title", category: "Point of Contact" },
+  // Shipping Information
+  { key: "shipping_name", label: "Shipping Name", category: "Shipping" },
+  { key: "shipping_address", label: "Shipping Address", category: "Shipping" },
+  { key: "shipping_city", label: "Shipping City", category: "Shipping" },
+  { key: "shipping_state", label: "Shipping State", category: "Shipping" },
+  // Business Intelligence
+  { key: "current_supplier", label: "Current Supplier", category: "Business Intelligence" },
+  { key: "monthly_volume", label: "Monthly Volume", category: "Business Intelligence" },
+  { key: "decision_maker", label: "Decision Maker", category: "Business Intelligence" },
+  { key: "business_type", label: "Business Type", category: "Business Intelligence" },
+  { key: "pain_points", label: "Pain Points", category: "Business Intelligence" },
+  { key: "next_action", label: "Next Action", category: "Business Intelligence" },
+  { key: "notes", label: "Notes", category: "Business Intelligence" },
+];
+
+// Group placeholders by category
+const PLACEHOLDER_CATEGORIES = DATA_COLLECTION_PLACEHOLDERS.reduce((acc, placeholder) => {
+  if (!acc[placeholder.category]) {
+    acc[placeholder.category] = [];
+  }
+  acc[placeholder.category].push(placeholder);
+  return acc;
+}, {} as Record<string, typeof DATA_COLLECTION_PLACEHOLDERS>);
 
 interface FieldDefinition {
   key: string;
@@ -66,6 +105,56 @@ export function QualificationCampaignManagement() {
   });
   const [newOption, setNewOption] = useState('');
   const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
+  const [fieldKeyOpen, setFieldKeyOpen] = useState(false);
+  const [isCustomKey, setIsCustomKey] = useState(false);
+  const [customKeyInput, setCustomKeyInput] = useState('');
+
+  // Generate knowledge base prompt for a campaign
+  const generateKnowledgeBasePrompt = (fields: FieldDefinition[]): string => {
+    if (fields.length === 0) return '';
+    
+    let prompt = `During the call, collect answers to the following qualification questions. Store each answer in the corresponding placeholder field:\n\n`;
+    
+    fields.forEach((field, index) => {
+      prompt += `${index + 1}. Question: "${field.label}"\n`;
+      prompt += `   → Store answer in: {{${field.key}}}\n`;
+      prompt += `   → Type: ${field.type}`;
+      if (field.required) prompt += ` (Required)`;
+      if (field.isKnockout) prompt += ` [KNOCKOUT - must match expected answer]`;
+      prompt += `\n`;
+      
+      if (field.options && field.options.length > 0) {
+        prompt += `   → Valid options: ${field.options.join(', ')}\n`;
+      }
+      
+      if (field.isKnockout && field.knockoutAnswer !== undefined) {
+        const answer = Array.isArray(field.knockoutAnswer) 
+          ? field.knockoutAnswer.join(' or ') 
+          : String(field.knockoutAnswer);
+        prompt += `   → Expected answer to qualify: ${answer}\n`;
+      }
+      
+      prompt += `\n`;
+    });
+    
+    return prompt.trim();
+  };
+
+  const copyKnowledgeBasePrompt = (campaign: QualificationCampaign) => {
+    const fields = (campaign.fieldDefinitions as FieldDefinition[]) || [];
+    const prompt = generateKnowledgeBasePrompt(fields);
+    
+    if (!prompt) {
+      toast({ title: "No fields to copy", description: "Add qualification fields first", variant: "destructive" });
+      return;
+    }
+    
+    navigator.clipboard.writeText(prompt);
+    toast({ 
+      title: "Copied to clipboard", 
+      description: "Paste this into your voice agent's knowledge base" 
+    });
+  };
 
   const { data: campaignsData, isLoading } = useQuery<{ campaigns: QualificationCampaign[] }>({
     queryKey: ['/api/qualification/campaigns'],
@@ -125,12 +214,22 @@ export function QualificationCampaignManagement() {
     setNewField({ key: '', label: '', type: 'text', required: false, weight: 1, order: 0, isKnockout: false, knockoutAnswer: undefined });
     setEditingFieldIndex(null);
     setNewOption('');
+    setIsCustomKey(false);
+    setCustomKeyInput('');
+    setFieldKeyOpen(false);
   };
 
   const startEditField = (index: number) => {
     const field = fieldDefinitions[index];
     setNewField({ ...field });
     setEditingFieldIndex(index);
+    
+    // Check if this is a custom key (not in predefined list)
+    const isPredefined = DATA_COLLECTION_PLACEHOLDERS.some(p => p.key === field.key);
+    setIsCustomKey(!isPredefined);
+    if (!isPredefined) {
+      setCustomKeyInput(field.key);
+    }
   };
 
   const saveField = () => {
@@ -270,6 +369,15 @@ export function QualificationCampaignManagement() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => copyKnowledgeBasePrompt(campaign)}
+                    data-testid={`button-copy-campaign-${campaign.id}`}
+                  >
+                    <Copy className="h-4 w-4 mr-1" />
+                    Copy for KB
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => openEdit(campaign)} data-testid={`button-edit-campaign-${campaign.id}`}>
                     <Edit className="h-4 w-4 mr-1" />
                     Edit
@@ -378,7 +486,7 @@ export function QualificationCampaignManagement() {
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
                         <span className="font-medium">{field.label}</span>
-                        <span className="text-muted-foreground ml-2 text-sm">({field.key})</span>
+                        <code className="text-muted-foreground ml-2 text-sm bg-muted/50 px-1 rounded">{`{{${field.key}}}`}</code>
                       </div>
                       <Badge variant="outline">{field.type}</Badge>
                       {field.required && <Badge variant="secondary">Required</Badge>}
@@ -423,14 +531,106 @@ export function QualificationCampaignManagement() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="field-key">Field Key</Label>
-                      <Input
-                        id="field-key"
-                        value={newField.key}
-                        onChange={(e) => setNewField(prev => ({ ...prev, key: e.target.value }))}
-                        placeholder="purchased_tyres"
-                        data-testid="input-field-key"
-                      />
+                      <Label>Field Key (Placeholder)</Label>
+                      {isCustomKey ? (
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{`{{`}</span>
+                            <Input
+                              value={customKeyInput}
+                              onChange={(e) => {
+                                const value = e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                                setCustomKeyInput(value);
+                                setNewField(prev => ({ ...prev, key: value }));
+                              }}
+                              placeholder="custom_key"
+                              className="px-7"
+                              data-testid="input-custom-field-key"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{`}}`}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setIsCustomKey(false);
+                              setCustomKeyInput('');
+                              setNewField(prev => ({ ...prev, key: '' }));
+                            }}
+                            data-testid="button-cancel-custom-key"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Popover open={fieldKeyOpen} onOpenChange={setFieldKeyOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={fieldKeyOpen}
+                              className="w-full justify-between font-normal"
+                              data-testid="combobox-field-key"
+                            >
+                              {newField.key ? (
+                                <code className="text-sm">{`{{${newField.key}}}`}</code>
+                              ) : (
+                                <span className="text-muted-foreground">Select placeholder...</span>
+                              )}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search placeholders..." />
+                              <CommandList>
+                                <CommandEmpty>No placeholder found.</CommandEmpty>
+                                {Object.entries(PLACEHOLDER_CATEGORIES).map(([category, placeholders]) => (
+                                  <CommandGroup key={category} heading={category}>
+                                    {placeholders.map((placeholder) => (
+                                      <CommandItem
+                                        key={placeholder.key}
+                                        value={placeholder.key}
+                                        onSelect={() => {
+                                          setNewField(prev => ({ ...prev, key: placeholder.key }));
+                                          setFieldKeyOpen(false);
+                                        }}
+                                        data-testid={`option-placeholder-${placeholder.key}`}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            newField.key === placeholder.key ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex flex-col">
+                                          <code className="text-xs">{`{{${placeholder.key}}}`}</code>
+                                          <span className="text-xs text-muted-foreground">{placeholder.label}</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                ))}
+                                <CommandSeparator />
+                                <CommandGroup heading="Custom">
+                                  <CommandItem
+                                    value="__custom__"
+                                    onSelect={() => {
+                                      setIsCustomKey(true);
+                                      setFieldKeyOpen(false);
+                                    }}
+                                    data-testid="option-custom-key"
+                                  >
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    <span>Add custom placeholder...</span>
+                                  </CommandItem>
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
