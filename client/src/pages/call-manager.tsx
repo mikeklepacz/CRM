@@ -28,6 +28,7 @@ import { ProposalDiffViewer } from "@/components/proposal-diff-viewer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AlignerChat } from "@/components/aligner-chat";
 import { useOptionalProject } from "@/contexts/project-context";
+import { QualificationCampaignManagement } from "@/components/qualification-campaign-management";
 
 interface ElevenLabsAgent {
   id: string;
@@ -2050,6 +2051,7 @@ export default function CallManager() {
                   <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
                   <TabsTrigger value="aligner-chat" data-testid="tab-aligner-chat">Aligner Chat</TabsTrigger>
                   <TabsTrigger value="kb-library" data-testid="tab-kb-library">KB Library</TabsTrigger>
+                  <TabsTrigger value="campaigns" data-testid="tab-campaigns">Campaigns</TabsTrigger>
                 </>
               )}
             </TabsList>
@@ -3552,6 +3554,13 @@ export default function CallManager() {
           {canAccessAdminFeatures(user) && (
             <TabsContent value="kb-library" className="space-y-6">
               <KBLibraryTab />
+            </TabsContent>
+          )}
+
+          {/* Campaigns Tab */}
+          {canAccessAdminFeatures(user) && (
+            <TabsContent value="campaigns" className="space-y-6">
+              <QualificationCampaignManagement />
             </TabsContent>
           )}
 
