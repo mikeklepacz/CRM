@@ -348,9 +348,13 @@ export default function MapSearch() {
       }
       
       // Try browser geolocation as fallback
+      // Mark as loaded immediately to prevent race conditions with async geolocation
       if (navigator.geolocation) {
+        let geoHandled = false;
         navigator.geolocation.getCurrentPosition(
           (position) => {
+            if (geoHandled) return;
+            geoHandled = true;
             const { latitude, longitude } = position.coords;
             setMapCenter({ lat: latitude, lng: longitude });
             setMapZoom(10); // Closer zoom for user location
@@ -363,7 +367,9 @@ export default function MapSearch() {
             setMapViewLoaded(true);
           },
           () => {
-            // Geolocation denied or failed - fall back to USA center
+            if (geoHandled) return;
+            geoHandled = true;
+            // Geolocation denied or failed - fall back to USA center (already default state)
             setMapViewLoaded(true);
           },
           { timeout: 5000, maximumAge: 300000 } // 5s timeout, cache for 5 min
