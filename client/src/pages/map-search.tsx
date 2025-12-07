@@ -220,8 +220,10 @@ export default function MapSearch() {
   const [state, setState] = useState("");
   const [country, setCountry] = useState("United States");
   const [defaultCountryLoaded, setDefaultCountryLoaded] = useState(false);
+  const [categoryLoaded, setCategoryLoaded] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [businessTypeOpen, setBusinessTypeOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
   const [duplicateCount, setDuplicateCount] = useState(0);
@@ -287,15 +289,15 @@ export default function MapSearch() {
     queryKey: ["/api/maps/last-category"],
   });
 
-  // Initialize category from last selection (defaults to 'Pets' if never chosen)
+  // Initialize category from last selection (only once on load)
   useEffect(() => {
-    if (lastCategoryData?.category) {
-      setCategory(lastCategoryData.category);
-    } else {
-      // Default to 'Pets' if no last category exists
-      setCategory("Pets");
+    if (!categoryLoaded && lastCategoryData !== undefined) {
+      const savedCategory = lastCategoryData?.category || "";
+      setCategory(savedCategory);
+      setCustomCategory(savedCategory);
+      setCategoryLoaded(true);
     }
-  }, [lastCategoryData]);
+  }, [lastCategoryData, categoryLoaded]);
 
   // Initialize active exclusions from user preferences
   useEffect(() => {
@@ -539,9 +541,10 @@ export default function MapSearch() {
       const excludedCount = data.excludedCount || 0;
       
       // Save the selected category as the last used category
-      if (category) {
+      const effectiveCategory = isQualificationMode ? customCategory.trim() : category;
+      if (effectiveCategory) {
         try {
-          await apiRequest("POST", "/api/maps/last-category", { category });
+          await apiRequest("POST", "/api/maps/last-category", { category: effectiveCategory });
         } catch (error) {
           console.error("Failed to save last category:", error);
         }
@@ -1088,28 +1091,65 @@ export default function MapSearch() {
                   <Label htmlFor="category">
                     {isQualificationMode ? 'Category/Tag' : 'Category'}
                   </Label>
-                  {isQualificationMode ? (
-                    <Input
-                      id="custom-category"
-                      placeholder="e.g., Tyre Shops, Fleet Managers..."
-                      value={customCategory}
-                      onChange={(e) => setCustomCategory(e.target.value)}
-                      data-testid="input-custom-category"
-                    />
-                  ) : (
-                    <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger data-testid="select-category">
-                        <SelectValue placeholder="Select category..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categoriesData?.categories?.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.name}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={categoryOpen}
+                        className="w-full justify-between"
+                        data-testid="button-category-select"
+                      >
+                        {(isQualificationMode ? customCategory : category) || "Select or type category..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0">
+                      <Command shouldFilter={false}>
+                        <CommandInput 
+                          placeholder="Type to search or enter new..." 
+                          value={isQualificationMode ? customCategory : category}
+                          onValueChange={(value) => {
+                            if (isQualificationMode) {
+                              setCustomCategory(value);
+                            } else {
+                              setCategory(value);
+                            }
+                          }}
+                        />
+                        <CommandList>
+                          {categoriesData?.categories && categoriesData.categories.length > 0 ? (
+                            <CommandGroup heading="Categories">
+                              {categoriesData.categories.map((cat) => (
+                                <CommandItem
+                                  key={cat.id}
+                                  value={cat.name}
+                                  onSelect={(currentValue) => {
+                                    if (isQualificationMode) {
+                                      setCustomCategory(currentValue);
+                                    } else {
+                                      setCategory(currentValue);
+                                    }
+                                    setCategoryOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      (isQualificationMode ? customCategory : category) === cat.name ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {cat.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          ) : (
+                            <CommandEmpty>Type to enter a category</CommandEmpty>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
