@@ -315,7 +315,7 @@ export default function MapSearch() {
     }
   }, [preferencesData, defaultCountryLoaded]);
 
-  // Initialize map view from session storage first, then saved default, then default location
+  // Initialize map view from session storage first, then saved default, then geolocation, then USA center
   useEffect(() => {
     if (!mapViewLoaded && preferencesData !== undefined) {
       const sessionView = sessionStorage.getItem(MAP_SESSION_KEY);
@@ -329,18 +329,49 @@ export default function MapSearch() {
           ) {
             setMapCenter({ lat: parsed.lat, lng: parsed.lng });
             setMapZoom(parsed.zoom);
+            setMapViewLoaded(true);
+            return;
           }
         } catch {
           // Ignore parse errors
         }
-      } else if (preferencesData?.defaultMapView) {
+      }
+      
+      if (preferencesData?.defaultMapView) {
         setMapCenter({ 
           lat: preferencesData.defaultMapView.lat, 
           lng: preferencesData.defaultMapView.lng 
         });
         setMapZoom(preferencesData.defaultMapView.zoom);
+        setMapViewLoaded(true);
+        return;
       }
-      setMapViewLoaded(true);
+      
+      // Try browser geolocation as fallback
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setMapCenter({ lat: latitude, lng: longitude });
+            setMapZoom(10); // Closer zoom for user location
+            // Save to session storage so it persists during navigation
+            sessionStorage.setItem(MAP_SESSION_KEY, JSON.stringify({
+              lat: latitude,
+              lng: longitude,
+              zoom: 10
+            }));
+            setMapViewLoaded(true);
+          },
+          () => {
+            // Geolocation denied or failed - fall back to USA center
+            setMapViewLoaded(true);
+          },
+          { timeout: 5000, maximumAge: 300000 } // 5s timeout, cache for 5 min
+        );
+      } else {
+        // No geolocation support - fall back to USA center
+        setMapViewLoaded(true);
+      }
     }
   }, [preferencesData, mapViewLoaded]);
 
