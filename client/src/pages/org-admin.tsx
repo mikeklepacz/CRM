@@ -24,7 +24,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star } from "lucide-react";
+import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star, MapPin } from "lucide-react";
+import { TIMEZONE_DATA } from "@shared/timezoneUtils";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -301,16 +302,17 @@ const settingsFormSchema = z.object({
 
 type SettingsFormData = z.infer<typeof settingsFormSchema>;
 
-
-const TIMEZONES = [
-  { value: "America/New_York", label: "Eastern Time (ET)" },
-  { value: "America/Chicago", label: "Central Time (CT)" },
-  { value: "America/Denver", label: "Mountain Time (MT)" },
-  { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
-  { value: "America/Anchorage", label: "Alaska Time (AKT)" },
-  { value: "Pacific/Honolulu", label: "Hawaii Time (HT)" },
-  { value: "UTC", label: "UTC" },
-];
+function detectBrowserTimezone(): string {
+  try {
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const found = TIMEZONE_DATA.find(tz => tz.value === browserTz);
+    if (found) return found.value;
+    if (browserTz.startsWith('America/')) return browserTz;
+    return 'America/New_York';
+  } catch {
+    return 'America/New_York';
+  }
+}
 
 export default function OrgAdmin() {
   const { user, isLoading: authLoading } = useAuth();
@@ -1367,20 +1369,40 @@ export default function OrgAdmin() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Default Timezone</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-timezone">
-                                <SelectValue placeholder="Select timezone" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {TIMEZONES.map((tz) => (
-                                <SelectItem key={tz.value} value={tz.value}>
-                                  {tz.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex gap-2">
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-timezone" className="flex-1">
+                                  <SelectValue placeholder="Select timezone" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {TIMEZONE_DATA.map((tz) => (
+                                  <SelectItem key={tz.value} value={tz.value}>
+                                    {tz.label} ({tz.country})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                const detected = detectBrowserTimezone();
+                                field.onChange(detected);
+                                const tzData = TIMEZONE_DATA.find(tz => tz.value === detected);
+                                toast({
+                                  title: "Timezone Detected",
+                                  description: `Set to ${tzData?.label || detected}`,
+                                });
+                              }}
+                              title="Detect timezone from browser"
+                              data-testid="button-detect-timezone"
+                            >
+                              <MapPin className="h-4 w-4" />
+                            </Button>
+                          </div>
                           <FormMessage />
                         </FormItem>
                       )}
