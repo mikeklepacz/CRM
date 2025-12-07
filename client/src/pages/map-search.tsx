@@ -230,6 +230,9 @@ export default function MapSearch() {
   const [mapCenter, setMapCenter] = useState({ lat: 39.8283, lng: -98.5795 }); // Center of USA
   const [mapZoom, setMapZoom] = useState(4);
   const [selectedLocation, setSelectedLocation] = useState<{lat: number, lng: number} | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const [mapViewLoaded, setMapViewLoaded] = useState(false);
+  const MAP_SESSION_KEY = 'mapSearchViewState';
   
   // Pagination state
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
@@ -311,6 +314,35 @@ export default function MapSearch() {
       setDefaultCountryLoaded(true);
     }
   }, [preferencesData, defaultCountryLoaded]);
+
+  // Initialize map view from session storage first, then saved default, then default location
+  useEffect(() => {
+    if (!mapViewLoaded && preferencesData !== undefined) {
+      const sessionView = sessionStorage.getItem(MAP_SESSION_KEY);
+      if (sessionView) {
+        try {
+          const parsed = JSON.parse(sessionView);
+          if (
+            typeof parsed.lat === 'number' && Number.isFinite(parsed.lat) &&
+            typeof parsed.lng === 'number' && Number.isFinite(parsed.lng) &&
+            typeof parsed.zoom === 'number' && Number.isFinite(parsed.zoom)
+          ) {
+            setMapCenter({ lat: parsed.lat, lng: parsed.lng });
+            setMapZoom(parsed.zoom);
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      } else if (preferencesData?.defaultMapView) {
+        setMapCenter({ 
+          lat: preferencesData.defaultMapView.lat, 
+          lng: preferencesData.defaultMapView.lng 
+        });
+        setMapZoom(preferencesData.defaultMapView.zoom);
+      }
+      setMapViewLoaded(true);
+    }
+  }, [preferencesData, mapViewLoaded]);
 
   // Save active exclusions to user preferences whenever they change
   useEffect(() => {
@@ -888,6 +920,25 @@ export default function MapSearch() {
           center={mapCenter}
           zoom={mapZoom}
           onClick={handleMapClick}
+          onLoad={(map) => {
+            mapRef.current = map;
+          }}
+          onIdle={() => {
+            if (mapRef.current && mapViewLoaded) {
+              const center = mapRef.current.getCenter();
+              const zoom = mapRef.current.getZoom();
+              if (center && zoom !== undefined) {
+                const newCenter = { lat: center.lat(), lng: center.lng() };
+                setMapCenter(newCenter);
+                setMapZoom(zoom);
+                sessionStorage.setItem(MAP_SESSION_KEY, JSON.stringify({ 
+                  lat: newCenter.lat, 
+                  lng: newCenter.lng, 
+                  zoom 
+                }));
+              }
+            }
+          }}
           options={{ 
             disableDefaultUI: false, 
             zoomControl: true,
@@ -1048,39 +1099,79 @@ export default function MapSearch() {
                       })()}
                     </SelectContent>
                   </Select>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="save-default-country"
-                      checked={preferencesData?.defaultMapCountry === country}
-                      onCheckedChange={async (checked) => {
-                        try {
-                          await apiRequest("PUT", "/api/user/preferences", {
-                            defaultMapCountry: checked ? country : null,
-                          });
-                          queryClient.invalidateQueries({ queryKey: ["/api/user/preferences"] });
-                          toast({
-                            title: checked ? "Default saved" : "Default cleared",
-                            description: checked 
-                              ? `${country} is now your default country`
-                              : "Default country has been cleared",
-                          });
-                        } catch (error) {
-                          console.error("Failed to save default country:", error);
-                          toast({
-                            title: "Error",
-                            description: "Failed to save preference",
-                            variant: "destructive",
-                          });
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="save-default-country"
+                        checked={preferencesData?.defaultMapCountry === country}
+                        onCheckedChange={async (checked) => {
+                          try {
+                            await apiRequest("PUT", "/api/user/preferences", {
+                              defaultMapCountry: checked ? country : null,
+                            });
+                            queryClient.invalidateQueries({ queryKey: ["/api/user/preferences"] });
+                            toast({
+                              title: checked ? "Default saved" : "Default cleared",
+                              description: checked 
+                                ? `${country} is now your default country`
+                                : "Default country has been cleared",
+                            });
+                          } catch (error) {
+                            console.error("Failed to save default country:", error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to save preference",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        data-testid="checkbox-save-default-country"
+                      />
+                      <Label
+                        htmlFor="save-default-country"
+                        className="text-xs text-muted-foreground cursor-pointer"
+                      >
+                        Default country
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="save-default-view"
+                        checked={
+                          preferencesData?.defaultMapView?.lat === mapCenter.lat && 
+                          preferencesData?.defaultMapView?.lng === mapCenter.lng &&
+                          preferencesData?.defaultMapView?.zoom === mapZoom
                         }
-                      }}
-                      data-testid="checkbox-save-default-country"
-                    />
-                    <Label
-                      htmlFor="save-default-country"
-                      className="text-xs text-muted-foreground cursor-pointer"
-                    >
-                      Save as default
-                    </Label>
+                        onCheckedChange={async (checked) => {
+                          try {
+                            await apiRequest("PUT", "/api/user/preferences", {
+                              defaultMapView: checked ? { lat: mapCenter.lat, lng: mapCenter.lng, zoom: mapZoom } : null,
+                            });
+                            queryClient.invalidateQueries({ queryKey: ["/api/user/preferences"] });
+                            toast({
+                              title: checked ? "Default view saved" : "Default view cleared",
+                              description: checked 
+                                ? "This map view is now your default"
+                                : "Default view has been cleared",
+                            });
+                          } catch (error) {
+                            console.error("Failed to save default view:", error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to save default view",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        data-testid="checkbox-save-default-view"
+                      />
+                      <Label
+                        htmlFor="save-default-view"
+                        className="text-xs text-muted-foreground cursor-pointer"
+                      >
+                        Default map view
+                      </Label>
+                    </div>
                   </div>
                 </div>
 
