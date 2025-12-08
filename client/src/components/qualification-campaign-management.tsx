@@ -581,10 +581,10 @@ export function QualificationCampaignManagement() {
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[300px] p-0" align="start">
-                            <Command>
+                          <PopoverContent className="w-[300px] p-0 max-h-[350px]" align="start">
+                            <Command className="flex flex-col max-h-[350px]">
                               <CommandInput placeholder="Search placeholders..." />
-                              <CommandList className="max-h-[300px] overflow-y-auto">
+                              <CommandList className="flex-1 max-h-[280px] overflow-y-auto">
                                 <CommandEmpty>
                                   <div className="py-4 text-center">
                                     <p className="text-sm text-muted-foreground mb-2">No placeholder found.</p>
