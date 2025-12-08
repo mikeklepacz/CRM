@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star, MapPin } from "lucide-react";
+import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star, MapPin, Building2 } from "lucide-react";
 import { TIMEZONE_DATA } from "@shared/timezoneUtils";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -407,6 +407,59 @@ export default function OrgAdmin() {
   const { data: projectsData, isLoading: projectsLoading } = useQuery<{ projects: TenantProject[] }>({
     queryKey: ['/api/org-admin/projects'],
     enabled: canAccessAdminFeatures(user),
+  });
+
+  const { data: tenantsData, isLoading: tenantsLoading } = useQuery<{ tenants: Array<{ id: string; name: string }> }>({
+    queryKey: ['/api/super-admin/tenants'],
+    enabled: !!user?.isSuperAdmin,
+  });
+
+  const switchTenantMutation = useMutation({
+    mutationFn: async (tenantId: string) => {
+      return apiRequest('POST', '/api/super-admin/switch-tenant', { tenantId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/invites'] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/org-admin/pipelines' 
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/elevenlabs/agents' 
+      });
+      toast({ title: "Switched organization", description: "Now viewing as selected organization" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error switching organization", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const clearTenantOverrideMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('GET', '/api/super-admin/switch-tenant/clear');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/invites'] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/org-admin/pipelines' 
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/elevenlabs/agents' 
+      });
+      toast({ title: "Cleared override", description: "Returned to your default organization" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error clearing override", description: error.message, variant: "destructive" });
+    },
   });
 
   const inviteForm = useForm<InviteFormData>({
@@ -1115,8 +1168,74 @@ export default function OrgAdmin() {
   const { isModuleEnabled } = useModuleAccess();
   const isPipelinesAllowed = isModuleEnabled('pipelines');
 
+  const isTenantMutating = switchTenantMutation.isPending || clearTenantOverrideMutation.isPending;
+  const currentTenantName = tenantsData?.tenants?.find(t => t.id === user?.tenantId)?.name || user?.tenantName;
+  const tenantSelectValue = user?.tenantId || '__none__';
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
+      {user?.isSuperAdmin && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Viewing:</span>
+          {tenantsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading organizations...
+            </div>
+          ) : (
+            <>
+              <Select
+                value={tenantSelectValue}
+                onValueChange={(value) => {
+                  if (value !== '__none__') {
+                    switchTenantMutation.mutate(value);
+                  }
+                }}
+                disabled={isTenantMutating}
+              >
+                <SelectTrigger className="w-[200px]" data-testid="org-admin-tenant-switcher">
+                  {isTenantMutating ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Switching...</span>
+                    </div>
+                  ) : (
+                    <SelectValue placeholder="Select organization">
+                      {currentTenantName || 'Select organization'}
+                    </SelectValue>
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__" disabled>
+                    Select organization
+                  </SelectItem>
+                  {tenantsData?.tenants?.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id} data-testid={`org-tenant-option-${tenant.id}`}>
+                      {tenant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(user as any).isViewingAsTenant && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => clearTenantOverrideMutation.mutate()}
+                  disabled={isTenantMutating}
+                  data-testid="org-clear-tenant-override"
+                >
+                  {clearTenantOverrideMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Clear'
+                  )}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      )}
       <div className="mb-6">
         <h2 className="text-3xl font-semibold text-foreground" data-testid="text-page-title">
           Organization Admin
