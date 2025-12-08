@@ -408,9 +408,9 @@ INSTRUCTIONS
         </CardHeader>
         <CardContent>
           {aligner?.assistantId && (
-            <div className="flex items-center gap-2 p-3 mb-4 border rounded-md bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-              <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-              <div className="text-sm text-blue-900 dark:text-blue-100">
+            <div className="flex items-center gap-2 p-3 mb-4 border rounded-md bg-blue-50 dark:bg-blue-900/40 border-blue-200 dark:border-blue-700">
+              <Info className="h-5 w-5 text-blue-600 dark:text-blue-300 flex-shrink-0" />
+              <div className="text-sm text-blue-900 dark:text-blue-50">
                 <strong>Connected to OpenAI:</strong> Assistant ID {aligner.assistantId.substring(0, 20)}...
                 <br />
                 Click "Sync to OpenAI" to upload KB files to this assistant.
