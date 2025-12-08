@@ -6836,9 +6836,19 @@ IMPORTANT:
       
       // Clean up temp file
       await fs.unlink(tmpFilePath);
+      console.log(`[Aligner Upload] File uploaded to OpenAI: ${uploadedFile.id}`);
 
       // If assistant has a vector store, add file to it
       if (assistant.vectorStoreId) {
+        console.log(`[Aligner Upload] Adding file to vector store: ${assistant.vectorStoreId}`);
+        console.log(`[Aligner Upload] OpenAI client has beta:`, !!openai.beta);
+        console.log(`[Aligner Upload] OpenAI client has beta.vectorStores:`, !!(openai.beta && openai.beta.vectorStores));
+        
+        if (!openai.beta || !openai.beta.vectorStores || !openai.beta.vectorStores.files) {
+          console.error('[Aligner Upload] OpenAI beta.vectorStores.files API not available');
+          throw new Error('OpenAI vector stores API not available. Please ensure OpenAI SDK version supports vector stores.');
+        }
+        
         await openai.beta.vectorStores.files.create(assistant.vectorStoreId, {
           file_id: uploadedFile.id,
         });
