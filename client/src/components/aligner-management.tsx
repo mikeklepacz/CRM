@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Upload, FileText, Trash2, Loader2, Save, Bot, AlertCircle, Sparkles, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/useAuth";
 
 export function AlignerManagement() {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // File upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -22,9 +24,17 @@ export function AlignerManagement() {
   const [fileName, setFileName] = useState("");
   const [fileCategory, setFileCategory] = useState("call-data");
 
-  // Fetch Aligner assistant
+  // Local state for textarea values to prevent cursor jumping
+  const [localInstructions, setLocalInstructions] = useState("");
+  const [localTaskPromptTemplate, setLocalTaskPromptTemplate] = useState("");
+
+  // Get tenantId for query key - ensures refetch when tenant changes
+  const tenantId = user?.tenantId;
+
+  // Fetch Aligner assistant - include tenantId in query key for proper cache invalidation on tenant switch
   const { data: alignerData, isLoading: alignerLoading } = useQuery({
-    queryKey: ['/api/aligner'],
+    queryKey: ['/api/aligner', tenantId],
+    enabled: !!tenantId,
   });
 
   // Fetch OpenAI settings to check if API key is configured
@@ -34,6 +44,14 @@ export function AlignerManagement() {
 
   const aligner = alignerData?.assistant;
   const alignerFiles = aligner?.files || [];
+
+  // Sync local state when aligner data changes (including tenant switch)
+  useEffect(() => {
+    if (aligner) {
+      setLocalInstructions(aligner.instructions || "");
+      setLocalTaskPromptTemplate(aligner.taskPromptTemplate || "");
+    }
+  }, [aligner?.id, aligner?.instructions, aligner?.taskPromptTemplate]);
 
   // Update instructions mutation
   const updateInstructionsMutation = useMutation({
@@ -45,7 +63,7 @@ export function AlignerManagement() {
         title: "Success",
         description: "Aligner instructions saved successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner', tenantId] });
     },
     onError: (error: any) => {
       toast({
@@ -66,7 +84,7 @@ export function AlignerManagement() {
         title: "Success",
         description: "Task prompt template saved successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner', tenantId] });
     },
     onError: (error: any) => {
       toast({
@@ -94,7 +112,7 @@ export function AlignerManagement() {
         title: "Success",
         description: "File uploaded successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner', tenantId] });
       setUploadDialogOpen(false);
       setFileContent("");
       setFileName("");
@@ -118,7 +136,7 @@ export function AlignerManagement() {
         title: "Success",
         description: "File deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner', tenantId] });
     },
     onError: (error: any) => {
       toast({
@@ -139,7 +157,7 @@ export function AlignerManagement() {
         title: "Sync Complete",
         description: `Successfully synced ${data.synced} KB files to OpenAI. ${data.failed > 0 ? `${data.failed} failed.` : ''}`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner', tenantId] });
     },
     onError: (error: any) => {
       toast({
@@ -151,7 +169,7 @@ export function AlignerManagement() {
   });
 
   const handleSaveInstructions = () => {
-    if (!aligner?.instructions) {
+    if (!localInstructions.trim()) {
       toast({
         title: "Error",
         description: "Please enter instructions",
@@ -159,11 +177,11 @@ export function AlignerManagement() {
       });
       return;
     }
-    updateInstructionsMutation.mutate(aligner.instructions);
+    updateInstructionsMutation.mutate(localInstructions);
   };
 
   const handleSaveTaskPrompt = () => {
-    if (!aligner?.taskPromptTemplate) {
+    if (!localTaskPromptTemplate.trim()) {
       toast({
         title: "Error",
         description: "Please enter task prompt template",
@@ -171,7 +189,7 @@ export function AlignerManagement() {
       });
       return;
     }
-    updateTaskPromptMutation.mutate(aligner.taskPromptTemplate);
+    updateTaskPromptMutation.mutate(localTaskPromptTemplate);
   };
 
   const handleUploadFile = () => {
@@ -208,7 +226,8 @@ export function AlignerManagement() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  if (alignerLoading) {
+  // Show loading state when auth is resolving (tenantId not yet available) or when fetching aligner data
+  if (!tenantId || alignerLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -243,16 +262,8 @@ export function AlignerManagement() {
             <Label htmlFor="aligner-instructions">System Prompt</Label>
             <Textarea
               id="aligner-instructions"
-              value={aligner.instructions || ""}
-              onChange={(e) => {
-                // Update local query cache
-                queryClient.setQueryData(['/api/aligner'], {
-                  assistant: {
-                    ...aligner,
-                    instructions: e.target.value,
-                  }
-                });
-              }}
+              value={localInstructions}
+              onChange={(e) => setLocalInstructions(e.target.value)}
               placeholder="You are the Aligner AI, responsible for analyzing call transcripts and insights to propose improvements to the knowledge base.
 
 Your role:
@@ -303,15 +314,8 @@ Your role:
             <Label htmlFor="task-prompt-template">Prompt Template</Label>
             <Textarea
               id="task-prompt-template"
-              value={aligner.taskPromptTemplate || ""}
-              onChange={(e) => {
-                queryClient.setQueryData(['/api/aligner'], {
-                  assistant: {
-                    ...aligner,
-                    taskPromptTemplate: e.target.value,
-                  }
-                });
-              }}
+              value={localTaskPromptTemplate}
+              onChange={(e) => setLocalTaskPromptTemplate(e.target.value)}
               placeholder="MISSION
 Analyze call performance and propose knowledge base improvements.
 

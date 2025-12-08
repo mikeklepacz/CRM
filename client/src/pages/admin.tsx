@@ -109,6 +109,10 @@ export default function Admin() {
   const selectValue = user?.tenantId || '__none__';
 
   const isTabEnabled = (tabId: string): boolean => {
+    // Aligner tab is Super Admin only
+    if (tabId === 'aligner' && !user?.isSuperAdmin) {
+      return false;
+    }
     const requiredModule = ADMIN_TAB_MODULE_MAP[tabId];
     if (!requiredModule) return true;
     const allowed = (user as any)?.allowedModules;
