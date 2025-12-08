@@ -27,7 +27,7 @@ export function OpenAIManagement() {
   const [fileCategory, setFileCategory] = useState("scripts");
   const [productCategory, setProductCategory] = useState<string>("");
   const [fileDescription, setFileDescription] = useState("");
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("none");
 
   // Fetch OpenAI settings
   const { data: settings, isLoading: settingsLoading } = useQuery({
@@ -208,7 +208,7 @@ export function OpenAIManagement() {
       category: fileCategory,
       productCategory: productCategory || undefined,
       description: fileDescription,
-      agentId: selectedAgentId || undefined,
+      agentId: selectedAgentId && selectedAgentId !== "none" ? selectedAgentId : undefined,
     });
   };
 
@@ -217,7 +217,7 @@ export function OpenAIManagement() {
     setFileCategory(file.category || "scripts");
     setProductCategory(file.productCategory || "");
     setFileDescription(file.description || "");
-    setSelectedAgentId(file.agentId || "");
+    setSelectedAgentId(file.agentId || "none");
     setUploadDialogOpen(true);
   };
 
@@ -543,7 +543,7 @@ Rules:
           setFileCategory("scripts");
           setProductCategory("");
           setFileDescription("");
-          setSelectedAgentId("");
+          setSelectedAgentId("none");
         }
       }}>
         <DialogContent className="max-w-2xl">
@@ -633,7 +633,7 @@ Rules:
                   <SelectValue placeholder="Not assigned to specific agent..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None (Available to all agents)</SelectItem>
+                  <SelectItem value="none">None (Available to all agents)</SelectItem>
                   {agents.map((agent: any) => (
                     <SelectItem key={agent.id} value={agent.agentId}>
                       {agent.name}
