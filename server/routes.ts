@@ -24467,7 +24467,7 @@ ${conversationContext}`;
     try {
       const tenantId = req.user.tenantId;
       const userId = req.user.id;
-      const { name, slug, projectType, description, settings, isDefault } = req.body;
+      const { name, slug, projectType, description, settings, isDefault, accentColor } = req.body;
 
       if (!name || typeof name !== 'string' || name.trim().length === 0) {
         return res.status(400).json({ message: 'Project name is required' });
@@ -24488,6 +24488,7 @@ ${conversationContext}`;
         description: description?.trim(),
         settings: settings || {},
         isDefault: isDefault || false,
+        accentColor: accentColor || '#6366f1',
         createdBy: userId,
       });
 
@@ -24507,7 +24508,7 @@ ${conversationContext}`;
     try {
       const { projectId } = req.params;
       const tenantId = req.user.tenantId;
-      const { name, slug, projectType, description, settings, status } = req.body;
+      const { name, slug, projectType, description, settings, status, accentColor } = req.body;
 
       const existing = await storage.getTenantProjectById(projectId, tenantId);
       if (!existing) {
@@ -24528,6 +24529,7 @@ ${conversationContext}`;
       if (description !== undefined) updates.description = description?.trim();
       if (settings !== undefined) updates.settings = settings;
       if (status !== undefined) updates.status = status;
+      if (accentColor !== undefined) updates.accentColor = accentColor;
 
       const project = await storage.updateTenantProject(projectId, tenantId, updates);
       res.json({ project });

@@ -36,10 +36,7 @@ export default function Admin() {
 
   const switchTenantMutation = useMutation({
     mutationFn: async (tenantId: string) => {
-      return apiRequest('/api/super-admin/switch-tenant', {
-        method: 'POST',
-        body: JSON.stringify({ tenantId }),
-      });
+      return apiRequest('POST', '/api/super-admin/switch-tenant', { tenantId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
@@ -52,9 +49,7 @@ export default function Admin() {
 
   const clearTenantOverrideMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/super-admin/switch-tenant/clear', {
-        method: 'GET',
-      });
+      return apiRequest('GET', '/api/super-admin/switch-tenant/clear');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
