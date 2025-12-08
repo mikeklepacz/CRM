@@ -26,6 +26,7 @@ interface Ticket {
   updatedAt: string;
   userEmail?: string;
   userName?: string;
+  tenantName?: string;
 }
 
 interface TicketReply {
@@ -244,6 +245,11 @@ export function AdminTicketInbox() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {ticket.tenantName && (
+                            <Badge variant="secondary" className="text-xs">
+                              {ticket.tenantName}
+                            </Badge>
+                          )}
                           <Badge variant="outline" className="text-xs">
                             {ticket.category}
                           </Badge>
@@ -278,6 +284,11 @@ export function AdminTicketInbox() {
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    {tickets.find(t => t.id === ticketDetail.id)?.tenantName && (
+                      <Badge variant="secondary" className="text-xs">
+                        {tickets.find(t => t.id === ticketDetail.id)?.tenantName}
+                      </Badge>
+                    )}
                     <Badge variant="outline" className="text-xs">
                       {ticketDetail.category}
                     </Badge>

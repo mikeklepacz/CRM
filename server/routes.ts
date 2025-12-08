@@ -19193,7 +19193,7 @@ Use this store information to provide context-aware responses. When helping draf
 
   // Ticket Routes
 
-  // Get unread ticket count (admin only - scoped to tenant)
+  // Get unread ticket count (admin only - Super Admins see all tenants, tenant admins see their tenant)
   app.get('/api/tickets/unread-count', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
@@ -19205,9 +19205,16 @@ Use this store information to provide context-aware responses. When helping draf
         return res.json({ count: 0 });
       }
 
-      // Get all tickets and filter by tenant to get accurate count
       const allTickets = await storage.getAllTickets();
-      const unreadCount = allTickets.filter(t => t.tenantId === tenantId && t.isUnreadByAdmin).length;
+      
+      // Super Admins see unread count from ALL tenants, tenant admins only see their tenant
+      let unreadCount: number;
+      if (user?.isSuperAdmin) {
+        unreadCount = allTickets.filter(t => t.isUnreadByAdmin).length;
+      } else {
+        unreadCount = allTickets.filter(t => t.tenantId === tenantId && t.isUnreadByAdmin).length;
+      }
+      
       res.json({ count: unreadCount });
     } catch (error: any) {
       console.error('Error getting unread count:', error);
@@ -19215,7 +19222,7 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Get all tickets with user info (admin only - scoped to their tenant)
+  // Get all tickets with user info (Super Admins see all tenants, tenant admins see their tenant)
   app.get('/api/tickets/admin', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
@@ -19228,18 +19235,31 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       const allTickets = await storage.getAllTickets();
-      // Filter tickets to only show those from the admin's tenant
-      const tenantTickets = allTickets.filter(ticket => ticket.tenantId === tenantId);
       
+      // Super Admins see ALL tickets from ALL tenants, tenant admins only see their tenant
+      const ticketsToShow = user?.isSuperAdmin 
+        ? allTickets 
+        : allTickets.filter(ticket => ticket.tenantId === tenantId);
+      
+      // For Super Admins, fetch tenant names for each ticket to show which tenant it belongs to
       const ticketsWithUserInfo = await Promise.all(
-        tenantTickets.map(async (ticket) => {
+        ticketsToShow.map(async (ticket) => {
           const ticketUser = await storage.getUser(ticket.userId);
+          let tenantName: string | undefined;
+          
+          // Include tenant name for Super Admins so they can see which tenant each ticket belongs to
+          if (user?.isSuperAdmin && ticket.tenantId) {
+            const tenant = await storage.getTenantById(ticket.tenantId);
+            tenantName = tenant?.name;
+          }
+          
           return {
             ...ticket,
             userEmail: ticketUser?.email,
             userName: ticketUser?.firstName && ticketUser?.lastName
               ? `${ticketUser.firstName} ${ticketUser.lastName}`
               : undefined,
+            tenantName,
           };
         })
       );
