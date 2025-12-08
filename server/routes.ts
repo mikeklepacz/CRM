@@ -23,7 +23,7 @@ import { validateTwilioSignature } from "./twilio-signature-validation";
 import multer from "multer";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
 import { updateCommissionTrackerStatus } from "./services/commissionTrackerUpdate";
@@ -6825,10 +6825,10 @@ IMPORTANT:
       await fs.writeFile(tmpFilePath, file.buffer);
       console.log(`[Aligner Upload] Temp file created: ${tmpFilePath} (${file.size} bytes)`);
 
-      // Upload to OpenAI
+      // Upload to OpenAI with original filename so OpenAI can detect file type
       const fileStream = await fs.open(tmpFilePath, 'r');
       const uploadedFile = await openai.files.create({
-        file: fileStream.createReadStream(),
+        file: await toFile(fileStream.createReadStream(), file.originalname),
         purpose: 'assistants',
       });
       
