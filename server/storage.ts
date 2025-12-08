@@ -732,11 +732,11 @@ export interface IStorage {
   createNoSendDate(data: InsertNoSendDate): Promise<NoSendDate>;
   deleteNoSendDate(id: string): Promise<void>;
 
-  // Ignored Holidays operations
-  getIgnoredHolidays(): Promise<IgnoredHoliday[]>;
-  getIgnoredHolidayByHolidayId(holidayId: string): Promise<IgnoredHoliday | undefined>;
+  // Ignored Holidays operations (tenant-aware)
+  getIgnoredHolidays(tenantId: string): Promise<IgnoredHoliday[]>;
+  getIgnoredHolidayByHolidayId(tenantId: string, holidayId: string): Promise<IgnoredHoliday | undefined>;
   createIgnoredHoliday(data: InsertIgnoredHoliday): Promise<IgnoredHoliday>;
-  deleteIgnoredHoliday(holidayId: string): Promise<void>;
+  deleteIgnoredHoliday(tenantId: string, holidayId: string): Promise<void>;
 
   // Qualification Campaign operations
   listQualificationCampaigns(tenantId: string): Promise<QualificationCampaign[]>;
@@ -5667,13 +5667,15 @@ export class DatabaseStorage implements IStorage {
     await db.delete(noSendDates).where(eq(noSendDates.id, id));
   }
 
-  // Ignored Holidays operations
-  async getIgnoredHolidays(): Promise<IgnoredHoliday[]> {
-    return await db.select().from(ignoredHolidays);
+  // Ignored Holidays operations (tenant-aware)
+  async getIgnoredHolidays(tenantId: string): Promise<IgnoredHoliday[]> {
+    return await db.select().from(ignoredHolidays).where(eq(ignoredHolidays.tenantId, tenantId));
   }
 
-  async getIgnoredHolidayByHolidayId(holidayId: string): Promise<IgnoredHoliday | undefined> {
-    const [holiday] = await db.select().from(ignoredHolidays).where(eq(ignoredHolidays.holidayId, holidayId));
+  async getIgnoredHolidayByHolidayId(tenantId: string, holidayId: string): Promise<IgnoredHoliday | undefined> {
+    const [holiday] = await db.select().from(ignoredHolidays).where(
+      and(eq(ignoredHolidays.tenantId, tenantId), eq(ignoredHolidays.holidayId, holidayId))
+    );
     return holiday;
   }
 
@@ -5682,8 +5684,10 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async deleteIgnoredHoliday(holidayId: string): Promise<void> {
-    await db.delete(ignoredHolidays).where(eq(ignoredHolidays.holidayId, holidayId));
+  async deleteIgnoredHoliday(tenantId: string, holidayId: string): Promise<void> {
+    await db.delete(ignoredHolidays).where(
+      and(eq(ignoredHolidays.tenantId, tenantId), eq(ignoredHolidays.holidayId, holidayId))
+    );
   }
 
   // Qualification Campaign operations

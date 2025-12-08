@@ -47,8 +47,7 @@ interface HolidayCache {
 
 class HolidayCalendarService {
   private holidayCache: HolidayCache = {};
-  private ignoredHolidaysCache: Set<string> | null = null;
-  private ignoredHolidaysCacheTime: number = 0;
+  private ignoredHolidaysCache: Map<string, { cache: Set<string>; time: number }> = new Map();
   private readonly CACHE_TTL_MS = 60000; // 1 minute cache
   private readonly options = {
     shiftSaturdayHolidays: true,
@@ -68,35 +67,45 @@ class HolidayCalendarService {
   }
 
   /**
-   * Get the set of ignored holiday IDs (cached)
+   * Get the set of ignored holiday IDs for a tenant (cached)
+   * If no tenantId is provided, returns empty set (all holidays are active/blocking)
    */
-  private async getIgnoredHolidayIds(): Promise<Set<string>> {
+  private async getIgnoredHolidayIds(tenantId?: string): Promise<Set<string>> {
+    if (!tenantId) {
+      return new Set();
+    }
     const now = Date.now();
-    if (this.ignoredHolidaysCache && (now - this.ignoredHolidaysCacheTime) < this.CACHE_TTL_MS) {
-      return this.ignoredHolidaysCache;
+    const cached = this.ignoredHolidaysCache.get(tenantId);
+    if (cached && (now - cached.time) < this.CACHE_TTL_MS) {
+      return cached.cache;
     }
     
-    const ignoredList = await storage.getIgnoredHolidays();
-    this.ignoredHolidaysCache = new Set(ignoredList.map(h => h.holidayId));
-    this.ignoredHolidaysCacheTime = now;
-    return this.ignoredHolidaysCache;
+    const ignoredList = await storage.getIgnoredHolidays(tenantId);
+    const cacheEntry = new Set(ignoredList.map(h => h.holidayId));
+    this.ignoredHolidaysCache.set(tenantId, { cache: cacheEntry, time: now });
+    return cacheEntry;
   }
 
   /**
-   * Check if a holiday is ignored (toggled OFF)
+   * Check if a holiday is ignored (toggled OFF) for a tenant
+   * If no tenantId is provided, treats all holidays as active (not ignored)
    */
-  private async isHolidayIgnored(reason: string): Promise<boolean> {
+  private async isHolidayIgnored(reason: string, tenantId?: string): Promise<boolean> {
     const holidayId = this.reasonToHolidayId(reason);
-    const ignoredIds = await this.getIgnoredHolidayIds();
+    const ignoredIds = await this.getIgnoredHolidayIds(tenantId);
     return ignoredIds.has(holidayId);
   }
 
   /**
    * Clear the ignored holidays cache (call when toggles change)
+   * If tenantId is provided, only clear that tenant's cache
    */
-  clearIgnoredHolidaysCache(): void {
-    this.ignoredHolidaysCache = null;
-    this.ignoredHolidaysCacheTime = 0;
+  clearIgnoredHolidaysCache(tenantId?: string): void {
+    if (tenantId) {
+      this.ignoredHolidaysCache.delete(tenantId);
+    } else {
+      this.ignoredHolidaysCache.clear();
+    }
   }
 
   /**
@@ -422,11 +431,11 @@ class HolidayCalendarService {
   }
 
   /**
-   * Get all holidays (including ignored ones) with their status
+   * Get all holidays (including ignored ones) with their status for a tenant
    * Used for the admin UI to display toggles
    */
-  async getAllHolidaysWithStatus(): Promise<{ holidayId: string; name: string; isIgnored: boolean }[]> {
-    const ignoredIds = await this.getIgnoredHolidayIds();
+  async getAllHolidaysWithStatus(tenantId: string): Promise<{ holidayId: string; name: string; isIgnored: boolean }[]> {
+    const ignoredIds = await this.getIgnoredHolidayIds(tenantId);
     
     // Define all holidays that can be toggled
     const allHolidays = [
@@ -487,5 +496,5 @@ export const isNoSendDay = (date: Date, timezone?: string) => holidayCalendarSer
 export const getUpcomingBlockedDays = (startDate: Date, days: number, timezone?: string) => 
   holidayCalendarService.getUpcomingBlockedDays(startDate, days, timezone);
 export const getCustomBlockedDates = () => holidayCalendarService.getCustomBlockedDates();
-export const getAllHolidaysWithStatus = () => holidayCalendarService.getAllHolidaysWithStatus();
-export const clearIgnoredHolidaysCache = () => holidayCalendarService.clearIgnoredHolidaysCache();
+export const getAllHolidaysWithStatus = (tenantId: string) => holidayCalendarService.getAllHolidaysWithStatus(tenantId);
+export const clearIgnoredHolidaysCache = (tenantId?: string) => holidayCalendarService.clearIgnoredHolidaysCache(tenantId);

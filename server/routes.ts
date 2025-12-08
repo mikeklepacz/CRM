@@ -22965,8 +22965,12 @@ ${conversationContext}`;
   // Get all holidays with their toggle status
   app.get('/api/holidays/toggles', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'Tenant ID required' });
+      }
       const { getAllHolidaysWithStatus } = await import('./services/holidayCalendar');
-      const holidays = await getAllHolidaysWithStatus();
+      const holidays = await getAllHolidaysWithStatus(tenantId);
       res.json(holidays);
     } catch (error: any) {
       console.error('Error fetching holiday toggles:', error);
@@ -22978,8 +22982,12 @@ ${conversationContext}`;
   app.post('/api/holidays/toggle', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user?.id || req.user?.claims?.sub;
+      const tenantId = req.user?.tenantId;
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
+      }
+      if (!tenantId) {
+        return res.status(400).json({ message: 'Tenant ID required' });
       }
 
       const { holidayId, holidayName, ignore } = req.body;
@@ -22991,9 +22999,10 @@ ${conversationContext}`;
 
       if (ignore) {
         // Add to ignored list (turn OFF blocking)
-        const existing = await storage.getIgnoredHolidayByHolidayId(holidayId);
+        const existing = await storage.getIgnoredHolidayByHolidayId(tenantId, holidayId);
         if (!existing) {
           await storage.createIgnoredHoliday({
+            tenantId,
             holidayId,
             holidayName,
             ignoredBy: userId,
@@ -23001,11 +23010,11 @@ ${conversationContext}`;
         }
       } else {
         // Remove from ignored list (turn ON blocking)
-        await storage.deleteIgnoredHoliday(holidayId);
+        await storage.deleteIgnoredHoliday(tenantId, holidayId);
       }
 
       // Clear cache so changes take effect immediately
-      clearIgnoredHolidaysCache();
+      clearIgnoredHolidaysCache(tenantId);
 
       res.json({ success: true, holidayId, ignored: ignore });
     } catch (error: any) {
@@ -23017,7 +23026,11 @@ ${conversationContext}`;
   // Get list of currently ignored holidays
   app.get('/api/holidays/ignored', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const ignored = await storage.getIgnoredHolidays();
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'Tenant ID required' });
+      }
+      const ignored = await storage.getIgnoredHolidays(tenantId);
       res.json(ignored);
     } catch (error: any) {
       console.error('Error fetching ignored holidays:', error);
