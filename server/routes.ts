@@ -841,20 +841,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      // Include tenant context from session (set during login via passport.deserializeUser)
-      // This is needed for canAccessAdminFeatures to work on the frontend
-      // Also fetch tenant name for branding purposes
+      // Check for super admin tenant override
+      let effectiveTenantId = req.user.tenantId;
+      let effectiveRoleInTenant = req.user.roleInTenant;
       let tenantName: string | null = null;
-      if (req.user.tenantId) {
-        const tenant = await storage.getTenantById(req.user.tenantId);
+      let isViewingAsTenant = false;
+
+      if (user?.isSuperAdmin && req.session?.tenantOverrideId) {
+        effectiveTenantId = req.session.tenantOverrideId;
+        isViewingAsTenant = true;
+        effectiveRoleInTenant = await storage.getUserTenantRole(userId, effectiveTenantId) || 'org_admin';
+      }
+      
+      // Fetch tenant name for branding purposes
+      if (effectiveTenantId) {
+        const tenant = await storage.getTenantById(effectiveTenantId);
         tenantName = tenant?.name || null;
       }
       
       res.json({
         ...user,
-        tenantId: req.user.tenantId,
-        roleInTenant: req.user.roleInTenant,
+        tenantId: effectiveTenantId,
+        roleInTenant: effectiveRoleInTenant,
         tenantName,
+        isViewingAsTenant,
       });
     } catch (error: any) {
       console.error("Error fetching user:", error);
@@ -23070,6 +23080,59 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error updating tenant:', error);
       res.status(500).json({ message: error.message || 'Failed to update tenant' });
+    }
+  });
+
+  // POST /api/super-admin/switch-tenant - Switch tenant context for super admin
+  app.post('/api/super-admin/switch-tenant', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.body;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'tenantId is required' });
+      }
+      
+      // Verify the tenant exists
+      const tenant = await storage.getTenantById(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ message: 'Tenant not found' });
+      }
+      
+      // Store the tenant override in the session
+      req.session.tenantOverrideId = tenantId;
+      
+      // Persist the session
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err: any) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      
+      res.json({ success: true, tenantId, tenantName: tenant.name });
+    } catch (error: any) {
+      console.error('Error switching tenant:', error);
+      res.status(500).json({ message: error.message || 'Failed to switch tenant' });
+    }
+  });
+
+  // GET /api/super-admin/switch-tenant/clear - Clear tenant override for super admin
+  app.get('/api/super-admin/switch-tenant/clear', requireSuperAdmin, async (req: any, res) => {
+    try {
+      // Clear the tenant override from the session
+      req.session.tenantOverrideId = null;
+      
+      // Persist the session
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err: any) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error clearing tenant override:', error);
+      res.status(500).json({ message: error.message || 'Failed to clear tenant override' });
     }
   });
 

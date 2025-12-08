@@ -584,8 +584,25 @@ export function QualificationCampaignManagement() {
                           <PopoverContent className="w-[300px] p-0" align="start">
                             <Command>
                               <CommandInput placeholder="Search placeholders..." />
-                              <CommandList>
-                                <CommandEmpty>No placeholder found.</CommandEmpty>
+                              <CommandList className="max-h-[300px] overflow-y-auto">
+                                <CommandEmpty>
+                                  <div className="py-4 text-center">
+                                    <p className="text-sm text-muted-foreground mb-2">No placeholder found.</p>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setIsCustomKey(true);
+                                        setFieldKeyOpen(false);
+                                      }}
+                                      data-testid="button-create-custom-empty"
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Create custom placeholder
+                                    </Button>
+                                  </div>
+                                </CommandEmpty>
                                 {Object.entries(PLACEHOLDER_CATEGORIES).map(([category, placeholders]) => (
                                   <CommandGroup key={category} heading={category}>
                                     {placeholders.map((placeholder) => (
@@ -613,9 +630,9 @@ export function QualificationCampaignManagement() {
                                   </CommandGroup>
                                 ))}
                                 <CommandSeparator />
-                                <CommandGroup heading="Custom">
+                                <CommandGroup heading="Custom" forceMount>
                                   <CommandItem
-                                    value="__custom__"
+                                    value="__custom__ custom create new placeholder"
                                     onSelect={() => {
                                       setIsCustomKey(true);
                                       setFieldKeyOpen(false);

@@ -783,6 +783,7 @@ export default function OrgAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      projectContext?.refetchProjects();
       setIsProjectDialogOpen(false);
       setEditingProject(null);
       projectForm.reset();
@@ -806,6 +807,7 @@ export default function OrgAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      projectContext?.refetchProjects();
       setIsProjectDialogOpen(false);
       setEditingProject(null);
       projectForm.reset();
@@ -829,6 +831,7 @@ export default function OrgAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      projectContext?.refetchProjects();
       setProjectToArchive(null);
       toast({
         title: "Success",
@@ -850,6 +853,7 @@ export default function OrgAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      projectContext?.refetchProjects();
       toast({
         title: "Success",
         description: "Project restored successfully",
@@ -870,6 +874,7 @@ export default function OrgAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      projectContext?.refetchProjects();
       toast({
         title: "Success",
         description: "Project set as default",
@@ -890,6 +895,7 @@ export default function OrgAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/org-admin/projects'] });
+      projectContext?.refetchProjects();
       setProjectToDelete(null);
       toast({
         title: "Success",
