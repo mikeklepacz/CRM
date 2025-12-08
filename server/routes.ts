@@ -6944,19 +6944,62 @@ IMPORTANT:
       const { fileId } = req.params;
       const tenantId = await getEffectiveTenantId(req);
       
+      // Get the file info first to get the OpenAI file ID
+      const fileInfo = await storage.getAssistantFileById(fileId);
+      if (!fileInfo) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
       }
+      
+      // Verify the file belongs to this assistant
+      if (fileInfo.assistantId !== alignerAssistant.id) {
+        return res.status(404).json({ error: 'File not found or does not belong to Aligner assistant' });
+      }
 
-      // Use scoped delete that enforces assistant ownership at storage layer
+      // Delete from OpenAI if we have the OpenAI file ID and vector store
+      if (fileInfo.openaiFileId && alignerAssistant.vectorStoreId) {
+        try {
+          const openaiSettings = await storage.getOpenaiSettings(tenantId);
+          if (openaiSettings?.apiKey) {
+            const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+            
+            // Remove file from vector store first (SDK v6: vectorStoreId, fileId)
+            try {
+              await openai.vectorStores.files.del(alignerAssistant.vectorStoreId, fileInfo.openaiFileId);
+              console.log(`[Aligner Delete] Removed file ${fileInfo.openaiFileId} from vector store`);
+            } catch (vsError: any) {
+              // Log but continue - file might already be removed from vector store
+              console.log(`[Aligner Delete] Could not remove from vector store (may already be removed): ${vsError.message}`);
+            }
+            
+            // Delete the file from OpenAI (SDK v6: files.del not files.delete)
+            try {
+              await openai.files.del(fileInfo.openaiFileId);
+              console.log(`[Aligner Delete] Deleted file ${fileInfo.openaiFileId} from OpenAI`);
+            } catch (fileError: any) {
+              // Log but continue - file might already be deleted
+              console.log(`[Aligner Delete] Could not delete from OpenAI (may already be deleted): ${fileError.message}`);
+            }
+          }
+        } catch (openaiError: any) {
+          // Log but continue with local deletion
+          console.error(`[Aligner Delete] OpenAI deletion error: ${openaiError.message}`);
+        }
+      }
+
+      // Delete from local database
       const deleted = await storage.deleteAssistantFileByAssistantId(fileId, alignerAssistant.id);
       
       if (!deleted) {
-        return res.status(404).json({ error: 'File not found or does not belong to Aligner assistant' });
+        return res.status(404).json({ error: 'Failed to delete file from database' });
       }
       
+      console.log(`[Aligner Delete] Successfully deleted file: ${fileInfo.filename}`);
       res.json({ success: true });
     } catch (error: any) {
       console.error('[Aligner] Error deleting file:', error);
