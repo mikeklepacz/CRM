@@ -17129,13 +17129,14 @@ ${rawText}`;
         await fs.writeFile(tmpFilePath, content, 'utf-8');
         console.log('📤 [FILE UPLOAD] File written successfully');
 
-        const fileStream = (await import('fs')).createReadStream(tmpFilePath);
-
+        // Use toFile with filename so OpenAI can detect file type correctly
+        const fileHandle = await fs.open(tmpFilePath, 'r');
         console.log('📤 [FILE UPLOAD] Uploading to OpenAI...');
         file = await openai.files.create({
-          file: fileStream,
+          file: await toFile(fileHandle.createReadStream(), safeFilename),
           purpose: 'assistants'
         });
+        await fileHandle.close();
         console.log('📤 [FILE UPLOAD] File uploaded to OpenAI, file ID:', file.id);
       } finally {
         // Always clean up temporary file, even if upload fails
@@ -17352,6 +17353,17 @@ ${rawText}`;
         const OpenAI = (await import('openai')).default;
         const openai = new OpenAI({ apiKey: settings.apiKey });
 
+        // Remove file from vector store first (SDK v6: vectorStoreId, fileId)
+        if (settings.vectorStoreId) {
+          try {
+            await openai.vectorStores.files.del(settings.vectorStoreId, file.openaiFileId);
+            console.log('📁 [DELETE FILE] Removed file from vector store');
+          } catch (vsErr: any) {
+            console.log('📁 [DELETE FILE] ⚠️ Could not remove from vector store (may already be removed):', vsErr.message);
+          }
+        }
+
+        // Then delete the file from OpenAI
         try {
           await openai.files.del(file.openaiFileId);
           console.log('📁 [DELETE FILE] File deleted from OpenAI successfully');
