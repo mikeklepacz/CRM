@@ -808,6 +808,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return false;
   };
 
+  // Helper function to get effective tenant ID for Super Admin tenant override
+  // Super Admins can switch tenants via dropdown, which sets req.session.tenantOverrideId
+  const getEffectiveTenantId = async (req: any): Promise<string | undefined> => {
+    const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+    const user = await storage.getUser(userId);
+    
+    // Check for Super Admin tenant override
+    if (user?.isSuperAdmin && req.session?.tenantOverrideId) {
+      return req.session.tenantOverrideId;
+    }
+    
+    return req.user.tenantId;
+  };
+
   // Server-Sent Events endpoint for real-time updates
   app.get('/api/events', isAuthenticatedCustom, async (req: any, res) => {
     try {
@@ -6669,7 +6683,7 @@ IMPORTANT:
   // Get Aligner assistant details and files
   app.get('/api/aligner', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const tenantId = req.user.tenantId;
+      const tenantId = await getEffectiveTenantId(req);
       const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       
       if (!assistant) {
@@ -6694,7 +6708,7 @@ IMPORTANT:
   app.patch('/api/aligner/instructions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { instructions } = req.body;
-      const tenantId = req.user.tenantId;
+      const tenantId = await getEffectiveTenantId(req);
       const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       
       if (!assistant) {
@@ -6706,7 +6720,7 @@ IMPORTANT:
       }
 
       // Get OpenAI settings
-      const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
+      const openaiSettings = await storage.getOpenaiSettings(tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
@@ -6732,7 +6746,7 @@ IMPORTANT:
   app.patch('/api/aligner/task-prompt', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { taskPromptTemplate } = req.body;
-      const tenantId = req.user.tenantId;
+      const tenantId = await getEffectiveTenantId(req);
       const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       
       if (!assistant) {
@@ -6756,7 +6770,7 @@ IMPORTANT:
     try {
       const { filename, openaiFileId, fileSize, category } = req.body;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const tenantId = req.user.tenantId;
+      const tenantId = await getEffectiveTenantId(req);
       
       const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!assistant) {
@@ -6783,7 +6797,7 @@ IMPORTANT:
   app.delete('/api/aligner/files/:fileId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { fileId } = req.params;
-      const tenantId = req.user.tenantId;
+      const tenantId = await getEffectiveTenantId(req);
       
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
@@ -6809,7 +6823,7 @@ IMPORTANT:
   app.post('/api/aligner/sync-kb', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       console.log('[Aligner Sync] Starting KB files sync to OpenAI vector store...');
-      const tenantId = req.user.tenantId;
+      const tenantId = await getEffectiveTenantId(req);
       
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
@@ -6822,7 +6836,7 @@ IMPORTANT:
       }
 
       // Get OpenAI settings
-      const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
+      const openaiSettings = await storage.getOpenaiSettings(tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
