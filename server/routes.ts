@@ -6836,13 +6836,38 @@ IMPORTANT:
       
       // Clean up temp file
       await fs.unlink(tmpFilePath);
-      console.log(`[Aligner Upload] File uploaded to OpenAI: ${uploadedFile.id}`);
+      console.log(`[Aligner Upload] ✅ File uploaded to OpenAI: ${uploadedFile.id}`);
 
-      // If assistant has a vector store, add file to it
+      // If assistant has a vector store, add file to it with comprehensive error handling
       if (assistant.vectorStoreId) {
-        await openai.vectorStores.files.create(assistant.vectorStoreId, {
-          file_id: uploadedFile.id,
-        });
+        console.log(`[Aligner Upload] Adding file to vector store: ${assistant.vectorStoreId}`);
+        try {
+          const vectorStoreFile = await openai.vectorStores.files.create(assistant.vectorStoreId, {
+            file_id: uploadedFile.id,
+          });
+          console.log(`[Aligner Upload] ✅ File added to vector store. Status: ${vectorStoreFile.status}`);
+          
+          // Verify by reading back the file list from OpenAI
+          console.log(`[Aligner Upload] Verifying file in vector store...`);
+          try {
+            const filesInStore = await openai.vectorStores.files.list(assistant.vectorStoreId, { limit: 10 });
+            const ourFile = filesInStore.data.find(f => f.id === uploadedFile.id);
+            if (ourFile) {
+              console.log(`[Aligner Upload] ✅ VERIFIED: File found in vector store with status: ${ourFile.status}`);
+            } else {
+              console.log(`[Aligner Upload] ⚠️ WARNING: File not found in vector store list (may still be processing)`);
+            }
+            console.log(`[Aligner Upload] Total files in vector store: ${filesInStore.data.length}`);
+          } catch (verifyError: any) {
+            console.error(`[Aligner Upload] ⚠️ Could not verify file in vector store:`, verifyError.message);
+          }
+        } catch (vectorError: any) {
+          console.error(`[Aligner Upload] ❌ FAILED to add file to vector store:`, vectorError.message);
+          console.error(`[Aligner Upload] Error details:`, vectorError);
+          throw new Error(`Vector store attachment failed: ${vectorError.message}`);
+        }
+      } else {
+        console.log(`[Aligner Upload] ⚠️ No vector store configured for assistant`);
       }
 
       // Create database record
@@ -6856,7 +6881,7 @@ IMPORTANT:
         category: category || 'general',
       });
 
-      console.log(`[Aligner Upload] File uploaded successfully: ${file.originalname}`);
+      console.log(`[Aligner Upload] ✅ File uploaded successfully: ${file.originalname}`);
       res.json({ file: dbFile });
     } catch (error: any) {
       console.error('[Aligner] Error uploading file:', error);
@@ -17072,22 +17097,35 @@ ${rawText}`;
       await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'processing');
       console.log('📤 [FILE UPLOAD] Status updated to: processing');
 
-      // Add file to vector store using direct API call
-      console.log('📤 [FILE UPLOAD] Adding file to vector store via REST API...');
-      const vectorStoreFileResponse = await axios.post(
-        `https://api.openai.com/v1/vector_stores/${vectorStoreId}/files`,
-        {
+      // Add file to vector store using SDK (proper v6 syntax)
+      console.log('📤 [FILE UPLOAD] Adding file to vector store using SDK...');
+      let vectorStoreFile;
+      try {
+        vectorStoreFile = await openai.vectorStores.files.create(vectorStoreId, {
           file_id: file.id
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${settings.apiKey}`,
-            'Content-Type': 'application/json',
-            'OpenAI-Beta': 'assistants=v2'
+        });
+        console.log('📤 [FILE UPLOAD] ✅ File added to vector store. Status:', vectorStoreFile.status);
+        
+        // Verify by reading back the file list from OpenAI
+        console.log('📤 [FILE UPLOAD] Verifying file in vector store...');
+        try {
+          const filesInStore = await openai.vectorStores.files.list(vectorStoreId, { limit: 10 });
+          const ourFile = filesInStore.data.find(f => f.id === file.id);
+          if (ourFile) {
+            console.log(`📤 [FILE UPLOAD] ✅ VERIFIED: File found in vector store with status: ${ourFile.status}`);
+          } else {
+            console.log(`📤 [FILE UPLOAD] ⚠️ WARNING: File not found in vector store list (may still be processing)`);
           }
+          console.log(`📤 [FILE UPLOAD] Total files in vector store: ${filesInStore.data.length}`);
+        } catch (verifyError: any) {
+          console.error(`📤 [FILE UPLOAD] ⚠️ Could not verify file in vector store:`, verifyError.message);
         }
-      );
-      console.log('📤 [FILE UPLOAD] File added to vector store, status:', vectorStoreFileResponse.data.status);
+      } catch (vectorError: any) {
+        console.error('📤 [FILE UPLOAD] ❌ FAILED to add file to vector store:', vectorError.message);
+        console.error('📤 [FILE UPLOAD] Error details:', vectorError);
+        await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'failed');
+        throw new Error(`Vector store attachment failed: ${vectorError.message}`);
+      }
 
       // Poll for file processing completion
       console.log('📤 [FILE UPLOAD] Waiting for file to be processed...');
