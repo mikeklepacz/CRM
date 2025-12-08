@@ -6684,7 +6684,9 @@ IMPORTANT:
   app.get('/api/aligner', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const tenantId = await getEffectiveTenantId(req);
+      console.log('[Aligner] GET /api/aligner - tenantId:', tenantId, 'sessionOverride:', req.session?.tenantOverrideId, 'userTenantId:', req.user?.tenantId);
       const assistant = await storage.getAssistantBySlug('aligner', tenantId);
+      console.log('[Aligner] Found assistant:', assistant ? assistant.id : 'null');
       
       if (!assistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });

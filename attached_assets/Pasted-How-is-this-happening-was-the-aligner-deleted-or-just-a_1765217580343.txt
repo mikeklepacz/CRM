@@ -1,0 +1,49 @@
+How is this happening? was the aligner deleted or just accidentally hidden?
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 4 files
+Looking at the error message in your screenshot, the Aligner assistant wasn't deleted - it's not found in the database for the current tenant ("NMU Hemp Wick").
+
+Let me check the Aligner management code to see what's happening:
+
+From aligner-management.tsx, the component tries to fetch the Aligner assistant with:
+
+const { data: alignerData, isLoading: alignerLoading } = useQuery({
+  queryKey: ['/api/aligner', tenantId],
+  enabled: !!tenantId,
+});
+And shows an error when !aligner:
+
+if (!aligner) {
+  return (
+    <div className="flex items-center gap-2 p-4 border rounded-md bg-muted/50">
+      <AlertCircle className="h-5 w-5 text-amber-600" />
+      <span className="text-sm">Aligner assistant not found. Please check database configuration.</span>
+    </div>
+  );
+}
+The issue is that the Aligner assistant record doesn't exist for the "NMU Hemp Wick" tenant in the openai_assistants table.
+
+Looking at the backend route in routes.ts, line 6718:
+
+app.get('/api/aligner/:tenantId', async (req: any, res) => {
+  try {
+    const tenantId = req.params.tenantId;
+    const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
+    // ...
+  }
+});
+The Aligner assistant needs to be created in the database. This would normally happen during initial setup when you configure OpenAI settings.
+
+To fix this, you need to:
+
+Go to the OpenAI tab in Admin Dashboard
+Make sure you have an OpenAI API key configured
+The system should automatically create the Aligner assistant when you save OpenAI settings
+Alternatively, if you want me to add a migration or initialization script to automatically create the Aligner assistant for existing tenants, let me know and I can propose that change.
+
+The Aligner wasn't deleted or hidden - it was never created for this tenant in the first place. This is likely a tenant that was created before the Aligner feature was added, or the OpenAI settings initialization didn't complete properly.

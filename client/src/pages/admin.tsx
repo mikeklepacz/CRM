@@ -40,6 +40,16 @@ export default function Admin() {
   const [, setLocation] = useLocation();
   const [activeAdminTab, setActiveAdminTab] = useState("users");
   const { toast } = useToast();
+  
+  // Track active tenant locally for immediate updates (avoids race condition with auth refetch)
+  const [activeTenantId, setActiveTenantId] = useState<string | undefined>(undefined);
+  
+  // Sync activeTenantId with user's tenantId when user data changes
+  useEffect(() => {
+    if (user?.tenantId && !activeTenantId) {
+      setActiveTenantId(user.tenantId);
+    }
+  }, [user?.tenantId, activeTenantId]);
 
   const { data: tenantsData, isLoading: tenantsLoading } = useQuery<{ tenants: Array<{ id: string; name: string }> }>({
     queryKey: ['/api/super-admin/tenants'],
@@ -66,7 +76,9 @@ export default function Admin() {
     mutationFn: async (tenantId: string) => {
       return apiRequest('POST', '/api/super-admin/switch-tenant', { tenantId });
     },
-    onSuccess: () => {
+    onSuccess: (_data, tenantId) => {
+      // Update local state immediately for instant UI feedback
+      setActiveTenantId(tenantId);
       invalidateTenantData();
       toast({ title: "Switched organization", description: "Now viewing as selected organization" });
     },
@@ -80,6 +92,8 @@ export default function Admin() {
       return apiRequest('GET', '/api/super-admin/switch-tenant/clear');
     },
     onSuccess: () => {
+      // Reset to user's original tenant
+      setActiveTenantId(undefined);
       invalidateTenantData();
       toast({ title: "Cleared override", description: "Returned to your default organization" });
     },
@@ -105,8 +119,8 @@ export default function Admin() {
   }
 
   const isMutating = switchTenantMutation.isPending || clearTenantOverrideMutation.isPending;
-  const currentTenantName = tenantsData?.tenants?.find(t => t.id === user?.tenantId)?.name || user?.tenantName;
-  const selectValue = user?.tenantId || '__none__';
+  const currentTenantName = tenantsData?.tenants?.find(t => t.id === (activeTenantId || user?.tenantId))?.name || user?.tenantName;
+  const selectValue = activeTenantId || user?.tenantId || '__none__';
 
   const isTabEnabled = (tabId: string): boolean => {
     // Aligner tab is Super Admin only
@@ -258,7 +272,7 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="aligner">
-          <AlignerManagement />
+          <AlignerManagement tenantId={activeTenantId || user?.tenantId} />
         </TabsContent>
 
         <TabsContent value="docs">

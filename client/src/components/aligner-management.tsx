@@ -12,11 +12,13 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Upload, FileText, Trash2, Loader2, Save, Bot, AlertCircle, Sparkles, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useAuth } from "@/hooks/useAuth";
 
-export function AlignerManagement() {
+interface AlignerManagementProps {
+  tenantId?: string;
+}
+
+export function AlignerManagement({ tenantId }: AlignerManagementProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
 
   // File upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -27,9 +29,6 @@ export function AlignerManagement() {
   // Local state for textarea values to prevent cursor jumping
   const [localInstructions, setLocalInstructions] = useState("");
   const [localTaskPromptTemplate, setLocalTaskPromptTemplate] = useState("");
-
-  // Get tenantId for query key - ensures refetch when tenant changes
-  const tenantId = user?.tenantId;
 
   // Fetch Aligner assistant - include tenantId in query key for proper cache invalidation on tenant switch
   const { data: alignerData, isLoading: alignerLoading } = useQuery({
