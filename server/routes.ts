@@ -6847,6 +6847,55 @@ IMPORTANT:
           });
           console.log(`[Aligner Upload] ✅ File added to vector store. Status: ${vectorStoreFile.status}`);
           
+          // Poll file status to check for processing errors
+          console.log(`[Aligner Upload] Polling file status to verify processing...`);
+          let maxAttempts = 30; // 30 seconds max
+          let attempt = 0;
+          let finalStatus = vectorStoreFile.status;
+          
+          while (attempt < maxAttempts) {
+            try {
+              const fileStatus = await openai.vectorStores.files.retrieve(
+                assistant.vectorStoreId,
+                uploadedFile.id
+              );
+              
+              finalStatus = fileStatus.status;
+              console.log(`[Aligner Upload] File status: ${fileStatus.status} (attempt ${attempt + 1}/${maxAttempts})`);
+              
+              if (fileStatus.status === 'completed') {
+                console.log(`[Aligner Upload] ✅ File processing completed successfully`);
+                break;
+              } else if (fileStatus.status === 'failed') {
+                console.error(`[Aligner Upload] ❌ File processing FAILED`);
+                console.error(`[Aligner Upload] Error code: ${fileStatus.last_error?.code || 'unknown'}`);
+                console.error(`[Aligner Upload] Error message: ${fileStatus.last_error?.message || 'No error message provided'}`);
+                console.error(`[Aligner Upload] Full error object:`, JSON.stringify(fileStatus.last_error, null, 2));
+                throw new Error(`OpenAI failed to process file: ${fileStatus.last_error?.message || 'Unknown error'}`);
+              } else if (fileStatus.status === 'cancelled') {
+                console.error(`[Aligner Upload] ⚠️ File processing was cancelled`);
+                throw new Error('File processing was cancelled');
+              }
+              
+              // Still processing, wait before next poll
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              attempt++;
+            } catch (pollError: any) {
+              // If it's our thrown error, re-throw it
+              if (pollError.message.includes('OpenAI failed to process file') || pollError.message.includes('cancelled')) {
+                throw pollError;
+              }
+              // Otherwise it's a retrieval error
+              console.error(`[Aligner Upload] Error polling file status (attempt ${attempt + 1}):`, pollError.message);
+              attempt++;
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+          
+          if (attempt >= maxAttempts && finalStatus === 'in_progress') {
+            console.warn(`[Aligner Upload] ⚠️ File still processing after ${maxAttempts} seconds. Status: ${finalStatus}`);
+          }
+          
           // Verify by reading back the file list from OpenAI
           console.log(`[Aligner Upload] Verifying file in vector store...`);
           try {
@@ -6855,7 +6904,7 @@ IMPORTANT:
             if (ourFile) {
               console.log(`[Aligner Upload] ✅ VERIFIED: File found in vector store with status: ${ourFile.status}`);
             } else {
-              console.log(`[Aligner Upload] ⚠️ WARNING: File not found in vector store list (may still be processing)`);
+              console.log(`[Aligner Upload] ⚠️ WARNING: File not found in vector store list`);
             }
             console.log(`[Aligner Upload] Total files in vector store: ${filesInStore.data.length}`);
           } catch (verifyError: any) {
