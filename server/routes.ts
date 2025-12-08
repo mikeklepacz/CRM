@@ -6857,7 +6857,7 @@ IMPORTANT:
             try {
               const fileStatus = await openai.vectorStores.files.retrieve(
                 uploadedFile.id,
-                assistant.vectorStoreId
+                { vector_store_id: assistant.vectorStoreId }
               );
               
               finalStatus = fileStatus.status;
