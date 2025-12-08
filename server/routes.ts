@@ -6856,8 +6856,8 @@ IMPORTANT:
           while (attempt < maxAttempts) {
             try {
               const fileStatus = await openai.vectorStores.files.retrieve(
-                assistant.vectorStoreId,
-                uploadedFile.id
+                uploadedFile.id,
+                assistant.vectorStoreId
               );
               
               finalStatus = fileStatus.status;
