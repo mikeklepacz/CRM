@@ -28,6 +28,7 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
   // Local state for textarea values to prevent cursor jumping
   const [localInstructions, setLocalInstructions] = useState("");
   const [localTaskPromptTemplate, setLocalTaskPromptTemplate] = useState("");
+  const [localAssistantId, setLocalAssistantId] = useState("");
 
   // Fetch Aligner assistant - include tenantId in query key for cache invalidation, but use custom queryFn
   // because the default fetcher joins queryKey parts with "/" which would create wrong URL /api/aligner/tenantId
@@ -57,8 +58,9 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
     if (aligner) {
       setLocalInstructions(aligner.instructions || "");
       setLocalTaskPromptTemplate(aligner.taskPromptTemplate || "");
+      setLocalAssistantId(aligner.assistantId || "");
     }
-  }, [aligner?.id, aligner?.instructions, aligner?.taskPromptTemplate]);
+  }, [aligner?.id, aligner?.instructions, aligner?.taskPromptTemplate, aligner?.assistantId]);
 
   // Update instructions mutation
   const updateInstructionsMutation = useMutation({
@@ -97,6 +99,27 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
       toast({
         title: "Error",
         description: error.message || "Failed to save task prompt template",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update assistant ID mutation
+  const updateAssistantIdMutation = useMutation({
+    mutationFn: async (assistantId: string) => {
+      return await apiRequest("PATCH", "/api/aligner/assistant-id", { assistantId });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Assistant ID saved successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner', tenantId] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save assistant ID",
         variant: "destructive",
       });
     },
@@ -413,13 +436,41 @@ INSTRUCTIONS
           </div>
         </CardHeader>
         <CardContent>
+          {/* OpenAI Assistant ID Configuration */}
+          <div className="mb-4 p-4 border rounded-md bg-muted/30">
+            <div className="space-y-2">
+              <Label htmlFor="assistant-id">OpenAI Assistant ID</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="assistant-id"
+                  placeholder="asst_xxxxxxxxxxxxxxxx"
+                  value={localAssistantId}
+                  onChange={(e) => setLocalAssistantId(e.target.value)}
+                  className="font-mono"
+                  data-testid="input-aligner-assistant-id"
+                />
+                <Button
+                  onClick={() => updateAssistantIdMutation.mutate(localAssistantId)}
+                  disabled={updateAssistantIdMutation.isPending || localAssistantId === (aligner?.assistantId || "")}
+                  data-testid="button-save-assistant-id"
+                >
+                  {updateAssistantIdMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enter your OpenAI Assistant ID to connect this organization's Aligner
+              </p>
+            </div>
+          </div>
           {aligner?.assistantId && (
             <div className="flex items-center gap-2 p-3 mb-4 border rounded-md bg-blue-50 dark:bg-blue-900/40 border-blue-200 dark:border-blue-700">
               <Info className="h-5 w-5 text-blue-600 dark:text-blue-300 flex-shrink-0" />
               <div className="text-sm text-blue-900 dark:text-blue-50">
-                <strong>Connected to OpenAI:</strong> Assistant ID <span className="font-mono">{aligner.assistantId}</span>
-                <br />
-                Click "Sync to OpenAI" to upload KB files to this assistant.
+                <strong>Connected to OpenAI:</strong> Click "Sync to OpenAI" to upload KB files to this assistant.
               </div>
             </div>
           )}
