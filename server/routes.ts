@@ -853,10 +853,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         effectiveRoleInTenant = await storage.getUserTenantRole(userId, effectiveTenantId) || 'org_admin';
       }
       
-      // Fetch tenant name for branding purposes
+      // Fetch tenant name and allowed modules for branding and tab visibility
+      let allowedModules: string[] | null = null;
       if (effectiveTenantId) {
         const tenant = await storage.getTenantById(effectiveTenantId);
         tenantName = tenant?.name || null;
+        // Include allowed modules from tenant settings
+        allowedModules = tenant?.settings?.allowedModules || null;
       }
       
       res.json({
@@ -865,6 +868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         roleInTenant: effectiveRoleInTenant,
         tenantName,
         isViewingAsTenant,
+        allowedModules,
       });
     } catch (error: any) {
       console.error("Error fetching user:", error);
@@ -23099,6 +23103,7 @@ ${conversationContext}`;
       
       // Store the tenant override in the session
       req.session.tenantOverrideId = tenantId;
+      req.session.tenantOverrideName = tenant.name;
       
       // Persist the session
       await new Promise<void>((resolve, reject) => {
@@ -23120,6 +23125,7 @@ ${conversationContext}`;
     try {
       // Clear the tenant override from the session
       req.session.tenantOverrideId = null;
+      req.session.tenantOverrideName = null;
       
       // Persist the session
       await new Promise<void>((resolve, reject) => {

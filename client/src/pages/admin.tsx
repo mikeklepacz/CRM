@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,6 +10,18 @@ import { Building2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+const ADMIN_TAB_MODULE_MAP: Record<string, string | null> = {
+  users: null,
+  tickets: null,
+  campaigns: "qualification",
+  reports: null,
+  calendar: null,
+  openai: "voice_kb",
+  aligner: "voice_kb",
+  docs: "docs",
+  sync: "crm",
+};
 
 // Admin components (tenant-level only - Webhooks, Voice, Google Sheets moved to Super Admin)
 import { WooCommerceSync } from "@/components/woocommerce-sync";
@@ -94,6 +106,24 @@ export default function Admin() {
   const currentTenantName = tenantsData?.tenants?.find(t => t.id === user?.tenantId)?.name || user?.tenantName;
   const selectValue = user?.tenantId || '__none__';
 
+  const isTabEnabled = (tabId: string): boolean => {
+    const requiredModule = ADMIN_TAB_MODULE_MAP[tabId];
+    if (!requiredModule) return true;
+    const allowed = (user as any)?.allowedModules;
+    if (allowed === null || allowed === undefined) return true;
+    return Array.isArray(allowed) && allowed.includes(requiredModule);
+  };
+
+  const visibleTabs = useMemo(() => {
+    return Object.keys(ADMIN_TAB_MODULE_MAP).filter(isTabEnabled);
+  }, [user]);
+
+  useEffect(() => {
+    if (!isTabEnabled(activeAdminTab) && visibleTabs.length > 0) {
+      setActiveAdminTab(visibleTabs[0]);
+    }
+  }, [visibleTabs, activeAdminTab]);
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       {user?.isSuperAdmin && (
@@ -171,29 +201,29 @@ export default function Admin() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="users" data-testid="tab-users">Users</SelectItem>
-              <SelectItem value="tickets" data-testid="tab-tickets">Support Tickets</SelectItem>
-              <SelectItem value="campaigns" data-testid="tab-campaigns">Campaigns</SelectItem>
-              <SelectItem value="reports" data-testid="tab-reports">Reports</SelectItem>
-              <SelectItem value="calendar" data-testid="tab-calendar">Calendar</SelectItem>
-              <SelectItem value="openai" data-testid="tab-openai">OpenAI</SelectItem>
-              <SelectItem value="aligner" data-testid="tab-aligner">Aligner</SelectItem>
-              <SelectItem value="docs" data-testid="tab-docs">Docs</SelectItem>
-              <SelectItem value="sync" data-testid="tab-sync">WooCommerce Sync</SelectItem>
+              {isTabEnabled("users") && <SelectItem value="users" data-testid="tab-users">Users</SelectItem>}
+              {isTabEnabled("tickets") && <SelectItem value="tickets" data-testid="tab-tickets">Support Tickets</SelectItem>}
+              {isTabEnabled("campaigns") && <SelectItem value="campaigns" data-testid="tab-campaigns">Campaigns</SelectItem>}
+              {isTabEnabled("reports") && <SelectItem value="reports" data-testid="tab-reports">Reports</SelectItem>}
+              {isTabEnabled("calendar") && <SelectItem value="calendar" data-testid="tab-calendar">Calendar</SelectItem>}
+              {isTabEnabled("openai") && <SelectItem value="openai" data-testid="tab-openai">OpenAI</SelectItem>}
+              {isTabEnabled("aligner") && <SelectItem value="aligner" data-testid="tab-aligner">Aligner</SelectItem>}
+              {isTabEnabled("docs") && <SelectItem value="docs" data-testid="tab-docs">Docs</SelectItem>}
+              {isTabEnabled("sync") && <SelectItem value="sync" data-testid="tab-sync">WooCommerce Sync</SelectItem>}
             </SelectContent>
           </Select>
         ) : (
           /* Desktop/Tablet: Tabs with wrapping */
           <TabsList className="flex flex-wrap h-auto gap-1">
-            <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
-            <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
-            <TabsTrigger value="campaigns" data-testid="tab-campaigns">Campaigns</TabsTrigger>
-            <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
-            <TabsTrigger value="calendar" data-testid="tab-calendar">Calendar</TabsTrigger>
-            <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
-            <TabsTrigger value="aligner" data-testid="tab-aligner">Aligner</TabsTrigger>
-            <TabsTrigger value="docs" data-testid="tab-docs">Docs</TabsTrigger>
-            <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
+            {isTabEnabled("users") && <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>}
+            {isTabEnabled("tickets") && <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>}
+            {isTabEnabled("campaigns") && <TabsTrigger value="campaigns" data-testid="tab-campaigns">Campaigns</TabsTrigger>}
+            {isTabEnabled("reports") && <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>}
+            {isTabEnabled("calendar") && <TabsTrigger value="calendar" data-testid="tab-calendar">Calendar</TabsTrigger>}
+            {isTabEnabled("openai") && <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>}
+            {isTabEnabled("aligner") && <TabsTrigger value="aligner" data-testid="tab-aligner">Aligner</TabsTrigger>}
+            {isTabEnabled("docs") && <TabsTrigger value="docs" data-testid="tab-docs">Docs</TabsTrigger>}
+            {isTabEnabled("sync") && <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>}
           </TabsList>
         )}
 

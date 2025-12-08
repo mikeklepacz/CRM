@@ -76,6 +76,24 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Tenant override middleware for super admins
+  // When a super admin switches tenant context, this overwrites req.user.tenantId
+  // so all downstream handlers automatically use the selected tenant
+  app.use((req: any, res, next) => {
+    if (req.user && req.user.isSuperAdmin && req.session?.tenantOverrideId) {
+      // Save original tenant for endpoints that need cross-tenant access
+      req.user.originalTenantId = req.user.tenantId;
+      // Overwrite with the selected tenant
+      req.user.tenantId = req.session.tenantOverrideId;
+      // Also copy tenant name if available in session
+      if (req.session.tenantOverrideName) {
+        req.user.originalTenantName = req.user.tenantName;
+        req.user.tenantName = req.session.tenantOverrideName;
+      }
+    }
+    next();
+  });
+
   const config = await getOidcConfig();
 
   const verify: VerifyFunction = async (
