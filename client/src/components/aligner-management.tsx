@@ -30,9 +30,18 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
   const [localInstructions, setLocalInstructions] = useState("");
   const [localTaskPromptTemplate, setLocalTaskPromptTemplate] = useState("");
 
-  // Fetch Aligner assistant - include tenantId in query key for proper cache invalidation on tenant switch
+  // Fetch Aligner assistant - include tenantId in query key for cache invalidation, but use custom queryFn
+  // because the default fetcher joins queryKey parts with "/" which would create wrong URL /api/aligner/tenantId
   const { data: alignerData, isLoading: alignerLoading } = useQuery({
     queryKey: ['/api/aligner', tenantId],
+    queryFn: async () => {
+      const res = await fetch('/api/aligner', { credentials: 'include' });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Failed to fetch aligner');
+      }
+      return res.json();
+    },
     enabled: !!tenantId,
   });
 
