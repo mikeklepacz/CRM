@@ -108,6 +108,7 @@ export function QualificationCampaignManagement() {
   const [fieldKeyOpen, setFieldKeyOpen] = useState(false);
   const [isCustomKey, setIsCustomKey] = useState(false);
   const [customKeyInput, setCustomKeyInput] = useState('');
+  const [fieldKeySearch, setFieldKeySearch] = useState('');
 
   // Generate knowledge base prompt for a campaign
   const generateKnowledgeBasePrompt = (fields: FieldDefinition[]): string => {
@@ -217,6 +218,7 @@ export function QualificationCampaignManagement() {
     setIsCustomKey(false);
     setCustomKeyInput('');
     setFieldKeyOpen(false);
+    setFieldKeySearch('');
   };
 
   const startEditField = (index: number) => {
@@ -564,7 +566,12 @@ export function QualificationCampaignManagement() {
                           </Button>
                         </div>
                       ) : (
-                        <Popover open={fieldKeyOpen} onOpenChange={setFieldKeyOpen}>
+                        <Popover open={fieldKeyOpen} onOpenChange={(open) => {
+                          setFieldKeyOpen(open);
+                          if (!open) {
+                            setFieldKeySearch('');
+                          }
+                        }}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
@@ -583,7 +590,11 @@ export function QualificationCampaignManagement() {
                           </PopoverTrigger>
                           <PopoverContent className="w-[300px] p-0 max-h-[350px]" align="start">
                             <Command className="flex flex-col max-h-[350px]">
-                              <CommandInput placeholder="Search placeholders..." />
+                              <CommandInput 
+                                placeholder="Search placeholders..." 
+                                value={fieldKeySearch}
+                                onValueChange={setFieldKeySearch}
+                              />
                               <CommandList className="flex-1 max-h-[280px] overflow-y-auto">
                                 <CommandEmpty>
                                   <div className="py-4 text-center">
@@ -593,8 +604,12 @@ export function QualificationCampaignManagement() {
                                       variant="outline"
                                       size="sm"
                                       onClick={() => {
+                                        const sanitizedSearch = fieldKeySearch.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                                        setCustomKeyInput(sanitizedSearch);
+                                        setNewField(prev => ({ ...prev, key: sanitizedSearch }));
                                         setIsCustomKey(true);
                                         setFieldKeyOpen(false);
+                                        setFieldKeySearch('');
                                       }}
                                       data-testid="button-create-custom-empty"
                                     >
@@ -611,6 +626,7 @@ export function QualificationCampaignManagement() {
                                         value={placeholder.key}
                                         onSelect={() => {
                                           setNewField(prev => ({ ...prev, key: placeholder.key }));
+                                          setFieldKeySearch('');
                                           setFieldKeyOpen(false);
                                         }}
                                         data-testid={`option-placeholder-${placeholder.key}`}
@@ -634,8 +650,12 @@ export function QualificationCampaignManagement() {
                                   <CommandItem
                                     value="__custom__ custom create new placeholder"
                                     onSelect={() => {
+                                      const sanitizedSearch = fieldKeySearch.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                                      setCustomKeyInput(sanitizedSearch);
+                                      setNewField(prev => ({ ...prev, key: sanitizedSearch }));
                                       setIsCustomKey(true);
                                       setFieldKeyOpen(false);
+                                      setFieldKeySearch('');
                                     }}
                                     data-testid="option-custom-key"
                                   >
