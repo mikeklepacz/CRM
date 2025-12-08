@@ -596,7 +596,7 @@ async function syncKbFileToAlignerVectorStore(
     await fs.unlink(tmpFilePath);
 
     // Add to vector store
-    await openai.beta.vectorStores.files.create(alignerAssistant.vectorStoreId, {
+    await openai.vectorStores.files.create(alignerAssistant.vectorStoreId, {
       file_id: uploadedFile.id,
     });
 
@@ -6840,7 +6840,7 @@ IMPORTANT:
 
       // If assistant has a vector store, add file to it
       if (assistant.vectorStoreId) {
-        await openai.beta.vectorStores.files.create(assistant.vectorStoreId, {
+        await openai.vectorStores.files.create(assistant.vectorStoreId, {
           file_id: uploadedFile.id,
         });
       }
@@ -6918,7 +6918,7 @@ IMPORTANT:
       let vectorStoreId = alignerAssistant.vectorStoreId;
       if (!vectorStoreId) {
         console.log('[Aligner Sync] Creating new vector store for Aligner...');
-        const vectorStore = await openai.beta.vectorStores.create({
+        const vectorStore = await openai.vectorStores.create({
           name: 'Aligner KB Files',
         });
         vectorStoreId = vectorStore.id;
@@ -6948,7 +6948,7 @@ IMPORTANT:
       // List files in OpenAI vector store
       let vectorStoreFiles: any[] = [];
       try {
-        const response = await openai.beta.vectorStores.files.list(vectorStoreId, { limit: 100 });
+        const response = await openai.vectorStores.files.list(vectorStoreId, { limit: 100 });
         vectorStoreFiles = response.data || [];
         console.log(`[Aligner Sync] Found ${vectorStoreFiles.length} files in OpenAI vector store`);
       } catch (error: any) {
@@ -6971,7 +6971,7 @@ IMPORTANT:
       for (const file of missingFiles) {
         try {
           console.log(`[Aligner Sync] Re-adding file to vector store: ${file.filename}`);
-          await openai.beta.vectorStores.files.create(vectorStoreId, {
+          await openai.vectorStores.files.create(vectorStoreId, {
             file_id: file.openaiFileId,
           });
           resynced++;
