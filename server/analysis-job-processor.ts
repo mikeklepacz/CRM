@@ -53,7 +53,7 @@ async function processJob(jobId: string) {
     });
 
     // Get Aligner assistant
-    const alignerAssistant = await storage.getAssistantBySlug('aligner');
+    const alignerAssistant = await storage.getAssistantBySlug('aligner', job.tenantId);
     if (!alignerAssistant || !alignerAssistant.assistantId) {
       throw new Error('Aligner assistant not configured');
     }

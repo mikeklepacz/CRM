@@ -584,9 +584,9 @@ export interface IStorage {
   updateAnalysisJob(id: string, updates: Partial<InsertAnalysisJob>): Promise<AnalysisJob>;
 
   // OpenAI Assistant Management operations
-  getAllAssistants(): Promise<any[]>;
+  getAllAssistants(tenantId?: string): Promise<any[]>;
   getAssistantById(id: string): Promise<any | undefined>;
-  getAssistantBySlug(slug: string): Promise<any | undefined>;
+  getAssistantBySlug(slug: string, tenantId?: string): Promise<any | undefined>;
   updateAssistant(id: string, updates: any): Promise<any>;
   getAssistantFiles(assistantId: string): Promise<any[]>;
   getAssistantFileById(id: string): Promise<any | undefined>;
@@ -3651,7 +3651,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // OpenAI Assistant Management operations
-  async getAllAssistants(): Promise<any[]> {
+  async getAllAssistants(tenantId?: string): Promise<any[]> {
+    if (tenantId) {
+      return await db.select().from(openaiAssistants).where(and(eq(openaiAssistants.isActive, true), eq(openaiAssistants.tenantId, tenantId)));
+    }
     return await db.select().from(openaiAssistants).where(eq(openaiAssistants.isActive, true));
   }
 
@@ -3660,7 +3663,11 @@ export class DatabaseStorage implements IStorage {
     return assistant;
   }
 
-  async getAssistantBySlug(slug: string): Promise<any | undefined> {
+  async getAssistantBySlug(slug: string, tenantId?: string): Promise<any | undefined> {
+    if (tenantId) {
+      const [assistant] = await db.select().from(openaiAssistants).where(and(eq(openaiAssistants.slug, slug), eq(openaiAssistants.tenantId, tenantId)));
+      return assistant;
+    }
     const [assistant] = await db.select().from(openaiAssistants).where(eq(openaiAssistants.slug, slug));
     return assistant;
   }

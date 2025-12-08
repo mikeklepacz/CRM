@@ -31,7 +31,7 @@ export async function analyzeCallTranscript(conversationId: string, tenantId: st
       .join('\n');
 
     // Get Aligner assistant for call analysis
-    const alignerAssistant = await storage.getAssistantBySlug('aligner');
+    const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
     if (!alignerAssistant || !alignerAssistant.assistantId) {
       console.error('Aligner assistant not configured - skipping AI reflection');
       return;

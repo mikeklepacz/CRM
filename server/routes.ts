@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray, and, desc, isNotNull, isNull, ne } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -562,7 +562,7 @@ async function syncKbFileToAlignerVectorStore(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Get Aligner assistant
-    const alignerAssistant = await storage.getAssistantBySlug('aligner');
+    const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
     if (!alignerAssistant?.assistantId || !alignerAssistant.vectorStoreId) {
       return { success: false, error: 'Aligner not configured with vector store' };
     }
@@ -2991,6 +2991,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get voice proxy latency metrics
+  app.get('/api/voice-proxy/metrics', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Check voice access
+      const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
+      if (!isAdminUser && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
+      const activeSessions = voiceProxyServer.getActiveSessionCount();
+      const metrics = {
+        activeSessions,
+        message: activeSessions === 0 
+          ? 'No active calls - start a call to see latency metrics'
+          : 'Check server logs for detailed latency metrics (logged every 100 frames)',
+      };
+
+      res.json(metrics);
+    } catch (error: any) {
+      console.error('Error fetching voice proxy metrics:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // Debug endpoint: Get full call trace for debugging
   app.get('/api/debug/call-trace/:callSid', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -3628,7 +3655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get Wick Coach assistant
-      const wickCoachAssistant = await storage.getAssistantBySlug('wick-coach');
+      const wickCoachAssistant = await storage.getAssistantBySlug('wick-coach', req.user.tenantId);
       if (!wickCoachAssistant || !wickCoachAssistant.assistantId) {
         return res.status(400).json({ error: 'Wick Coach assistant not configured. Please set up the Wick Coach assistant first.' });
       }
@@ -3875,7 +3902,7 @@ Ready to receive calls?`;
         
         try {
           // Get Aligner assistant
-          const alignerAssistant = await storage.getAssistantBySlug('aligner');
+          const alignerAssistant = await storage.getAssistantBySlug('aligner', req.user.tenantId);
           
           if (!alignerAssistant || !alignerAssistant.assistantId) {
             console.log('[AI Insights → Aligner] Aligner assistant not configured, skipping KB analysis');
@@ -4147,7 +4174,7 @@ Ready to receive calls?`;
       }
 
       // Get Aligner assistant
-      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(400).json({ error: 'Aligner assistant not configured' });
       }
@@ -4328,7 +4355,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       }
 
       // Get Aligner assistant config
-      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(500).json({ error: 'Aligner assistant not configured' });
       }
@@ -5787,7 +5814,8 @@ The user has agreed to create proposals. Please output your recommended changes 
       console.log(`[KB Analyze] Analyzing for ${agentLabel}${isChainedFromWickCoach ? ' (chained from Wick Coach)' : ''}`);
 
       // Get Aligner assistant
-      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      const tenantId = (req.user as any).tenantId;
+      const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(400).json({ error: 'Aligner assistant not configured. Please set up the Aligner assistant first.' });
       }
@@ -5813,40 +5841,10 @@ The user has agreed to create proposals. Please output your recommended changes 
       }
 
       // Get KB files based on agent selection
-      const tenantId = (req.user as any).tenantId;
       const allKbFiles = await storage.getAllKbFiles(tenantId);
       const kbFiles = isAllAgents
         ? allKbFiles.filter(file => file.agentId == null) // Only general files for "all agents"
         : allKbFiles.filter(file => file.agentId === agentId || file.agentId == null); // Specific + general for single agent
-      
-
-
-  // Get voice proxy latency metrics
-  app.get('/api/voice-proxy/metrics', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      // Check voice access
-      const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
-      if (!isAdminUser && !user?.hasVoiceAccess) {
-        return res.status(403).json({ error: 'Voice calling access required' });
-      }
-
-      const activeSessions = voiceProxyServer.getActiveSessionCount();
-      const metrics = {
-        activeSessions,
-        message: activeSessions === 0 
-          ? 'No active calls - start a call to see latency metrics'
-          : 'Check server logs for detailed latency metrics (logged every 100 frames)',
-      };
-
-      res.json(metrics);
-    } catch (error: any) {
-      console.error('Error fetching voice proxy metrics:', error);
-      res.status(500).json({ error: error.message || 'Internal server error' });
-    }
-  });
 
       if (kbFiles.length === 0) {
         return res.status(404).json({ 
@@ -6589,7 +6587,8 @@ IMPORTANT:
   app.get('/api/assistants/:slug', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { slug } = req.params;
-      const assistant = await storage.getAssistantBySlug(slug);
+      const tenantId = (req.user as any).tenantId;
+      const assistant = await storage.getAssistantBySlug(slug, tenantId);
       
       if (!assistant) {
         return res.status(404).json({ error: 'Assistant not found' });
@@ -6670,10 +6669,11 @@ IMPORTANT:
   // Get Aligner assistant details and files
   app.get('/api/aligner', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const assistant = await storage.getAssistantBySlug('aligner');
+      const tenantId = req.user.tenantId;
+      const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       
       if (!assistant) {
-        return res.status(404).json({ error: 'Aligner assistant not found' });
+        return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
       }
 
       const files = await storage.getAssistantFiles(assistant.id);
@@ -6694,10 +6694,11 @@ IMPORTANT:
   app.patch('/api/aligner/instructions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { instructions } = req.body;
-      const assistant = await storage.getAssistantBySlug('aligner');
+      const tenantId = req.user.tenantId;
+      const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       
       if (!assistant) {
-        return res.status(404).json({ error: 'Aligner assistant not found' });
+        return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
       }
 
       if (!assistant.assistantId) {
@@ -6731,10 +6732,11 @@ IMPORTANT:
   app.patch('/api/aligner/task-prompt', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { taskPromptTemplate } = req.body;
-      const assistant = await storage.getAssistantBySlug('aligner');
+      const tenantId = req.user.tenantId;
+      const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       
       if (!assistant) {
-        return res.status(404).json({ error: 'Aligner assistant not found' });
+        return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
       }
 
       // Task prompt template is only used internally (not synced to OpenAI)
@@ -6754,10 +6756,11 @@ IMPORTANT:
     try {
       const { filename, openaiFileId, fileSize, category } = req.body;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = req.user.tenantId;
       
-      const assistant = await storage.getAssistantBySlug('aligner');
+      const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!assistant) {
-        return res.status(404).json({ error: 'Aligner assistant not found' });
+        return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
       }
 
       const file = await storage.createAssistantFile({
@@ -6780,11 +6783,12 @@ IMPORTANT:
   app.delete('/api/aligner/files/:fileId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { fileId } = req.params;
+      const tenantId = req.user.tenantId;
       
       // Get Aligner assistant
-      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant) {
-        return res.status(404).json({ error: 'Aligner assistant not found' });
+        return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
       }
 
       // Use scoped delete that enforces assistant ownership at storage layer
@@ -6805,11 +6809,12 @@ IMPORTANT:
   app.post('/api/aligner/sync-kb', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       console.log('[Aligner Sync] Starting KB files sync to OpenAI vector store...');
+      const tenantId = req.user.tenantId;
       
       // Get Aligner assistant
-      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant) {
-        return res.status(404).json({ error: 'Aligner assistant not found' });
+        return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
       }
 
       if (!alignerAssistant.assistantId) {
@@ -8575,11 +8580,18 @@ IMPORTANT:
       const currentUser = req.currentUser;
       const isUserAdmin = currentUser.roleInTenant === 'org_admin' || currentUser.role === 'admin' || currentUser.isSuperAdmin;
 
-      // Query commissions table directly - filter for referral commissions only
+      // Query commissions table directly - filter for referral commissions only AND by tenant
+      const tenantId = req.user.tenantId;
       const allCommissions = await db.query.commissions.findMany({
-        where: eq(commissions.commissionKind, 'referral')
+        where: and(eq(commissions.commissionKind, 'referral'), eq(commissions.tenantId, tenantId))
       });
-      const allUsers = await db.query.users.findMany();
+      
+      // Get users that belong to this tenant
+      const tenantUserRecords = await db.select().from(userTenants).where(eq(userTenants.tenantId, tenantId));
+      const tenantUserIds = tenantUserRecords.map(ut => ut.userId);
+      const allUsers = tenantUserIds.length > 0 
+        ? await db.query.users.findMany({ where: inArray(users.id, tenantUserIds) })
+        : [];
 
       // Group referral commissions by referring agent (the person who earns the referral)
       const referralSummary: Record<string, {
@@ -21405,7 +21417,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Get Aligner assistant
-      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      const alignerAssistant = await storage.getAssistantBySlug('aligner', req.user.tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(400).json({ message: 'Aligner assistant not configured' });
       }
@@ -21550,7 +21562,7 @@ Based on the conversation, help the user design an effective email sequence that
       }
       
       // Get Aligner assistant for strategy synthesis
-      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      const alignerAssistant = await storage.getAssistantBySlug('aligner', req.user.tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(400).json({ message: 'Aligner assistant not configured' });
       }
