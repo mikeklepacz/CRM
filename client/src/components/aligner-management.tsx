@@ -22,8 +22,7 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
 
   // File upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [fileContent, setFileContent] = useState("");
-  const [fileName, setFileName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileCategory, setFileCategory] = useState("call-data");
 
   // Local state for textarea values to prevent cursor jumping
@@ -105,15 +104,23 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
 
   // Upload file mutation
   const uploadFileMutation = useMutation({
-    mutationFn: async (data: { filename: string; category: string }) => {
-      // For now, just create the file record
-      // Later this will upload to OpenAI first
-      return await apiRequest("POST", "/api/aligner/files", {
-        filename: data.filename,
-        category: data.category,
-        openaiFileId: null,
-        fileSize: 0,
+    mutationFn: async (data: { file: File; category: string }) => {
+      const formData = new FormData();
+      formData.append('file', data.file);
+      formData.append('category', data.category);
+      
+      const res = await fetch('/api/aligner/files', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
       });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to upload file');
+      }
+      
+      return res.json();
     },
     onSuccess: () => {
       toast({
@@ -122,8 +129,7 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/aligner', tenantId] });
       setUploadDialogOpen(false);
-      setFileContent("");
-      setFileName("");
+      setSelectedFile(null);
     },
     onError: (error: any) => {
       toast({
@@ -161,9 +167,14 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
       return await apiRequest("POST", "/api/aligner/sync-kb");
     },
     onSuccess: (data: any) => {
+      const message = data.resynced > 0
+        ? `Re-synced ${data.resynced} files to OpenAI. ${data.alreadySynced} already synced. ${data.failed > 0 ? `${data.failed} failed.` : ''}`
+        : `All ${data.totalInDb} files already synced to OpenAI vector store.`;
+      
       toast({
         title: "Sync Complete",
-        description: `Successfully synced ${data.synced} KB files to OpenAI. ${data.failed > 0 ? `${data.failed} failed.` : ''}`,
+        description: message,
+        variant: data.failed > 0 ? "destructive" : "default",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/aligner', tenantId] });
     },
@@ -201,16 +212,16 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
   };
 
   const handleUploadFile = () => {
-    if (!fileName) {
+    if (!selectedFile) {
       toast({
         title: "Error",
-        description: "Please provide a filename",
+        description: "Please select a file",
         variant: "destructive",
       });
       return;
     }
     uploadFileMutation.mutate({
-      filename: fileName,
+      file: selectedFile,
       category: fileCategory,
     });
   };
@@ -218,12 +229,7 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setFileContent(event.target?.result as string);
-      };
-      reader.readAsText(file);
+      setSelectedFile(file);
     }
   };
 
@@ -477,8 +483,7 @@ INSTRUCTIONS
       <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
         setUploadDialogOpen(open);
         if (!open) {
-          setFileContent("");
-          setFileName("");
+          setSelectedFile(null);
           setFileCategory("call-data");
         }
       }}>
@@ -486,7 +491,7 @@ INSTRUCTIONS
           <DialogHeader>
             <DialogTitle>Upload Aligner Knowledge Base File</DialogTitle>
             <DialogDescription>
-              Add reference materials for call analysis and KB improvement proposals
+              Add reference materials for call analysis and KB improvement proposals (max 50MB)
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -494,24 +499,18 @@ INSTRUCTIONS
               <Label>Upload File</Label>
               <Input
                 type="file"
-                accept=".txt,.md"
+                accept=".txt,.md,.pdf,.docx,.csv"
                 onChange={handleFileSelect}
                 data-testid="input-aligner-file-upload"
               />
+              {selectedFile && (
+                <p className="text-xs text-muted-foreground">
+                  Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
-                Supported formats: .txt, .md
+                Supported formats: .txt, .md, .pdf, .docx, .csv (max 50MB)
               </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="aligner-filename">Filename</Label>
-              <Input
-                id="aligner-filename"
-                value={fileName}
-                onChange={(e) => setFileName(e.target.value)}
-                placeholder="e.g., call-analysis-guidelines.txt"
-                data-testid="input-aligner-filename"
-              />
             </div>
 
             <div className="space-y-2">

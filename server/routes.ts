@@ -6767,28 +6767,97 @@ IMPORTANT:
     }
   });
 
-  // Upload file to Aligner
-  app.post('/api/aligner/files', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // Configure multer for Aligner file uploads
+  const alignerUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB max
+    },
+    fileFilter: (req, file, cb) => {
+      // Allowed file extensions
+      const allowedExtensions = ['.txt', '.md', '.pdf', '.docx', '.csv'];
+      const ext = file.originalname.toLowerCase().substring(file.originalname.lastIndexOf('.'));
+      
+      if (allowedExtensions.includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`File type not allowed. Supported formats: ${allowedExtensions.join(', ')}`));
+      }
+    },
+  });
+
+  // Upload file to Aligner (multipart/form-data)
+  app.post('/api/aligner/files', isAuthenticatedCustom, isAdmin, alignerUpload.single('file'), async (req: any, res) => {
     try {
-      const { filename, openaiFileId, fileSize, category } = req.body;
+      const file = req.file as Express.Multer.File;
+      const { category } = req.body;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = await getEffectiveTenantId(req);
+      
+      if (!file) {
+        return res.status(400).json({ error: 'File is required' });
+      }
       
       const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!assistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
       }
 
-      const file = await storage.createAssistantFile({
+      // Get OpenAI settings
+      const openaiSettings = await storage.getOpenaiSettings(tenantId);
+      if (!openaiSettings?.apiKey) {
+        return res.status(400).json({ error: 'OpenAI API key not configured' });
+      }
+
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+
+      // Create temporary file with binary content
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const os = await import('os');
+      
+      const tmpDir = os.tmpdir();
+      // Sanitize filename to prevent path traversal attacks
+      const safeFilename = path.basename(file.originalname);
+      const tmpFilePath = path.join(tmpDir, `aligner-upload-${Date.now()}-${safeFilename}`);
+      
+      // Write file buffer as binary (not UTF-8 text)
+      await fs.writeFile(tmpFilePath, file.buffer);
+      console.log(`[Aligner Upload] Temp file created: ${tmpFilePath} (${file.size} bytes)`);
+
+      // Upload to OpenAI
+      const fileStream = await fs.open(tmpFilePath, 'r');
+      const uploadedFile = await openai.files.create({
+        file: fileStream.createReadStream(),
+        purpose: 'assistants',
+      });
+      
+      await fileStream.close();
+      
+      // Clean up temp file
+      await fs.unlink(tmpFilePath);
+
+      // If assistant has a vector store, add file to it
+      if (assistant.vectorStoreId) {
+        await openai.beta.vectorStores.files.create(assistant.vectorStoreId, {
+          file_id: uploadedFile.id,
+        });
+        console.log(`[Aligner Upload] File added to vector store: ${assistant.vectorStoreId}`);
+      }
+
+      // Create database record
+      const dbFile = await storage.createAssistantFile({
+        tenantId,
         assistantId: assistant.id,
-        filename,
-        openaiFileId,
-        fileSize,
+        filename: file.originalname,
+        openaiFileId: uploadedFile.id,
+        fileSize: file.size,
         uploadedBy: userId,
-        category,
+        category: category || 'general',
       });
 
-      res.json({ file });
+      console.log(`[Aligner Upload] File uploaded successfully: ${file.originalname}`);
+      res.json({ file: dbFile });
     } catch (error: any) {
       console.error('[Aligner] Error uploading file:', error);
       res.status(500).json({ error: error.message || 'Failed to upload file' });
@@ -6872,83 +6941,59 @@ IMPORTANT:
         console.log('[Aligner Sync] Using existing vector store:', vectorStoreId);
       }
 
-      // Get all KB files
-      const kbFiles = await storage.getAllKbFiles();
-      console.log(`[Aligner Sync] Found ${kbFiles.length} KB files to sync`);
+      // Get all assistant files from database
+      const dbFiles = await storage.getAssistantFiles(alignerAssistant.id);
+      console.log(`[Aligner Sync] Found ${dbFiles.length} files in database`);
 
-      const syncResults = [];
-      const errors = [];
+      // List files in OpenAI vector store
+      let vectorStoreFiles: any[] = [];
+      try {
+        const response = await openai.beta.vectorStores.files.list(vectorStoreId, { limit: 100 });
+        vectorStoreFiles = response.data || [];
+        console.log(`[Aligner Sync] Found ${vectorStoreFiles.length} files in OpenAI vector store`);
+      } catch (error: any) {
+        console.error('[Aligner Sync] Error listing vector store files:', error);
+        // Continue even if listing fails
+      }
 
-      // Upload each KB file to vector store
-      for (const kbFile of kbFiles) {
+      // Create a set of OpenAI file IDs in vector store
+      const vectorStoreFileIds = new Set(vectorStoreFiles.map(f => f.id));
+
+      // Check which database files are missing from vector store
+      const missingFiles = dbFiles.filter(f => !vectorStoreFileIds.has(f.openaiFileId));
+      console.log(`[Aligner Sync] Found ${missingFiles.length} files missing from vector store`);
+
+      let resynced = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      // Re-upload missing files to vector store
+      for (const file of missingFiles) {
         try {
-          console.log(`[Aligner Sync] Processing file: ${kbFile.filename}`);
-          
-          // Get latest version content
-          const versions = await storage.getKbFileVersions(kbFile.id);
-          if (versions.length === 0) {
-            console.warn(`[Aligner Sync] No versions found for ${kbFile.filename}, skipping`);
-            continue;
-          }
-
-          const latestVersion = versions[0];
-          
-          // Create a temporary file with the content
-          const fs = await import('fs/promises');
-          const path = await import('path');
-          const os = await import('os');
-          
-          const tmpDir = os.tmpdir();
-          const tmpFilePath = path.join(tmpDir, `aligner-${Date.now()}-${kbFile.filename}`);
-          
-          await fs.writeFile(tmpFilePath, latestVersion.content, 'utf-8');
-          console.log(`[Aligner Sync] Temp file created: ${tmpFilePath}`);
-
-          // Upload to OpenAI
-          const fileStream = await fs.open(tmpFilePath, 'r');
-          const uploadedFile = await openai.files.create({
-            file: fileStream.createReadStream(),
-            purpose: 'assistants',
-          });
-          
-          await fileStream.close();
-          await fs.unlink(tmpFilePath);
-          
-          console.log(`[Aligner Sync] Uploaded ${kbFile.filename} to OpenAI: ${uploadedFile.id}`);
-
-          // Add file to vector store
+          console.log(`[Aligner Sync] Re-adding file to vector store: ${file.filename}`);
           await openai.beta.vectorStores.files.create(vectorStoreId, {
-            file_id: uploadedFile.id,
+            file_id: file.openaiFileId,
           });
-          
-          console.log(`[Aligner Sync] Added ${kbFile.filename} to vector store`);
-
-          syncResults.push({
-            filename: kbFile.filename,
-            openaiFileId: uploadedFile.id,
-            success: true,
-          });
-
+          resynced++;
         } catch (error: any) {
-          console.error(`[Aligner Sync] Error syncing ${kbFile.filename}:`, error);
-          errors.push({
-            filename: kbFile.filename,
-            error: error.message,
-          });
+          console.error(`[Aligner Sync] Failed to re-add ${file.filename}:`, error);
+          failed++;
+          errors.push(`${file.filename}: ${error.message}`);
         }
       }
 
-      console.log(`[Aligner Sync] Sync complete: ${syncResults.length} succeeded, ${errors.length} failed`);
-
-      res.json({
+      const summary = {
         success: true,
-        synced: syncResults.length,
-        failed: errors.length,
-        vectorStoreId: vectorStoreId,
-        results: syncResults,
-        errors: errors,
-      });
+        totalInDb: dbFiles.length,
+        totalInVectorStore: vectorStoreFiles.length,
+        resynced,
+        failed,
+        alreadySynced: dbFiles.length - missingFiles.length,
+        errors: errors.length > 0 ? errors : undefined,
+      };
 
+      console.log('[Aligner Sync] Complete:', summary);
+      res.json(summary);
     } catch (error: any) {
       console.error('[Aligner Sync] Error syncing KB files:', error);
       res.status(500).json({ error: error.message || 'Failed to sync KB files' });
