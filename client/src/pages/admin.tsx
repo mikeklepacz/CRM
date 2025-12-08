@@ -34,12 +34,26 @@ export default function Admin() {
     enabled: !!user?.isSuperAdmin,
   });
 
+  const invalidateTenantData = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/openai/files'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/openai/settings'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/categories/active'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/tickets'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/qualification-campaigns'] });
+  };
+
   const switchTenantMutation = useMutation({
     mutationFn: async (tenantId: string) => {
       return apiRequest('POST', '/api/super-admin/switch-tenant', { tenantId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+      invalidateTenantData();
       toast({ title: "Switched organization", description: "Now viewing as selected organization" });
     },
     onError: (error: Error) => {
@@ -52,7 +66,7 @@ export default function Admin() {
       return apiRequest('GET', '/api/super-admin/switch-tenant/clear');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+      invalidateTenantData();
       toast({ title: "Cleared override", description: "Returned to your default organization" });
     },
     onError: (error: Error) => {
