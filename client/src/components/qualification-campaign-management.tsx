@@ -114,7 +114,7 @@ export function QualificationCampaignManagement() {
   const generateKnowledgeBasePrompt = (fields: FieldDefinition[]): string => {
     if (fields.length === 0) return '';
     
-    let prompt = `During the call, collect answers to the following qualification questions. Store each answer in the corresponding placeholder field:\n\n`;
+    let prompt = '';
     
     fields.forEach((field, index) => {
       prompt += `${index + 1}. Question: "${field.label}"\n`;
