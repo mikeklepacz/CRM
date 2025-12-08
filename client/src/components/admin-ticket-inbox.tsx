@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Loader2, Send, CheckCircle2, XCircle } from "lucide-react";
 
@@ -52,10 +53,21 @@ const TICKET_CATEGORIES = [
 
 export function AdminTicketInbox() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  
+  const prevTenantIdRef = useRef<string | undefined>(user?.tenantId);
+  
+  useEffect(() => {
+    if (prevTenantIdRef.current !== user?.tenantId) {
+      setSelectedTicketId(null);
+      setReplyMessage('');
+      prevTenantIdRef.current = user?.tenantId;
+    }
+  }, [user?.tenantId]);
 
   // Fetch all tickets
   const { data: ticketsData, isLoading: ticketsLoading } = useQuery<{ tickets: Ticket[] }>({

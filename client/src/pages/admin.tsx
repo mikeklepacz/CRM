@@ -57,6 +57,8 @@ export default function Admin() {
     queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
     queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
     queryClient.invalidateQueries({ queryKey: ['/api/tickets'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/tickets/admin'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/tickets/unread-count'] });
     queryClient.invalidateQueries({ queryKey: ['/api/qualification-campaigns'] });
   };
 
