@@ -2886,14 +2886,14 @@ export default function EHub() {
                   <div>
                     <Label htmlFor="senderEmail">Send From</Label>
                     <Select
-                      value={senderEmailAccountId || ""}
-                      onValueChange={(value) => setSenderEmailAccountId(value || null)}
+                      value={senderEmailAccountId || "__default__"}
+                      onValueChange={(value) => setSenderEmailAccountId(value === "__default__" ? null : value)}
                     >
                       <SelectTrigger className="w-full" data-testid="select-sender-email">
                         <SelectValue placeholder="Select email account (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Use default account</SelectItem>
+                        <SelectItem value="__default__">Use default account</SelectItem>
                         {emailAccounts?.filter(acc => acc.status === 'active').map((account) => (
                           <SelectItem key={account.id} value={account.id}>
                             {account.email}
@@ -3288,14 +3288,14 @@ export default function EHub() {
                       <div>
                         <Label htmlFor="senderEmailInline" className="text-xs">Send From</Label>
                         <Select
-                          value={senderEmailAccountId || ""}
-                          onValueChange={(value) => setSenderEmailAccountId(value || null)}
+                          value={senderEmailAccountId || "__default__"}
+                          onValueChange={(value) => setSenderEmailAccountId(value === "__default__" ? null : value)}
                         >
                           <SelectTrigger className="w-full" data-testid="select-sender-email-inline">
                             <SelectValue placeholder="Select email account (optional)" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Use default account</SelectItem>
+                            <SelectItem value="__default__">Use default account</SelectItem>
                             {emailAccounts?.filter(acc => acc.status === 'active').map((account) => (
                               <SelectItem key={account.id} value={account.id}>
                                 {account.email}
