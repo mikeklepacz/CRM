@@ -536,7 +536,7 @@ export const categories = pgTable("categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Optional: categories can belong to a project
-  name: varchar("name", { length: 100 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(), // Uniqueness is per tenant+project, not global
   description: text("description"),
   isActive: boolean("is_active").default(true),
   displayOrder: integer("display_order").default(0),

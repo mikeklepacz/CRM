@@ -19348,7 +19348,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/maps/save-to-qualification', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const tenantId = req.user.tenantId;
-      const { placeId, category } = req.body;
+      const { placeId, category, projectId } = req.body;
 
       if (!placeId) {
         return res.status(400).json({ message: 'Place ID is required' });
@@ -19383,7 +19383,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Auto-create category if it doesn't exist (frictionless category creation)
       if (category && category.trim()) {
-        await storage.getOrCreateCategoryByName(tenantId, category.trim());
+        await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
       }
 
       // Create qualification lead from place data

@@ -424,8 +424,8 @@ export interface IStorage {
   getAllCategories(tenantId: string, projectId?: string): Promise<Category[]>;
   getActiveCategories(tenantId: string, projectId?: string): Promise<Category[]>;
   getCategory(id: string): Promise<Category | undefined>;
-  getCategoryByName(tenantId: string, name: string): Promise<Category | undefined>;
-  getOrCreateCategoryByName(tenantId: string, name: string): Promise<Category>;
+  getCategoryByName(tenantId: string, name: string, projectId?: string): Promise<Category | undefined>;
+  getOrCreateCategoryByName(tenantId: string, name: string, projectId?: string): Promise<Category>;
   createCategory(category: InsertCategory): Promise<Category>;
   updateCategory(id: string, updates: Partial<InsertCategory>): Promise<Category>;
   deleteCategory(id: string): Promise<void>;
@@ -2502,24 +2502,28 @@ export class DatabaseStorage implements IStorage {
     return category;
   }
 
-  async getCategoryByName(tenantId: string, name: string): Promise<Category | undefined> {
+  async getCategoryByName(tenantId: string, name: string, projectId?: string): Promise<Category | undefined> {
+    const conditions = [eq(categories.tenantId, tenantId), eq(categories.name, name)];
+    if (projectId) {
+      conditions.push(eq(categories.projectId, projectId));
+    }
     const [category] = await db
       .select()
       .from(categories)
-      .where(and(eq(categories.tenantId, tenantId), eq(categories.name, name)));
+      .where(and(...conditions));
     return category;
   }
 
-  async getOrCreateCategoryByName(tenantId: string, name: string): Promise<Category> {
-    // First check if category exists
-    const existing = await this.getCategoryByName(tenantId, name);
+  async getOrCreateCategoryByName(tenantId: string, name: string, projectId?: string): Promise<Category> {
+    // First check if category exists (include projectId in lookup for proper scoping)
+    const existing = await this.getCategoryByName(tenantId, name, projectId);
     if (existing) {
       return existing;
     }
-    // Create new category
+    // Create new category with optional projectId
     const [newCategory] = await db
       .insert(categories)
-      .values({ tenantId, name, isActive: true })
+      .values({ tenantId, name, isActive: true, ...(projectId ? { projectId } : {}) })
       .returning();
     return newCategory;
   }

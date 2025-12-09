@@ -28,6 +28,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/components/theme-provider";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
+import { useOptionalProject } from "@/contexts/project-context";
 import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X, Settings2, Bone, ExternalLink, Download, ArrowLeft } from "lucide-react";
 import { Link, useSearch } from "wouter";
 import {
@@ -208,6 +209,8 @@ export default function MapSearch() {
   const { actualTheme } = useTheme();
   const searchString = useSearch();
   const { isModuleEnabled } = useModuleAccess();
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   
   // Parse mode from URL query params
   const isQualificationModeFromUrl = useMemo(() => {
@@ -276,8 +279,13 @@ export default function MapSearch() {
   } | null>(null);
 
 
+  const isProjectContextLoading = projectContext?.isLoading ?? false;
+  const categoriesUrl = currentProject?.id 
+    ? `/api/categories/active?projectId=${currentProject.id}` 
+    : "/api/categories/active";
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
-    queryKey: ["/api/categories/active"],
+    queryKey: [categoriesUrl],
+    enabled: !isProjectContextLoading,
   });
 
   // Fetch saved exclusions
@@ -628,6 +636,7 @@ export default function MapSearch() {
       return await apiRequest("POST", "/api/maps/save-to-qualification", {
         placeId,
         category,
+        projectId: currentProject?.id,
       });
     },
     onSuccess: (data) => {
@@ -682,7 +691,11 @@ export default function MapSearch() {
       // Process current batch in parallel
       const results = await Promise.allSettled(
         batch.map(placeId =>
-          apiRequest("POST", endpoint, { placeId, category: effectiveCategory })
+          apiRequest("POST", endpoint, { 
+            placeId, 
+            category: effectiveCategory,
+            ...(isQualificationMode && currentProject?.id ? { projectId: currentProject.id } : {})
+          })
         )
       );
 
