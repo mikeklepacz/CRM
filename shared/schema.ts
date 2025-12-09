@@ -212,6 +212,43 @@ export const processedGmailMessages = pgTable("processed_gmail_messages", {
   index("idx_processed_gmail_message_id").on(table.gmailMessageId),
 ]);
 
+// Email Accounts Pool - Multi-email support for E-Hub sequences
+// Each tenant can connect multiple Gmail accounts and assign them to sequences
+export const emailAccounts = pgTable("email_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  email: varchar("email", { length: 255 }).notNull(), // Gmail address (also serves as display name)
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  tokenExpiry: bigint("token_expiry", { mode: "number" }),
+  status: varchar("status", { length: 50 }).notNull().default('active'), // 'active', 'inactive', 'disconnected', 'error'
+  dailySendCount: integer("daily_send_count").notNull().default(0), // Emails sent today
+  lastSendCountReset: date("last_send_count_reset"), // Date when dailySendCount was last reset
+  connectedBy: varchar("connected_by").references(() => users.id), // Which admin connected it
+  connectedAt: timestamp("connected_at").defaultNow(),
+  lastUsedAt: timestamp("last_used_at"), // When last email was sent from this account
+  errorMessage: text("error_message"), // Error details if status is 'error'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_email_accounts_tenant").on(table.tenantId),
+  index("idx_email_accounts_status").on(table.tenantId, table.status),
+  uniqueIndex("idx_email_accounts_tenant_email").on(table.tenantId, table.email),
+]);
+
+export const insertEmailAccountSchema = createInsertSchema(emailAccounts).omit({
+  id: true,
+  dailySendCount: true,
+  lastSendCountReset: true,
+  connectedAt: true,
+  lastUsedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertEmailAccount = z.infer<typeof insertEmailAccountSchema>;
+export type EmailAccount = typeof emailAccounts.$inferSelect;
+
 // Dashboard card configurations - controls which roles see which cards
 export const dashboardCards = pgTable("dashboard_cards", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1337,6 +1374,7 @@ export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
   projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Scope to specific project (null = tenant-wide)
+  senderEmailAccountId: varchar("sender_email_account_id").references(() => emailAccounts.id, { onDelete: 'set null' }), // Which email account sends this sequence
   name: varchar("name", { length: 255 }).notNull(),
   isSystem: boolean("is_system").default(false), // System sequences (e.g., Manual Follow-Ups) cannot be deleted
   strategyTranscript: jsonb("strategy_transcript").$type<StrategyTranscript>(), // Full AI strategy conversation with envelope
