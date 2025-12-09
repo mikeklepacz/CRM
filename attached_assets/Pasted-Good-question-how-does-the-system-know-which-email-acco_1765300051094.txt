@@ -1,0 +1,20 @@
+Good question - how does the system know which email account to send from? Let me check:
+
+Searched for "How does the email sender determine which Gmail/email account to send emails through? Is there a sender email stored per sequence, per project, or per tenant?"
+
+Decided on email sender architecture (5 seconds)
+Current reality:
+All emails are sent from one hardcoded admin account:
+const ADMIN_USER_ID = '4df35876-ab89-4860-8656-0440accfea14'; // michael@naturalmaterials.eu
+
+This means:
+* Every E-Hub email goes through michael@naturalmaterials.eu
+* There's no per-project or per-sequence sender email
+* Cannabis emails and Pet emails would both come from the same Gmail account
+What you need for multi-project:
+Option	Description
+Per-Project Email	Each project has its own sender Gmail (e.g., cannabis@nmu.com, pets@nmu.com)
+Per-Sequence Email	Each sequence can specify which email to send from
+Email Pool	Multiple emails available, system rotates/selects based on rules
+This is a significant architectural piece that would need to be built. Would you like me to plan out adding per-project email accounts to the E-Hub system?
+   Well, right now, this is pretty much how it's going to be on the real world side. So my business partner is going to be taking care of the pet stuff and he has his own email. He will also have an admin login, which means that he will have access to the call manager and the Hub. I will be dealing with the projects on the cannabis side and he will be dealing with the projects on the pet side. Therefore, I'm thinking to myself that in a way we are collaborating together within the same tenant and working on different projects. So I'm wondering to myself, what is the best way to make sure that we can send multiple emails? Because in reality, each one of us could be sending 50 emails through our own queue based on our own email. And I'm not sure what changes or modifications we need to make or what additions we need to do based on the current Hub to make it all work.
