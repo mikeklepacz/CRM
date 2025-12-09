@@ -29,11 +29,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Building2, Users, BarChart3, Plus, Edit, Eye, Loader2, Check, Trash2, UserPlus, 
   Search, ArrowUpDown, ArrowUp, ArrowDown, Mail, Lock, Briefcase, KeyRound, 
-  UserX, UserCheck, Phone, Ticket, Webhook, Mic, FileSpreadsheet, Send, XCircle
+  UserX, UserCheck, Phone, Ticket, Webhook, Mic, FileSpreadsheet, Send, XCircle, Tag
 } from "lucide-react";
 import { VoiceSettings } from "@/components/voice-settings";
 import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { WebhookManager } from "@/components/webhook-manager";
+import { CategoryManagement } from "@/components/category-management";
 
 interface Tenant {
   id: string;
@@ -982,6 +983,10 @@ export default function SuperAdmin() {
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Google Sheets
           </TabsTrigger>
+          <TabsTrigger value="categories" data-testid="tab-categories">
+            <Tag className="mr-2 h-4 w-4" />
+            Categories
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="tenants">
@@ -1776,6 +1781,43 @@ export default function SuperAdmin() {
                 </div>
               ) : (
                 <GoogleSheetsSync tenantId={configTenantId} />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="categories">
+          <Card>
+            <CardHeader>
+              <CardTitle>Category Management</CardTitle>
+              <CardDescription>
+                Manage categories - Per tenant settings
+              </CardDescription>
+              <div className="pt-2">
+                <Select value={configTenantId} onValueChange={setConfigTenantId}>
+                  <SelectTrigger className="w-[300px]" data-testid="select-categories-tenant">
+                    <SelectValue placeholder="Select tenant to configure" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tenants (Overview)</SelectItem>
+                    {tenantsData?.tenants?.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {configTenantId === 'all' ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Tag className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Category Configuration</p>
+                  <p className="text-sm">
+                    Select a tenant to manage their categories
+                  </p>
+                </div>
+              ) : (
+                <CategoryManagement />
               )}
             </CardContent>
           </Card>

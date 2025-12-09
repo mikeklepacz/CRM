@@ -23,11 +23,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star, MapPin, Building2 } from "lucide-react";
+import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star, MapPin, Building2, Tag } from "lucide-react";
 import { TIMEZONE_DATA } from "@shared/timezoneUtils";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { CategoryManagement } from "@/components/category-management";
 
 interface TenantUser {
   id: string;
@@ -1273,6 +1274,10 @@ export default function OrgAdmin() {
             <FolderKanban className="mr-2 h-4 w-4" />
             Projects
           </TabsTrigger>
+          <TabsTrigger value="categories" data-testid="tab-categories">
+            <Tag className="mr-2 h-4 w-4" />
+            Categories
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="team">
@@ -1907,6 +1912,10 @@ export default function OrgAdmin() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="categories">
+          <CategoryManagement />
         </TabsContent>
       </Tabs>
 
