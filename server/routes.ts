@@ -25415,12 +25415,41 @@ ${conversationContext}`;
   // ==========================================================================
 
   // GET /api/email-accounts - List all email accounts for tenant
+  // Auto-imports existing Gmail connections from user_integrations if not already in email_accounts
   app.get('/api/email-accounts', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       if (!user?.tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+
+      // Auto-import existing Gmail connections from user_integrations
+      // Uses tenant-scoped DB query for efficiency (filters at database level)
+      const tenantIntegrations = await storage.getUserIntegrationsWithGmailByTenant(user.tenantId);
+
+      for (const integration of tenantIntegrations) {
+        // Skip if already imported (check by email to avoid duplicates)
+        const existingAccount = await storage.getEmailAccountByEmail(user.tenantId, integration.googleCalendarEmail!);
+        if (!existingAccount) {
+          try {
+            // Auto-create email account from existing user integration
+            await storage.createEmailAccount({
+              tenantId: user.tenantId,
+              email: integration.googleCalendarEmail!,
+              accessToken: integration.googleCalendarAccessToken,
+              refreshToken: integration.googleCalendarRefreshToken || undefined,
+              tokenExpiry: integration.googleCalendarTokenExpiry || undefined,
+              status: 'active',
+              connectedBy: integration.userId,
+            });
+          } catch (err: any) {
+            // Ignore unique constraint violations (concurrent requests)
+            if (!err.message?.includes('unique') && !err.code?.includes('23505')) {
+              console.warn('Failed to auto-import email account:', integration.googleCalendarEmail, err.message);
+            }
+          }
+        }
       }
 
       const accounts = await storage.listEmailAccounts(user.tenantId);

@@ -298,6 +298,7 @@ export interface IStorage {
   // User integrations operations
   getUserIntegration(userId: string): Promise<UserIntegration | undefined>;
   getAllUserIntegrations(): Promise<UserIntegration[]>;
+  getUserIntegrationsWithGmailByTenant(tenantId: string): Promise<UserIntegration[]>;
   updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration>;
 
   // User preferences operations
@@ -1564,6 +1565,26 @@ export class DatabaseStorage implements IStorage {
       .from(userIntegrations)
       .innerJoin(users, eq(userIntegrations.userId, users.id))
       .where(eq(users.isActive, true));
+
+    return results.map(r => r.integration);
+  }
+
+  async getUserIntegrationsWithGmailByTenant(tenantId: string): Promise<UserIntegration[]> {
+    // Tenant-scoped query for users with Gmail credentials
+    // Filters at database level for efficiency
+    const results = await db
+      .select({
+        integration: userIntegrations,
+        user: users
+      })
+      .from(userIntegrations)
+      .innerJoin(users, eq(userIntegrations.userId, users.id))
+      .where(and(
+        eq(userIntegrations.tenantId, tenantId),
+        eq(users.isActive, true),
+        isNotNull(userIntegrations.googleCalendarEmail),
+        isNotNull(userIntegrations.googleCalendarAccessToken)
+      ));
 
     return results.map(r => r.integration);
   }
