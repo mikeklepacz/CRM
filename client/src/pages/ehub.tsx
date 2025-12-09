@@ -1539,6 +1539,13 @@ export default function EHub() {
   const [stepDelays, setStepDelays] = useState<number[]>([]);
   const [repeatLastStep, setRepeatLastStep] = useState<boolean>(false);
   const [sequenceKeywords, setSequenceKeywords] = useState<string>("");
+  
+  // Step template editing state
+  const [editStepDialogOpen, setEditStepDialogOpen] = useState(false);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [editStepSubject, setEditStepSubject] = useState("");
+  const [editStepBody, setEditStepBody] = useState("");
+  const [editStepGuidance, setEditStepGuidance] = useState("");
 
   // All Contacts tab state
   const [page, setPage] = useState(1);
@@ -1843,6 +1850,56 @@ export default function EHub() {
       toast({
         title: "Error",
         description: error.message || "Failed to save keywords",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fetch sequence steps for template editing
+  const { data: sequenceSteps, refetch: refetchSteps } = useQuery<Array<{
+    id: string;
+    stepNumber: number;
+    delayDays: string;
+    subjectTemplate: string | null;
+    bodyTemplate: string | null;
+    aiGuidance: string | null;
+  }>>({
+    queryKey: ['/api/sequences', selectedSequenceId, 'steps'],
+    queryFn: async () => {
+      if (!selectedSequenceId) return [];
+      const res = await fetch(`/api/sequences/${selectedSequenceId}/steps`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch steps');
+      return res.json();
+    },
+    enabled: !!selectedSequenceId,
+  });
+
+  // Update step template mutation
+  const updateStepTemplateMutation = useMutation({
+    mutationFn: async ({ stepId, subjectTemplate, bodyTemplate, aiGuidance }: {
+      stepId: string;
+      subjectTemplate?: string | null;
+      bodyTemplate?: string | null;
+      aiGuidance?: string | null;
+    }) => {
+      return await apiRequest("PATCH", `/api/sequences/${selectedSequenceId}/steps/${stepId}`, {
+        subjectTemplate,
+        bodyTemplate,
+        aiGuidance,
+      });
+    },
+    onSuccess: () => {
+      refetchSteps();
+      setEditStepDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Step template saved successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save step template",
         variant: "destructive",
       });
     },
@@ -3577,6 +3634,52 @@ export default function EHub() {
                   </CardContent>
                 </Card>
 
+                {/* Step Email Templates Card */}
+                {sequenceSteps && sequenceSteps.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Step Email Templates</CardTitle>
+                      <CardDescription>
+                        Customize the email content for each step (optional - AI generates if blank)
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {sequenceSteps.map((step) => (
+                        <div key={step.id} className="flex items-center justify-between p-3 border rounded-md">
+                          <div className="flex-1">
+                            <div className="font-medium">Step {step.stepNumber}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {step.subjectTemplate ? (
+                                <span className="text-green-600">Has subject template</span>
+                              ) : step.aiGuidance ? (
+                                <span className="text-blue-600">Has AI guidance</span>
+                              ) : (
+                                <span>AI-generated content</span>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingStepId(step.id);
+                              setEditStepSubject(step.subjectTemplate || '');
+                              setEditStepBody(step.bodyTemplate || '');
+                              setEditStepGuidance(step.aiGuidance || '');
+                              setEditStepDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-step-${step.stepNumber}`}
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+
                 {/* Keyword Bank Card */}
                 {currentSequence && (
                   <Card>
@@ -5291,6 +5394,71 @@ export default function EHub() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Step Template Dialog */}
+      <Dialog open={editStepDialogOpen} onOpenChange={setEditStepDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Step Email Template</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Subject Template (leave blank for AI-generated)</Label>
+              <Input
+                value={editStepSubject}
+                onChange={(e) => setEditStepSubject(e.target.value)}
+                placeholder="e.g., Following up on my previous message"
+                data-testid="input-step-subject"
+              />
+            </div>
+            <div>
+              <Label>Body Template (leave blank for AI-generated)</Label>
+              <Textarea
+                value={editStepBody}
+                onChange={(e) => setEditStepBody(e.target.value)}
+                placeholder="Enter the email body template..."
+                rows={8}
+                data-testid="input-step-body"
+              />
+            </div>
+            <div>
+              <Label>AI Guidance (optional hints for AI content generation)</Label>
+              <Textarea
+                value={editStepGuidance}
+                onChange={(e) => setEditStepGuidance(e.target.value)}
+                placeholder="e.g., Focus on urgency, mention limited time offer"
+                rows={3}
+                data-testid="input-step-guidance"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEditStepDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (editingStepId) {
+                    updateStepTemplateMutation.mutate({
+                      stepId: editingStepId,
+                      subjectTemplate: editStepSubject || null,
+                      bodyTemplate: editStepBody || null,
+                      aiGuidance: editStepGuidance || null,
+                    });
+                  }
+                }}
+                disabled={updateStepTemplateMutation.isPending}
+                data-testid="button-save-step-template"
+              >
+                {updateStepTemplateMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : null}
+                Save Template
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

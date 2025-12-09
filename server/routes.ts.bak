@@ -22202,56 +22202,6 @@ ${conversationContext}`;
     }
   });
 
-  // Get sequence steps (admin only)
-  app.get('/api/sequences/:id/steps', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      
-      const sequence = await storage.getSequence(id, req.user.tenantId);
-      if (!sequence) {
-        return res.status(404).json({ message: 'Sequence not found' });
-      }
-
-      const steps = await storage.getSequenceSteps(id);
-      res.json(steps);
-    } catch (error: any) {
-      console.error('Error fetching sequence steps:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch sequence steps' });
-    }
-  });
-
-  // Update individual sequence step (admin only)
-  app.patch('/api/sequences/:sequenceId/steps/:stepId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const { sequenceId, stepId } = req.params;
-      
-      const sequence = await storage.getSequence(sequenceId, req.user.tenantId);
-      if (!sequence) {
-        return res.status(404).json({ message: 'Sequence not found' });
-      }
-
-      const { subjectTemplate, bodyTemplate, aiGuidance } = z.object({
-        subjectTemplate: z.string().nullable().optional(),
-        bodyTemplate: z.string().nullable().optional(),
-        aiGuidance: z.string().nullable().optional(),
-      }).parse(req.body);
-
-      const updatedStep = await storage.updateSequenceStep(stepId, {
-        subjectTemplate: subjectTemplate ?? undefined,
-        bodyTemplate: bodyTemplate ?? undefined,
-        aiGuidance: aiGuidance ?? undefined,
-      });
-
-      res.json(updatedStep);
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        return res.status(400).json({ message: 'Invalid step data', errors: error.errors });
-      }
-      console.error('Error updating sequence step:', error);
-      res.status(500).json({ message: error.message || 'Failed to update sequence step' });
-    }
-  });
-
   // Update sequence keywords (admin only)
   app.put('/api/sequences/:id/keywords', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

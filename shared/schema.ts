@@ -1408,8 +1408,11 @@ export const sequenceSteps = pgTable("sequence_steps", {
   sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
   stepNumber: integer("step_number").notNull(), // 1, 2, 3, etc.
   delayDays: decimal("delay_days", { precision: 10, scale: 4 }).notNull(), // Days to wait after previous step (supports decimals like 0.0035 for testing)
+  subjectTemplate: text("subject_template"), // Optional subject template (if null, AI generates)
+  bodyTemplate: text("body_template"), // Optional body template (if null, AI generates)
   aiGuidance: text("ai_guidance"), // Optional per-step AI instructions
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   stepSequenceIdx: index("idx_sequence_steps_sequence").on(table.sequenceId, table.stepNumber),
   stepUniqueIdx: uniqueIndex("idx_sequence_steps_unique").on(table.sequenceId, table.stepNumber),
