@@ -1930,6 +1930,27 @@ export default function EHub() {
     },
   });
 
+  // Update sequence sender email mutation (auto-save)
+  const updateSequenceSenderMutation = useMutation({
+    mutationFn: async ({ sequenceId, senderEmailAccountId }: { sequenceId: string; senderEmailAccountId: string | null }) => {
+      return await apiRequest("PATCH", `/api/sequences/${sequenceId}`, { senderEmailAccountId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      toast({
+        title: "Saved",
+        description: "Sender email updated",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update sender email",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Scan for replies mutation
   const scanRepliesMutation = useMutation({
     mutationFn: async ({ dryRun, selectedEmails }: { dryRun: boolean; selectedEmails?: string[] }) => {
@@ -3338,6 +3359,38 @@ export default function EHub() {
                       ))}
                     </select>
                   </div>
+
+                  {/* Send From dropdown for existing sequence - auto-saves */}
+                  {selectedSequenceId && currentSequence && (
+                    <div className="pt-4 border-t">
+                      <Label htmlFor="senderEmailExisting" className="text-sm">Send From</Label>
+                      <Select
+                        value={(currentSequence as any).senderEmailAccountId || "__default__"}
+                        onValueChange={(value) => {
+                          const newSenderEmailAccountId = value === "__default__" ? null : value;
+                          updateSequenceSenderMutation.mutate({
+                            sequenceId: selectedSequenceId,
+                            senderEmailAccountId: newSenderEmailAccountId,
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-full mt-1" data-testid="select-sender-email-existing">
+                          <SelectValue placeholder="Select email account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__default__">Use default account</SelectItem>
+                          {emailAccounts?.filter(acc => acc.status === 'active').map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.email}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Changes save automatically
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
