@@ -403,7 +403,12 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
 
 export function invalidateCache(tenantId?: string) {
   if (tenantId) {
-    tenantCacheMap.delete(tenantId);
+    // Clear both the plain tenantId key and all project-scoped keys (tenantId:projectId)
+    for (const key of tenantCacheMap.keys()) {
+      if (key === tenantId || key.startsWith(`${tenantId}:`)) {
+        tenantCacheMap.delete(key);
+      }
+    }
   } else {
     tenantCacheMap.clear();
   }
