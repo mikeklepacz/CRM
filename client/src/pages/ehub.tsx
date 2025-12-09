@@ -1662,7 +1662,7 @@ export default function EHub() {
 
   // Fetch all contacts with pagination and filters
   const { data: allContactsData, isLoading: isLoadingContacts } = useQuery<AllContactsResponse>({
-    queryKey: ['/api/ehub/all-contacts', page, debouncedSearch, contactStatusFilter],
+    queryKey: ['/api/ehub/all-contacts', page, debouncedSearch, contactStatusFilter, currentProject?.id],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append('page', page.toString());
@@ -1672,6 +1672,9 @@ export default function EHub() {
       }
       if (contactStatusFilter && contactStatusFilter !== 'all') {
         params.append('statusFilter', contactStatusFilter);
+      }
+      if (currentProject?.id) {
+        params.append('projectId', currentProject.id);
       }
       const response = await fetch(`/api/ehub/all-contacts?${params.toString()}`);
       if (!response.ok) {

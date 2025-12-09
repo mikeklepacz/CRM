@@ -1,8 +1,8 @@
-import { eq, sql, inArray, and } from 'drizzle-orm';
+import { eq, sql, inArray, and, or, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import * as googleSheets from '../googleSheets';
 import { storage } from '../storage';
-import { sequenceRecipients, sequences } from '../../shared/schema';
+import { sequenceRecipients, sequences, categories, clients } from '../../shared/schema';
 import type { EhubContact, AllContactsResponse } from '../../shared/schema';
 import { detectTimezone } from './timezoneHours';
 
@@ -65,25 +65,28 @@ export async function getAllContacts(options: {
   search?: string;
   statusFilter?: 'all' | 'neverContacted' | 'contacted' | 'inSequence' | 'replied' | 'bounced';
   tenantId: string;
+  projectId?: string;
 }): Promise<AllContactsResponse> {
   const {
     page = 1,
     pageSize = 50,
     search = '',
     statusFilter = 'all',
-    tenantId
+    tenantId,
+    projectId
   } = options;
 
   const now = Date.now();
-  const tenantCache = tenantCacheMap.get(tenantId);
+  const cacheKey = projectId ? `${tenantId}:${projectId}` : tenantId;
+  const tenantCache = tenantCacheMap.get(cacheKey);
   const cacheValid = tenantCache && (now - tenantCache.timestamp < CACHE_TTL_MS);
 
   if (!cacheValid) {
-    const contacts = await fetchAndEnrichContacts(tenantId);
-    tenantCacheMap.set(tenantId, { contacts, timestamp: now });
+    const contacts = await fetchAndEnrichContacts(tenantId, projectId);
+    tenantCacheMap.set(cacheKey, { contacts, timestamp: now });
   }
 
-  let filteredContacts = tenantCacheMap.get(tenantId)?.contacts || [];
+  let filteredContacts = tenantCacheMap.get(cacheKey)?.contacts || [];
 
   if (search) {
     const searchLower = search.toLowerCase();
@@ -137,7 +140,7 @@ export async function getAllContacts(options: {
   };
 }
 
-async function fetchAndEnrichContacts(tenantId: string): Promise<EhubContact[]> {
+async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Promise<EhubContact[]> {
   const allContacts: Array<{
     name: string;
     email: string;
@@ -146,6 +149,57 @@ async function fetchAndEnrichContacts(tenantId: string): Promise<EhubContact[]> 
     link?: string;
     salesSummary?: string;
   }> = [];
+
+  // If projectId is provided, get allowed emails from clients in project categories
+  let allowedEmails: Set<string> | null = null;
+  if (projectId) {
+    // Get category names for this project (or shared categories with null projectId)
+    const projectCategories = await db
+      .select({ name: categories.name })
+      .from(categories)
+      .where(
+        and(
+          eq(categories.tenantId, tenantId),
+          or(
+            eq(categories.projectId, projectId),
+            isNull(categories.projectId)
+          )
+        )
+      );
+    
+    const categoryNames = projectCategories.map(c => c.name);
+    
+    if (categoryNames.length > 0) {
+      // Get client emails from clients that belong to these categories
+      // Handle both 'Email' and 'email' keys in the JSONB data field
+      const projectClients = await db
+        .select({ 
+          email: sql<string>`LOWER(COALESCE(
+            (${clients.data}->>'Email')::text,
+            (${clients.data}->>'email')::text
+          ))`,
+        })
+        .from(clients)
+        .where(
+          and(
+            eq(clients.tenantId, tenantId),
+            inArray(clients.category, categoryNames)
+          )
+        );
+      
+      const validEmails = projectClients
+        .filter(c => c.email && c.email.includes('@'))
+        .map(c => c.email.trim().toLowerCase());
+      
+      // Only set allowedEmails if we found valid client emails
+      // If no clients have emails but categories exist, don't filter (show all contacts)
+      if (validEmails.length > 0) {
+        allowedEmails = new Set(validEmails);
+      }
+      // else allowedEmails stays null - no filtering applied
+    }
+    // If no categories for this project, allowedEmails stays null - show all contacts
+  }
 
   const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
   
@@ -236,7 +290,12 @@ async function fetchAndEnrichContacts(tenantId: string): Promise<EhubContact[]> 
     }
   });
 
-  const contactsFromSheet = Array.from(emailMap.values());
+  let contactsFromSheet = Array.from(emailMap.values());
+
+  // Filter by project if allowedEmails is set
+  if (allowedEmails !== null) {
+    contactsFromSheet = contactsFromSheet.filter(c => allowedEmails.has(c.email));
+  }
 
   const uniqueEmails = [...new Set(contactsFromSheet.map(c => c.email))];
 

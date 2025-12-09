@@ -2909,6 +2909,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             data: storeInfo,
             status: storeInfo.status || 'unassigned',
             tenantId: (req.user as any).tenantId,
+        projectId,
           });
         }
         
@@ -3539,6 +3540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 ...details.conversation_initiation_client_data,
               },
               tenantId: (req.user as any).tenantId,
+        projectId,
             });
           }
 
@@ -8078,6 +8080,7 @@ IMPORTANT:
             data: row,
             status: 'unassigned',
             tenantId: (req.user as any).tenantId,
+        projectId,
           });
           created++;
         }
@@ -8466,6 +8469,7 @@ IMPORTANT:
         content,
         isFollowUp: isFollowUp || false,
         tenantId: (req.user as any).tenantId,
+        projectId,
       });
 
       res.json(note);
@@ -10268,6 +10272,7 @@ IMPORTANT:
             status: order.status,
             orderDate: new Date(order.date_created),
             tenantId: (req.user as any).tenantId,
+        projectId,
           });
 
           // Create notification for re-order
@@ -12700,6 +12705,7 @@ IMPORTANT:
             status: 'unassigned',
             lastSyncedAt: new Date(),
             tenantId: (req.user as any).tenantId,
+        projectId,
           });
           created++;
         }
@@ -12815,6 +12821,7 @@ IMPORTANT:
             status: 'unassigned',
             lastSyncedAt: new Date(),
             tenantId: (req.user as any).tenantId,
+        projectId,
           });
           created++;
         }
@@ -16135,6 +16142,7 @@ ${rawText}`;
         addToCalendar: false,
         storeMetadata: enhancedStoreMetadata,
         tenantId: (req.user as any).tenantId,
+        projectId,
       };
 
       // Validate with schema
@@ -21152,6 +21160,7 @@ Use this store information to provide context-aware responses. When helping draf
       const pageSize = parseInt(req.query.pageSize as string) || 50;
       const search = (req.query.search as string) || '';
       const statusFilter = (req.query.statusFilter as string) || 'all';
+      const projectId = (req.query.projectId as string) || undefined;
 
       const result = await getAllContacts({
         page,
@@ -21159,6 +21168,7 @@ Use this store information to provide context-aware responses. When helping draf
         search,
         statusFilter: statusFilter as any,
         tenantId: (req.user as any).tenantId,
+        projectId,
       });
 
       res.json(result);
@@ -22433,6 +22443,7 @@ ${conversationContext}`;
           search: search || '',
           statusFilter: statusFilter || 'all',
           tenantId: (req.user as any).tenantId,
+        projectId,
         });
         contactsToAdd = allContacts;
       } else {
