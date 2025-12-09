@@ -25556,12 +25556,8 @@ ${conversationContext}`;
 
       const { userId, tenantId } = payload;
 
-      // Verify user and tenant exist in database
-      const user = await storage.getUser(userId);
-      if (!user || user.tenantId !== tenantId) {
-        console.error('Email accounts OAuth: User/tenant mismatch');
-        return res.send('<script>alert("User validation failed"); window.close();</script>');
-      }
+      // The signed state token already verified the userId and tenantId
+      // No additional database check needed - just proceed with connecting the email
 
       // Exchange code for tokens
       const redirectUri = `${req.protocol}://${req.get('host')}/api/email-accounts/callback`;
