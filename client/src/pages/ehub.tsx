@@ -402,10 +402,7 @@ function ScannerManagementView() {
   // Add to blacklist mutation
   const addToBlacklistMutation = useMutation({
     mutationFn: async (data: { email: string; reason?: string }) => {
-      return await apiRequest('/api/ehub/blacklist', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return await apiRequest('POST', '/api/ehub/blacklist', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/blacklist'] });
@@ -428,9 +425,7 @@ function ScannerManagementView() {
   // Remove from blacklist mutation
   const removeFromBlacklistMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/ehub/blacklist/${id}`, {
-        method: 'DELETE',
-      });
+      return await apiRequest('DELETE', `/api/ehub/blacklist/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/blacklist'] });
@@ -1675,7 +1670,7 @@ export default function EHub() {
   // Delete email account mutation
   const deleteEmailAccountMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/email-accounts/${id}`, { method: 'DELETE' });
+      return await apiRequest('DELETE', `/api/email-accounts/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/email-accounts'] });
@@ -2713,7 +2708,7 @@ export default function EHub() {
                         All {allContactsData.contacts.length} contacts on this page are selected.
                       </span>
                       <Button
-                        variant="link"
+                        variant="ghost"
                         size="sm"
                         onClick={handleSelectAllMatching}
                         data-testid="button-select-all-matching"
@@ -2916,14 +2911,7 @@ export default function EHub() {
                         }}
                       >
                         <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            {sequence.name}
-                            {sequence.isSystem && (
-                              <Badge variant="outline" className="text-xs">
-                                🔒 System
-                              </Badge>
-                            )}
-                          </div>
+                          {sequence.name}
                         </TableCell>
                         <TableCell>{sequence.stepDelays?.length || 0} steps</TableCell>
                         <TableCell>
@@ -2977,17 +2965,15 @@ export default function EHub() {
                                 <Pause className="w-4 h-4" />
                               )}
                             </Button>
-                            {!sequence.isSystem && (
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => setDeleteSequenceId(sequence.id)}
-                                data-testid={`button-delete-${sequence.id}`}
-                                title="Delete sequence"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => setDeleteSequenceId(sequence.id)}
+                              data-testid={`button-delete-${sequence.id}`}
+                              title="Delete sequence"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
