@@ -1,0 +1,76 @@
+Opened server/storage.ts
+
+Restarted Start application
+Let me continue fixing the email accounts route. I need to look at how other routes get the tenantId to fix this issue.
+
+
+Executed rg -A 30 -n api/email-accounts server/routes.ts
+
+Executed rg -B 2 -A 5 -n 'req\.session\.tenantId' server/routes.ts | head -n 50
+I can see the issue. The route is using user.tenantId but the users table doesn't have a tenantId column - instead, tenants are linked via the user_tenants join table. Let me check how other routes resolve the tenantId:
+
+
+Executed rg -B 3 -A 5 -n getUserDefaultTenant server/routes.ts | head -n 50
+Let me search for how other routes get tenant context:
+
+
+Executed rg -B 2 -A 2 -n 'tenantId.*=' server/routes.ts | head -n 80
+Now I understand. The routes are using req.user.tenantId which should be attached to the request by the auth middleware. Let me check the auth middleware to see how it attaches the tenantId:
+
+
+Executed rg -B 20 -A 5 -n 'user\.tenantId' server/routes.ts | head -n 100
+Now I can see that req.user.tenantId is the standard way to get the tenant, not user.tenantId from a storage lookup. The email accounts routes are incorrectly doing const user = await storage.getUser(userId) and then accessing user.tenantId, but that property doesn't exist on the User type from the database.
+
+The fix is to use (req.user as any).tenantId instead of fetching the user and accessing user.tenantId. Let me read the relevant sections of the email accounts routes and fix them:
+
+Let me find the correct line numbers:
+
+
+Executed rg -n 'GET /api/email-accounts' server/routes.ts
+The file has more lines than the read tool reported. Let me use bash to read the file:
+
+
+Executed sed -n '25416,25495p' server/routes.ts
+Now I can see the issue. The routes are checking user.tenantId after fetching the user from storage, but the User type from the database doesn't have a tenantId field. The correct approach is to use (req.user as any).tenantId which is set by the auth middleware.
+
+Let me also read the rest of the routes that need to be fixed:
+
+
+Executed sed -n '25620,25690p' server/routes.ts
+Now I understand the full extent of the issue. There are 4 routes that need to be fixed to use (req.user as any).tenantId instead of user.tenantId:
+
+GET /api/email-accounts (line ~25418)
+GET /api/email-accounts/oauth-url (line ~25477)
+DELETE /api/email-accounts/:id (line ~25629)
+PATCH /api/email-accounts/:id (line ~25651)
+Let me make all the fixes:
+
+
+Edited server/routes.ts
+Let me read part of the routes.ts file first:
+
+
+Executed head -n 100 server/routes.ts
+
+Restarted Start application
+Now let me make the edits:
+
+
+Edited server/routes.ts
+Let me use sed to make the edit directly:
+
+
+Executed grep -n "GET /api/email-accounts - List all" server/routes.ts | head -1
+Let me use sed to make the edits directly. I'll fix all 4 routes:
+
+
+Executed sed -i '25420,25425s/.*/ try {\n const tenantId = (req.user as any).tenantId;\n if (!tenantId) {\n return res.status(400).json({ message: '"'"'No tenant associated with user'"'"' });\n }/' server/routes.ts 2>&1 || echo "Failed"
+The sed approach might have issues with multiline patterns. Let me check the result and use a different approach:
+
+
+Executed sed -n '25416,25470p' server/routes.ts
+The sed command made a mess. Let me restore the file and use a different approach with git:
+
+
+Agent ran into an error
+I accidentally corrupted the routes.ts file while trying to make an edit. We need to restore to a previous version.

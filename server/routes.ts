@@ -25418,24 +25418,23 @@ ${conversationContext}`;
   // Auto-imports existing Gmail connections from user_integrations if not already in email_accounts
   app.get('/api/email-accounts', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user?.tenantId) {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
 
       // Auto-import existing Gmail connections from user_integrations
       // Uses tenant-scoped DB query for efficiency (filters at database level)
-      const tenantIntegrations = await storage.getUserIntegrationsWithGmailByTenant(user.tenantId);
+      const tenantIntegrations = await storage.getUserIntegrationsWithGmailByTenant(tenantId);
 
       for (const integration of tenantIntegrations) {
         // Skip if already imported (check by email to avoid duplicates)
-        const existingAccount = await storage.getEmailAccountByEmail(user.tenantId, integration.googleCalendarEmail!);
+        const existingAccount = await storage.getEmailAccountByEmail(tenantId, integration.googleCalendarEmail!);
         if (!existingAccount) {
           try {
             // Auto-create email account from existing user integration
             await storage.createEmailAccount({
-              tenantId: user.tenantId,
+              tenantId: tenantId,
               email: integration.googleCalendarEmail!,
               accessToken: integration.googleCalendarAccessToken,
               refreshToken: integration.googleCalendarRefreshToken || undefined,
@@ -25452,7 +25451,7 @@ ${conversationContext}`;
         }
       }
 
-      const accounts = await storage.listEmailAccounts(user.tenantId);
+      const accounts = await storage.listEmailAccounts(tenantId);
       
       // Don't expose tokens to frontend
       const safeAccounts = accounts.map(acc => ({
@@ -25483,8 +25482,8 @@ ${conversationContext}`;
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user?.tenantId) {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
 
@@ -25494,7 +25493,7 @@ ${conversationContext}`;
       // Generate secure state with nonce and HMAC signature for CSRF protection
       const { createHmac, randomBytes } = await import('crypto');
       const nonce = randomBytes(16).toString('hex');
-      const statePayload = { userId, tenantId: user.tenantId, nonce };
+      const statePayload = { userId, tenantId: tenantId, nonce };
       const stateString = JSON.stringify(statePayload);
       const signature = createHmac('sha256', integration.googleClientSecret).update(stateString).digest('hex');
       const signedState = JSON.stringify({ payload: statePayload, sig: signature });
@@ -25630,13 +25629,12 @@ ${conversationContext}`;
   app.delete('/api/email-accounts/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user?.tenantId) {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
 
-      const deleted = await storage.deleteEmailAccount(id, user.tenantId);
+      const deleted = await storage.deleteEmailAccount(id, tenantId);
       if (!deleted) {
         return res.status(404).json({ message: 'Email account not found' });
       }
@@ -25653,9 +25651,8 @@ ${conversationContext}`;
     try {
       const { id } = req.params;
       const { status } = req.body;
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user?.tenantId) {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
 
@@ -25663,7 +25660,7 @@ ${conversationContext}`;
         return res.status(400).json({ message: 'Invalid status. Use "active" or "inactive"' });
       }
 
-      const updated = await storage.updateEmailAccount(id, user.tenantId, { status });
+      const updated = await storage.updateEmailAccount(id, tenantId, { status });
       if (!updated) {
         return res.status(404).json({ message: 'Email account not found' });
       }
