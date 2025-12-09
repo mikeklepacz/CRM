@@ -27,7 +27,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Tag } from "lucide-react";
-import { useProject } from "@/contexts/project-context";
+import { useOptionalProject } from "@/contexts/project-context";
 
 interface Category {
   id: string;
@@ -43,7 +43,8 @@ interface Category {
 
 export function CategoryManagement() {
   const { toast } = useToast();
-  const { projects } = useProject();
+  const projectContext = useOptionalProject();
+  const projects = projectContext?.projects || [];
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState({
