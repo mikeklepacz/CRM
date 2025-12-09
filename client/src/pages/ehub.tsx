@@ -157,6 +157,17 @@ interface PausedRecipient {
   }>;
 }
 
+interface EmailAccount {
+  id: string;
+  email: string;
+  status: string;
+  dailySendCount: number;
+  lastSendCountReset: string | null;
+  connectedAt: string | null;
+  lastUsedAt: string | null;
+  errorMessage: string | null;
+}
+
 function SentHistoryView() {
   const projectContext = useOptionalProject();
   const currentProject = projectContext?.currentProject;
@@ -1552,6 +1563,7 @@ export default function EHub() {
 
   // Sequence form state
   const [name, setName] = useState("");
+  const [senderEmailAccountId, setSenderEmailAccountId] = useState<string | null>(null);
 
   // Test Email state
   const [testRecipientEmail, setTestRecipientEmail] = useState("");
@@ -1654,6 +1666,43 @@ export default function EHub() {
   const { data: settings } = useQuery<EhubSettings>({
     queryKey: ['/api/ehub/settings'],
   });
+
+  // Fetch email accounts
+  const { data: emailAccounts, isLoading: isLoadingEmailAccounts } = useQuery<EmailAccount[]>({
+    queryKey: ['/api/email-accounts'],
+  });
+
+  // Delete email account mutation
+  const deleteEmailAccountMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/email-accounts/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/email-accounts'] });
+      toast({ title: 'Email Disconnected', description: 'The email account has been removed' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to disconnect email', variant: 'destructive' });
+    },
+  });
+
+  // Connect email account handler
+  const handleConnectEmail = async () => {
+    try {
+      const res = await fetch('/api/email-accounts/oauth-url', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to get OAuth URL');
+      const { url } = await res.json();
+      const popup = window.open(url, 'Connect Gmail', 'width=600,height=700');
+      const checkPopup = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(checkPopup);
+          queryClient.invalidateQueries({ queryKey: ['/api/email-accounts'] });
+        }
+      }, 1000);
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to connect email', variant: 'destructive' });
+    }
+  };
 
   // Fetch upcoming blocked days (holidays) for holiday summary
   const { data: upcomingBlockedDays } = useQuery<{ date: string; reason: string }[]>({
@@ -2322,6 +2371,7 @@ export default function EHub() {
 
   const resetSequenceForm = () => {
     setName("");
+    setSenderEmailAccountId(null);
   };
 
   // Selection handlers
@@ -2378,6 +2428,7 @@ export default function EHub() {
   const handleCreateSequence = () => {
     createMutation.mutate({
       name,
+      senderEmailAccountId,
     });
   };
 
@@ -2780,6 +2831,28 @@ export default function EHub() {
                       placeholder="e.g., Cold Outreach Q1 2025"
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="senderEmail">Send From</Label>
+                    <Select
+                      value={senderEmailAccountId || ""}
+                      onValueChange={(value) => setSenderEmailAccountId(value || null)}
+                    >
+                      <SelectTrigger className="w-full" data-testid="select-sender-email">
+                        <SelectValue placeholder="Select email account (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Use default account</SelectItem>
+                        {emailAccounts?.filter(acc => acc.status === 'active').map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Select which Gmail account sends emails for this sequence
+                    </p>
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button
@@ -3157,7 +3230,7 @@ export default function EHub() {
                     <p className="text-xs text-muted-foreground mb-2">
                       AI will generate email content based on your strategy
                     </p>
-                    <div className="flex gap-2">
+                    <div className="space-y-3">
                       <Input
                         placeholder="e.g., Cold Outreach Q1 2025"
                         value={name}
@@ -3169,10 +3242,30 @@ export default function EHub() {
                         }}
                         data-testid="input-sequence-name-inline"
                       />
+                      <div>
+                        <Label htmlFor="senderEmailInline" className="text-xs">Send From</Label>
+                        <Select
+                          value={senderEmailAccountId || ""}
+                          onValueChange={(value) => setSenderEmailAccountId(value || null)}
+                        >
+                          <SelectTrigger className="w-full" data-testid="select-sender-email-inline">
+                            <SelectValue placeholder="Select email account (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Use default account</SelectItem>
+                            {emailAccounts?.filter(acc => acc.status === 'active').map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {account.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <Button
                         onClick={handleCreateSequence}
                         disabled={!name || createMutation.isPending}
                         data-testid="button-create-sequence-inline"
+                        className="w-full"
                       >
                         {createMutation.isPending ? (
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -4326,6 +4419,73 @@ export default function EHub() {
                   Save Settings
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="w-5 h-5" />
+                Email Accounts Pool
+              </CardTitle>
+              <CardDescription>
+                Connect Gmail accounts to send emails from. Emails are distributed across active accounts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoadingEmailAccounts ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading email accounts...
+                </div>
+              ) : emailAccounts && emailAccounts.length > 0 ? (
+                <div className="space-y-2">
+                  {emailAccounts.map((account) => (
+                    <div key={account.id} className="flex items-center justify-between p-3 border rounded-md" data-testid={`row-email-account-${account.id}`}>
+                      <div className="flex items-center gap-3">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        <div>
+                          <div className="font-medium">{account.email}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {account.dailySendCount} sent today
+                            {account.lastUsedAt && ` · Last used ${formatDistanceToNow(new Date(account.lastUsedAt), { addSuffix: true })}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={account.status === 'active' ? 'default' : 'secondary'}>
+                          {account.status}
+                        </Badge>
+                        {account.errorMessage && (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <AlertCircle className="w-4 h-4 text-destructive" />
+                            </TooltipTrigger>
+                            <TooltipContent>{account.errorMessage}</TooltipContent>
+                          </Tooltip>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteEmailAccountMutation.mutate(account.id)}
+                          disabled={deleteEmailAccountMutation.isPending}
+                          data-testid={`button-delete-email-${account.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  No email accounts connected. Connect a Gmail account to start sending.
+                </div>
+              )}
+              <Button onClick={handleConnectEmail} data-testid="button-connect-email">
+                <Plus className="w-4 h-4 mr-2" />
+                Connect Gmail Account
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

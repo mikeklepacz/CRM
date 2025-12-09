@@ -1,4 +1,4 @@
-import { google } from "googleapis";
+import { google, gmail_v1 } from "googleapis";
 import { storage } from "../storage";
 import type {
   SequenceRecipient,
@@ -199,6 +199,124 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
 }
 
 /**
+ * Get Gmail client from email account credentials
+ * Used for sequences with assigned sender email accounts
+ */
+async function getGmailClientForEmailAccount(emailAccountId: string, tenantId: string): Promise<{ gmail: gmail_v1.Gmail; email: string }> {
+  const account = await storage.getEmailAccount(emailAccountId, tenantId);
+  if (!account) throw new Error('Email account not found');
+  if (account.status !== 'active') throw new Error('Email account is not active');
+  if (!account.accessToken) throw new Error('Email account not connected');
+
+  const systemIntegration = await storage.getSystemIntegration('google_sheets');
+  if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+    throw new Error('System OAuth not configured');
+  }
+
+  let accessToken = account.accessToken;
+
+  if (account.tokenExpiry && account.tokenExpiry < Date.now()) {
+    if (!account.refreshToken) throw new Error('Email account token expired');
+
+    const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: systemIntegration.googleClientId,
+        client_secret: systemIntegration.googleClientSecret,
+        refresh_token: account.refreshToken,
+        grant_type: 'refresh_token'
+      })
+    });
+
+    if (!refreshResponse.ok) throw new Error('Failed to refresh email account token');
+    const tokens = await refreshResponse.json();
+    accessToken = tokens.access_token;
+
+    await storage.updateEmailAccount(emailAccountId, tenantId, {
+      accessToken,
+      tokenExpiry: Date.now() + (tokens.expires_in * 1000),
+    });
+  }
+
+  const oauth2Client = new google.auth.OAuth2(
+    systemIntegration.googleClientId,
+    systemIntegration.googleClientSecret
+  );
+  oauth2Client.setCredentials({
+    access_token: accessToken,
+    refresh_token: account.refreshToken,
+  });
+
+  return { gmail: google.gmail({ version: 'v1', auth: oauth2Client }), email: account.email };
+}
+
+/**
+ * Send email using a Gmail client directly
+ * Used when sending from email accounts instead of user integrations
+ */
+async function sendEmailWithGmailClient(
+  gmail: gmail_v1.Gmail,
+  options: { to: string; subject: string; body: string; threadId?: string; inReplyTo?: string; references?: string }
+): Promise<EmailResponse> {
+  try {
+    const headers: string[] = [
+      `To: ${options.to}`,
+      `Subject: ${mimeEncodeSubject(options.subject)}`,
+      "Content-Type: text/html; charset=utf-8",
+    ];
+
+    if (options.inReplyTo) headers.push(`In-Reply-To: ${options.inReplyTo}`);
+    if (options.references) headers.push(`References: ${options.references}`);
+
+    const email = [...headers, "", options.body].join("\r\n");
+
+    const encodedEmail = Buffer.from(email)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    const requestBody: any = { raw: encodedEmail };
+    if (options.threadId) requestBody.threadId = options.threadId;
+
+    const response = await gmail.users.messages.send({
+      userId: "me",
+      requestBody,
+    });
+
+    const gmailMessageId = response.data.id;
+    const gmailThreadId = response.data.threadId;
+
+    let rfc822MessageId: string | undefined;
+    if (gmailMessageId) {
+      try {
+        const message = await gmail.users.messages.get({
+          userId: "me",
+          id: gmailMessageId,
+          format: "full",
+        });
+
+        const msgHeaders = message.data.payload?.headers || [];
+        const msgIdHeader = msgHeaders.find(
+          (h) => h.name?.toLowerCase() === "message-id",
+        );
+        if (msgIdHeader?.value) rfc822MessageId = msgIdHeader.value;
+      } catch {}
+    }
+
+    return {
+      success: true,
+      messageId: gmailMessageId,
+      threadId: gmailThreadId,
+      rfc822MessageId,
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Unknown error" };
+  }
+}
+
+/**
  * CLEAN, HIGH-PERFORMANCE AI EMAIL GENERATION
  */
 export async function personalizeEmailWithAI(
@@ -375,8 +493,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       return false;
     }
 
-    // 2. Get admin user for Gmail OAuth
-    // CRITICAL FIX: Hardcode the actual admin user ID to bypass ghost user bug
+    // 2. Fallback admin user for Gmail OAuth (used when no sender email account is assigned)
     const ADMIN_USER_ID = '4df35876-ab89-4860-8656-0440accfea14'; // michael@naturalmaterials.eu
 
     // 3. Generate email content using AI
@@ -432,16 +549,47 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       }
     }
 
-    // 4. Send email via Gmail
-    const emailResult = await sendEmail({
-      userId: ADMIN_USER_ID,
-      to: recipient.email,
-      subject,
-      body,
-      threadId,
-      inReplyTo,
-      references,
-    });
+    // 4. Send email via Gmail - use sequence's email account if assigned, otherwise fallback to admin
+    let emailResult: EmailResponse;
+    let usedEmailAccountId: string | null = null;
+    
+    if (sequence.senderEmailAccountId) {
+      // Use the sequence's assigned email account
+      try {
+        const { gmail } = await getGmailClientForEmailAccount(sequence.senderEmailAccountId, sequence.tenantId);
+        emailResult = await sendEmailWithGmailClient(gmail, {
+          to: recipient.email,
+          subject,
+          body,
+          threadId,
+          inReplyTo,
+          references,
+        });
+        usedEmailAccountId = sequence.senderEmailAccountId;
+      } catch (emailAccountError: any) {
+        // Email account failed - fall back to admin user
+        emailResult = await sendEmail({
+          userId: ADMIN_USER_ID,
+          to: recipient.email,
+          subject,
+          body,
+          threadId,
+          inReplyTo,
+          references,
+        });
+      }
+    } else {
+      // No email account assigned - use admin fallback
+      emailResult = await sendEmail({
+        userId: ADMIN_USER_ID,
+        to: recipient.email,
+        subject,
+        body,
+        threadId,
+        inReplyTo,
+        references,
+      });
+    }
 
     if (!emailResult.success) {
       return false;
@@ -478,6 +626,15 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       await storage.incrementSequenceSentCount(sequence.id);
     } catch (error) {
       // Silent failure - don't break email sending for bookkeeping errors
+    }
+
+    // 7.5 Increment email account daily send count if using an email account
+    if (usedEmailAccountId) {
+      try {
+        await storage.incrementEmailAccountDailySendCount(usedEmailAccountId, sequence.tenantId);
+      } catch (error) {
+        // Silent failure - don't break email sending for tracking errors
+      }
     }
 
     // 8. UPDATE COMMISSION TRACKER GOOGLE SHEETS (critical fix!)
