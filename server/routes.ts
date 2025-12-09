@@ -25418,9 +25418,33 @@ ${conversationContext}`;
   // Auto-imports existing Gmail connections from user_integrations if not already in email_accounts
   app.get('/api/email-accounts', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user?.tenantId) {
+      const tenantId = (req.user as any).tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+    try {
+      const tenantId = (req.user as any).tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+    try {
+      const tenantId = (req.user as any).tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+    try {
+      const tenantId = (req.user as any).tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+    try {
+      const tenantId = (req.user as any).tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+    try {
+      const tenantId = (req.user as any).tenantId;
+      if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
 
