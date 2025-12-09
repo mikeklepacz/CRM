@@ -309,14 +309,14 @@ export function CategoryManagement() {
               <div className="space-y-2">
                 <Label htmlFor="projectId">Assigned Project</Label>
                 <Select
-                  value={formData.projectId || ""}
-                  onValueChange={(value) => setFormData({ ...formData, projectId: value === "" ? null : value })}
+                  value={formData.projectId || "all"}
+                  onValueChange={(value) => setFormData({ ...formData, projectId: value === "all" ? null : value })}
                 >
                   <SelectTrigger data-testid="select-category-project">
                     <SelectValue placeholder="All Projects" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Projects</SelectItem>
+                    <SelectItem value="all">All Projects</SelectItem>
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}
