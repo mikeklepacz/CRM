@@ -18663,8 +18663,9 @@ Use this store information to provide context-aware responses. When helping draf
   // Get all categories (admin only)
   app.get('/api/categories', isAuthenticatedCustom, async (req: any, res) => {
     try {
+      const projectId = req.query.projectId as string | undefined;
       const tenantId = req.user.tenantId;
-      const categories = await storage.getAllCategories(tenantId);
+      const categories = await storage.getAllCategories(tenantId, projectId);
       res.json({ categories });
     } catch (error: any) {
       console.error('Error fetching categories:', error);
@@ -18676,7 +18677,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/categories/active', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const tenantId = req.user.tenantId;
-      const categories = await storage.getActiveCategories(tenantId);
+      const projectId = req.query.projectId as string | undefined;
+      const categories = await storage.getActiveCategories(tenantId, projectId);
       res.json({ categories });
     } catch (error: any) {
       console.error('Error fetching active categories:', error);

@@ -25,7 +25,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Tag } from "lucide-react";
+import { useProject } from "@/contexts/project-context";
 
 interface Category {
   id: string;
@@ -33,12 +35,15 @@ interface Category {
   description: string | null;
   displayOrder: number;
   isActive: boolean;
+  projectId: string | null;
+  projectName?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export function CategoryManagement() {
   const { toast } = useToast();
+  const { projects } = useProject();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState({
@@ -46,6 +51,7 @@ export function CategoryManagement() {
     description: "",
     displayOrder: 0,
     isActive: true,
+    projectId: null as string | null,
   });
 
   const { data: categoriesData, isLoading } = useQuery<{ categories: Category[] }>({
@@ -136,6 +142,7 @@ export function CategoryManagement() {
       description: "",
       displayOrder: 0,
       isActive: true,
+      projectId: null,
     });
     setEditingCategory(null);
   };
@@ -148,6 +155,7 @@ export function CategoryManagement() {
         description: category.description || "",
         displayOrder: category.displayOrder,
         isActive: category.isActive,
+        projectId: category.projectId || null,
       });
     } else {
       resetForm();
@@ -157,6 +165,7 @@ export function CategoryManagement() {
         description: "",
         displayOrder: nextOrder,
         isActive: true,
+        projectId: null,
       });
     }
     setIsDialogOpen(true);
@@ -224,6 +233,7 @@ export function CategoryManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Project</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Display Order</TableHead>
                   <TableHead>Status</TableHead>
@@ -234,6 +244,13 @@ export function CategoryManagement() {
                 {categories.map((category) => (
                   <TableRow key={category.id} data-testid={`row-category-${category.id}`}>
                     <TableCell className="font-medium">{category.name}</TableCell>
+                    <TableCell>
+                      {category.projectId ? (
+                        <Badge variant="outline">{category.projectName || "Unknown"}</Badge>
+                      ) : (
+                        <Badge variant="secondary">All Projects</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {category.description || <span className="text-muted-foreground">—</span>}
                     </TableCell>
@@ -297,6 +314,29 @@ export function CategoryManagement() {
                   required
                   data-testid="input-category-name"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="projectId">Assigned Project</Label>
+                <Select
+                  value={formData.projectId || ""}
+                  onValueChange={(value) => setFormData({ ...formData, projectId: value === "" ? null : value })}
+                >
+                  <SelectTrigger data-testid="select-category-project">
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Projects</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Categories can be scoped to a specific project, or shared across all projects
+                </p>
               </div>
 
               <div className="space-y-2">

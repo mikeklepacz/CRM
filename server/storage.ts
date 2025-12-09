@@ -421,8 +421,8 @@ export interface IStorage {
   removeUserTagById(userId: string, id: string): Promise<void>;
 
   // Category operations
-  getAllCategories(tenantId: string): Promise<Category[]>;
-  getActiveCategories(tenantId: string): Promise<Category[]>;
+  getAllCategories(tenantId: string, projectId?: string): Promise<Category[]>;
+  getActiveCategories(tenantId: string, projectId?: string): Promise<Category[]>;
   getCategory(id: string): Promise<Category | undefined>;
   getCategoryByName(tenantId: string, name: string): Promise<Category | undefined>;
   getOrCreateCategoryByName(tenantId: string, name: string): Promise<Category>;
@@ -2470,19 +2470,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Category operations
-  async getAllCategories(tenantId: string): Promise<Category[]>{
+  async getAllCategories(tenantId: string, projectId?: string): Promise<Category[]>{
+    const conditions = [eq(categories.tenantId, tenantId)];
+    if (projectId) {
+      conditions.push(eq(categories.projectId, projectId));
+    }
     return await db
       .select()
       .from(categories)
-      .where(eq(categories.tenantId, tenantId))
+      .where(and(...conditions))
       .orderBy(categories.displayOrder, categories.name);
   }
 
-  async getActiveCategories(tenantId: string): Promise<Category[]> {
+  async getActiveCategories(tenantId: string, projectId?: string): Promise<Category[]> {
+    const conditions = [eq(categories.isActive, true), eq(categories.tenantId, tenantId)];
+    if (projectId) {
+      conditions.push(eq(categories.projectId, projectId));
+    }
     return await db
       .select()
       .from(categories)
-      .where(and(eq(categories.isActive, true), eq(categories.tenantId, tenantId)))
+      .where(and(...conditions))
       .orderBy(categories.displayOrder, categories.name);
   }
 
