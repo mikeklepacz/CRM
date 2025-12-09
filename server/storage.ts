@@ -202,6 +202,9 @@ import {
   type InsertQualificationCampaign,
   type QualificationLead,
   type InsertQualificationLead,
+  emailAccounts,
+  type EmailAccount,
+  type InsertEmailAccount,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
@@ -755,6 +758,16 @@ export interface IStorage {
   deleteQualificationLead(id: string, tenantId: string): Promise<boolean>;
   deleteQualificationLeads(ids: string[], tenantId: string): Promise<number>;
   getQualificationLeadStats(tenantId: string, campaignId?: string): Promise<{ total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null }>;
+
+  // Email Accounts Pool operations
+  listEmailAccounts(tenantId: string): Promise<EmailAccount[]>;
+  getEmailAccount(id: string, tenantId: string): Promise<EmailAccount | undefined>;
+  getEmailAccountByEmail(tenantId: string, email: string): Promise<EmailAccount | undefined>;
+  createEmailAccount(data: InsertEmailAccount): Promise<EmailAccount>;
+  updateEmailAccount(id: string, tenantId: string, updates: Partial<InsertEmailAccount>): Promise<EmailAccount>;
+  deleteEmailAccount(id: string, tenantId: string): Promise<boolean>;
+  incrementEmailAccountDailySendCount(id: string, tenantId: string): Promise<EmailAccount>;
+  getAvailableEmailAccount(tenantId: string, maxDailyLimit: number): Promise<EmailAccount | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5854,6 +5867,88 @@ export class DatabaseStorage implements IStorage {
       byCallStatus,
       averageScore: scoreCount > 0 ? Math.round(scoreSum / scoreCount) : null
     };
+  }
+
+  // Email Accounts Pool operations
+  async listEmailAccounts(tenantId: string): Promise<EmailAccount[]> {
+    return await db.select()
+      .from(emailAccounts)
+      .where(eq(emailAccounts.tenantId, tenantId))
+      .orderBy(desc(emailAccounts.createdAt));
+  }
+
+  async getEmailAccount(id: string, tenantId: string): Promise<EmailAccount | undefined> {
+    const [account] = await db.select()
+      .from(emailAccounts)
+      .where(and(eq(emailAccounts.id, id), eq(emailAccounts.tenantId, tenantId)));
+    return account;
+  }
+
+  async getEmailAccountByEmail(tenantId: string, email: string): Promise<EmailAccount | undefined> {
+    const [account] = await db.select()
+      .from(emailAccounts)
+      .where(and(eq(emailAccounts.tenantId, tenantId), eq(emailAccounts.email, email)));
+    return account;
+  }
+
+  async createEmailAccount(data: InsertEmailAccount): Promise<EmailAccount> {
+    const [created] = await db.insert(emailAccounts).values(data).returning();
+    return created;
+  }
+
+  async updateEmailAccount(id: string, tenantId: string, updates: Partial<InsertEmailAccount>): Promise<EmailAccount> {
+    const [updated] = await db.update(emailAccounts)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(emailAccounts.id, id), eq(emailAccounts.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteEmailAccount(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(emailAccounts)
+      .where(and(eq(emailAccounts.id, id), eq(emailAccounts.tenantId, tenantId)));
+    return (result as any).rowCount > 0;
+  }
+
+  async incrementEmailAccountDailySendCount(id: string, tenantId: string): Promise<EmailAccount> {
+    const today = new Date().toISOString().split('T')[0];
+    const account = await this.getEmailAccount(id, tenantId);
+    if (!account) throw new Error('Email account not found');
+
+    const lastReset = account.lastSendCountReset;
+    const needsReset = !lastReset || lastReset !== today;
+
+    const [updated] = await db.update(emailAccounts)
+      .set({
+        dailySendCount: needsReset ? 1 : (account.dailySendCount || 0) + 1,
+        lastSendCountReset: today,
+        lastUsedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(emailAccounts.id, id), eq(emailAccounts.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async getAvailableEmailAccount(tenantId: string, maxDailyLimit: number): Promise<EmailAccount | undefined> {
+    const today = new Date().toISOString().split('T')[0];
+    const accounts = await db.select()
+      .from(emailAccounts)
+      .where(and(
+        eq(emailAccounts.tenantId, tenantId),
+        eq(emailAccounts.status, 'active')
+      ))
+      .orderBy(emailAccounts.dailySendCount);
+
+    for (const account of accounts) {
+      const lastReset = account.lastSendCountReset;
+      const needsReset = !lastReset || lastReset !== today;
+      const currentCount = needsReset ? 0 : (account.dailySendCount || 0);
+      if (currentCount < maxDailyLimit) {
+        return account;
+      }
+    }
+    return undefined;
   }
 }
 
