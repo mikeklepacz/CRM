@@ -11520,6 +11520,24 @@ IMPORTANT:
       // - Filter stores to only those whose category is in the allowed list
       // - If project has no categories, return empty result (not all data)
       // ============================================================================
+      // Build Link → Category lookup map for Parent Link inheritance (used by project filter)
+      const storeLinkColumn = storeHeaders.find(h => h.toLowerCase() === 'link');
+      const storeParentLinkColumn = storeHeaders.find(h => h.toLowerCase() === 'parent link');
+      const linkToCategoryMap = new Map<string, string>();
+      
+      if (storeLinkColumn && storeCategoryColumnName) {
+        filteredStoreData.forEach(row => {
+          const link = row[storeLinkColumn]?.toString().trim().toLowerCase();
+          const category = row[storeCategoryColumnName]?.toString().trim().toLowerCase();
+          if (link && category) {
+            linkToCategoryMap.set(link, category);
+          }
+        });
+      }
+      
+      // Store allowed category names for use in orphaned tracker filtering later
+      let allowedCategoryNames: string[] = [];
+      
       if (projectId && storeCategoryColumnName) {
         // Get categories belonging to this project (or shared categories with null projectId)
         const projectCategories = await db
@@ -11535,7 +11553,7 @@ IMPORTANT:
             )
           );
         
-        const allowedCategoryNames = projectCategories.map(c => c.name.toLowerCase().trim());
+        allowedCategoryNames = projectCategories.map(c => c.name.toLowerCase().trim());
         
         if (allowedCategoryNames.length === 0) {
           // Project has no categories - return empty to prevent showing all data
@@ -11544,9 +11562,24 @@ IMPORTANT:
         } else {
           const beforeFilterCount = filteredStoreData.length;
           filteredStoreData = filteredStoreData.filter(row => {
-            const rowCategory = row[storeCategoryColumnName];
-            if (!rowCategory) return false;
-            return allowedCategoryNames.includes(rowCategory.toLowerCase().trim());
+            // First, check the row's own category
+            const rowCategory = row[storeCategoryColumnName]?.toString().trim().toLowerCase();
+            if (rowCategory && allowedCategoryNames.includes(rowCategory)) {
+              return true;
+            }
+            
+            // If no direct category, check Parent Link for inherited category
+            if (storeParentLinkColumn) {
+              const parentLink = row[storeParentLinkColumn]?.toString().trim().toLowerCase();
+              if (parentLink) {
+                const parentCategory = linkToCategoryMap.get(parentLink);
+                if (parentCategory && allowedCategoryNames.includes(parentCategory)) {
+                  return true;
+                }
+              }
+            }
+            
+            return false;
           });
           const afterFilterCount = filteredStoreData.length;
           console.log(`Project filter applied: ${allowedCategoryNames.join(', ')} - ${afterFilterCount} stores shown (${beforeFilterCount - afterFilterCount} filtered out)`);
@@ -11629,12 +11662,49 @@ IMPORTANT:
       });
 
       // Then, add tracker rows that don't exist in FILTERED store (deleted orders)
+      // CRITICAL: Only include orphaned tracker rows if their Link resolves to a project-valid category
       filteredTrackerData.forEach(trackerRow => {
         const joinValue = trackerRow[actualTrackerJoinColumn];
         const normalizedJoinValue = normalizeLink(joinValue);
         // Check if this tracker row already matched a FILTERED store row
         const alreadyMerged = filteredStoreData.some(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedJoinValue && normalizedJoinValue);
         if (!alreadyMerged) {
+          // Project filtering for orphaned tracker rows
+          // Only include if Link resolves to a category that belongs to the project
+          if (projectId && allowedCategoryNames.length > 0) {
+            const trackerLinkColumn = trackerHeaders.find(h => h.toLowerCase() === 'link');
+            const trackerParentLinkColumn = trackerHeaders.find(h => h.toLowerCase() === 'parent link');
+            
+            let hasValidCategory = false;
+            
+            // Check if tracker row's Link maps to a valid category
+            if (trackerLinkColumn) {
+              const trackerLink = trackerRow[trackerLinkColumn]?.toString().trim().toLowerCase();
+              if (trackerLink && linkToCategoryMap.has(trackerLink)) {
+                const category = linkToCategoryMap.get(trackerLink);
+                if (category && allowedCategoryNames.includes(category)) {
+                  hasValidCategory = true;
+                }
+              }
+            }
+            
+            // If no direct category, check Parent Link
+            if (!hasValidCategory && trackerParentLinkColumn) {
+              const parentLink = trackerRow[trackerParentLinkColumn]?.toString().trim().toLowerCase();
+              if (parentLink && linkToCategoryMap.has(parentLink)) {
+                const parentCategory = linkToCategoryMap.get(parentLink);
+                if (parentCategory && allowedCategoryNames.includes(parentCategory)) {
+                  hasValidCategory = true;
+                }
+              }
+            }
+            
+            // Skip this orphaned row if it doesn't belong to the project
+            if (!hasValidCategory) {
+              return;
+            }
+          }
+          
           // This row only exists in tracker - it was deleted from store
           mergedDataMap.set(`tracker-${trackerRow._trackerRowIndex}`, {
             ...trackerRow,

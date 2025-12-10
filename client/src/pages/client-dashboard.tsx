@@ -1023,7 +1023,10 @@ export default function ClientDashboard() {
       if (!response.ok) throw new Error('Failed to fetch merged data');
       return response.json();
     },
-    enabled: !!storeSheetId && !!trackerSheetId,
+    // Wait for project context to be loaded before fetching to prevent stale cache from projectId=undefined
+    enabled: !!storeSheetId && !!trackerSheetId && currentProject !== undefined,
+    // Don't use stale data from previous project - always refetch when project changes
+    staleTime: 0,
   });
 
   const headers = mergedData?.headers || [];
@@ -2555,7 +2558,7 @@ export default function ClientDashboard() {
               <div className="flex flex-wrap items-center gap-2">
                 {/* Total and Visible Shops Counter */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground px-3 py-1 bg-muted rounded-md" data-testid="text-shops-counter">
-                  <span className="font-medium">Showing {filteredData.length} shops</span>
+                  <span className="font-medium">Showing {filteredData.length} of {data.length} shops</span>
                 </div>
 
                 <Popover>
