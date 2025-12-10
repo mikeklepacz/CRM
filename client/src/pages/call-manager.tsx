@@ -1318,7 +1318,16 @@ export default function CallManager() {
 
   // Fetch eligible stores for current scenario
   const { data: eligibleStores = [], isLoading: storesLoading, refetch: refetchStores } = useQuery<EligibleStore[]>({
-    queryKey: ['/api/elevenlabs/eligible-stores', activeScenario],
+    queryKey: ['/api/elevenlabs/eligible-stores', activeScenario, currentProject?.id],
+    queryFn: async () => {
+      const url = new URL(`/api/elevenlabs/eligible-stores/${activeScenario}`, window.location.origin);
+      if (currentProject?.id) {
+        url.searchParams.set('projectId', currentProject.id);
+      }
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch eligible stores');
+      return response.json();
+    },
     enabled: hasAccess,
   });
 

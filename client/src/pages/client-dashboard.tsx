@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLocation } from "wouter";
 import { canAccessAdminFeatures } from "@/lib/authUtils";
+import { useOptionalProject } from "@/contexts/project-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -371,6 +372,8 @@ export default function ClientDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { openPanel } = useChatPanel();
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   const [storeSheetId, setStoreSheetId] = useState<string>("");
   const [trackerSheetId, setTrackerSheetId] = useState<string>("");
   const joinColumn = "link"; // Hardcoded to "link"
@@ -1008,14 +1011,14 @@ export default function ClientDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data: mergedData, isLoading, refetch } = useQuery({
-    queryKey: ['merged-data', storeSheetId, trackerSheetId, joinColumn],
+    queryKey: ['merged-data', storeSheetId, trackerSheetId, joinColumn, currentProject?.id],
     queryFn: async () => {
       if (!storeSheetId || !trackerSheetId) return null;
       const response = await fetch('/api/sheets/merged-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ storeSheetId, trackerSheetId, joinColumn }),
+        body: JSON.stringify({ storeSheetId, trackerSheetId, joinColumn, projectId: currentProject?.id }),
       });
       if (!response.ok) throw new Error('Failed to fetch merged data');
       return response.json();

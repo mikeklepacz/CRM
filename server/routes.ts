@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq, sql, inArray, and, desc, isNotNull, isNull, ne } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants } from "@shared/schema";
+import { eq, sql, inArray, and, or, desc, isNotNull, isNull, ne } from "drizzle-orm";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants, categories } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -142,8 +142,8 @@ const sheetsCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 30000; // 30 seconds
 
 // Generate cache key from request parameters
-function generateCacheKey(userId: string, storeSheetId: string, trackerSheetId: string, category: string | null): string {
-  return `${userId}:${storeSheetId}:${trackerSheetId}:${category || 'all'}`;
+function generateCacheKey(userId: string, storeSheetId: string, trackerSheetId: string, category: string | null, projectId?: string): string {
+  return `${userId}:${storeSheetId}:${trackerSheetId}:${category || 'all'}:${projectId || 'all-projects'}`;
 }
 
 // Get cached data if still valid
@@ -2710,13 +2710,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Link: link,
         };
       }).filter((store: any) => store.Link);
+
+      // Apply project-based filtering through category linkage
+      const projectId = req.query.projectId as string | undefined;
+      let projectFilteredStores = stores;
+
+      if (projectId) {
+        const tenantId = (req.user as any).tenantId;
+        const projectCategories = await storage.getCategoriesForProject(projectId, tenantId);
+        const projectCategoryNames = new Set(projectCategories.map((c: any) => c.name.toLowerCase()));
+
+        if (projectCategoryNames.size > 0) {
+          projectFilteredStores = stores.filter((store: any) => {
+            const storeCategory = (store['Category'] || store['category'] || '').toLowerCase().trim();
+            return storeCategory && projectCategoryNames.has(storeCategory);
+          });
+        } else {
+          // Project has no categories - return empty list
+          projectFilteredStores = [];
+        }
+      }
       
       // Apply scenario-based filtering
-      let eligibleStores = stores;
+      let eligibleStores = projectFilteredStores;
       
       if (scenario === 'cold_calls') {
         // Cold Calls: Simply show all stores with Status = 'Claimed'
-        eligibleStores = stores.filter((store: any) => {
+        eligibleStores = projectFilteredStores.filter((store: any) => {
           const status = store['Status'] || store['status'] || '';
           return status.toLowerCase() === 'claimed';
         });
@@ -2725,7 +2745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        eligibleStores = stores.filter((store: any) => {
+        eligibleStores = projectFilteredStores.filter((store: any) => {
           const status = store['Status'] || store['status'] || '';
           const followUpDate = store['Follow-up Date'] || store['follow_up_date'] || store['followUpDate'] || '';
           
@@ -2746,7 +2766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
-        eligibleStores = stores.filter((store: any) => {
+        eligibleStores = projectFilteredStores.filter((store: any) => {
           const agentName = store['Agent Name'] || store['agent_name'] || store['agentName'] || '';
           const lastContact = store['Last Contact'] || store['last_contact_date'] || store['lastContactDate'] || '';
           
@@ -11268,7 +11288,7 @@ IMPORTANT:
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      const { storeSheetId, trackerSheetId, joinColumn } = req.body;
+      const { storeSheetId, trackerSheetId, joinColumn, projectId } = req.body;
 
       if (!storeSheetId || !trackerSheetId || !joinColumn) {
         return res.status(400).json({ message: "Store sheet ID, tracker sheet ID, and join column are required" });
@@ -11279,7 +11299,7 @@ IMPORTANT:
       const selectedCategory = await storage.getSelectedCategory(userId, tenantId);
 
       // Check cache first (30-second TTL)
-      const cacheKey = generateCacheKey(userId, storeSheetId, trackerSheetId, selectedCategory);
+      const cacheKey = generateCacheKey(userId, storeSheetId, trackerSheetId, selectedCategory, projectId);
       const cachedData = getCachedData(cacheKey);
 
       if (cachedData) {
@@ -11467,6 +11487,54 @@ IMPORTANT:
       } else if (selectedCategory && !storeCategoryColumnName) {
         console.log(`WARNING: User has selectedCategory "${selectedCategory}" but "Category" column not found in sheet`);
       }
+
+      // ============================================================================
+      // CRITICAL: Filter by Project Categories
+      // ============================================================================
+      // Purpose:
+      // Filter stores by categories that belong to the selected project
+      // This ensures data isolation between projects (e.g., Pet Sales vs Hemp Wick Sales)
+      //
+      // Filter Logic:
+      // - If projectId is provided, get all category names belonging to that project
+      // - Filter stores to only those whose category is in the allowed list
+      // - If project has no categories, return empty result (not all data)
+      // ============================================================================
+      if (projectId && storeCategoryColumnName) {
+        // Get categories belonging to this project (or shared categories with null projectId)
+        const projectCategories = await db
+          .select({ name: categories.name })
+          .from(categories)
+          .where(
+            and(
+              eq(categories.tenantId, tenantId),
+              or(
+                eq(categories.projectId, projectId),
+                isNull(categories.projectId)
+              )
+            )
+          );
+        
+        const allowedCategoryNames = projectCategories.map(c => c.name.toLowerCase().trim());
+        
+        if (allowedCategoryNames.length === 0) {
+          // Project has no categories - return empty to prevent showing all data
+          console.log(`Project ${projectId} has no categories - returning empty result`);
+          filteredStoreData = [];
+        } else {
+          const beforeFilterCount = filteredStoreData.length;
+          filteredStoreData = filteredStoreData.filter(row => {
+            const rowCategory = row[storeCategoryColumnName];
+            if (!rowCategory) return false;
+            return allowedCategoryNames.includes(rowCategory.toLowerCase().trim());
+          });
+          const afterFilterCount = filteredStoreData.length;
+          console.log(`Project filter applied: ${allowedCategoryNames.join(', ')} - ${afterFilterCount} stores shown (${beforeFilterCount - afterFilterCount} filtered out)`);
+        }
+      } else if (projectId && !storeCategoryColumnName) {
+        console.log(`WARNING: projectId "${projectId}" provided but "Category" column not found in sheet`);
+      }
+
 
       // ============================================================================
       // CRITICAL: Filter Out Closed Listings (Open = FALSE)

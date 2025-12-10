@@ -312,7 +312,7 @@ export interface IStorage {
   // Client operations
   getAllClients(tenantId: string): Promise<Client[]>;
   getClientsByAgent(agentId: string, tenantId: string): Promise<Client[]>;
-  getFilteredClients(tenantId: string, filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string }): Promise<Client[]>;
+  getFilteredClients(tenantId: string, filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string; projectId?: string }): Promise<Client[]>;
   getClient(id: string, tenantId: string): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
   updateClient(id: string, tenantId: string, updates: Partial<InsertClient>): Promise<Client>;
@@ -1690,7 +1690,30 @@ export class DatabaseStorage implements IStorage {
       .orderBy(clients.createdAt);
   }
 
-  async getFilteredClients(tenantId: string, filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string }): Promise<Client[]> {
+  async getFilteredClients(tenantId: string, filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string; projectId?: string }): Promise<Client[]> {
+    // If projectId is provided, filter by categories belonging to that project
+    let allowedCategoryNames: string[] | null = null;
+    if (filters.projectId) {
+      const projectCategories = await db
+        .select({ name: categories.name })
+        .from(categories)
+        .where(
+          and(
+            eq(categories.tenantId, tenantId),
+            or(
+              eq(categories.projectId, filters.projectId),
+              isNull(categories.projectId)
+            )
+          )
+        );
+      allowedCategoryNames = projectCategories.map(c => c.name);
+      
+      // If project has no categories, return empty to prevent showing all data
+      if (allowedCategoryNames.length === 0) {
+        return [];
+      }
+    }
+    
     let query = db.select().from(clients);
     const conditions: any[] = [eq(clients.tenantId, tenantId)];
 
@@ -1702,7 +1725,12 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Filter by category
+    // Filter by project's categories (if projectId was provided)
+    if (allowedCategoryNames !== null) {
+      conditions.push(inArray(clients.category, allowedCategoryNames));
+    }
+
+    // Filter by specific category (in addition to project filtering)
     if (filters.category) {
       conditions.push(eq(clients.category, filters.category));
     }
