@@ -11475,7 +11475,7 @@ IMPORTANT:
         h.toLowerCase().trim() === 'category'
       );
 
-      if (selectedCategory && storeCategoryColumnName) {
+      if (selectedCategory && storeCategoryColumnName && !projectId) {
         const beforeFilterCount = filteredStoreData.length;
         filteredStoreData = filteredStoreData.filter(row => {
           const rowCategory = row[storeCategoryColumnName];
