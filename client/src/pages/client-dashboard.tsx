@@ -1520,17 +1520,40 @@ export default function ClientDashboard() {
     };
   }, [headers, data, selectedStates]);
 
-  // Initialize selected states when data loads (or from saved preferences)
+  // State selection: ensure valid selection whenever data or preferences change
+  const statesVersion = allStates.join(',');
+  const prefsVersion = (userPreferences?.selectedStates || []).sort().join(',');
+  const [lastProcessedVersion, setLastProcessedVersion] = useState<string>('');
+  
   useEffect(() => {
-    if (allStates.length > 0 && selectedStates.size === 0 && preferencesLoaded) {
-      if (userPreferences?.selectedStates && userPreferences.selectedStates.length > 0) {
-        // Filter saved states to only include ones that still exist in the data
-        const validStates = userPreferences.selectedStates.filter((state: string) => allStates.includes(state));
-        setSelectedStates(new Set(validStates));
+    // Wait for BOTH data and preferences to be ready
+    if (allStates.length === 0 || !preferencesLoaded) return;
+    
+    // Create a combined version that includes both data and preferences
+    const combinedVersion = `${statesVersion}|${prefsVersion}`;
+    
+    // Skip if we've already processed this exact combination
+    if (combinedVersion === lastProcessedVersion) return;
+    
+    // Mark as processed
+    setLastProcessedVersion(combinedVersion);
+    
+    // Priority 1: Try saved preferences (always apply if valid)
+    if (userPreferences?.selectedStates && userPreferences.selectedStates.length > 0) {
+      const validPrefs = userPreferences.selectedStates.filter((s: string) => allStates.includes(s));
+      if (validPrefs.length > 0) {
+        setSelectedStates(new Set(validPrefs));
+        return;
       }
-      // If no saved preferences, do NOT auto-select anything - user must manually choose
     }
-  }, [allStates.length, userPreferences, preferencesLoaded]);
+    
+    // Priority 2: Check if current selection is valid
+    const currentValidCount = Array.from(selectedStates).filter(s => allStates.includes(s)).length;
+    if (currentValidCount > 0) return;
+    
+    // Priority 3: Fallback to all states so data is visible
+    setSelectedStates(new Set(allStates));
+  }, [allStates, statesVersion, prefsVersion, selectedStates, preferencesLoaded, userPreferences, lastProcessedVersion]);
 
   // Initialize selected cities when states change or cities load
   useEffect(() => {
