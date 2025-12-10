@@ -1705,6 +1705,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.incrementCampaignCalls(target.campaignId, clientData.tenantId, callSuccessful ? 'successful' : 'failed');
             
             console.log(`Updated campaign target ${targetId} status to ${newStatus}`);
+            
+            // Update qualification lead if this was a lead call
+            if (target?.clientId) {
+              const client = await storage.getClient(target.clientId, clientData.tenantId);
+              if (client?.uniqueIdentifier?.startsWith('lead:')) {
+                const leadId = client.uniqueIdentifier.replace('lead:', '');
+                const leadData = client.data as any;
+                const leadStatus = callSuccessful ? 'completed' : 'failed';
+                await storage.updateQualificationLead(leadId, clientData.tenantId, {
+                  callStatus: leadStatus,
+                  callSessionId: conversationId,
+                  lastCallAt: new Date(),
+                  status: callSuccessful ? 'contacted' : 'new',
+                });
+                console.log(`Updated qualification lead ${leadId} call status to ${leadStatus}`);
+              }
+            }
           }
         }
       }
@@ -2816,13 +2833,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isOpen,
           agentName,
           status,
+          source: 'sheets' as const,
         };
       }).filter((store: any) => {
         // Exclude DBA children - they have no businessName
         return store.businessName && store.businessName.trim().length > 0;
       });
+
+      // ============================================================================
+      // Unified Contact Feed: Add Qualification Leads from Database
+      // ============================================================================
+      let qualificationLeadsContacts: any[] = [];
       
-      res.json(storesWithHours);
+      // Only fetch leads for cold_calls scenario (pending calls)
+      if (scenario === 'cold_calls' || scenario === 'qualification') {
+        const tenantId = (req.user as any).tenantId;
+        const { leads } = await storage.listQualificationLeads(tenantId, { limit: 1000 });
+        
+        // Filter leads with phone numbers and pending call status
+        const callableLeads = leads.filter((lead: any) => {
+          const hasPhone = lead.pocPhone && lead.pocPhone.trim().length > 0;
+          const isPending = !lead.callStatus || lead.callStatus === 'pending';
+          return hasPhone && isPending;
+        });
+        
+        // Project filtering for leads (if projectId specified)
+        let filteredLeads = callableLeads;
+        if (projectId) {
+          const projectCategories = await storage.getCategoriesForProject(projectId, tenantId);
+          const projectCategoryNames = new Set(projectCategories.map((c: any) => c.name.toLowerCase()));
+          
+          if (projectCategoryNames.size > 0) {
+            filteredLeads = callableLeads.filter((lead: any) => {
+              const leadCategory = (lead.category || '').toLowerCase().trim();
+              // Include leads with matching category OR leads without category (unassigned)
+              return !leadCategory || projectCategoryNames.has(leadCategory);
+            });
+          }
+        }
+        
+        // Map leads to EligibleStore format
+        qualificationLeadsContacts = filteredLeads.map((lead: any) => ({
+          link: `lead:${lead.id}`,  // Prefix to distinguish from sheet links
+          leadId: lead.id,
+          businessName: lead.company || 'Unknown Company',
+          state: lead.state || lead.country || '',
+          country: lead.country || '',
+          phone: lead.pocPhone || '',
+          hours: '',  // Leads don't have hours data
+          hoursSchedule: [],
+          isOpen: true,  // Assume leads are always callable
+          agentName: '',  // Not assigned yet
+          status: lead.callStatus || 'pending',
+          pocName: lead.pocName || '',
+          website: lead.website || '',
+          source: 'leads' as const,
+        }));
+      }
+
+      // Combine both sources into unified contact feed
+      const unifiedContacts = [...storesWithHours, ...qualificationLeadsContacts];
+      
+      res.json(unifiedContacts);
     } catch (error: any) {
       console.error('Error fetching eligible stores:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
@@ -2910,39 +2982,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let skippedStores = 0;
       
       for (const storeLink of stores) {
-        // Find existing client by unique identifier
-        let client = await storage.getClientByUniqueIdentifier(storeLink);
+        // Check if this is a qualification lead (prefixed with "lead:")
+        const isQualificationLead = storeLink.startsWith('lead:');
+        let client: any = null;
+        let leadId: string | null = null;
+        let phoneNumber: string | null = null;
         
-        // If client doesn't exist and we have store data, create it
-        if (!client && storeDataMap.has(storeLink)) {
-          const storeInfo = storeDataMap.get(storeLink);
-          const phone = storeInfo.phone || storeInfo.Phone;
+        if (isQualificationLead) {
+          // Handle qualification lead - create a client record for call tracking
+          leadId = storeLink.replace('lead:', '');
+          const lead = await storage.getQualificationLead(leadId, tenantId);
           
-          if (!phone) {
+          if (!lead || !lead.pocPhone) {
             skippedStores++;
             continue;
           }
           
-          client = await storage.createClient({
-            uniqueIdentifier: storeLink,
-            googleSheetId: storeInfo.sheetId || 'unknown',
-            data: storeInfo,
-            status: storeInfo.status || 'unassigned',
-            tenantId: (req.user as any).tenantId,
-        projectId,
+          phoneNumber = lead.pocPhone;
+          
+          // Update lead call status to 'scheduled'
+          await storage.updateQualificationLead(leadId, tenantId, { 
+            callStatus: 'scheduled',
+            callAttempts: (lead.callAttempts || 0) + 1
           });
+          
+          // Check if client already exists for this lead
+          client = await storage.getClientByUniqueIdentifier(storeLink);
+          
+          if (!client) {
+            // Create a client record for this lead (uses existing call tracking system)
+            client = await storage.createClient({
+              uniqueIdentifier: storeLink, // "lead:xxx" pattern
+              googleSheetId: 'qualification-leads',
+              data: {
+                Phone: lead.pocPhone,
+                Name: lead.company,
+                businessName: lead.company,
+                state: lead.state || lead.country || '',
+                pocName: lead.pocName || '',
+                website: lead.website || '',
+                source: 'qualification_lead',
+                leadId: leadId,
+              },
+              status: 'lead',
+              tenantId: tenantId,
+              projectId: projectId,
+            });
+          }
+        } else {
+          // Handle Google Sheets client (original logic)
+          // Find existing client by unique identifier
+          client = await storage.getClientByUniqueIdentifier(storeLink);
+          
+          // If client doesn't exist and we have store data, create it
+          if (!client && storeDataMap.has(storeLink)) {
+            const storeInfo = storeDataMap.get(storeLink);
+            const phone = storeInfo.phone || storeInfo.Phone;
+            
+            if (!phone) {
+              skippedStores++;
+              continue;
+            }
+            
+            client = await storage.createClient({
+              uniqueIdentifier: storeLink,
+              googleSheetId: storeInfo.sheetId || 'unknown',
+              data: storeInfo,
+              status: storeInfo.status || 'unassigned',
+              tenantId: (req.user as any).tenantId,
+              projectId,
+            });
+          }
+          
+          if (client) {
+            const clientData = client.data as any;
+            phoneNumber = clientData?.Phone || clientData?.phone;
+          }
         }
         
-        // Create campaign target if we have a client
-        if (client) {
-          const clientData = client.data as any;
-          const phoneNumber = clientData?.Phone || clientData?.phone;
-          
-          if (!phoneNumber) {
-            skippedStores++;
-            continue;
-          }
-          
+        // Create campaign target if we have a client/lead with phone
+        if (client && phoneNumber) {
           const targetData: any = {
             campaignId: campaign.id,
             clientId: client.id,

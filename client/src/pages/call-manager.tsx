@@ -57,6 +57,10 @@ interface EligibleStore {
   lastContactDate?: string;
   followUpDate?: string;
   pocName?: string;
+  source: 'sheets' | 'leads';  // Unified contact source
+  leadId?: string;  // For leads only - database ID
+  website?: string;  // For leads only
+  country?: string;  // For leads only (international)
 }
 
 interface CallQueueStats {
@@ -1233,6 +1237,7 @@ export default function CallManager() {
   const [selectedAgentFilters, setSelectedAgentFilters] = useState<Set<string>>(new Set());
   const [selectedStateFilters, setSelectedStateFilters] = useState<string[]>([]);
   const [showCanadaOnly, setShowCanadaOnly] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'sheets' | 'leads'>('all');
   const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
   const [selectedCallForDialog, setSelectedCallForDialog] = useState<{ conversationId: string; callData: any } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -1671,6 +1676,15 @@ export default function CallManager() {
   if (selectedStateFilters.length > 0) {
     filteredStores = filteredStores.filter(store => store.state && selectedStateFilters.includes(store.state));
   }
+
+  // Apply source filter (sheets vs leads)
+  if (sourceFilter !== 'all') {
+    filteredStores = filteredStores.filter(store => store.source === sourceFilter);
+  }
+
+  // Count by source for filter display
+  const sheetsCount = eligibleStores.filter(s => s.source === 'sheets').length;
+  const leadsCount = eligibleStores.filter(s => s.source === 'leads').length;
 
   // Toggle agent filter
   const handleToggleAgentFilter = (agentName: string) => {
@@ -2440,6 +2454,37 @@ export default function CallManager() {
                           )}
                         </div>
                       )}
+
+                      {/* Source Filter (Sheets vs Leads) */}
+                      <div className="border rounded-lg p-4">
+                        <h3 className="text-sm font-medium mb-3">Contact Source</h3>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant={sourceFilter === 'all' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setSourceFilter('all')}
+                            data-testid="button-source-all"
+                          >
+                            All ({eligibleStores.length})
+                          </Button>
+                          <Button
+                            variant={sourceFilter === 'sheets' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setSourceFilter('sheets')}
+                            data-testid="button-source-sheets"
+                          >
+                            Clients ({sheetsCount})
+                          </Button>
+                          <Button
+                            variant={sourceFilter === 'leads' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setSourceFilter('leads')}
+                            data-testid="button-source-leads"
+                          >
+                            Leads ({leadsCount})
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -2469,6 +2514,7 @@ export default function CallManager() {
                               />
                             </TableHead>
                             <TableHead>Business Name</TableHead>
+                            <TableHead>Source</TableHead>
                             <TableHead>Agent</TableHead>
                             <TableHead>Location</TableHead>
                             <TableHead>Phone</TableHead>
@@ -2487,7 +2533,22 @@ export default function CallManager() {
                                 />
                               </TableCell>
                               <TableCell className="font-medium" data-testid={`text-name-${store.link}`}>
-                                {store.businessName}
+                                <div className="flex flex-col">
+                                  <span>{store.businessName}</span>
+                                  {store.pocName && (
+                                    <span className="text-xs text-muted-foreground">{store.pocName}</span>
+                                  )}
+                                  {store.website && (
+                                    <a href={store.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate max-w-[200px]">
+                                      {store.website}
+                                    </a>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell data-testid={`text-source-${store.link}`}>
+                                <Badge variant={store.source === 'leads' ? 'default' : 'secondary'}>
+                                  {store.source === 'leads' ? 'Lead' : 'Client'}
+                                </Badge>
                               </TableCell>
                               <TableCell data-testid={`text-agent-${store.link}`}>
                                 <span className="text-sm">{store.agentName || "N/A"}</span>
