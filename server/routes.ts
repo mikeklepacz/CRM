@@ -2664,48 +2664,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { scenario } = req.params;
       
       // Get BOTH sheets - Commission Tracker for status/agent, Store Database for business details
+      // Note: Sheets are now OPTIONAL - we can return just qualification leads if sheets not configured
       const commissionSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
       
-      if (!commissionSheet || !storeSheet) {
-        return res.status(404).json({ error: 'Required Google Sheets not configured' });
-      }
-
-      // Read Commission Tracker data (has: Link, Status, Agent Name, Follow-Up Date, etc.)
-      const commissionRange = `${commissionSheet.sheetName}!A:ZZ`;
-      const commissionRows = await googleSheets.readSheetData(commissionSheet.spreadsheetId, commissionRange);
+      const hasSheetsConfigured = commissionSheet && storeSheet;
       
-      if (commissionRows.length === 0) {
-        return res.json([]);
-      }
-
-      // Parse Commission Tracker
-      const commissionHeaders = commissionRows[0];
-      const commissionData = commissionRows.slice(1).map((row: any[]) => {
-        const obj: any = {};
-        commissionHeaders.forEach((header: string, i: number) => {
-          obj[header] = row[i] || '';
-        });
-        return obj;
-      });
-
-      // Read Store Database (has: Name, Phone, Hours, State, Address, etc.)
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      // Read sheets data only if configured
+      let commissionData: any[] = [];
+      let storeData: any[] = [];
       
-      if (storeRows.length === 0) {
-        return res.json([]);
-      }
+      if (hasSheetsConfigured) {
+        // Read Commission Tracker data (has: Link, Status, Agent Name, Follow-Up Date, etc.)
+        const commissionRange = `${commissionSheet!.sheetName}!A:ZZ`;
+        const commissionRows = await googleSheets.readSheetData(commissionSheet!.spreadsheetId, commissionRange);
+        
+        if (commissionRows.length > 0) {
+          // Parse Commission Tracker
+          const commissionHeaders = commissionRows[0];
+          commissionData = commissionRows.slice(1).map((row: any[]) => {
+            const obj: any = {};
+            commissionHeaders.forEach((header: string, i: number) => {
+              obj[header] = row[i] || '';
+            });
+            return obj;
+          });
+        }
 
-      // Parse Store Database
-      const storeHeaders = storeRows[0];
-      const storeData = storeRows.slice(1).map((row: any[]) => {
-        const obj: any = {};
-        storeHeaders.forEach((header: string, i: number) => {
-          obj[header] = row[i] || '';
-        });
-        return obj;
-      });
+        // Read Store Database (has: Name, Phone, Hours, State, Address, etc.)
+        const storeRange = `${storeSheet!.sheetName}!A:ZZ`;
+        const storeRows = await googleSheets.readSheetData(storeSheet!.spreadsheetId, storeRange);
+        
+        if (storeRows.length > 0) {
+          // Parse Store Database
+          const storeHeaders = storeRows[0];
+          storeData = storeRows.slice(1).map((row: any[]) => {
+            const obj: any = {};
+            storeHeaders.forEach((header: string, i: number) => {
+              obj[header] = row[i] || '';
+            });
+            return obj;
+          });
+        }
+      }
 
       // Create lookup map: Link -> Store Details
       const storeMap = new Map();
