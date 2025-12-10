@@ -2735,7 +2735,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (projectId) {
         const tenantId = (req.user as any).tenantId;
-        const projectCategories = await storage.getCategoriesForProject(projectId, tenantId);
+        const projectCategories = await storage.getAllCategories(tenantId, projectId);
         const projectCategoryNames = new Set(projectCategories.map((c: any) => c.name.toLowerCase()));
 
         if (projectCategoryNames.size > 0) {
@@ -2861,7 +2861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Project filtering for leads (if projectId specified)
         let filteredLeads = callableLeads;
         if (projectId) {
-          const projectCategories = await storage.getCategoriesForProject(projectId, tenantId);
+          const projectCategories = await storage.getAllCategories(tenantId, projectId);
           const projectCategoryNames = new Set(projectCategories.map((c: any) => c.name.toLowerCase()));
           
           if (projectCategoryNames.size > 0) {
