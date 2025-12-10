@@ -609,10 +609,11 @@ export default function MapSearch() {
   });
 
   const saveToSheetMutation = useMutation({
-    mutationFn: async ({ placeId, category }: { placeId: string; category: string }) => {
+    mutationFn: async ({ placeId, category, projectId }: { placeId: string; category: string; projectId?: string }) => {
       return await apiRequest("POST", "/api/maps/save-to-sheet", {
         placeId,
         category,
+        ...(projectId ? { projectId } : {}),
       });
     },
     onSuccess: (data) => {
@@ -694,7 +695,7 @@ export default function MapSearch() {
           apiRequest("POST", endpoint, { 
             placeId, 
             category: effectiveCategory,
-            ...(isQualificationMode && currentProject?.id ? { projectId: currentProject.id } : {})
+            ...(currentProject?.id ? { projectId: currentProject.id } : {})
           })
         )
       );
@@ -808,7 +809,11 @@ export default function MapSearch() {
     if (isQualificationMode) {
       saveToQualificationMutation.mutate({ placeId, category: effectiveCategory });
     } else {
-      saveToSheetMutation.mutate({ placeId, category: effectiveCategory });
+      saveToSheetMutation.mutate({ 
+        placeId, 
+        category: effectiveCategory,
+        projectId: currentProject?.id 
+      });
     }
   };
 

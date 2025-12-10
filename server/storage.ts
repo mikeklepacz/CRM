@@ -750,7 +750,7 @@ export interface IStorage {
   deleteQualificationCampaign(id: string, tenantId: string): Promise<boolean>;
 
   // Qualification Lead operations
-  listQualificationLeads(tenantId: string, filters?: { campaignId?: string; status?: string; callStatus?: string; limit?: number; offset?: number }): Promise<{ leads: QualificationLead[]; total: number }>;
+  listQualificationLeads(tenantId: string, filters?: { campaignId?: string; status?: string; callStatus?: string; projectId?: string; limit?: number; offset?: number }): Promise<{ leads: QualificationLead[]; total: number }>;
   getQualificationLead(id: string, tenantId: string): Promise<QualificationLead | undefined>;
   findQualificationLeadBySourceId(tenantId: string, sourceId: string): Promise<QualificationLead | undefined>;
   createQualificationLead(data: InsertQualificationLead): Promise<QualificationLead>;
@@ -758,7 +758,7 @@ export interface IStorage {
   updateQualificationLead(id: string, tenantId: string, updates: Partial<InsertQualificationLead>): Promise<QualificationLead>;
   deleteQualificationLead(id: string, tenantId: string): Promise<boolean>;
   deleteQualificationLeads(ids: string[], tenantId: string): Promise<number>;
-  getQualificationLeadStats(tenantId: string, campaignId?: string): Promise<{ total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null }>;
+  getQualificationLeadStats(tenantId: string, campaignId?: string, projectId?: string): Promise<{ total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null }>;
 
   // Email Accounts Pool operations
   listEmailAccounts(tenantId: string): Promise<EmailAccount[]>;
@@ -2533,26 +2533,43 @@ export class DatabaseStorage implements IStorage {
 
   // Category operations
   async getAllCategories(tenantId: string, projectId?: string): Promise<Category[]>{
-    const conditions = [eq(categories.tenantId, tenantId)];
+    // When projectId is provided, include both project-specific AND shared (null projectId) categories
     if (projectId) {
-      conditions.push(eq(categories.projectId, projectId));
+      return await db
+        .select()
+        .from(categories)
+        .where(and(
+          eq(categories.tenantId, tenantId),
+          or(eq(categories.projectId, projectId), isNull(categories.projectId))
+        ))
+        .orderBy(categories.displayOrder, categories.name);
     }
+    // No projectId = return all categories for tenant
     return await db
       .select()
       .from(categories)
-      .where(and(...conditions))
+      .where(eq(categories.tenantId, tenantId))
       .orderBy(categories.displayOrder, categories.name);
   }
 
   async getActiveCategories(tenantId: string, projectId?: string): Promise<Category[]> {
-    const conditions = [eq(categories.isActive, true), eq(categories.tenantId, tenantId)];
+    // When projectId is provided, include both project-specific AND shared (null projectId) categories
     if (projectId) {
-      conditions.push(eq(categories.projectId, projectId));
+      return await db
+        .select()
+        .from(categories)
+        .where(and(
+          eq(categories.isActive, true),
+          eq(categories.tenantId, tenantId),
+          or(eq(categories.projectId, projectId), isNull(categories.projectId))
+        ))
+        .orderBy(categories.displayOrder, categories.name);
     }
+    // No projectId = return all active categories for tenant
     return await db
       .select()
       .from(categories)
-      .where(and(...conditions))
+      .where(and(eq(categories.isActive, true), eq(categories.tenantId, tenantId)))
       .orderBy(categories.displayOrder, categories.name);
   }
 
@@ -2565,24 +2582,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCategoryByName(tenantId: string, name: string, projectId?: string): Promise<Category | undefined> {
-    const conditions = [eq(categories.tenantId, tenantId), eq(categories.name, name)];
+    // When projectId is provided, look for project-specific first, then shared
     if (projectId) {
-      conditions.push(eq(categories.projectId, projectId));
+      // Try project-specific first
+      const [projectCategory] = await db
+        .select()
+        .from(categories)
+        .where(and(
+          eq(categories.tenantId, tenantId),
+          eq(categories.name, name),
+          eq(categories.projectId, projectId)
+        ));
+      if (projectCategory) return projectCategory;
+      
+      // Fall back to shared category (null projectId)
+      const [sharedCategory] = await db
+        .select()
+        .from(categories)
+        .where(and(
+          eq(categories.tenantId, tenantId),
+          eq(categories.name, name),
+          isNull(categories.projectId)
+        ));
+      return sharedCategory;
     }
+    
+    // No projectId = look for any category with that name
     const [category] = await db
       .select()
       .from(categories)
-      .where(and(...conditions));
+      .where(and(eq(categories.tenantId, tenantId), eq(categories.name, name)));
     return category;
   }
 
   async getOrCreateCategoryByName(tenantId: string, name: string, projectId?: string): Promise<Category> {
-    // First check if category exists (include projectId in lookup for proper scoping)
+    // First check if category exists (checks project-specific then shared)
     const existing = await this.getCategoryByName(tenantId, name, projectId);
     if (existing) {
       return existing;
     }
-    // Create new category with optional projectId
+    // Create new category under the project if projectId provided
     const [newCategory] = await db
       .insert(categories)
       .values({ tenantId, name, isActive: true, ...(projectId ? { projectId } : {}) })
@@ -5806,7 +5845,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Qualification Lead operations
-  async listQualificationLeads(tenantId: string, filters?: { campaignId?: string; status?: string; callStatus?: string; limit?: number; offset?: number }): Promise<{ leads: QualificationLead[]; total: number }> {
+  async listQualificationLeads(tenantId: string, filters?: { campaignId?: string; status?: string; callStatus?: string; projectId?: string; limit?: number; offset?: number }): Promise<{ leads: QualificationLead[]; total: number }> {
     const conditions = [eq(qualificationLeads.tenantId, tenantId)];
     
     if (filters?.campaignId) {
@@ -5817,6 +5856,26 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.callStatus) {
       conditions.push(eq(qualificationLeads.callStatus, filters.callStatus));
+    }
+
+    // Project filtering: filter leads by categories assigned to the project
+    if (filters?.projectId) {
+      // Get categories for this project (including shared ones with null projectId)
+      const projectCategories = await db
+        .select({ name: categories.name })
+        .from(categories)
+        .where(and(
+          eq(categories.tenantId, tenantId),
+          or(eq(categories.projectId, filters.projectId), isNull(categories.projectId))
+        ));
+      const categoryNames = projectCategories.map(c => c.name.toLowerCase());
+      
+      if (categoryNames.length > 0) {
+        conditions.push(inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames));
+      } else {
+        // No categories for project = no leads should match
+        conditions.push(sql`1 = 0`);
+      }
     }
 
     const limit = filters?.limit || 100;
@@ -5884,10 +5943,28 @@ export class DatabaseStorage implements IStorage {
     return (result as any).rowCount || 0;
   }
 
-  async getQualificationLeadStats(tenantId: string, campaignId?: string): Promise<{ total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null }> {
+  async getQualificationLeadStats(tenantId: string, campaignId?: string, projectId?: string): Promise<{ total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null }> {
     const conditions = [eq(qualificationLeads.tenantId, tenantId)];
     if (campaignId) {
       conditions.push(eq(qualificationLeads.campaignId, campaignId));
+    }
+
+    // Project filtering: filter leads by categories assigned to the project
+    if (projectId) {
+      const projectCategories = await db
+        .select({ name: categories.name })
+        .from(categories)
+        .where(and(
+          eq(categories.tenantId, tenantId),
+          or(eq(categories.projectId, projectId), isNull(categories.projectId))
+        ));
+      const categoryNames = projectCategories.map(c => c.name.toLowerCase());
+      
+      if (categoryNames.length > 0) {
+        conditions.push(inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames));
+      } else {
+        conditions.push(sql`1 = 0`);
+      }
     }
 
     const leads = await db.select()

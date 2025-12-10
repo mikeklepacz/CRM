@@ -3179,7 +3179,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Parse query filters
-      const { agentId, startDate, endDate, outcome, limit = 50 } = req.query;
+      const { agentId, startDate, endDate, outcome, projectId, limit = 50 } = req.query;
+      const tenantId = req.user.tenantId;
 
       // Build SQL query for completed calls with transcripts
       let query = db
@@ -3236,6 +3237,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         query = query.where(eq(callSessions.callSuccessful, true));
       } else if (outcome === 'failed') {
         query = query.where(sql`${callSessions.callSuccessful} = false OR ${callSessions.status} = 'failed'`);
+      }
+      
+      // Project filtering: filter calls by client's category matching project categories
+      if (projectId) {
+        const projectCategories = await db
+          .select({ name: categories.name })
+          .from(categories)
+          .where(and(
+            eq(categories.tenantId, tenantId),
+            or(eq(categories.projectId, projectId as string), isNull(categories.projectId))
+          ));
+        const categoryNames = projectCategories.map(c => c.name.toLowerCase());
+        
+        if (categoryNames.length > 0) {
+          query = query.where(inArray(sql`LOWER(${clients.category})`, categoryNames));
+        } else {
+          // No categories for project = no calls should match
+          query = query.where(sql`1 = 0`);
+        }
       }
 
       // Order by most recent first and apply limit
@@ -19301,7 +19321,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { placeId, category } = req.body;
+      const { placeId, category, projectId } = req.body;
 
       if (!placeId || !category) {
         return res.status(400).json({ message: 'Place ID and category are required' });
@@ -19320,7 +19340,7 @@ Use this store information to provide context-aware responses. When helping draf
       // Auto-create category if it doesn't exist (frictionless category creation)
       const tenantId = (req.user as any).tenantId;
       if (category && category.trim() && tenantId) {
-        await storage.getOrCreateCategoryByName(tenantId, category.trim());
+        await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
       }
 
       // Find Store Database sheet for this category
@@ -25331,12 +25351,13 @@ ${conversationContext}`;
       if (!await checkQualificationModuleAccess(req, res)) return;
       
       const tenantId = req.user.tenantId;
-      const { campaignId, status, callStatus, limit, offset } = req.query;
+      const { campaignId, status, callStatus, projectId, limit, offset } = req.query;
 
       const result = await storage.listQualificationLeads(tenantId, {
         campaignId: campaignId as string | undefined,
         status: status as string | undefined,
         callStatus: callStatus as string | undefined,
+        projectId: projectId as string | undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
         offset: offset ? parseInt(offset as string, 10) : undefined,
       });
@@ -25353,8 +25374,8 @@ ${conversationContext}`;
       if (!await checkQualificationModuleAccess(req, res)) return;
       
       const tenantId = req.user.tenantId;
-      const { campaignId } = req.query;
-      const stats = await storage.getQualificationLeadStats(tenantId, campaignId as string | undefined);
+      const { campaignId, projectId } = req.query;
+      const stats = await storage.getQualificationLeadStats(tenantId, campaignId as string | undefined, projectId as string | undefined);
       res.json({ stats });
     } catch (error: any) {
       console.error('Error getting qualification lead stats:', error);

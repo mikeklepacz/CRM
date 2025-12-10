@@ -1340,7 +1340,16 @@ export default function CallManager() {
 
   // Fetch call analytics
   const { data: analyticsData, isLoading: analyticsLoading, refetch: refetchAnalytics } = useQuery<CallAnalyticsData>({
-    queryKey: ['/api/elevenlabs/call-analytics'],
+    queryKey: ['/api/elevenlabs/call-analytics', currentProject?.id],
+    queryFn: async () => {
+      const url = new URL('/api/elevenlabs/call-analytics', window.location.origin);
+      if (currentProject?.id) {
+        url.searchParams.set('projectId', currentProject.id);
+      }
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch call analytics');
+      return response.json();
+    },
     enabled: hasAccess,
   });
 

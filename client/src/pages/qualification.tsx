@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useOptionalProject } from "@/contexts/project-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,6 +112,8 @@ export default function Qualification() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -143,11 +146,12 @@ export default function Qualification() {
   });
 
   const { data: leadsData, isLoading: leadsLoading, refetch: refetchLeads } = useQuery<{ leads: QualificationLead[]; total: number }>({
-    queryKey: ['/api/qualification/leads', statusFilter, callStatusFilter],
+    queryKey: ['/api/qualification/leads', statusFilter, callStatusFilter, currentProject?.id],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (callStatusFilter !== 'all') params.set('callStatus', callStatusFilter);
+      if (currentProject?.id) params.set('projectId', currentProject.id);
       params.set('limit', '500');
       const response = await fetch(`/api/qualification/leads?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch leads');
@@ -155,8 +159,11 @@ export default function Qualification() {
     },
   });
 
+  const statsQueryUrl = currentProject?.id 
+    ? `/api/qualification/leads/stats?projectId=${currentProject.id}` 
+    : '/api/qualification/leads/stats';
   const { data: statsData } = useQuery<{ stats: { total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null } }>({
-    queryKey: ['/api/qualification/leads/stats'],
+    queryKey: [statsQueryUrl],
   });
 
   const { data: campaignsData } = useQuery<{ campaigns: QualificationCampaign[] }>({

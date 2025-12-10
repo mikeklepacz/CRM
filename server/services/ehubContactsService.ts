@@ -1,8 +1,8 @@
-import { eq, sql, inArray, and, or, isNull } from 'drizzle-orm';
+import { eq, sql, and, or, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import * as googleSheets from '../googleSheets';
 import { storage } from '../storage';
-import { sequenceRecipients, sequences, categories, clients } from '../../shared/schema';
+import { sequenceRecipients, sequences, categories } from '../../shared/schema';
 import type { EhubContact, AllContactsResponse } from '../../shared/schema';
 import { detectTimezone } from './timezoneHours';
 
@@ -150,8 +150,8 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
     salesSummary?: string;
   }> = [];
 
-  // If projectId is provided, get allowed emails from clients in project categories
-  let allowedEmails: Set<string> | null = null;
+  // If projectId is provided, get allowed category names for filtering Google Sheet data
+  let allowedCategoryNames: Set<string> | null = null;
   if (projectId) {
     // Get category names for this project (or shared categories with null projectId)
     const projectCategories = await db
@@ -167,38 +167,16 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
         )
       );
     
-    const categoryNames = projectCategories.map(c => c.name);
+    // Create set of allowed category names (lowercase for comparison)
+    allowedCategoryNames = new Set(projectCategories.map(c => c.name.toLowerCase().trim()));
     
-    if (categoryNames.length > 0) {
-      // Get client emails from clients that belong to these categories
-      // Handle both 'Email' and 'email' keys in the JSONB data field
-      const projectClients = await db
-        .select({ 
-          email: sql<string>`LOWER(COALESCE(
-            (${clients.data}->>'Email')::text,
-            (${clients.data}->>'email')::text
-          ))`,
-        })
-        .from(clients)
-        .where(
-          and(
-            eq(clients.tenantId, tenantId),
-            inArray(clients.category, categoryNames)
-          )
-        );
-      
-      const validEmails = projectClients
-        .filter(c => c.email && c.email.includes('@'))
-        .map(c => c.email.trim().toLowerCase());
-      
-      // Only set allowedEmails if we found valid client emails
-      // If no clients have emails but categories exist, don't filter (show all contacts)
-      if (validEmails.length > 0) {
-        allowedEmails = new Set(validEmails);
-      }
-      // else allowedEmails stays null - no filtering applied
+    // If project has no categories, return empty (not all contacts)
+    if (allowedCategoryNames.size === 0) {
+      console.log(`[E-Hub] Project ${projectId} has no categories - returning empty contacts`);
+      return [];
     }
-    // If no categories for this project, allowedEmails stays null - show all contacts
+    
+    console.log(`[E-Hub] Project filter: allowed categories = ${Array.from(allowedCategoryNames).join(', ')}`);
   }
 
   const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
@@ -219,10 +197,24 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
       const hoursIndex = headers.indexOf('hours');
       const linkIndex = headers.indexOf('link');
       const salesSummaryIndex = headers.indexOf('sales-ready summary');
+      const categoryIndex = headers.indexOf('category');
 
       if (emailIndex !== -1) {
         const storeContacts = rows
-          .filter((row: any[]) => row[emailIndex] && row[emailIndex].includes('@'))
+          .filter((row: any[]) => {
+            // Must have valid email
+            if (!row[emailIndex] || !row[emailIndex].includes('@')) {
+              return false;
+            }
+            // If project filtering is active, check category
+            if (allowedCategoryNames !== null && categoryIndex !== -1) {
+              const rowCategory = (row[categoryIndex] || '').toLowerCase().trim();
+              if (!rowCategory || !allowedCategoryNames.has(rowCategory)) {
+                return false;
+              }
+            }
+            return true;
+          })
           .map((row: any[]) => ({
             name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
             email: row[emailIndex].trim().toLowerCase(),
@@ -290,12 +282,9 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
     }
   });
 
-  let contactsFromSheet = Array.from(emailMap.values());
+  const contactsFromSheet = Array.from(emailMap.values());
 
-  // Filter by project if allowedEmails is set
-  if (allowedEmails !== null) {
-    contactsFromSheet = contactsFromSheet.filter(c => allowedEmails.has(c.email));
-  }
+  // Note: Project filtering is now done when reading from sheets (using allowedCategoryNames)
 
   const uniqueEmails = [...new Set(contactsFromSheet.map(c => c.email))];
 
