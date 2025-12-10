@@ -179,6 +179,9 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
     console.log(`[E-Hub] Project filter: allowed categories = ${Array.from(allowedCategoryNames).join(', ')}`);
   }
 
+  // Map to cross-reference Commission Tracker links to Store Database categories
+  const linkToCategoryMap = new Map<string, string>();
+
   const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
   
   if (storeSheet) {
@@ -198,6 +201,17 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
       const linkIndex = headers.indexOf('link');
       const salesSummaryIndex = headers.indexOf('sales-ready summary');
       const categoryIndex = headers.indexOf('category');
+
+      // Build Link → Category map for cross-referencing Commission Tracker contacts
+      if (linkIndex !== -1 && categoryIndex !== -1) {
+        rows.forEach((row: any[]) => {
+          const link = (row[linkIndex] || '').trim().toLowerCase();
+          const category = (row[categoryIndex] || '').toLowerCase().trim();
+          if (link && category) {
+            linkToCategoryMap.set(link, category);
+          }
+        });
+      }
 
       if (emailIndex !== -1) {
         const storeContacts = rows
@@ -251,7 +265,23 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
 
       if (pocEmailIndex !== -1) {
         const commissionContacts = rows
-          .filter((row: any[]) => row[pocEmailIndex] && row[pocEmailIndex].includes('@'))
+          .filter((row: any[]) => {
+            // Must have valid email
+            if (!row[pocEmailIndex] || !row[pocEmailIndex].includes('@')) {
+              return false;
+            }
+            
+            // If project filtering is active, check category via Link cross-reference
+            if (allowedCategoryNames !== null && linkIndex !== -1) {
+              const rowLink = (row[linkIndex] || '').trim().toLowerCase();
+              const linkedCategory = linkToCategoryMap.get(rowLink);
+              // Only include if we can find the linked category and it's allowed
+              if (!linkedCategory || !allowedCategoryNames.has(linkedCategory)) {
+                return false;
+              }
+            }
+            return true;
+          })
           .map((row: any[]) => {
             const email = row[pocEmailIndex].trim().toLowerCase();
             const status = statusIndex !== -1 ? (row[statusIndex] || '').trim() : '';
