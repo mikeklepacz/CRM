@@ -22709,7 +22709,12 @@ ${conversationContext}`;
       }
 
       if (recipients.length === 0) {
-        return res.json({ message: 'No new recipients to import', count: 0 });
+        return res.json({ 
+          message: 'No new recipients to import', 
+          count: 0,
+          skipped: skippedRows.length,
+          skippedReasons: skippedRows.slice(0, 10) // Show first 10 reasons
+        });
       }
 
       // MATRIX2: Just create recipients with metadata - Matrix2 slot assigner handles scheduling
@@ -22741,7 +22746,12 @@ ${conversationContext}`;
       const { invalidateCache } = await import('./services/ehubContactsService');
       invalidateCache();
 
-      res.json({ message: 'Recipients imported successfully', count: created.length });
+      res.json({ 
+        message: 'Recipients imported successfully', 
+        count: created.length,
+        skipped: skippedRows.length,
+        skippedReasons: skippedRows.slice(0, 10) // Show first 10 reasons if any
+      });
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
@@ -22758,11 +22768,15 @@ ${conversationContext}`;
       const { id } = req.params;
       const { contacts, selectAll, search, statusFilter } = req.body;
 
-      // Check sequence exists
+      // Check sequence exists and get tenantId/projectId from it
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
+      
+      // Get tenantId and projectId from the sequence for proper multi-tenant/project support
+      const tenantId = req.user.tenantId;
+      const projectId = sequence.projectId;
 
       // Get contacts data - either from provided array or via getAllContacts
       let contactsToAdd: any[] = [];
@@ -22775,8 +22789,8 @@ ${conversationContext}`;
           pageSize: 99999, // Get all
           search: search || '',
           statusFilter: statusFilter || 'all',
-          tenantId: (req.user as any).tenantId,
-        projectId,
+          tenantId,
+          projectId,
         });
         contactsToAdd = allContacts;
       } else {
@@ -22865,6 +22879,7 @@ ${conversationContext}`;
         // Validate using Zod schema before adding to batch
         try {
           insertSequenceRecipientSchema.parse({
+            tenantId,
             sequenceId: id,
             email,
             name,
@@ -22878,6 +22893,7 @@ ${conversationContext}`;
 
           seenEmails.add(email);
           recipients.push({
+            tenantId,
             sequenceId: id,
             email,
             name,
@@ -22888,8 +22904,9 @@ ${conversationContext}`;
             timezone,
             status: 'pending',
           });
-        } catch (validationError) {
-          skippedRows.push(`Validation failed for ${email}: ${name}`);
+        } catch (validationError: any) {
+          const errorMsg = validationError?.errors?.[0]?.message || 'Unknown validation error';
+          skippedRows.push(`Validation failed for ${email}: ${errorMsg}`);
           continue;
         }
       }
