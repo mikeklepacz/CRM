@@ -26,8 +26,7 @@ export async function getEligibleRecipientsForAssignment() {
        FROM sequence_steps ss 
        WHERE ss.sequence_id = s.id) as step_delays,
       s.status as sequence_status,
-      s.is_system,
-      s.sender_email_account_id
+      s.is_system
     FROM sequence_recipients sr
     INNER JOIN sequences s ON sr.sequence_id = s.id
     LEFT JOIN daily_send_slots dss ON sr.id = dss.recipient_id::varchar 
@@ -39,7 +38,6 @@ export async function getEligibleRecipientsForAssignment() {
       AND sr.business_hours IS NOT NULL
       AND sr.business_hours != ''
       AND dss.id IS NULL
-      AND s.sender_email_account_id IS NOT NULL
     ORDER BY sr.created_at ASC
   `);
   

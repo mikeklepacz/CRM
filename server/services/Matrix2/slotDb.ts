@@ -8,23 +8,11 @@ export interface DailySlot {
   filled: boolean;
   sent: boolean;
   recipient_id: string | null;
-  email_account_id: string | null;
 }
 
-export async function getSlotsForDate(dateIso: string, emailAccountId?: string): Promise<DailySlot[]> {
-  if (emailAccountId) {
-    const result = await db.execute(sql`
-      SELECT id, slot_time_utc, filled, sent, recipient_id, email_account_id
-      FROM daily_send_slots
-      WHERE slot_date = ${dateIso}
-        AND email_account_id = ${emailAccountId}
-      ORDER BY slot_time_utc ASC
-    `);
-    return (result as any).rows || [];
-  }
-  
+export async function getSlotsForDate(dateIso: string): Promise<DailySlot[]> {
   const result = await db.execute(sql`
-    SELECT id, slot_time_utc, filled, sent, recipient_id, email_account_id
+    SELECT id, slot_time_utc, filled, sent, recipient_id
     FROM daily_send_slots
     WHERE slot_date = ${dateIso}
     ORDER BY slot_time_utc ASC
@@ -33,31 +21,18 @@ export async function getSlotsForDate(dateIso: string, emailAccountId?: string):
   return rows;
 }
 
-export async function createSlots(dateIso: string, slots: Date[], emailAccountId: string, tenantId: string) {
+export async function createSlots(dateIso: string, slots: Date[]) {
   for (const dt of slots) {
     await db.execute(sql`
-      INSERT INTO daily_send_slots (tenant_id, email_account_id, slot_date, slot_time_utc, filled, sent)
-      VALUES (${tenantId}, ${emailAccountId}, ${dateIso}, ${dt.toISOString()}, FALSE, FALSE)
+      INSERT INTO daily_send_slots (slot_date, slot_time_utc, filled, sent)
+      VALUES (${dateIso}, ${dt.toISOString()}, FALSE, FALSE)
     `);
   }
 }
 
-export async function getEmptySlots(dateIso: string, emailAccountId?: string): Promise<DailySlot[]> {
-  if (emailAccountId) {
-    const result = await db.execute(sql`
-      SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id, email_account_id
-      FROM daily_send_slots
-      WHERE slot_date = ${dateIso}
-        AND email_account_id = ${emailAccountId}
-        AND filled = FALSE
-        AND sent = FALSE
-      ORDER BY slot_time_utc ASC
-    `);
-    return (result as any).rows || [];
-  }
-
+export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
   const result = await db.execute(sql`
-    SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id, email_account_id
+    SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
     FROM daily_send_slots
     WHERE slot_date = ${dateIso}
       AND filled = FALSE

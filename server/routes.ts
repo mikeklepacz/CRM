@@ -21134,42 +21134,42 @@ Use this store information to provide context-aware responses. When helping draf
       
       // Query daily_send_slots and JOIN with recipient/sequence data
       const result = await db.execute(sql`
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
-PLACEHOLDER_FOR_REPLACEMENT
+        SELECT 
+          dss.id,
+          dss.slot_time_utc,
+          dss.filled,
+          dss.sent,
+          dss.recipient_id,
+          sr.email as recipient_email,
+          sr.current_step,
+          sr.sequence_id,
+          s.name as sequence_name
+        FROM daily_send_slots dss
+        LEFT JOIN sequence_recipients sr ON sr.id = dss.recipient_id::varchar
+        LEFT JOIN sequences s ON sr.sequence_id = s.id
+        WHERE dss.slot_time_utc >= ${now.toISOString()}
+          AND dss.slot_time_utc < ${endDate.toISOString()}
+        ORDER BY dss.slot_time_utc ASC
+        LIMIT 100
+      `);
+      
+      // Handle Drizzle result - extract rows from result object
+      const rows = (result as any).rows || [];
+      
+      // Transform to IndividualSend format expected by frontend
+      const queue = rows.map((row: any) => ({
+        recipientId: row.recipient_id || '',
+        recipientEmail: row.filled ? (row.recipient_email || 'Unknown') : '(Open slot)',
+        recipientName: row.filled ? (row.recipient_email || 'Unknown') : '(Open slot)',
+        sequenceId: row.sequence_id || '',
+        sequenceName: row.sequence_name || '',
+        stepNumber: row.current_step || 0,
+        scheduledAt: row.slot_time_utc,
+        sentAt: row.sent ? row.slot_time_utc : null,
+        status: row.sent ? 'sent' : (row.filled ? 'scheduled' : 'open'),
+        subject: null,
+      }));
+      
       res.json(queue);
     } catch (error: any) {
       console.error('Error fetching queue:', error);
