@@ -1,0 +1,81 @@
+Tell me how the queue works now that you can have multiple emails sending to multiple campaigns/sequences.
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 16 files
+The E-Hub queue system has evolved into a slot-first architecture that elegantly handles multiple sequences sending emails concurrently. Here's how it works:
+
+Core Architecture
+1. Slot Generation (Matrix2/slotGenerator.ts)
+
+Pre-generates daily email "time slots" based on your settings (daily limit, sending hours, jitter)
+Creates slots for 3 days ahead to ensure there's always availability
+Each slot is a specific UTC timestamp when an email can be sent
+Slots are sequence-agnostic - they don't care which sequence fills them
+2. Priority-Based Assignment (Matrix2/slotAssigner.ts)
+
+Runs every 60 seconds to assign eligible recipients to empty slots
+Uses a 3-tier priority system:
+Tier 1 (Highest): Manual Follow-Ups at step 1+ (human handoffs getting AI follow-ups)
+Tier 2 (Medium): Active follow-ups at step 2+ (nurturing existing sequences)
+Tier 3 (Lowest): Cold outreach at step 0 (first contact)
+Recipients from ALL sequences compete for slots based on priority
+Checks eligibility (timezone, business hours, step delays) before assignment
+3. Queue Processing (emailQueue.ts)
+
+Runs every 60 seconds to send emails whose slot time has arrived
+Sends up to 10 emails per cycle
+After sending, automatically assigns the recipient to their next step's slot (multi-step progression)
+Includes Reply Guard - checks for replies before sending to prevent interrupting conversations
+Multi-Sequence Coordination
+The beauty is that sequences don't interfere with each other:
+
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│ Sequence A  │     │ Sequence B  │     │ Sequence C  │
+│ 50 recips   │     │ 30 recips   │     │ 20 recips   │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       └───────────────────┴───────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │  SHARED     │
+                    │  SLOT POOL  │  ← 200 slots/day
+                    │             │
+                    └──────┬──────┘
+                           │
+              Priority Assignment (every 60s)
+                           │
+                    ┌──────▼──────┐
+                    │  Assigned   │
+                    │  Slots      │
+                    └──────┬──────┘
+                           │
+              Email Sending (every 60s)
+Key Features
+Fairness: All sequences share the same slot pool, so no single sequence can monopolize sending capacity.
+
+Rate Limiting: The daily email limit (e.g., 200/day) is enforced globally across all sequences automatically.
+
+Intelligent Spacing: Jitter (min/max delay) creates human-like randomness between sends, regardless of which sequence they're from.
+
+Multi-Step Progression: After a recipient receives an email, they're automatically assigned to a new slot for their next step (e.g., 3 days later), competing again in the priority queue.
+
+Reply Protection: The Reply Guard checks Gmail threads before sending, preventing follow-ups when a conversation has already started.
+
+Example Flow
+Day 1, 9:00 AM:
+- Slot opens
+- 5 recipients eligible (2 from Seq A step 0, 2 from Seq B step 2, 1 from Seq C step 1)
+- Priority: Seq C step 1 wins (Manual Follow-Up tier)
+- Email sent to Seq C recipient
+- Recipient auto-assigned to next slot (Day 4, considering step delay)
+Day 1, 9:05 AM:
+- Next slot opens
+- 4 recipients eligible
+- Priority: Seq B step 2 wins (Active Follow-Up tier)
+- Email sent to Seq B recipient
+The system ensures fairness, rate limiting, and priority-based delivery all work together seamlessly across unlimited sequences.
+
+Scroll to latest
