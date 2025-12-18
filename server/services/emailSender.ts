@@ -472,6 +472,113 @@ JSON FORMAT:
 }
 
 /**
+ * Send failure notification when email send fails
+ * Creates in-app notification AND sends email to michael@naturalmaterials.eu
+ */
+interface FailureNotificationParams {
+  recipientEmail: string;
+  recipientId: string;
+  sequenceName: string;
+  sequenceId: string;
+  tenantId: string;
+  errorReason: string;
+  emailAccountId?: string;
+}
+
+async function sendFailureNotification(params: FailureNotificationParams): Promise<void> {
+  const { recipientEmail, recipientId, sequenceName, sequenceId, tenantId, errorReason, emailAccountId } = params;
+  
+  try {
+    // Get admin user ID for notification
+    const adminTenantId = await storage.getAdminTenantId();
+    const adminUser = await storage.getUserByEmail('michael@naturalmaterials.eu');
+    
+    if (!adminUser) {
+      console.error('[EmailSender] Cannot send failure notification: admin user not found');
+      return;
+    }
+
+    // 1. Create in-app notification
+    const notificationTitle = 'Email Send Failed';
+    const notificationMessage = `Failed to send email to ${recipientEmail} from sequence "${sequenceName}". Reason: ${errorReason}`;
+    
+    await storage.createNotification({
+      tenantId: adminTenantId || tenantId,
+      userId: adminUser.id,
+      notificationType: 'email_failure',
+      title: notificationTitle,
+      message: notificationMessage,
+      priority: 'high',
+      metadata: {
+        recipientEmail,
+        recipientId,
+        sequenceId,
+        sequenceName,
+        emailAccountId,
+        errorReason,
+        failedAt: new Date().toISOString(),
+      },
+    });
+
+    // 2. Send email notification to michael@naturalmaterials.eu
+    // Use a simple email via the admin user's Gmail (if available)
+    try {
+      const adminIntegration = await storage.getUserIntegration(adminUser.id);
+      if (adminIntegration?.googleCalendarAccessToken) {
+        const systemIntegration = await storage.getSystemIntegration('google_sheets');
+        if (systemIntegration?.googleClientId && systemIntegration?.googleClientSecret) {
+          const oauth2Client = new google.auth.OAuth2(
+            systemIntegration.googleClientId,
+            systemIntegration.googleClientSecret
+          );
+          oauth2Client.setCredentials({
+            access_token: adminIntegration.googleCalendarAccessToken,
+            refresh_token: adminIntegration.googleCalendarRefreshToken,
+          });
+          
+          const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+          
+          const emailBody = `
+<h2>Email Send Failed</h2>
+<p><strong>Recipient:</strong> ${recipientEmail}</p>
+<p><strong>Sequence:</strong> ${sequenceName}</p>
+<p><strong>Error:</strong> ${errorReason}</p>
+<p><strong>Email Account ID:</strong> ${emailAccountId || 'Not assigned'}</p>
+<p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+<p>The recipient has been bumped to the next available slot.</p>
+          `.trim();
+          
+          const headers = [
+            `To: michael@naturalmaterials.eu`,
+            `Subject: [E-Hub Alert] Email Send Failed - ${sequenceName}`,
+            'Content-Type: text/html; charset=utf-8',
+          ];
+          
+          const email = [...headers, '', emailBody].join('\r\n');
+          const encodedEmail = Buffer.from(email)
+            .toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+          
+          await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { raw: encodedEmail },
+          });
+          
+          console.log(`[EmailSender] Failure notification email sent to michael@naturalmaterials.eu`);
+        }
+      }
+    } catch (emailError: any) {
+      // Don't fail if notification email can't be sent - in-app notification is still created
+      console.error(`[EmailSender] Could not send failure notification email: ${emailError.message}`);
+    }
+  } catch (error: any) {
+    console.error(`[EmailSender] Failed to create failure notification: ${error.message}`);
+  }
+}
+
+/**
  * Matrix2 Integration: Send email to recipient by ID
  * Handles full workflow: fetch data, generate content, send, update metadata
  */
@@ -493,10 +600,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       return false;
     }
 
-    // 2. Fallback admin user for Gmail OAuth (used when no sender email account is assigned)
-    const ADMIN_USER_ID = '4df35876-ab89-4860-8656-0440accfea14'; // michael@naturalmaterials.eu
-
-    // 3. Generate email content using AI
+    // 2. Generate email content using AI
     const currentStep = (recipient.currentStep || 0) + 1; // Next step to send
     
     const { subject, body } = await personalizeEmailWithAI(
@@ -549,39 +653,32 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       }
     }
 
-    // 4. Send email via Gmail - use sequence's email account if assigned, otherwise fallback to admin
+    // 4. Send email via Gmail - MUST have an assigned email account (no fallback)
     let emailResult: EmailResponse;
     let usedEmailAccountId: string | null = null;
     
-    if (sequence.senderEmailAccountId) {
-      // Use the sequence's assigned email account
-      try {
-        const { gmail } = await getGmailClientForEmailAccount(sequence.senderEmailAccountId, sequence.tenantId);
-        emailResult = await sendEmailWithGmailClient(gmail, {
-          to: recipient.email,
-          subject,
-          body,
-          threadId,
-          inReplyTo,
-          references,
-        });
-        usedEmailAccountId = sequence.senderEmailAccountId;
-      } catch (emailAccountError: any) {
-        // Email account failed - fall back to admin user
-        emailResult = await sendEmail({
-          userId: ADMIN_USER_ID,
-          to: recipient.email,
-          subject,
-          body,
-          threadId,
-          inReplyTo,
-          references,
-        });
-      }
-    } else {
-      // No email account assigned - use admin fallback
-      emailResult = await sendEmail({
-        userId: ADMIN_USER_ID,
+    if (!sequence.senderEmailAccountId) {
+      // NO FALLBACK: Sequence must have an assigned email account
+      const errorMsg = `No email account assigned to sequence "${sequence.name}"`;
+      console.error(`[EmailSender] ${errorMsg} - recipient: ${recipient.email}`);
+      
+      // Create notification and send alert email
+      await sendFailureNotification({
+        recipientEmail: recipient.email,
+        recipientId: recipient.id,
+        sequenceName: sequence.name || 'Unknown Sequence',
+        sequenceId: sequence.id,
+        tenantId: sequence.tenantId,
+        errorReason: errorMsg,
+      });
+      
+      return false;
+    }
+    
+    // Use the sequence's assigned email account
+    try {
+      const { gmail } = await getGmailClientForEmailAccount(sequence.senderEmailAccountId, sequence.tenantId);
+      emailResult = await sendEmailWithGmailClient(gmail, {
         to: recipient.email,
         subject,
         body,
@@ -589,9 +686,41 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
         inReplyTo,
         references,
       });
+      usedEmailAccountId = sequence.senderEmailAccountId;
+    } catch (emailAccountError: any) {
+      // NO FALLBACK: If account fails, notify and return false
+      const errorMsg = emailAccountError.message || 'Unknown email account error';
+      console.error(`[EmailSender] Email account failed for sequence "${sequence.name}": ${errorMsg}`);
+      
+      // Create notification and send alert email
+      await sendFailureNotification({
+        recipientEmail: recipient.email,
+        recipientId: recipient.id,
+        sequenceName: sequence.name || 'Unknown Sequence',
+        sequenceId: sequence.id,
+        tenantId: sequence.tenantId,
+        errorReason: `Email account error: ${errorMsg}`,
+        emailAccountId: sequence.senderEmailAccountId,
+      });
+      
+      return false;
     }
 
     if (!emailResult.success) {
+      // Email send failed (not account error, but Gmail API error)
+      const errorMsg = emailResult.error || 'Gmail send failed';
+      console.error(`[EmailSender] Gmail send failed for ${recipient.email}: ${errorMsg}`);
+      
+      await sendFailureNotification({
+        recipientEmail: recipient.email,
+        recipientId: recipient.id,
+        sequenceName: sequence.name || 'Unknown Sequence',
+        sequenceId: sequence.id,
+        tenantId: sequence.tenantId,
+        errorReason: errorMsg,
+        emailAccountId: sequence.senderEmailAccountId,
+      });
+      
       return false;
     }
 
