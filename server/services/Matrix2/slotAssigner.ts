@@ -82,7 +82,7 @@ export async function assignSingleRecipient(recipientId: string) {
     return;
   }
 
-  // Try to assign to first available slot
+  // Try to assign to first available slot that matches this recipient's email account
   const now = new Date();
   for (const slot of slots) {
     const slotUtc = new Date(slot.slot_time_utc);
@@ -90,6 +90,11 @@ export async function assignSingleRecipient(recipientId: string) {
     // CRITICAL: Don't assign slots in the past (prevents flash-disappear on pause/resume)
     if (slotUtc < now) {
       continue;
+    }
+
+    // Check email account match - slot must belong to the same email account as the sequence
+    if (slot.email_account_id && recipient.sender_email_account_id !== slot.email_account_id) {
+      continue; // Skip - this slot belongs to a different email account
     }
 
     if (await isRecipientEligible(recipient, slotUtc, settings)) {
@@ -195,8 +200,14 @@ export async function assignRecipientsToSlots() {
     }
 
     // Find first eligible recipient for this slot (now sorted by priority)
+    // CRITICAL: Only assign if recipient's sequence email account matches slot's email account
     for (let i = 0; i < sortedRecipients.length; i++) {
       const r = sortedRecipients[i];
+      
+      // Check email account match - slot must belong to the same email account as the sequence
+      if (slot.email_account_id && r.sender_email_account_id !== slot.email_account_id) {
+        continue; // Skip - this slot belongs to a different email account
+      }
       
       if (!(await isRecipientEligible(r, slotUtc, settings))) {
         continue;

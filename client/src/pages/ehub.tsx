@@ -136,6 +136,8 @@ interface IndividualSend {
   subject: string | null;
   threadId?: string | null;
   messageId?: string | null;
+  senderEmail?: string;
+  emailAccountId?: string;
 }
 
 interface PausedRecipient {
@@ -1203,6 +1205,7 @@ function QueueView() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Recipient</TableHead>
+                    <TableHead>Sender</TableHead>
                     <TableHead>Sequence</TableHead>
                     <TableHead>Step</TableHead>
                     <TableHead>Scheduled</TableHead>
@@ -1222,6 +1225,9 @@ function QueueView() {
                         <div className="font-medium">{item.recipientName || 'Unknown'}</div>
                         <div className="text-sm text-muted-foreground">{item.recipientEmail}</div>
                       </div>
+                    </TableCell>
+                    <TableCell data-testid={`text-queue-sender-${item.recipientId}-${item.stepNumber}`}>
+                      <span className="text-sm">{item.senderEmail || '(No sender)'}</span>
                     </TableCell>
                     <TableCell data-testid={`text-queue-sequence-${item.recipientId}-${item.stepNumber}`}>
                       {item.sequenceName}

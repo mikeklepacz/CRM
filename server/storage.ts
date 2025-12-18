@@ -769,6 +769,7 @@ export interface IStorage {
   deleteEmailAccount(id: string, tenantId: string): Promise<boolean>;
   incrementEmailAccountDailySendCount(id: string, tenantId: string): Promise<EmailAccount>;
   getAvailableEmailAccount(tenantId: string, maxDailyLimit: number): Promise<EmailAccount | undefined>;
+  getActiveEmailAccounts(tenantId: string): Promise<EmailAccount[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6075,6 +6076,16 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return undefined;
+  }
+
+  async getActiveEmailAccounts(tenantId: string): Promise<EmailAccount[]> {
+    return await db.select()
+      .from(emailAccounts)
+      .where(and(
+        eq(emailAccounts.tenantId, tenantId),
+        eq(emailAccounts.status, 'active')
+      ))
+      .orderBy(emailAccounts.email);
   }
 }
 

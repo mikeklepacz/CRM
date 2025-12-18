@@ -45,22 +45,27 @@
 
 // server/services/Matrix2/slotGenerator.ts
 import { storage } from "../../storage";
-import { getSlotsForDate, createSlots } from "./slotDb";
+import { getSlotsForDateAndAccount, createSlots } from "./slotDb";
 import { addMinutes, addDays, parseISO } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { randomInt } from "crypto";
 import { eventGateway } from "../events/gateway";
 
 /**
- * Generate slots for a single day based on E-Hub settings
+ * Generate slots for a single day for a specific email account
+ * Each email account gets its own dailyLimit slots
  * 
  * @param dateIso - The date in YYYY-MM-DD format
  * @param adminTz - Admin timezone
+ * @param tenantId - Tenant ID
+ * @param emailAccountId - Email account ID this slot belongs to
  * @param settings - E-Hub settings
  */
-export async function generateSlotsForDay(
+export async function generateSlotsForDayAndAccount(
   dateIso: string,
   adminTz: string,
+  tenantId: string,
+  emailAccountId: string,
   settings: {
     dailyEmailLimit: number;
     sendingHoursStart: number;
@@ -73,14 +78,12 @@ export async function generateSlotsForDay(
   const { dailyEmailLimit, sendingHoursStart, minDelayMinutes, maxDelayMinutes } = settings;
   
   // Phase 1-3: Support both duration and end hour for backward compatibility
-  // Fallback logic: if duration not set, calculate from end hour
   const sendingHoursDuration = settings.sendingHoursDuration || 
     (settings.sendingHoursEnd === settings.sendingHoursStart ? 24 : 
      ((settings.sendingHoursEnd! - settings.sendingHoursStart + 24) % 24));
   const endHourCalculated = (sendingHoursStart + sendingHoursDuration) % 24;
   const needsNextDay = (sendingHoursStart + sendingHoursDuration) >= 24;
 
-  // Generate slots starting at sendingHoursStart in admin timezone
   const slots: Date[] = [];
   
   // Start time: dateIso at sendingHoursStart in admin timezone → convert to UTC
@@ -94,8 +97,7 @@ export async function generateSlotsForDay(
     cursor = now;
   }
   
-  // End time boundary: dateIso + duration hours
-  // If duration spans past midnight, use next day for endBoundary
+  // End time boundary
   const endDate = needsNextDay ? addDays(parseISO(dateIso), 1) : parseISO(dateIso);
   const endDateIso = formatInTimeZone(endDate, adminTz, 'yyyy-MM-dd');
   const endTimeStr = `${endDateIso}T${String(endHourCalculated).padStart(2, '0')}:00:00`;
@@ -105,11 +107,8 @@ export async function generateSlotsForDay(
   
   for (let i = 0; i < dailyEmailLimit; i++) {
     if (i === 0) {
-      // First slot starts at the exact send hour
       slots.push(new Date(cursor));
     } else {
-      // Subsequent slots: add pure random jitter (no even spacing)
-      // Prevent consecutive duplicates for better randomness
       let jitter = randomInt(minDelayMinutes, maxDelayMinutes + 1);
       let attempts = 0;
       while (jitter === previousJitter && attempts < 10) {
@@ -120,7 +119,6 @@ export async function generateSlotsForDay(
       
       cursor = addMinutes(cursor, jitter);
       
-      // Stop if we've exceeded the send window boundary
       if (cursor >= endBoundary) {
         break;
       }
@@ -129,26 +127,41 @@ export async function generateSlotsForDay(
     }
   }
 
-  // Insert slots into database
-  await createSlots(dateIso, slots);
+  // Insert slots with email_account_id
+  await createSlots(dateIso, slots, tenantId, emailAccountId);
 
-  // Emit WebSocket event for real-time UI updates
-  eventGateway.emit('matrix:slotsChanged', {
-    date: dateIso,
-    slotCount: slots.length,
-    firstSlot: slots[0].toISOString(),
-    lastSlot: slots[slots.length - 1].toISOString(),
-  });
+  return slots;
 }
 
 /**
- * Ensure 3 days worth of slots are always available
+ * Legacy wrapper for backward compatibility
+ * Generates slots without email account (for migration period)
+ */
+export async function generateSlotsForDay(
+  dateIso: string,
+  adminTz: string,
+  settings: {
+    dailyEmailLimit: number;
+    sendingHoursStart: number;
+    sendingHoursDuration?: number;
+    sendingHoursEnd?: number;
+    minDelayMinutes: number;
+    maxDelayMinutes: number;
+  }
+) {
+  // This is now a no-op - slots are generated per email account in ensureDailySlots
+  console.warn('[SlotGenerator] generateSlotsForDay called without email account - skipping');
+}
+
+/**
+ * Ensure 3 days worth of slots are always available for ALL active email accounts
  * 
  * This function:
- * 1. Reads admin timezone from user_preferences
- * 2. Reads send window and rate limits from ehub_settings
- * 3. Checks which of the next 3 days need slots
- * 4. Generates slots for missing days (skipping weekends if configured)
+ * 1. Gets all active email accounts in the pool
+ * 2. For each account, generates dailyLimit slots per day
+ * 3. Skips weekends/holidays if configured
+ * 
+ * Result: If 2 accounts with dailyLimit=100, total 200 slots per day
  */
 export async function ensureDailySlots() {
   const tenantId = await storage.getAdminTenantId();
@@ -158,6 +171,12 @@ export async function ensureDailySlots() {
   
   const settings = await storage.getEhubSettings(tenantId);
   if (!settings) {
+    return;
+  }
+
+  // Get all active email accounts in the pool
+  const emailAccounts = await storage.getActiveEmailAccounts(tenantId);
+  if (!emailAccounts || emailAccounts.length === 0) {
     return;
   }
 
@@ -177,6 +196,8 @@ export async function ensureDailySlots() {
     (settings.sendingHoursEnd === settings.sendingHoursStart ? 24 : 
      ((settings.sendingHoursEnd! - settings.sendingHoursStart + 24) % 24));
 
+  let totalSlotsGenerated = 0;
+
   // Check next 3 calendar days
   for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
     const targetDate = new Date(now);
@@ -185,30 +206,42 @@ export async function ensureDailySlots() {
     
     // Skip excluded days if configured
     const dayOfWeek = parseInt(formatInTimeZone(targetDate, adminTz, 'i')); // 1=Mon, 7=Sun
-    // Convert ISO day (1=Mon, 7=Sun) to JS day (0=Sun, 1=Mon, etc.)
     const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
     if (excludedDays.includes(jsDay)) {
       continue;
     }
 
-    // Check if slots already exist for this day
-    const existing = await getSlotsForDate(dateIso);
-    if (existing.length >= dailyLimit) {
-      continue;
-    }
-    
-    // If some slots exist but not enough, skip (don't partially fill)
-    if (existing.length > 0 && existing.length < dailyLimit) {
-      continue;
-    }
+    // Generate slots for EACH email account
+    for (const account of emailAccounts) {
+      // Check if slots already exist for this account + day
+      const existing = await getSlotsForDateAndAccount(dateIso, account.id);
+      if (existing.length >= dailyLimit) {
+        continue;
+      }
+      
+      // If some slots exist but not enough, skip (don't partially fill)
+      if (existing.length > 0 && existing.length < dailyLimit) {
+        continue;
+      }
 
-    // Generate slots for this day
-    await generateSlotsForDay(dateIso, adminTz, {
-      dailyEmailLimit: dailyLimit,
-      sendingHoursStart,
-      sendingHoursDuration,
-      minDelayMinutes,
-      maxDelayMinutes,
+      // Generate slots for this account
+      const slots = await generateSlotsForDayAndAccount(dateIso, adminTz, tenantId, account.id, {
+        dailyEmailLimit: dailyLimit,
+        sendingHoursStart,
+        sendingHoursDuration,
+        minDelayMinutes,
+        maxDelayMinutes,
+      });
+      
+      totalSlotsGenerated += slots.length;
+    }
+  }
+
+  // Emit event if we generated any slots
+  if (totalSlotsGenerated > 0) {
+    eventGateway.emit('matrix:slotsChanged', {
+      totalSlotsGenerated,
+      accountCount: emailAccounts.length,
     });
   }
 }

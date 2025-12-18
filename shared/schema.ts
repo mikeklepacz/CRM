@@ -1999,9 +1999,11 @@ export type InsertTestDataNukeLog = z.infer<typeof insertTestDataNukeLogSchema>;
 export type TestDataNukeLog = typeof testDataNukeLog.$inferSelect;
 
 // Daily Send Slots - pre-generated email slots for Matrix2 scheduling engine
+// Each email account in the pool gets its own slots (dailyLimit per account)
 export const dailySendSlots = pgTable("daily_send_slots", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  emailAccountId: varchar("email_account_id").notNull().references(() => emailAccounts.id, { onDelete: 'cascade' }),
   slotDate: date("slot_date").notNull(),
   slotTimeUtc: timestamp("slot_time_utc", { withTimezone: true }).notNull(),
   filled: boolean("filled").notNull().default(false),
@@ -2012,6 +2014,7 @@ export const dailySendSlots = pgTable("daily_send_slots", {
 }, (table) => [
   index("idx_slots_by_date").on(table.slotDate),
   index("idx_slots_open").on(table.slotDate, table.filled),
+  index("idx_slots_by_account").on(table.emailAccountId, table.slotDate),
 ]);
 
 export const insertDailySendSlotSchema = createInsertSchema(dailySendSlots).omit({

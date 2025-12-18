@@ -1,7 +1,7 @@
 // server/services/Matrix2/queueRebuilder.ts
 import { storage } from "../../storage";
-import { generateSlotsForDay } from "./slotGenerator";
-import { fillSlot, getEmptySlots } from "./slotDb";
+import { generateSlotsForDayAndAccount } from "./slotGenerator";
+import { fillSlot, getEmptySlotsForAccount } from "./slotDb";
 import { parseBusinessHours } from "../timezoneHours";
 import { toZonedTime } from "date-fns-tz";
 import { addDays } from "date-fns";
@@ -89,11 +89,13 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       (SELECT array_agg(ss.delay_days ORDER BY ss.step_number) 
        FROM sequence_steps ss 
        WHERE ss.sequence_id = s.id) as step_delays,
-      s.status as sequence_status
+      s.status as sequence_status,
+      s.sender_email_account_id
     FROM sequence_recipients sr
     LEFT JOIN sequences s ON sr.sequence_id = s.id
     WHERE sr.status NOT IN ('bounced')
       AND s.status = 'active'
+      AND s.sender_email_account_id IS NOT NULL
     ORDER BY 
       sr.id ASC
   `);
@@ -103,28 +105,43 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   // 4. DELETE ALL SLOTS (NUKE THE ENTIRE QUEUE)
   await db.execute(sql`DELETE FROM daily_send_slots`);
   
-  // 5. Regenerate 3 days worth of fresh slots with new settings
+  // 5. Get all active email accounts
+  const emailAccounts = await storage.getActiveEmailAccounts(tenantId);
+  if (!emailAccounts || emailAccounts.length === 0) {
+    return; // No email accounts to generate slots for
+  }
+  
+  // 6. Regenerate 3 days worth of fresh slots PER ACCOUNT with new settings
   for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
     const targetDate = addDays(rebuildStartDate, dayOffset);
     const targetDateIso = targetDate.toISOString().slice(0, 10);
     
-    await generateSlotsForDay(targetDateIso, adminTz, {
-      dailyEmailLimit: settings.dailyEmailLimit,
-      sendingHoursStart: settings.sendingHoursStart,
-      sendingHoursDuration: sendingHoursDuration,
-      minDelayMinutes: settings.minDelayMinutes,
-      maxDelayMinutes: settings.maxDelayMinutes,
-    });
+    // Generate slots for each email account
+    for (const account of emailAccounts) {
+      await generateSlotsForDayAndAccount(targetDateIso, adminTz, tenantId, account.id, {
+        dailyEmailLimit: settings.dailyEmailLimit,
+        sendingHoursStart: settings.sendingHoursStart,
+        sendingHoursDuration: sendingHoursDuration,
+        minDelayMinutes: settings.minDelayMinutes,
+        maxDelayMinutes: settings.maxDelayMinutes,
+      });
+    }
   }
   
-  // 6. Reassign recipients to the new slots
-  // All recipients fetched are from ACTIVE sequences only
+  // 7. Reassign recipients to the new slots
+  // All recipients fetched are from ACTIVE sequences with assigned email accounts
   const orderedRecipients = allRecipients;
   
   let assignedCount = 0;
   let skippedCount = 0;
   
   for (const recipient of orderedRecipients) {
+    // Skip if no email account assigned (shouldn't happen but safety check)
+    if (!recipient.sender_email_account_id) {
+      skippedCount++;
+      continue;
+    }
+    
     // CRITICAL: Clear any existing slot assignments for this recipient before reassigning
     // This prevents the same recipient from being assigned to multiple slots
     await db.execute(sql`
@@ -137,14 +154,15 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     const recipientTz = recipient.timezone || adminTz;
     const recipientWithDefaults = { ...recipient, timezone: recipientTz };
     
-    // Get the next available empty slot across all 3 days
+    // Get the next available empty slot FOR THIS ACCOUNT across all 3 days
     let assigned = false;
     
     for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
       const targetDate = addDays(rebuildStartDate, dayOffset);
       const targetDateIso = targetDate.toISOString().slice(0, 10);
       
-      const emptySlots = await getEmptySlots(targetDateIso);
+      // Only get slots for THIS recipient's email account
+      const emptySlots = await getEmptySlotsForAccount(targetDateIso, recipient.sender_email_account_id);
       
       // Try to assign to an eligible slot
       for (const slot of emptySlots) {

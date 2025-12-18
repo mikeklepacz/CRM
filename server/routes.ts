@@ -21132,7 +21132,7 @@ Use this store information to provide context-aware responses. When helping draf
       const endDate = new Date(now);
       endDate.setDate(endDate.getDate() + timeWindowDays);
       
-      // Query daily_send_slots and JOIN with recipient/sequence data
+      // Query daily_send_slots and JOIN with recipient/sequence/email_account data
       const result = await db.execute(sql`
         SELECT 
           dss.id,
@@ -21140,13 +21140,16 @@ Use this store information to provide context-aware responses. When helping draf
           dss.filled,
           dss.sent,
           dss.recipient_id,
+          dss.email_account_id,
           sr.email as recipient_email,
           sr.current_step,
           sr.sequence_id,
-          s.name as sequence_name
+          s.name as sequence_name,
+          ea.email as sender_email
         FROM daily_send_slots dss
         LEFT JOIN sequence_recipients sr ON sr.id = dss.recipient_id::varchar
         LEFT JOIN sequences s ON sr.sequence_id = s.id
+        LEFT JOIN email_accounts ea ON dss.email_account_id = ea.id
         WHERE dss.slot_time_utc >= ${now.toISOString()}
           AND dss.slot_time_utc < ${endDate.toISOString()}
         ORDER BY dss.slot_time_utc ASC
@@ -21168,6 +21171,8 @@ Use this store information to provide context-aware responses. When helping draf
         sentAt: row.sent ? row.slot_time_utc : null,
         status: row.sent ? 'sent' : (row.filled ? 'scheduled' : 'open'),
         subject: null,
+        senderEmail: row.sender_email || '',
+        emailAccountId: row.email_account_id || '',
       }));
       
       res.json(queue);
