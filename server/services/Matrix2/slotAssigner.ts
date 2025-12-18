@@ -54,6 +54,7 @@ import { isNoSendDay } from '../holidayCalendar';
 /**
  * Immediately assign a specific recipient to the next available slot
  * Called when a recipient is enrolled to avoid waiting for the 60s queue cycle
+ * Only assigns to slots belonging to the recipient's sequence email account
  */
 export async function assignSingleRecipient(recipientId: string) {
   const tenantId = await storage.getAdminTenantId();
@@ -66,19 +67,20 @@ export async function assignSingleRecipient(recipientId: string) {
     return;
   }
 
-  const today = new Date();
-  const dateIso = today.toISOString().slice(0, 10);
-  const slots = await getEmptySlots(dateIso);
-  
-  if (slots.length === 0) {
-    return;
-  }
-
-  // Get the specific recipient
+  // Get the specific recipient (includes sender_email_account_id)
   const recipients = await getEligibleRecipientsForAssignment();
   const recipient = recipients.find(r => r.id === recipientId);
   
-  if (!recipient) {
+  if (!recipient || !recipient.sender_email_account_id) {
+    return;
+  }
+
+  // Get empty slots for THIS email account only
+  const today = new Date();
+  const dateIso = today.toISOString().slice(0, 10);
+  const slots = await getEmptySlots(dateIso, recipient.sender_email_account_id);
+  
+  if (slots.length === 0) {
     return;
   }
 
@@ -195,8 +197,14 @@ export async function assignRecipientsToSlots() {
     }
 
     // Find first eligible recipient for this slot (now sorted by priority)
+    // CRITICAL: Only assign recipients to slots belonging to their sequence's email account
     for (let i = 0; i < sortedRecipients.length; i++) {
       const r = sortedRecipients[i];
+      
+      // Match slot's email account with recipient's sequence email account
+      if (slot.email_account_id && r.sender_email_account_id !== slot.email_account_id) {
+        continue;
+      }
       
       if (!(await isRecipientEligible(r, slotUtc, settings))) {
         continue;
