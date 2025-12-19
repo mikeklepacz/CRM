@@ -26,7 +26,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Phone, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Star, RefreshCw, Link as LinkIcon, Database, Copy, Upload, Volume2 } from "lucide-react";
+import { Phone, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Star, RefreshCw, Link as LinkIcon, Database, Copy, Upload, Volume2, Pencil } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
@@ -129,7 +129,8 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
     queryFn: async () => {
       const res = await fetch(`/api/super-admin/tenants/${tenantId}/projects`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch projects');
-      return res.json();
+      const data = await res.json();
+      return data.projects || [];
     },
     enabled: isSuperAdminMode,
   });
@@ -242,6 +243,28 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
       toast({
         title: "Success",
         description: "Agent deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateAgentMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof agentSchema> }) => {
+      return await apiRequest("PUT", `${apiBase}/agents/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'agents'] });
+      setEditingAgent(null);
+      agentForm.reset();
+      toast({
+        title: "Success",
+        description: "Agent updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -518,6 +541,107 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                     </Form>
                   </DialogContent>
                 </Dialog>
+
+                <Dialog open={!!editingAgent} onOpenChange={(open) => !open && setEditingAgent(null)}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Edit Voice Agent</DialogTitle>
+                      <DialogDescription>
+                        Update agent details and project assignment
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Form {...agentForm}>
+                      <form onSubmit={agentForm.handleSubmit((data) => {
+                        if (editingAgent) {
+                          updateAgentMutation.mutate({ id: editingAgent.id, data });
+                        }
+                      })} className="space-y-4">
+                        <FormField
+                          control={agentForm.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Agent Name</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Sales Cold Caller" data-testid="input-edit-agent-name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={agentForm.control}
+                          name="agentId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Agent ID</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="abc123..." data-testid="input-edit-agent-id" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={agentForm.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Description (Optional)</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Used for initial cold calls to new leads" data-testid="input-edit-agent-description" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {isSuperAdminMode && projects.length > 0 && (
+                          <FormField
+                            control={agentForm.control}
+                            name="projectId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Assign to Project</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-edit-agent-project">
+                                      <SelectValue placeholder="Select a project (optional)" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="">No project (tenant-wide)</SelectItem>
+                                    {projects.map((project) => (
+                                      <SelectItem key={project.id} value={project.id}>
+                                        {project.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormDescription>
+                                  Assign this agent to a specific project
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+
+                        <Button
+                          type="submit"
+                          disabled={updateAgentMutation.isPending}
+                          className="w-full"
+                          data-testid="button-update-agent"
+                        >
+                          {updateAgentMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Update Agent
+                        </Button>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {agents.length === 0 ? (
@@ -557,6 +681,24 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                         )}
                       </div>
                       <div className="flex gap-2">
+                        {isSuperAdminMode && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingAgent(agent);
+                              agentForm.reset({
+                                name: agent.name,
+                                agentId: agent.agent_id,
+                                description: agent.description || "",
+                                projectId: agent.projectId || "",
+                              });
+                            }}
+                            data-testid={`button-edit-agent-${agent.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
                         {!agent.is_default && (
                           <Button
                             variant="ghost"
