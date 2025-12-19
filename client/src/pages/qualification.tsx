@@ -172,7 +172,15 @@ export default function Qualification() {
 
   const createLeadMutation = useMutation({
     mutationFn: async (leadData: typeof newLead) => {
-      return apiRequest('POST', '/api/qualification/leads', leadData);
+      // Add tenantId from project context
+      const tenantId = currentProject?.tenantId;
+      if (!tenantId) {
+        throw new Error('Tenant ID not found');
+      }
+      return apiRequest('POST', '/api/qualification/leads', {
+        ...leadData,
+        tenantId,
+      });
     },
     onSuccess: () => {
       toast({ title: "Lead created successfully" });
