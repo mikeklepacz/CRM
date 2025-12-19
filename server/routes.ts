@@ -3050,7 +3050,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               },
               status: 'lead',
               tenantId: tenantId,
-              projectId: projectId,
+              projectId: lead.projectId || null,
             });
           }
         } else {
