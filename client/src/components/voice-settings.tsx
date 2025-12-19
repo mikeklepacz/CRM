@@ -188,7 +188,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
       name: "",
       agentId: "",
       description: "",
-      projectId: "",
+      projectId: "__none__",
     },
   });
 
@@ -446,7 +446,10 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                       </DialogDescription>
                     </DialogHeader>
                     <Form {...agentForm}>
-                      <form onSubmit={agentForm.handleSubmit((data) => createAgentMutation.mutate(data))} className="space-y-4">
+                      <form onSubmit={agentForm.handleSubmit((data) => createAgentMutation.mutate({
+                          ...data,
+                          projectId: data.projectId === "__none__" ? "" : data.projectId
+                        }))} className="space-y-4">
                         <FormField
                           control={agentForm.control}
                           name="name"
@@ -502,14 +505,14 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Assign to Project</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <Select onValueChange={field.onChange} value={field.value || "__none__"}>
                                   <FormControl>
                                     <SelectTrigger data-testid="select-agent-project">
                                       <SelectValue placeholder="Select a project (optional)" />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">No project (tenant-wide)</SelectItem>
+                                    <SelectItem value="__none__">No project (tenant-wide)</SelectItem>
                                     {projects.map((project) => (
                                       <SelectItem key={project.id} value={project.id}>
                                         {project.name}
@@ -553,7 +556,13 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                     <Form {...agentForm}>
                       <form onSubmit={agentForm.handleSubmit((data) => {
                         if (editingAgent) {
-                          updateAgentMutation.mutate({ id: editingAgent.id, data });
+                          updateAgentMutation.mutate({ 
+                            id: editingAgent.id, 
+                            data: {
+                              ...data,
+                              projectId: data.projectId === "__none__" ? "" : data.projectId
+                            }
+                          });
                         }
                       })} className="space-y-4">
                         <FormField
@@ -605,14 +614,14 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Assign to Project</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <Select onValueChange={field.onChange} value={field.value || "__none__"}>
                                   <FormControl>
                                     <SelectTrigger data-testid="select-edit-agent-project">
                                       <SelectValue placeholder="Select a project (optional)" />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">No project (tenant-wide)</SelectItem>
+                                    <SelectItem value="__none__">No project (tenant-wide)</SelectItem>
                                     {projects.map((project) => (
                                       <SelectItem key={project.id} value={project.id}>
                                         {project.name}
@@ -691,7 +700,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                                 name: agent.name,
                                 agentId: agent.agent_id,
                                 description: agent.description || "",
-                                projectId: agent.projectId || "",
+                                projectId: agent.projectId || "__none__",
                               });
                             }}
                             data-testid={`button-edit-agent-${agent.id}`}
