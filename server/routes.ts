@@ -1481,18 +1481,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let agentUpdates = 0;
       for (const phone of phoneNumbers) {
-        if (phone.agent_id && phone.phone_number_id) {
-          const dbAgentId = agentIdToDbId.get(phone.agent_id);
+        // ElevenLabs nests agent info in assigned_agent object
+        const assignedAgentId = phone.assigned_agent?.agent_id || phone.agent_id;
+        if (assignedAgentId && phone.phone_number_id) {
+          const dbAgentId = agentIdToDbId.get(assignedAgentId);
           if (dbAgentId) {
             try {
               await storage.updateElevenLabsAgent(dbAgentId, req.user.tenantId, {
                 phoneNumberId: phone.phone_number_id,
               });
               agentUpdates++;
-              console.log(`[PhoneSync] Updated agent ${phone.agent_id} with phone number ${phone.phone_number_id}`);
-            } catch (err) {
-              console.error(`[PhoneSync] Failed to update agent ${phone.agent_id}:`, err.message);
+              console.log(`[PhoneSync] Updated agent ${assignedAgentId} with phone number ${phone.phone_number_id}`);
+            } catch (err: any) {
+              console.error(`[PhoneSync] Failed to update agent ${assignedAgentId}:`, err.message);
             }
+          } else {
+            console.log(`[PhoneSync] Agent ${assignedAgentId} not found in database for tenant`);
           }
         }
       }
@@ -24188,18 +24192,22 @@ ${conversationContext}`;
       
       let agentUpdates = 0;
       for (const pn of phoneNumbers) {
-        if (pn.agent_id && pn.phone_number_id) {
-          const dbAgentId = agentIdToDbId.get(pn.agent_id);
+        // ElevenLabs nests agent info in assigned_agent object
+        const assignedAgentId = pn.assigned_agent?.agent_id || pn.agent_id;
+        if (assignedAgentId && pn.phone_number_id) {
+          const dbAgentId = agentIdToDbId.get(assignedAgentId);
           if (dbAgentId) {
             try {
               await storage.updateElevenLabsAgent(dbAgentId, tenantId, {
                 phoneNumberId: pn.phone_number_id,
               });
               agentUpdates++;
-              console.log(`[PhoneSync] Updated agent ${pn.agent_id} with phone number ${pn.phone_number_id}`);
-            } catch (err) {
-              console.error(`[PhoneSync] Failed to update agent ${pn.agent_id}:`, err.message);
+              console.log(`[PhoneSync] Updated agent ${assignedAgentId} with phone number ${pn.phone_number_id}`);
+            } catch (err: any) {
+              console.error(`[PhoneSync] Failed to update agent ${assignedAgentId}:`, err.message);
             }
+          } else {
+            console.log(`[PhoneSync] Agent ${assignedAgentId} not found in database for tenant`);
           }
         }
       }
