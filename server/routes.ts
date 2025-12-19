@@ -1452,7 +1452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ message: 'No phone numbers found in ElevenLabs account', phoneNumbers: [] });
       }
 
-      // Store phone numbers in database
+      // Store phone numbers in database with their agent assignments from ElevenLabs
       let storedCount = 0;
       for (const phone of phoneNumbers) {
         try {
@@ -1460,6 +1460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             phoneNumberId: phone.phone_number_id,
             phoneNumber: phone.number || phone.phone_number || '',
             label: phone.label || phone.name || null,
+            agentId: phone.agent_id || null,
             tenantId: req.user.tenantId,
           });
           storedCount++;
@@ -1468,29 +1469,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Assign first phone number to agents that don't have one yet
-      const agents = await storage.getAllElevenLabsAgents(req.user.tenantId);
-      let updatedCount = 0;
-
-      for (const agent of agents) {
-        if (!agent.phoneNumberId && phoneNumbers.length > 0) {
-          // Use the first phone number for agents without assigned numbers
-          await storage.updateElevenLabsAgent(agent.id, req.user.tenantId, {
-            phoneNumberId: phoneNumbers[0].phone_number_id,
-          });
-          updatedCount++;
-        }
-      }
-
       res.json({
-        message: `Successfully synced ${phoneNumbers.length} phone number(s) and updated ${updatedCount} agent(s)`,
+        message: `Successfully synced ${phoneNumbers.length} phone number(s) from ElevenLabs`,
         phoneNumbers: phoneNumbers.map((pn: any) => ({
-          phone_number: pn.phone_number,
+          phone_number: pn.phone_number || pn.number,
           phone_number_id: pn.phone_number_id,
           provider: pn.provider,
-          label: pn.label,
+          label: pn.label || pn.name,
+          agent_id: pn.agent_id,
         })),
-        updatedAgents: updatedCount,
       });
     } catch (error: any) {
       console.error('[PhoneSync] Error syncing phone numbers:', error.response?.data || error.message);
