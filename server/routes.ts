@@ -2983,6 +2983,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: name || `${scenario || 'Batch'} Campaign - ${new Date().toLocaleDateString()}`,
         scenario: scenario || 'custom',
         agentId: agent_record_id,
+        phoneNumberId: effectivePhoneNumberId,
         createdByUserId: userId,
         storeFilter: { scenario },
         totalStores: stores.length,

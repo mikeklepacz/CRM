@@ -284,7 +284,7 @@ export class CallDispatcher {
         const result = await this.initiateOutboundCall({
           apiKey,
           agentId: agent.agentId,
-          phoneNumberId: agent.phoneNumberId || '',
+          phoneNumberId: campaign.phoneNumberId || agent.phoneNumberId || '',
           toNumber: phoneNumber,
           tenantId: target.tenantId,
           userId,
