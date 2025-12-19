@@ -3151,14 +3151,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertElevenLabsPhoneNumber(phoneData: InsertElevenLabsPhoneNumber): Promise<ElevenLabsPhoneNumber> {
-    // Check if phone number already exists for this tenant
-    const existing = await this.getElevenLabsPhoneNumber(phoneData.phoneNumberId, phoneData.tenantId);
+    // Check if phone number already exists GLOBALLY (phoneNumberId is unique across all tenants)
+    const [existingGlobal] = await db.select().from(elevenLabsPhoneNumbers)
+      .where(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneData.phoneNumberId));
 
-    if (existing) {
-      // Update existing phone number
+    if (existingGlobal) {
+      // Phone number exists - update it with new data (may change tenant ownership)
       const [updated] = await db.update(elevenLabsPhoneNumbers)
-        .set({ ...phoneData, updatedAt: new Date() })
-        .where(and(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneData.phoneNumberId), eq(elevenLabsPhoneNumbers.tenantId, phoneData.tenantId)))
+        .set({ 
+          phoneNumber: phoneData.phoneNumber,
+          label: phoneData.label,
+          tenantId: phoneData.tenantId,
+          updatedAt: new Date() 
+        })
+        .where(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneData.phoneNumberId))
         .returning();
       return updated;
     } else {
