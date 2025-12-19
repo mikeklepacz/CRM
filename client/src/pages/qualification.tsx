@@ -139,11 +139,15 @@ export default function Qualification() {
     address: '',
     city: '',
     state: '',
-    country: 'USA',
+    country: '',
     website: '',
     source: '',
     notes: '',
+    campaignId: '',
   });
+  
+  const [isEditLeadOpen, setIsEditLeadOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<QualificationLead | null>(null);
 
   const { data: leadsData, isLoading: leadsLoading, refetch: refetchLeads } = useQuery<{ leads: QualificationLead[]; total: number }>({
     queryKey: ['/api/qualification/leads', statusFilter, callStatusFilter, currentProject?.id],
@@ -185,17 +189,33 @@ export default function Qualification() {
     },
     onSuccess: () => {
       toast({ title: "Lead created successfully" });
-      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
+      refetchLeads();
+      queryClient.invalidateQueries({ queryKey: [statsQueryUrl] });
       setIsAddLeadOpen(false);
       setNewLead({
         company: '', pocName: '', pocEmail: '', pocPhone: '',
-        address: '', city: '', state: '', country: 'USA',
-        website: '', source: '', notes: '',
+        address: '', city: '', state: '', country: '',
+        website: '', source: '', notes: '', campaignId: '',
       });
     },
     onError: (error: Error) => {
       toast({ title: "Failed to create lead", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateLeadMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<typeof newLead> }) => {
+      return apiRequest('PATCH', `/api/qualification/leads/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Lead updated successfully" });
+      refetchLeads();
+      queryClient.invalidateQueries({ queryKey: [statsQueryUrl] });
+      setIsEditLeadOpen(false);
+      setEditingLead(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update lead", description: error.message, variant: "destructive" });
     },
   });
 
@@ -205,8 +225,8 @@ export default function Qualification() {
     },
     onSuccess: (data: any) => {
       toast({ title: `${data.deleted} leads deleted` });
-      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
+      refetchLeads();
+      queryClient.invalidateQueries({ queryKey: [statsQueryUrl] });
       setSelectedLeads(new Set());
     },
     onError: (error: Error) => {
@@ -220,8 +240,8 @@ export default function Qualification() {
     },
     onSuccess: (data: any) => {
       toast({ title: `${data.count} leads imported successfully` });
-      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
+      refetchLeads();
+      queryClient.invalidateQueries({ queryKey: [statsQueryUrl] });
       resetImport();
     },
     onError: (error: Error) => {
@@ -661,7 +681,10 @@ export default function Qualification() {
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setEditingLead(lead);
+                              setIsEditLeadOpen(true);
+                            }}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
@@ -793,9 +816,26 @@ export default function Qualification() {
                 id="country"
                 value={newLead.country}
                 onChange={(e) => setNewLead(prev => ({ ...prev, country: e.target.value }))}
-                placeholder="USA"
+                placeholder="e.g. USA, Canada, UK"
                 data-testid="input-country"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="campaign">Campaign</Label>
+              <Select
+                value={newLead.campaignId || "__none__"}
+                onValueChange={(value) => setNewLead(prev => ({ ...prev, campaignId: value === "__none__" ? '' : value }))}
+              >
+                <SelectTrigger data-testid="select-campaign">
+                  <SelectValue placeholder="Select a campaign" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No Campaign</SelectItem>
+                  {campaignsData?.campaigns?.map((campaign) => (
+                    <SelectItem key={campaign.id} value={campaign.id}>{campaign.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-2 space-y-2">
               <Label htmlFor="notes">Notes</Label>
@@ -985,6 +1025,170 @@ export default function Qualification() {
               </TabsContent>
             </Tabs>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditLeadOpen} onOpenChange={(open) => {
+        setIsEditLeadOpen(open);
+        if (!open) setEditingLead(null);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Lead</DialogTitle>
+            <DialogDescription>Update lead information</DialogDescription>
+          </DialogHeader>
+          {editingLead && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Company Name</Label>
+                <Input
+                  value={editingLead.company || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, company: e.target.value } : null)}
+                  placeholder="Acme Corp"
+                  data-testid="input-edit-company"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Website</Label>
+                <Input
+                  value={editingLead.website || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, website: e.target.value } : null)}
+                  placeholder="https://example.com"
+                  data-testid="input-edit-website"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Contact Name</Label>
+                <Input
+                  value={editingLead.pocName || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, pocName: e.target.value } : null)}
+                  placeholder="John Doe"
+                  data-testid="input-edit-poc-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  value={editingLead.pocEmail || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, pocEmail: e.target.value } : null)}
+                  placeholder="john@example.com"
+                  data-testid="input-edit-poc-email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <Input
+                  value={editingLead.pocPhone || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, pocPhone: e.target.value } : null)}
+                  placeholder="+1 555-1234"
+                  data-testid="input-edit-poc-phone"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>City</Label>
+                <Input
+                  value={editingLead.city || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, city: e.target.value } : null)}
+                  placeholder="New York"
+                  data-testid="input-edit-city"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>State</Label>
+                <Input
+                  value={editingLead.state || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, state: e.target.value } : null)}
+                  placeholder="NY"
+                  data-testid="input-edit-state"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Country</Label>
+                <Input
+                  value={editingLead.country || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, country: e.target.value } : null)}
+                  placeholder="e.g. USA, Canada, UK"
+                  data-testid="input-edit-country"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Campaign</Label>
+                <Select
+                  value={editingLead.campaignId || "__none__"}
+                  onValueChange={(value) => setEditingLead(prev => prev ? { ...prev, campaignId: value === "__none__" ? null : value } : null)}
+                >
+                  <SelectTrigger data-testid="select-edit-campaign">
+                    <SelectValue placeholder="Select a campaign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No Campaign</SelectItem>
+                    {campaignsData?.campaigns?.map((campaign) => (
+                      <SelectItem key={campaign.id} value={campaign.id}>{campaign.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={editingLead.status || "new"}
+                  onValueChange={(value) => setEditingLead(prev => prev ? { ...prev, status: value } : null)}
+                >
+                  <SelectTrigger data-testid="select-edit-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">New</SelectItem>
+                    <SelectItem value="contacted">Contacted</SelectItem>
+                    <SelectItem value="qualified">Qualified</SelectItem>
+                    <SelectItem value="disqualified">Disqualified</SelectItem>
+                    <SelectItem value="exported">Exported</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label>Notes</Label>
+                <Textarea
+                  value={editingLead.notes || ''}
+                  onChange={(e) => setEditingLead(prev => prev ? { ...prev, notes: e.target.value } : null)}
+                  placeholder="Additional notes..."
+                  data-testid="input-edit-notes"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditLeadOpen(false)} data-testid="button-cancel-edit">
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (editingLead) {
+                  updateLeadMutation.mutate({ 
+                    id: editingLead.id, 
+                    data: {
+                      company: editingLead.company,
+                      website: editingLead.website,
+                      pocName: editingLead.pocName,
+                      pocEmail: editingLead.pocEmail,
+                      pocPhone: editingLead.pocPhone,
+                      city: editingLead.city,
+                      state: editingLead.state,
+                      country: editingLead.country,
+                      campaignId: editingLead.campaignId,
+                      status: editingLead.status,
+                      notes: editingLead.notes,
+                    }
+                  });
+                }
+              }} 
+              disabled={updateLeadMutation.isPending} 
+              data-testid="button-submit-edit"
+            >
+              {updateLeadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
