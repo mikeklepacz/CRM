@@ -130,7 +130,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
       const res = await fetch(`/api/super-admin/tenants/${tenantId}/projects`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch projects');
       const data = await res.json();
-      return data.projects || [];
+      return Array.isArray(data) ? data : data.projects ?? [];
     },
     enabled: isSuperAdminMode,
   });
