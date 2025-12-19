@@ -5860,9 +5860,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Project filtering: filter leads by direct project_id column
-    // Fallback to category-based matching for leads created before project_id was added
+    // Fallback to category-based matching ONLY for leads without a project_id (legacy leads)
     if (filters?.projectId) {
-      // Get categories for this project (including shared ones with null projectId) for backwards compatibility
+      // Get categories for this project for backwards compatibility with legacy leads
       const projectCategories = await db
         .select({ name: categories.name })
         .from(categories)
@@ -5872,11 +5872,14 @@ export class DatabaseStorage implements IStorage {
         ));
       const categoryNames = projectCategories.map(c => c.name.toLowerCase());
       
-      // Match leads with direct projectId OR category-based matching (for backwards compatibility)
+      // Match leads with direct projectId, OR legacy leads (no projectId) that match category
       if (categoryNames.length > 0) {
         conditions.push(or(
           eq(qualificationLeads.projectId, filters.projectId),
-          inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames)
+          and(
+            isNull(qualificationLeads.projectId),
+            inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames)
+          )
         ));
       } else {
         // No categories for project - only match leads with direct projectId
@@ -5956,7 +5959,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Project filtering: filter leads by direct project_id column
-    // Fallback to category-based matching for leads created before project_id was added
+    // Fallback to category-based matching ONLY for leads without a project_id (legacy leads)
     if (projectId) {
       const projectCategories = await db
         .select({ name: categories.name })
@@ -5967,11 +5970,14 @@ export class DatabaseStorage implements IStorage {
         ));
       const categoryNames = projectCategories.map(c => c.name.toLowerCase());
       
-      // Match leads with direct projectId OR category-based matching (for backwards compatibility)
+      // Match leads with direct projectId, OR legacy leads (no projectId) that match category
       if (categoryNames.length > 0) {
         conditions.push(or(
           eq(qualificationLeads.projectId, projectId),
-          inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames)
+          and(
+            isNull(qualificationLeads.projectId),
+            inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames)
+          )
         ));
       } else {
         // No categories for project - only match leads with direct projectId
