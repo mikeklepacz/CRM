@@ -2223,6 +2223,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       
+      console.log('[DEBUG] GET /api/elevenlabs/agents - tenantId:', req.user.tenantId, 'userId:', userId);
+      
       // Check voice access (admin or explicit voice access)
       const isAdmin = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdmin && !user?.hasVoiceAccess) {
