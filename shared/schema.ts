@@ -2452,6 +2452,7 @@ export type QualificationCampaign = typeof qualificationCampaigns.$inferSelect;
 export const qualificationLeads = pgTable("qualification_leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Scope to specific project (null = tenant-wide)
   campaignId: varchar("campaign_id").references(() => qualificationCampaigns.id, { onDelete: 'set null' }),
   
   // Company information
@@ -2511,6 +2512,7 @@ export const qualificationLeads = pgTable("qualification_leads", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_qualification_leads_tenant").on(table.tenantId),
+  index("idx_qualification_leads_project").on(table.projectId),
   index("idx_qualification_leads_campaign").on(table.campaignId),
   index("idx_qualification_leads_status").on(table.tenantId, table.status),
   index("idx_qualification_leads_call_status").on(table.tenantId, table.callStatus),
