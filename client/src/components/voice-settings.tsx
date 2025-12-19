@@ -675,13 +675,17 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2">
+                        <p className="text-sm text-muted-foreground mb-1">
                           Agent ID: {agent.agent_id}
                           {agent.projectName && (
                             <Badge variant="outline" className="ml-2">
                               {agent.projectName}
                             </Badge>
                           )}
+                        </p>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Phone: {agent.phone_number || <span className="text-destructive">Not assigned</span>}
+                          {agent.phone_label && <span className="ml-1">({agent.phone_label})</span>}
                         </p>
                         {agent.description && (
                           <p className="text-sm text-muted-foreground">

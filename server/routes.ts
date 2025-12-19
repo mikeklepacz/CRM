@@ -1475,8 +1475,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Update agents with their assigned phone number IDs from ElevenLabs
+      const allAgents = await storage.getAllElevenLabsAgents(req.user.tenantId);
+      const agentIdToDbId = new Map(allAgents.map(a => [a.agentId, a.id]));
+      
+      let agentUpdates = 0;
+      for (const phone of phoneNumbers) {
+        if (phone.agent_id && phone.phone_number_id) {
+          const dbAgentId = agentIdToDbId.get(phone.agent_id);
+          if (dbAgentId) {
+            try {
+              await storage.updateElevenLabsAgent(dbAgentId, req.user.tenantId, {
+                phoneNumberId: phone.phone_number_id,
+              });
+              agentUpdates++;
+              console.log(`[PhoneSync] Updated agent ${phone.agent_id} with phone number ${phone.phone_number_id}`);
+            } catch (err) {
+              console.error(`[PhoneSync] Failed to update agent ${phone.agent_id}:`, err.message);
+            }
+          }
+        }
+      }
+
       res.json({
-        message: `Successfully synced ${phoneNumbers.length} phone number(s) from ElevenLabs`,
+        message: `Successfully synced ${phoneNumbers.length} phone number(s) from ElevenLabs (${agentUpdates} agent(s) updated)`,
         phoneNumbers: phoneNumbers.map((pn: any) => ({
           phone_number: pn.phone_number || pn.number,
           phone_number_id: pn.phone_number_id,
@@ -2235,21 +2257,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const agents = await storage.getAllElevenLabsAgents(req.user.tenantId, projectId as string | undefined);
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(req.user.tenantId);
       
-      // Create a map of ElevenLabs agent IDs to phone numbers for lookup
-      // This uses the agent_id stored in phone_numbers (synced from ElevenLabs)
-      const phoneByAgentIdMap = new Map(
-        phoneNumbers.filter(p => p.agentId).map(p => [p.agentId, p])
+      // Create a map of phone number IDs to phone numbers for lookup
+      const phoneByIdMap = new Map(
+        phoneNumbers.map(p => [p.phoneNumberId, p])
       );
       
       // Transform to snake_case for frontend compatibility and include phone number
       const transformedAgents = agents.map(agent => {
-        // Look up phone by ElevenLabs agent ID (from synced phone numbers)
-        const phone = agent.agentId ? phoneByAgentIdMap.get(agent.agentId) : null;
+        // Look up phone by agent's stored phoneNumberId
+        const phone = agent.phoneNumberId ? phoneByIdMap.get(agent.phoneNumberId) : null;
         return {
           id: agent.id,
           name: agent.name,
           agent_id: agent.agentId,
-          phone_number_id: phone?.phoneNumberId || agent.phoneNumberId,
+          phone_number_id: agent.phoneNumberId,
           phone_number: phone?.phoneNumber || null,
           phone_label: phone?.label || null,
           description: agent.description,
@@ -24043,19 +24064,19 @@ ${conversationContext}`;
       const projects = await storage.listTenantProjects(tenantId);
       
       // Create maps for lookups
-      const phoneByAgentIdMap = new Map(
-        phoneNumbers.filter(pn => pn.agentId).map(pn => [pn.agentId, pn])
+      const phoneByIdMap = new Map(
+        phoneNumbers.map(pn => [pn.phoneNumberId, pn])
       );
       const projectMap = new Map(projects.map(p => [p.id, p.name]));
       
       const enrichedAgents = agents.map(agent => {
-        // Look up phone by ElevenLabs agent ID (from synced phone numbers)
-        const phone = agent.agentId ? phoneByAgentIdMap.get(agent.agentId) : null;
+        // Look up phone by agent's stored phoneNumberId
+        const phone = agent.phoneNumberId ? phoneByIdMap.get(agent.phoneNumberId) : null;
         return {
           id: agent.id,
           name: agent.name,
           agent_id: agent.agentId,
-          phone_number_id: phone?.phoneNumberId || agent.phoneNumberId,
+          phone_number_id: agent.phoneNumberId,
           phone_number: phone?.phoneNumber || null,
           phone_label: phone?.label || null,
           description: agent.description,
