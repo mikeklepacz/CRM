@@ -150,12 +150,11 @@ export default function Qualification() {
   const [editingLead, setEditingLead] = useState<QualificationLead | null>(null);
 
   const { data: leadsData, isLoading: leadsLoading, refetch: refetchLeads } = useQuery<{ leads: QualificationLead[]; total: number }>({
-    queryKey: ['/api/qualification/leads', statusFilter, callStatusFilter, currentProject?.id],
+    queryKey: ['/api/qualification/leads', statusFilter, callStatusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (callStatusFilter !== 'all') params.set('callStatus', callStatusFilter);
-      if (currentProject?.id) params.set('projectId', currentProject.id);
       params.set('limit', '500');
       const response = await fetch(`/api/qualification/leads?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch leads');
@@ -163,11 +162,8 @@ export default function Qualification() {
     },
   });
 
-  const statsQueryUrl = currentProject?.id 
-    ? `/api/qualification/leads/stats?projectId=${currentProject.id}` 
-    : '/api/qualification/leads/stats';
   const { data: statsData } = useQuery<{ stats: { total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null } }>({
-    queryKey: [statsQueryUrl],
+    queryKey: ['/api/qualification/leads/stats'],
   });
 
   const { data: campaignsData } = useQuery<{ campaigns: QualificationCampaign[] }>({
@@ -190,7 +186,7 @@ export default function Qualification() {
     onSuccess: () => {
       toast({ title: "Lead created successfully" });
       refetchLeads();
-      queryClient.invalidateQueries({ queryKey: [statsQueryUrl] });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
       setIsAddLeadOpen(false);
       setNewLead({
         company: '', pocName: '', pocEmail: '', pocPhone: '',
@@ -210,7 +206,7 @@ export default function Qualification() {
     onSuccess: () => {
       toast({ title: "Lead updated successfully" });
       refetchLeads();
-      queryClient.invalidateQueries({ queryKey: [statsQueryUrl] });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
       setIsEditLeadOpen(false);
       setEditingLead(null);
     },
@@ -226,7 +222,7 @@ export default function Qualification() {
     onSuccess: (data: any) => {
       toast({ title: `${data.deleted} leads deleted` });
       refetchLeads();
-      queryClient.invalidateQueries({ queryKey: [statsQueryUrl] });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
       setSelectedLeads(new Set());
     },
     onError: (error: Error) => {
@@ -241,7 +237,7 @@ export default function Qualification() {
     onSuccess: (data: any) => {
       toast({ title: `${data.count} leads imported successfully` });
       refetchLeads();
-      queryClient.invalidateQueries({ queryKey: [statsQueryUrl] });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads/stats'] });
       resetImport();
     },
     onError: (error: Error) => {
