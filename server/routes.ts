@@ -2227,24 +2227,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const agents = await storage.getAllElevenLabsAgents(req.user.tenantId, projectId as string | undefined);
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(req.user.tenantId);
       
-      // Create a map of phone number IDs to phone numbers for quick lookup
-      const phoneMap = new Map(phoneNumbers.map(p => [p.phoneNumberId, p]));
+      // Create a map of ElevenLabs agent IDs to phone numbers for lookup
+      // This uses the agent_id stored in phone_numbers (synced from ElevenLabs)
+      const phoneByAgentIdMap = new Map(
+        phoneNumbers.filter(p => p.agentId).map(p => [p.agentId, p])
+      );
       
       // Transform to snake_case for frontend compatibility and include phone number
       const transformedAgents = agents.map(agent => {
-        const phone = agent.phoneNumberId ? phoneMap.get(agent.phoneNumberId) : null;
+        // Look up phone by ElevenLabs agent ID (from synced phone numbers)
+        const phone = agent.agentId ? phoneByAgentIdMap.get(agent.agentId) : null;
         return {
           id: agent.id,
           name: agent.name,
           agent_id: agent.agentId,
-          phone_number_id: agent.phoneNumberId,
+          phone_number_id: phone?.phoneNumberId || agent.phoneNumberId,
           phone_number: phone?.phoneNumber || null,
           phone_label: phone?.label || null,
           description: agent.description,
           is_default: agent.isDefault,
         };
       });
-      
       res.json(transformedAgents);
     } catch (error: any) {
       console.error('Error fetching agents:', error);
@@ -24018,14 +24021,19 @@ ${conversationContext}`;
       const agents = await storage.getAllElevenLabsAgents(tenantId);
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(tenantId);
       
-      const phoneNumberMap = new Map(phoneNumbers.map(pn => [pn.phoneNumberId, pn]));
+      // Create a map of ElevenLabs agent IDs to phone numbers for lookup
+      const phoneByAgentIdMap = new Map(
+        phoneNumbers.filter(pn => pn.agentId).map(pn => [pn.agentId, pn])
+      );
+      
       const enrichedAgents = agents.map(agent => {
-        const phone = agent.phoneNumberId ? phoneNumberMap.get(agent.phoneNumberId) : null;
+        // Look up phone by ElevenLabs agent ID (from synced phone numbers)
+        const phone = agent.agentId ? phoneByAgentIdMap.get(agent.agentId) : null;
         return {
           id: agent.id,
           name: agent.name,
           agent_id: agent.agentId,
-          phone_number_id: agent.phoneNumberId,
+          phone_number_id: phone?.phoneNumberId || agent.phoneNumberId,
           phone_number: phone?.phoneNumber || null,
           phone_label: phone?.label || null,
           description: agent.description,
