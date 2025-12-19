@@ -226,26 +226,6 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
     },
   });
 
-  const syncPhoneNumbersMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("POST", `${apiBase}/sync-phone-numbers`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [apiBase, 'agents'] });
-      toast({
-        title: "Success",
-        description: "Phone numbers synced from ElevenLabs successfully",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const setDefaultMutation = useMutation({
     mutationFn: async (id: string) => {
       return await apiRequest("PUT", `${apiBase}/agents/${id}/set-default`);
@@ -401,18 +381,6 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
               </p>
               
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => syncPhoneNumbersMutation.mutate()}
-                  disabled={syncPhoneNumbersMutation.isPending || !hasApiKey}
-                  data-testid="button-sync-phone-numbers"
-                >
-                  {syncPhoneNumbersMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  <Phone className="h-4 w-4 mr-2" />
-                  Sync Phone Numbers
-                </Button>
                 <Dialog open={isAddAgentOpen} onOpenChange={setIsAddAgentOpen}>
                   <DialogTrigger asChild>
                     <Button data-testid="button-add-agent">
@@ -519,31 +487,6 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                         <p className="text-sm text-muted-foreground mb-2">
                           Agent ID: {agent.agent_id}
                         </p>
-                        {agent.phone_number && (
-                          <div className="flex items-center gap-2 mb-2">
-                            <Phone className="h-4 w-4 text-primary" />
-                            <p className="text-sm font-medium">
-                              {agent.phone_number}
-                              {agent.phone_label && (
-                                <span className="ml-2 text-xs text-muted-foreground">
-                                  ({agent.phone_label})
-                                </span>
-                              )}
-                            </p>
-                            <Badge variant="outline" className="ml-auto">
-                              <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                              Synced
-                            </Badge>
-                          </div>
-                        )}
-                        {!agent.phone_number && (
-                          <div className="flex items-center gap-2 mb-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground italic">
-                              No phone number assigned
-                            </p>
-                          </div>
-                        )}
                         {agent.description && (
                           <p className="text-sm text-muted-foreground">
                             {agent.description}
