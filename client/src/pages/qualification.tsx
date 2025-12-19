@@ -172,14 +172,15 @@ export default function Qualification() {
 
   const createLeadMutation = useMutation({
     mutationFn: async (leadData: typeof newLead) => {
-      // Add tenantId from project context
       const tenantId = currentProject?.tenantId;
+      const projectId = currentProject?.id;
       if (!tenantId) {
         throw new Error('Tenant ID not found');
       }
       return apiRequest('POST', '/api/qualification/leads', {
         ...leadData,
         tenantId,
+        projectId,
       });
     },
     onSuccess: () => {

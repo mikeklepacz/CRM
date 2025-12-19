@@ -5859,9 +5859,10 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(qualificationLeads.callStatus, filters.callStatus));
     }
 
-    // Project filtering: filter leads by categories assigned to the project
+    // Project filtering: filter leads by direct project_id column
+    // Fallback to category-based matching for leads created before project_id was added
     if (filters?.projectId) {
-      // Get categories for this project (including shared ones with null projectId)
+      // Get categories for this project (including shared ones with null projectId) for backwards compatibility
       const projectCategories = await db
         .select({ name: categories.name })
         .from(categories)
@@ -5871,11 +5872,15 @@ export class DatabaseStorage implements IStorage {
         ));
       const categoryNames = projectCategories.map(c => c.name.toLowerCase());
       
+      // Match leads with direct projectId OR category-based matching (for backwards compatibility)
       if (categoryNames.length > 0) {
-        conditions.push(inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames));
+        conditions.push(or(
+          eq(qualificationLeads.projectId, filters.projectId),
+          inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames)
+        ));
       } else {
-        // No categories for project = no leads should match
-        conditions.push(sql`1 = 0`);
+        // No categories for project - only match leads with direct projectId
+        conditions.push(eq(qualificationLeads.projectId, filters.projectId));
       }
     }
 
@@ -5950,7 +5955,8 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(qualificationLeads.campaignId, campaignId));
     }
 
-    // Project filtering: filter leads by categories assigned to the project
+    // Project filtering: filter leads by direct project_id column
+    // Fallback to category-based matching for leads created before project_id was added
     if (projectId) {
       const projectCategories = await db
         .select({ name: categories.name })
@@ -5961,10 +5967,15 @@ export class DatabaseStorage implements IStorage {
         ));
       const categoryNames = projectCategories.map(c => c.name.toLowerCase());
       
+      // Match leads with direct projectId OR category-based matching (for backwards compatibility)
       if (categoryNames.length > 0) {
-        conditions.push(inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames));
+        conditions.push(or(
+          eq(qualificationLeads.projectId, projectId),
+          inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames)
+        ));
       } else {
-        conditions.push(sql`1 = 0`);
+        // No categories for project - only match leads with direct projectId
+        conditions.push(eq(qualificationLeads.projectId, projectId));
       }
     }
 
