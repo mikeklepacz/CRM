@@ -24174,9 +24174,8 @@ ${conversationContext}`;
         headers: { "xi-api-key": config.apiKey },
       });
 
-      console.log('[PhoneSync] Raw ElevenLabs response:', JSON.stringify(response.data, null, 2));
       const phoneNumbers = response.data.phone_numbers || (Array.isArray(response.data) ? response.data : []);
-      console.log('[PhoneSync] Phone numbers parsed:', JSON.stringify(phoneNumbers.map(pn => ({ phone_number_id: pn.phone_number_id, agent_id: pn.agent_id })), null, 2));
+      
       for (const pn of phoneNumbers) {
         await storage.upsertElevenLabsPhoneNumber({
           phoneNumberId: pn.phone_number_id,
