@@ -2966,8 +2966,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Agent configuration incomplete - missing agentId or phoneNumberId' });
       }
       
-      // Validate phone_number_id - use from request if provided, otherwise use agent's configured value
-      const effectivePhoneNumberId = phone_number_id || agent.phoneNumberId;
+      // Validate phone_number_id - must be explicitly provided, no fallback
+      // No fallback - use only explicitly provided phone_number_id
+      const effectivePhoneNumberId = phone_number_id;
       if (!effectivePhoneNumberId) {
         return res.status(400).json({ error: 'Phone number ID required for outbound calling' });
       }
