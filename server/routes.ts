@@ -23991,7 +23991,7 @@ ${conversationContext}`;
   app.get('/api/super-admin/tenants/:tenantId/projects', requireSuperAdmin, async (req: any, res) => {
     try {
       const { tenantId } = req.params;
-      const projects = await storage.getProjectsByTenantId(tenantId);
+      const projects = await storage.listTenantProjects(tenantId);
       res.json(projects);
     } catch (error: any) {
       console.error("Error fetching tenant projects:", error);
@@ -24038,7 +24038,7 @@ ${conversationContext}`;
       const { tenantId } = req.params;
       const agents = await storage.getAllElevenLabsAgents(tenantId);
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(tenantId);
-      const projects = await storage.getProjectsByTenantId(tenantId);
+      const projects = await storage.listTenantProjects(tenantId);
       
       // Create maps for lookups
       const phoneByAgentIdMap = new Map(
