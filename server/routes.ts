@@ -24170,18 +24170,39 @@ ${conversationContext}`;
         headers: { "xi-api-key": config.apiKey },
       });
 
-      const phoneNumbers = response.data.phone_numbers || [];
+      const phoneNumbers = response.data.phone_numbers || (Array.isArray(response.data) ? response.data : []);
       for (const pn of phoneNumbers) {
         await storage.upsertElevenLabsPhoneNumber({
           phoneNumberId: pn.phone_number_id,
-          phoneNumber: pn.phone_number,
-          label: pn.label || null,
-          agentId: pn.agent_id || null,
+          phoneNumber: pn.phone_number || pn.number || '',
+          label: pn.label || pn.name || null,
           tenantId,
         });
       }
 
-      res.json({ message: "Phone numbers synced successfully", count: phoneNumbers.length });
+      // Update agents with their assigned phone number IDs from ElevenLabs
+      const allAgents = await storage.getAllElevenLabsAgents(tenantId);
+      const agentIdToDbId = new Map(allAgents.map(a => [a.agentId, a.id]));
+      
+      let agentUpdates = 0;
+      for (const pn of phoneNumbers) {
+        if (pn.agent_id && pn.phone_number_id) {
+          const dbAgentId = agentIdToDbId.get(pn.agent_id);
+          if (dbAgentId) {
+            try {
+              await storage.updateElevenLabsAgent(dbAgentId, tenantId, {
+                phoneNumberId: pn.phone_number_id,
+              });
+              agentUpdates++;
+              console.log(`[PhoneSync] Updated agent ${pn.agent_id} with phone number ${pn.phone_number_id}`);
+            } catch (err) {
+              console.error(`[PhoneSync] Failed to update agent ${pn.agent_id}:`, err.message);
+            }
+          }
+        }
+      }
+
+      res.json({ message: `Phone numbers synced successfully (${agentUpdates} agent(s) updated)`, count: phoneNumbers.length });
     } catch (error: any) {
       console.error("Error syncing phone numbers:", error);
       res.status(500).json({ message: error.message || "Failed to sync phone numbers" });
