@@ -2522,7 +2522,7 @@ export default function CallManager() {
                         </TableHeader>
                         <TableBody>
                           {filteredStores.map((store) => (
-                            <TableRow key={store.link} data-testid={`row-store-${store.link}`}>
+                            <TableRow key={store.link} data-testid={`row-store-${store.link}`} className={store.status === "scheduled" ? "bg-primary/10 border-l-2 border-l-primary" : ""}>
                               <TableCell>
                                 <Checkbox
                                   checked={selectedStores.has(store.link)}
@@ -2590,7 +2590,12 @@ export default function CallManager() {
                                 </div>
                               </TableCell>
                               <TableCell data-testid={`text-status-${store.link}`}>
-                                <Badge variant="outline">{store.status || "Unclaimed"}</Badge>
+                                <Badge 
+                                  variant={store.status === 'scheduled' ? 'default' : 'outline'} 
+                                  className={store.status === 'scheduled' ? 'bg-primary' : ''}
+                                >
+                                  {store.status === 'scheduled' ? 'Scheduled' : (store.status || 'pending')}
+                                </Badge>
                               </TableCell>
                             </TableRow>
                           ))}

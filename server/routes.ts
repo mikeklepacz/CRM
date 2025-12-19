@@ -2874,11 +2874,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const tenantId = (req.user as any).tenantId;
         const { leads } = await storage.listQualificationLeads(tenantId, { limit: 1000 });
         
-        // Filter leads with phone numbers and pending call status
+        // Filter leads with phone numbers (all call statuses eligible)
         const callableLeads = leads.filter((lead: any) => {
           const hasPhone = lead.pocPhone && lead.pocPhone.trim().length > 0;
-          const isPending = !lead.callStatus || lead.callStatus === 'pending';
-          return hasPhone && isPending;
+          // All call statuses eligible (scheduled = prioritized)
+          return hasPhone;
         });
         
         // Project filtering for leads (if projectId specified)
