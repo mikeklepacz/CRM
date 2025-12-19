@@ -37,6 +37,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const configSchema = z.object({
   apiKey: z.string().min(1, "API key is required"),
@@ -47,6 +54,7 @@ const agentSchema = z.object({
   name: z.string().min(1, "Agent name is required"),
   agentId: z.string().min(1, "Agent ID is required"),
   description: z.string().optional(),
+  projectId: z.string().optional(),
 });
 
 type Agent = {
@@ -58,6 +66,13 @@ type Agent = {
   phone_label?: string | null;
   description?: string;
   is_default: boolean;
+  projectId?: string | null;
+  projectName?: string | null;
+};
+
+type Project = {
+  id: string;
+  name: string;
 };
 
 interface VoiceSettingsProps {
@@ -106,6 +121,17 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
       if (!res.ok) throw new Error('Failed to fetch webhook status');
       return res.json();
     },
+  });
+
+  // Fetch projects for the tenant (super admin mode only)
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: [apiBase, 'projects'],
+    queryFn: async () => {
+      const res = await fetch(`/api/super-admin/tenants/${tenantId}/projects`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch projects');
+      return res.json();
+    },
+    enabled: isSuperAdminMode,
   });
 
   // Fetch background audio settings (global, not tenant-specific)
@@ -161,6 +187,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
       name: "",
       agentId: "",
       description: "",
+      projectId: "",
     },
   });
 
@@ -445,6 +472,37 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                           )}
                         />
 
+                        {isSuperAdminMode && projects.length > 0 && (
+                          <FormField
+                            control={agentForm.control}
+                            name="projectId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Assign to Project</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-agent-project">
+                                      <SelectValue placeholder="Select a project (optional)" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="">No project (tenant-wide)</SelectItem>
+                                    {projects.map((project) => (
+                                      <SelectItem key={project.id} value={project.id}>
+                                        {project.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormDescription>
+                                  Assign this agent to a specific project, or leave blank for tenant-wide availability
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+
                         <Button
                           type="submit"
                           disabled={createAgentMutation.isPending}
@@ -486,6 +544,11 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                         </div>
                         <p className="text-sm text-muted-foreground mb-2">
                           Agent ID: {agent.agent_id}
+                          {agent.projectName && (
+                            <Badge variant="outline" className="ml-2">
+                              {agent.projectName}
+                            </Badge>
+                          )}
                         </p>
                         {agent.description && (
                           <p className="text-sm text-muted-foreground">

@@ -1182,6 +1182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     agentId: z.string().min(1, "Agent ID is required"),
     description: z.string().optional(),
     isDefault: z.boolean().optional(),
+    projectId: z.string().optional().transform(val => val === "" ? null : val),
   });
 
   // Config endpoints (API key + Twilio number)
@@ -1297,7 +1298,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const agent = await storage.createElevenLabsAgent({ ...validation.data, tenantId: req.user.tenantId });
+      const agentData = {
+        ...validation.data,
+        tenantId: req.user.tenantId,
+        projectId: validation.data.projectId || null,
+      };
+      const agent = await storage.createElevenLabsAgent(agentData);
       res.json(agent);
     } catch (error: any) {
       console.error("Error creating ElevenLabs agent:", error);
@@ -23981,6 +23987,18 @@ ${conversationContext}`;
     }
   });
 
+  // GET /api/super-admin/tenants/:tenantId/projects - Get projects for a specific tenant
+  app.get('/api/super-admin/tenants/:tenantId/projects', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const projects = await storage.getProjectsByTenantId(tenantId);
+      res.json(projects);
+    } catch (error: any) {
+      console.error("Error fetching tenant projects:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch projects" });
+    }
+  });
+
   // ============================================================================
   // SUPER ADMIN ELEVENLABS ROUTES - Per-tenant voice configuration
   // ============================================================================
@@ -24020,11 +24038,13 @@ ${conversationContext}`;
       const { tenantId } = req.params;
       const agents = await storage.getAllElevenLabsAgents(tenantId);
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(tenantId);
+      const projects = await storage.getProjectsByTenantId(tenantId);
       
-      // Create a map of ElevenLabs agent IDs to phone numbers for lookup
+      // Create maps for lookups
       const phoneByAgentIdMap = new Map(
         phoneNumbers.filter(pn => pn.agentId).map(pn => [pn.agentId, pn])
       );
+      const projectMap = new Map(projects.map(p => [p.id, p.name]));
       
       const enrichedAgents = agents.map(agent => {
         // Look up phone by ElevenLabs agent ID (from synced phone numbers)
@@ -24038,6 +24058,8 @@ ${conversationContext}`;
           phone_label: phone?.label || null,
           description: agent.description,
           is_default: agent.isDefault,
+          projectId: agent.projectId || null,
+          projectName: agent.projectId ? projectMap.get(agent.projectId) || null : null,
         };
       });
       
@@ -24057,7 +24079,12 @@ ${conversationContext}`;
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const agent = await storage.createElevenLabsAgent({ ...validation.data, tenantId });
+      const agentData = {
+        ...validation.data,
+        tenantId,
+        projectId: validation.data.projectId || null,
+      };
+      const agent = await storage.createElevenLabsAgent(agentData);
       res.json(agent);
     } catch (error: any) {
       console.error("Error creating ElevenLabs agent:", error);

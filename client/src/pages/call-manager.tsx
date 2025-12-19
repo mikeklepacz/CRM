@@ -2186,9 +2186,7 @@ export default function CallManager() {
                     setSelectedAgent(value);
                   }} disabled={agentsLoading}>
                     <SelectTrigger data-testid="select-agent">
-                      <SelectValue placeholder={agentsLoading ? "Loading agents..." : "Choose an agent"}>
-                        {selectedAgent && agents.find(a => a.id === selectedAgent)?.name}
-                      </SelectValue>
+                      <SelectValue placeholder={agentsLoading ? "Loading agents..." : "Choose an agent"} />
                     </SelectTrigger>
                     <SelectContent>
                       {agents.map(agent => (
