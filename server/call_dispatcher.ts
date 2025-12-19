@@ -279,6 +279,20 @@ export class CallDispatcher {
       console.log('[CallDispatcher][DEBUG] Call session created:', callSession.id);
 
       try {
+        // Look up the actual phone number from the database
+        const effectivePhoneNumberId = campaign.phoneNumberId || agent.phoneNumberId || '';
+        let fromNumber: string | undefined;
+        if (effectivePhoneNumberId) {
+          const phoneRecord = await storage.getElevenLabsPhoneNumber(effectivePhoneNumberId, target.tenantId);
+          fromNumber = phoneRecord?.phoneNumber;
+          console.log('[CallDispatcher][DEBUG] Phone number lookup:', effectivePhoneNumberId, '->', fromNumber || 'NOT FOUND');
+        }
+        
+        // Require agent phone number - no fallback to tenant default
+        if (!fromNumber) {
+          throw new Error(`No phone number found for agent. Agent phoneNumberId: ${agent.phoneNumberId}, Campaign phoneNumberId: ${campaign.phoneNumberId}`);
+        }
+        
         console.log('[CallDispatcher][DEBUG] Initiating outbound call...');
         const callStart = Date.now();
         const result = await this.initiateOutboundCall({
@@ -298,6 +312,7 @@ export class CallDispatcher {
           },
           ivrBehavior: ivrBehaviorSetting,
           basePrompt: combinedPrompt,
+          fromNumber: fromNumber,
         });
         console.log(`[CallDispatcher][DEBUG] Outbound call initiated in ${Date.now() - callStart}ms`);
         console.log('[CallDispatcher][DEBUG] Call SID:', result.callSid);
@@ -350,6 +365,7 @@ export class CallDispatcher {
     clientData?: any;
     ivrBehavior?: string;
     basePrompt?: string;
+    fromNumber?: string;
   }): Promise<{ success: boolean; message: string; conversation_id: string | null; callSid: string | null }> {
     // Helper to mask phone numbers for security
     const maskPhone = (phone: string) => phone.length > 4 ? `***${phone.slice(-4)}` : '****';
@@ -410,13 +426,13 @@ export class CallDispatcher {
     eventGateway.emit('call:debug', {
       stage: 'dispatcher',
       message: 'TwiML generated, calling Twilio',
-      details: { from: maskPhone(config.twilioNumber), to: maskPhone(params.toNumber) },
+      details: { from: maskPhone(params.fromNumber!), to: maskPhone(params.toNumber) },
       level: 'info',
     });
 
     // Initiate the call using Twilio SDK
     const result = await twilioInitiateCall({
-      from: config.twilioNumber,
+      from: params.fromNumber!,
       to: params.toNumber,
       twiml: twiml,
     });
