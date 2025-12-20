@@ -234,12 +234,19 @@ async function connectToElevenLabs(params) {
       console.log('[VoiceProxy][DEBUG] Will send dynamic_variables:', Object.keys(dynamicVariables));
     }
 
-    // Add conversation config override for prompt if present
+    // ALWAYS add conversation config override with TTS output format
+    // This enforces 16kHz audio for ALL agents regardless of their ElevenLabs configuration
+    initMessage.conversation_config_override = {
+      tts: {
+        output_format: "pcm_16000"
+      }
+    };
+    console.log('[VoiceProxy][DEBUG] Enforcing audio format: pcm_16000 for all agents');
+
+    // Add prompt override if present
     if (basePrompt) {
-      initMessage.conversation_config_override = {
-        agent: {
-          prompt: { prompt: basePrompt }
-        }
+      initMessage.conversation_config_override.agent = {
+        prompt: { prompt: basePrompt }
       };
       console.log('[VoiceProxy][DEBUG] Will send prompt override (length:', basePrompt.length, ')');
     }
