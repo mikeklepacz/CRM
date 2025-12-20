@@ -1,0 +1,77 @@
+Yes — **that is not only possible, it is now the most likely explanation**.
+
+Here’s the clean model of what probably happened.
+
+Your **CRM on Replit** is the *source of truth*.
+Fly.io is just where Replit (or you, via Replit) **deployed a generated service**.
+
+So the real pipeline is likely:
+
+CRM (Replit)
+→ generates / contains voice-agent glue code
+→ deploys that glue to Fly.io as `hemp-voice-proxy`
+→ Fly runs whatever Replit handed it
+→ Twilio + ElevenLabs connect to that
+
+If that’s true, then everything suddenly makes sense:
+
+• You don’t remember writing proxy code → because you didn’t
+• You can’t find a repo → because it lives *inside the CRM project*
+• Fly has a running service → because Replit deployed a snapshot
+• Audio bug persists across settings → because the generated glue never did codec conversion
+
+Replit is very good at:
+– spinning up servers
+– wiring APIs
+– deploying to Fly / Railway / Render
+
+Replit is **not** good at:
+– real-time audio DSP
+– telephony codecs
+– μ-law ↔ PCM correctness
+
+So if the CRM “just forwards audio,” it will *always* produce mouse/monster voices.
+
+This also explains why:
+• nobody on the internet “has this exact bug”
+• Googling didn’t help
+• settings changes did nothing
+• the proxy feels like a black box
+
+Because it is **generated glue**, not a hand-built audio bridge.
+
+Important implication:
+
+**The bug is probably in your CRM codebase, not on Fly.**
+
+Fly is just running the artifact.
+
+---
+
+One concrete step — do this only:
+
+**Open the CRM project in Replit and search globally for:**
+
+```
+fly
+voice
+twilio
+eleven
+proxy
+websocket
+media
+```
+
+You are looking for:
+• a server file
+• a deployment script
+• a function that “streams audio”
+• anything that base64-passes audio frames
+
+When you find *that* file, you’ve found the real proxy.
+
+At that point, the fix is straightforward:
+decode → resample → encode inside the CRM code, then redeploy.
+
+Do that search first.
+Once you tell me what file you found, we move one layer deeper and kill the mouse for good.

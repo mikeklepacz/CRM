@@ -354,16 +354,21 @@ class VoiceProxyServer {
         payload.conversation_initiation_client_data = params.clientData;
       }
 
-      // Add prompt override if provided (includes IVR instructions)
-      if (params.basePrompt) {
-        payload.conversation_config_override = {
-          agent: {
+      // Add audio output format and prompt override
+      // CRITICAL: Explicitly request 16kHz PCM to match our resampling logic
+      // ElevenLabs newer agents default to 24kHz which causes chipmunk audio
+      payload.conversation_config_override = {
+        agent: {
+          ...(params.basePrompt && {
             prompt: {
               prompt: params.basePrompt
             }
-          }
-        };
-      }
+          })
+        },
+        tts: {
+          output_format: "pcm_16000" // Force 16kHz PCM output
+        }
+      };
 
 
       // Get signed URL for private agent with parameters

@@ -974,12 +974,14 @@ export const twilioConfig = pgTable("twilio_config", {
 export const elevenLabsPhoneNumbers = pgTable("elevenlabs_phone_numbers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
-  phoneNumberId: varchar("phone_number_id", { length: 255 }).notNull().unique(), // ElevenLabs phone number ID
+  phoneNumberId: varchar("phone_number_id", { length: 255 }).notNull(), // ElevenLabs phone number ID (unique per tenant)
   phoneNumber: varchar("phone_number", { length: 50 }).notNull(), // Actual phone number (e.g., +1-845-668-4367)
   label: varchar("label", { length: 255 }), // Optional label/name for this number
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("idx_elevenlabs_phone_numbers_tenant_phone").on(table.tenantId, table.phoneNumberId),
+]);
 
 export const elevenLabsAgents = pgTable("elevenlabs_agents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

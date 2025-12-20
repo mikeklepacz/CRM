@@ -3146,29 +3146,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getElevenLabsPhoneNumber(phoneNumberId: string, tenantId: string): Promise<ElevenLabsPhoneNumber | undefined> {
-    const [phone] = await db.select().from(elevenLabsPhoneNumbers).where(and(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneNumberId), eq(elevenLabsPhoneNumbers.tenantId, tenantId)));
+    // Strict tenant-scoped lookup - each tenant must have their own phone number record
+    const [phone] = await db.select().from(elevenLabsPhoneNumbers).where(
+      and(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneNumberId), eq(elevenLabsPhoneNumbers.tenantId, tenantId))
+    );
     return phone;
   }
 
   async upsertElevenLabsPhoneNumber(phoneData: InsertElevenLabsPhoneNumber): Promise<ElevenLabsPhoneNumber> {
-    // Check if phone number already exists GLOBALLY (phoneNumberId is unique across all tenants)
-    const [existingGlobal] = await db.select().from(elevenLabsPhoneNumbers)
-      .where(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneData.phoneNumberId));
+    // Check if phone number already exists for this specific tenant
+    const [existingForTenant] = await db.select().from(elevenLabsPhoneNumbers)
+      .where(and(
+        eq(elevenLabsPhoneNumbers.phoneNumberId, phoneData.phoneNumberId),
+        eq(elevenLabsPhoneNumbers.tenantId, phoneData.tenantId)
+      ));
 
-    if (existingGlobal) {
-      // Phone number exists - update it with new data (may change tenant ownership)
+    if (existingForTenant) {
+      // Phone number exists for this tenant - update it
       const [updated] = await db.update(elevenLabsPhoneNumbers)
         .set({ 
           phoneNumber: phoneData.phoneNumber,
           label: phoneData.label,
-          tenantId: phoneData.tenantId,
           updatedAt: new Date() 
         })
-        .where(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneData.phoneNumberId))
+        .where(and(
+          eq(elevenLabsPhoneNumbers.phoneNumberId, phoneData.phoneNumberId),
+          eq(elevenLabsPhoneNumbers.tenantId, phoneData.tenantId)
+        ))
         .returning();
       return updated;
     } else {
-      // Insert new phone number
+      // Insert new phone number for this tenant (allows same phoneNumberId for different tenants)
       const [newPhone] = await db.insert(elevenLabsPhoneNumbers).values(phoneData).returning();
       return newPhone;
     }
