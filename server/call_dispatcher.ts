@@ -133,7 +133,7 @@ export class CallDispatcher {
           continue;
         }
         
-        await this.processCallTarget(target, tenantConfig.apiKey);
+        await this.processCallTarget(target, tenantConfig.apiKey, tenantConfig.useDirectElevenLabs ?? false);
       }
       
       // Emit WebSocket event for real-time UI updates
@@ -164,7 +164,7 @@ export class CallDispatcher {
     }
   }
 
-  private async processCallTarget(target: any, apiKey: string): Promise<void> {
+  private async processCallTarget(target: any, apiKey: string, useDirectElevenLabs: boolean): Promise<void> {
     const targetStart = Date.now();
     console.log('[CallDispatcher][DEBUG] ========== PROCESS CALL TARGET ==========');
     console.log('[CallDispatcher][DEBUG] Target ID:', target.id);
@@ -259,7 +259,9 @@ export class CallDispatcher {
       // Create call session BEFORE initiating Twilio call
       // This ensures voice proxy can find it immediately when stream starts
       // Store prompt data in storeSnapshot since metadata field doesn't exist in schema
+      const connectionMode = useDirectElevenLabs ? 'direct' : 'proxy';
       console.log('[CallDispatcher][DEBUG] Creating call session...');
+      console.log('[CallDispatcher][DEBUG] Connection mode:', connectionMode);
       const callSession = await storage.createCallSession({
         tenantId: target.tenantId, // Required for multi-tenant isolation
         callSid: null, // Will be updated after Twilio call creation
@@ -267,6 +269,7 @@ export class CallDispatcher {
         phoneNumber,
         clientId: target.clientId,
         status: 'initiated',
+        connectionMode, // Track which path: 'direct' (ElevenLabs) or 'proxy' (Fly.io)
         storeSnapshot: {
           combinedPrompt: combinedPrompt,
           ivrBehavior: ivrBehaviorSetting,
