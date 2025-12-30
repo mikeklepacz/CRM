@@ -494,8 +494,9 @@ export interface IStorage {
   }>;
 
   // ElevenLabs settings operations
-  getElevenLabsConfig(tenantId: string): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string } | undefined>;
+  getElevenLabsConfig(tenantId: string): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string; useDirectElevenLabs?: boolean } | undefined>;
   updateElevenLabsConfig(tenantId: string, config: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void>;
+  updateElevenLabsConfigDirectMode(tenantId: string, useDirectElevenLabs: boolean): Promise<void>;
 
   // ElevenLabs Phone Numbers operations
   getAllElevenLabsPhoneNumbers(tenantId: string): Promise<ElevenLabsPhoneNumber[]>;
@@ -3111,7 +3112,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ElevenLabs settings operations
-  async getElevenLabsConfig(tenantId: string): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string } | undefined> {
+  async getElevenLabsConfig(tenantId: string): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string; useDirectElevenLabs?: boolean } | undefined> {
     const [config] = await db.select().from(elevenLabsConfig).where(eq(elevenLabsConfig.tenantId, tenantId)).limit(1);
     if (!config) return undefined;
     return {
@@ -3138,6 +3139,12 @@ export class DatabaseStorage implements IStorage {
     // Delete old config for this tenant and insert new
     await db.delete(elevenLabsConfig).where(eq(elevenLabsConfig.tenantId, tenantId));
     await db.insert(elevenLabsConfig).values(merged);
+  }
+
+  async updateElevenLabsConfigDirectMode(tenantId: string, useDirectElevenLabs: boolean): Promise<void> {
+    await db.update(elevenLabsConfig)
+      .set({ useDirectElevenLabs, updatedAt: new Date() })
+      .where(eq(elevenLabsConfig.tenantId, tenantId));
   }
 
   // ElevenLabs Phone Numbers operations

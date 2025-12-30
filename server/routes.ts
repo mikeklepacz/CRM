@@ -24061,6 +24061,37 @@ ${conversationContext}`;
     }
   });
 
+  // GET /api/super-admin/tenants/:tenantId/elevenlabs-config - Get useDirectElevenLabs setting
+  app.get('/api/super-admin/tenants/:tenantId/elevenlabs-config', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const config = await storage.getElevenLabsConfig(tenantId);
+      res.json({ useDirectElevenLabs: config?.useDirectElevenLabs ?? false });
+    } catch (error: any) {
+      console.error("Error fetching Direct ElevenLabs setting:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch setting" });
+    }
+  });
+
+  // PATCH /api/super-admin/tenants/:tenantId/elevenlabs-config - Update useDirectElevenLabs setting
+  app.patch('/api/super-admin/tenants/:tenantId/elevenlabs-config', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const { useDirectElevenLabs } = req.body;
+      
+      if (typeof useDirectElevenLabs !== 'boolean') {
+        return res.status(400).json({ message: "useDirectElevenLabs must be a boolean" });
+      }
+
+      await storage.updateElevenLabsConfigDirectMode(tenantId, useDirectElevenLabs);
+      console.log(`[VoiceConfig] Tenant ${tenantId} set useDirectElevenLabs=${useDirectElevenLabs}`);
+      res.json({ message: "Direct ElevenLabs setting updated successfully", useDirectElevenLabs });
+    } catch (error: any) {
+      console.error("Error updating Direct ElevenLabs setting:", error);
+      res.status(500).json({ message: error.message || "Failed to update setting" });
+    }
+  });
+
   // GET /api/super-admin/tenants/:tenantId/elevenlabs/agents - Get tenant's agents
   app.get('/api/super-admin/tenants/:tenantId/elevenlabs/agents', requireSuperAdmin, async (req: any, res) => {
     try {
