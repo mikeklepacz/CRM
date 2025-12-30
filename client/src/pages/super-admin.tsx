@@ -26,6 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { 
   Building2, Users, BarChart3, Plus, Edit, Eye, Loader2, Check, Trash2, UserPlus, 
   Search, ArrowUpDown, ArrowUp, ArrowDown, Mail, Lock, Briefcase, KeyRound, 
@@ -243,6 +244,39 @@ export default function SuperAdmin() {
     queryKey: ['/api/tickets', selectedTicketId],
     enabled: !!selectedTicketId,
   });
+
+  // Direct ElevenLabs bypass setting for selected tenant
+  const { data: directElevenLabsData, isLoading: directElevenLabsLoading } = useQuery<{ useDirectElevenLabs: boolean }>({
+    queryKey: ['/api/super-admin/tenants', configTenantId, 'elevenlabs-config'],
+    enabled: isSuperAdmin(user) && configTenantId !== 'all',
+  });
+
+  const updateDirectElevenLabsMutation = useMutation({
+    mutationFn: async (useDirectElevenLabs: boolean) => {
+      return apiRequest(`/api/super-admin/tenants/${configTenantId}/elevenlabs-config`, {
+        method: 'PATCH',
+        body: JSON.stringify({ useDirectElevenLabs }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/tenants', configTenantId, 'elevenlabs-config'] });
+      toast({
+        title: useDirectElevenLabs ? "Direct Mode Enabled" : "Proxy Mode Enabled",
+        description: useDirectElevenLabs 
+          ? "Calls will route directly to ElevenLabs (bypassing Fly.io proxy)"
+          : "Calls will route through Fly.io proxy",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update setting",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const useDirectElevenLabs = directElevenLabsData?.useDirectElevenLabs ?? false;
 
   const createForm = useForm<TenantFormData>({
     resolver: zodResolver(tenantFormSchema),
@@ -1718,7 +1752,7 @@ export default function SuperAdmin() {
               <CardDescription>
                 ElevenLabs voice agent configuration - Per tenant settings
               </CardDescription>
-              <div className="pt-2">
+              <div className="flex flex-wrap items-center gap-4 pt-2">
                 <Select value={configTenantId} onValueChange={setConfigTenantId}>
                   <SelectTrigger className="w-[300px]" data-testid="select-voice-tenant">
                     <SelectValue placeholder="Select tenant to configure" />
@@ -1730,6 +1764,29 @@ export default function SuperAdmin() {
                     ))}
                   </SelectContent>
                 </Select>
+                
+                {configTenantId !== 'all' && (
+                  <div className="flex items-center gap-3 px-4 py-2 rounded-md bg-muted/50 border">
+                    <div className="flex flex-col">
+                      <Label htmlFor="direct-elevenlabs-toggle" className="text-sm font-medium">
+                        Direct ElevenLabs Mode
+                      </Label>
+                      <span className="text-xs text-muted-foreground">
+                        {useDirectElevenLabs ? "Bypassing Fly.io proxy" : "Using Fly.io proxy"}
+                      </span>
+                    </div>
+                    <Switch
+                      id="direct-elevenlabs-toggle"
+                      data-testid="switch-direct-elevenlabs"
+                      checked={useDirectElevenLabs}
+                      disabled={directElevenLabsLoading || updateDirectElevenLabsMutation.isPending}
+                      onCheckedChange={(checked) => updateDirectElevenLabsMutation.mutate(checked)}
+                    />
+                    {updateDirectElevenLabsMutation.isPending && (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    )}
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent>
