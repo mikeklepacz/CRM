@@ -253,10 +253,7 @@ export default function SuperAdmin() {
 
   const updateDirectElevenLabsMutation = useMutation({
     mutationFn: async (useDirectElevenLabs: boolean) => {
-      return apiRequest(`/api/super-admin/tenants/${configTenantId}/elevenlabs-config`, {
-        method: 'PATCH',
-        body: JSON.stringify({ useDirectElevenLabs }),
-      });
+      return apiRequest('PATCH', `/api/super-admin/tenants/${configTenantId}/elevenlabs-config`, { useDirectElevenLabs });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/super-admin/tenants/${configTenantId}/elevenlabs-config`] });
