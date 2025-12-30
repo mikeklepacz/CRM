@@ -247,7 +247,7 @@ export default function SuperAdmin() {
 
   // Direct ElevenLabs bypass setting for selected tenant
   const { data: directElevenLabsData, isLoading: directElevenLabsLoading } = useQuery<{ useDirectElevenLabs: boolean }>({
-    queryKey: ['/api/super-admin/tenants', configTenantId, 'elevenlabs-config'],
+    queryKey: [`/api/super-admin/tenants/${configTenantId}/elevenlabs-config`],
     enabled: isSuperAdmin(user) && configTenantId !== 'all',
   });
 
@@ -259,7 +259,7 @@ export default function SuperAdmin() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/super-admin/tenants', configTenantId, 'elevenlabs-config'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/super-admin/tenants/${configTenantId}/elevenlabs-config`] });
       toast({
         title: useDirectElevenLabs ? "Direct Mode Enabled" : "Proxy Mode Enabled",
         description: useDirectElevenLabs 
