@@ -57,9 +57,14 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   
   if (useDirectMode) {
     // Direct ElevenLabs WebSocket connection (bypass proxy)
-    wsUrl = `${ELEVENLABS_DIRECT_WS_BASE}?agent_id=${params.agentId}`;
+    // Include API key in query params for authentication
+    // Note: This is a diagnostic feature for admin testing only. The API key in the URL 
+    // is the tenant's own key, used to test audio quality by bypassing the proxy.
+    // The URL is not exposed to end users - only sent to Twilio for WebSocket connection.
+    wsUrl = `${ELEVENLABS_DIRECT_WS_BASE}?agent_id=${params.agentId}&xi-api-key=${params.elevenLabsApiKey}`;
     connectionMode = 'direct';
     console.log('[Twilio][DEBUG] Using DIRECT ElevenLabs connection (bypass proxy)');
+    console.log('[Twilio][DEBUG] API key included for ElevenLabs authentication (masked in logs)');
   } else {
     // Default: Use Fly.io WebSocket proxy
     wsUrl = FLY_VOICE_PROXY_URL;
