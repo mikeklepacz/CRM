@@ -413,7 +413,10 @@ export class CallDispatcher {
       userId: params.userId,
     };
 
-    // Generate TwiML that routes to our WebSocket voice proxy
+    // Generate TwiML that routes to either:
+    // 1. WebSocket voice proxy (default) - with audio mixing/background
+    // 2. Direct ElevenLabs (bypass mode) - for testing audio quality
+    const useDirectMode = config.useDirectElevenLabs ?? false;
     const twiml = generateStreamTwiML({
       agentId: params.agentId,
       phoneNumberId: params.phoneNumberId,
@@ -421,7 +424,12 @@ export class CallDispatcher {
       dynamicVariables: params.dynamicVariables,
       clientData: clientDataWithMetadata,
       basePrompt: params.basePrompt || '',
+      useDirectElevenLabs: useDirectMode,
+      elevenLabsApiKey: config.apiKey,
     });
+    
+    // Log connection mode for debugging
+    console.log(`[CallDispatcher] Connection mode: ${useDirectMode ? 'DIRECT ElevenLabs' : 'Fly.io Proxy'}`);
 
     eventGateway.emit('call:debug', {
       stage: 'dispatcher',

@@ -3119,7 +3119,8 @@ export class DatabaseStorage implements IStorage {
       apiKey: config.apiKey,
       twilioNumber: config.twilioNumber || undefined,
       webhookSecret: config.webhookSecret || undefined,
-      phoneNumberId: config.phoneNumberId || undefined
+      phoneNumberId: config.phoneNumberId || undefined,
+      useDirectElevenLabs: config.useDirectElevenLabs ?? false
     };
   }
 

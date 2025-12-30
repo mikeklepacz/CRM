@@ -17,14 +17,20 @@ interface TwiMLStreamParams {
   dynamicVariables?: Record<string, string>;
   clientData?: Record<string, any>;
   basePrompt?: string;
+  useDirectElevenLabs?: boolean;
+  elevenLabsApiKey?: string;
 }
 
 // Fly.io voice proxy URL - this handles WebSocket connections that Replit can't
 const FLY_VOICE_PROXY_URL = process.env.FLY_VOICE_PROXY_URL || 'wss://hemp-voice-proxy.fly.dev/media-stream';
 
+// Direct ElevenLabs WebSocket URL (bypass proxy for testing)
+const ELEVENLABS_DIRECT_WS_BASE = 'wss://api.elevenlabs.io/v1/convai/conversation';
+
 /**
- * Generates TwiML that connects to our WebSocket voice proxy on Fly.io
- * The proxy handles ElevenLabs connection, audio mixing, and background audio
+ * Generates TwiML that connects to either:
+ * 1. Our WebSocket voice proxy on Fly.io (default) - handles audio mixing, background audio
+ * 2. Direct ElevenLabs WebSocket (bypass mode) - for testing audio quality without proxy processing
  */
 export function generateStreamTwiML(params: TwiMLStreamParams): string {
   const startTime = Date.now();
@@ -37,24 +43,42 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
     hasDynamicVariables: !!params.dynamicVariables,
     hasClientData: !!params.clientData,
     hasBasePrompt: !!params.basePrompt,
+    useDirectElevenLabs: params.useDirectElevenLabs,
   }, null, 2));
 
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const response = new VoiceResponse();
   
-  // Use Fly.io WebSocket URL (Replit's proxy doesn't support inbound WebSocket from Twilio)
-  const wsUrl = FLY_VOICE_PROXY_URL;
+  // Determine connection mode: Direct ElevenLabs vs Fly.io Proxy
+  const useDirectMode = params.useDirectElevenLabs && params.elevenLabsApiKey;
+  
+  let wsUrl: string;
+  let connectionMode: 'direct' | 'proxy';
+  
+  if (useDirectMode) {
+    // Direct ElevenLabs WebSocket connection (bypass proxy)
+    wsUrl = `${ELEVENLABS_DIRECT_WS_BASE}?agent_id=${params.agentId}`;
+    connectionMode = 'direct';
+    console.log('[Twilio][DEBUG] Using DIRECT ElevenLabs connection (bypass proxy)');
+  } else {
+    // Default: Use Fly.io WebSocket proxy
+    wsUrl = FLY_VOICE_PROXY_URL;
+    connectionMode = 'proxy';
+    console.log('[Twilio][DEBUG] Using Fly.io PROXY connection');
+  }
   
   console.log(`[Twilio][DEBUG] WebSocket URL: ${wsUrl}`);
+  console.log(`[Twilio][DEBUG] Connection mode: ${connectionMode}`);
   console.log(`[Twilio][DEBUG] FLY_VOICE_PROXY_URL env: ${process.env.FLY_VOICE_PROXY_URL || 'not set, using default'}`);
   
   // Emit debug event so user can see the WebSocket URL in Chrome DevTools
   eventGateway.emit('call:debug', {
     stage: 'twiml',
-    message: 'Generated TwiML with Fly.io WebSocket URL',
+    message: `Generated TwiML with ${connectionMode === 'direct' ? 'DIRECT ElevenLabs' : 'Fly.io proxy'} WebSocket URL`,
     details: { 
-      wsUrl, 
-      isFlyio: true,
+      wsUrl: connectionMode === 'direct' ? '[DIRECT_ELEVENLABS]' : wsUrl,
+      connectionMode,
+      isFlyio: connectionMode === 'proxy',
     },
     level: 'info',
   });
