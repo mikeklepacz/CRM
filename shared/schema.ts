@@ -955,6 +955,7 @@ export const elevenLabsConfig = pgTable("elevenlabs_config", {
   phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls
   twilioNumber: varchar("twilio_number", { length: 50 }), // Twilio phone number (for display only)
   webhookSecret: text("webhook_secret"), // Shared secret for webhook HMAC validation
+  useDirectElevenLabs: boolean("use_direct_elevenlabs").default(false), // Bypass Fly.io proxy and route calls directly to ElevenLabs
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1031,6 +1032,7 @@ export const callSessions = pgTable("call_sessions", {
   followUpNeeded: boolean("follow_up_needed").default(false),
   followUpDate: timestamp("follow_up_date"),
   nextAction: text("next_action"),
+  connectionMode: varchar("connection_mode", { length: 20 }).default('proxy'), // 'proxy' (via Fly.io) or 'direct' (straight to ElevenLabs)
   // Denormalized store snapshot for historical integrity
   storeSnapshot: jsonb("store_snapshot").$type<Record<string, any>>(),
   createdAt: timestamp("created_at").defaultNow(),
