@@ -49,3 +49,4 @@ GMAIL_ADMIN_USER_ID = "4df35876-ab89-4860-8656-0440accfea14"
 
 [userenv.development]
 VITE_HMR_PORT = "5000"
+USE_INTERNAL_PROXY = "true"
