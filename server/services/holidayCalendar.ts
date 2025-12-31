@@ -253,12 +253,14 @@ class HolidayCalendarService {
    * @param timezone - Optional IANA timezone string. When provided, the date is converted
    *                   to this timezone to determine the LOCAL calendar date for holiday checks.
    *                   This is critical when checking if a recipient's local date is a holiday.
+   * @param tenantId - Optional tenant ID to check tenant-specific holiday toggles.
+   *                   If not provided, all holidays are treated as blocking (not ignored).
    * 
    * Example: A slot at 2025-11-28T05:00:00Z (midnight EST) would be:
    * - Nov 28 in America/New_York (Thanksgiving Day - blocked)
    * - Nov 27 in America/Los_Angeles (not blocked yet)
    */
-  async isNoSendDay(date: Date, timezone?: string): Promise<BlockedDayResult> {
+  async isNoSendDay(date: Date, timezone?: string, tenantId?: string): Promise<BlockedDayResult> {
     const dateStr = this.dateToString(date, timezone);
     
     // Check custom blocked dates FIRST (highest priority - these are always enforced)
@@ -268,32 +270,32 @@ class HolidayCalendarService {
       return { blocked: true, reason: customMatch.reason };
     }
     
-    // Check extended holiday windows (can be ignored)
+    // Check extended holiday windows (can be ignored per tenant)
     const thanksgivingCheck = this.isThanksgivingWindow(dateStr);
     if (thanksgivingCheck.blocked && thanksgivingCheck.reason) {
-      if (!await this.isHolidayIgnored(thanksgivingCheck.reason)) {
+      if (!await this.isHolidayIgnored(thanksgivingCheck.reason, tenantId)) {
         return thanksgivingCheck;
       }
     }
     
     const christmasCheck = this.isChristmasWindow(dateStr);
     if (christmasCheck.blocked && christmasCheck.reason) {
-      if (!await this.isHolidayIgnored(christmasCheck.reason)) {
+      if (!await this.isHolidayIgnored(christmasCheck.reason, tenantId)) {
         return christmasCheck;
       }
     }
     
     const newYearsCheck = this.isNewYearsWindow(dateStr);
     if (newYearsCheck.blocked && newYearsCheck.reason) {
-      if (!await this.isHolidayIgnored(newYearsCheck.reason)) {
+      if (!await this.isHolidayIgnored(newYearsCheck.reason, tenantId)) {
         return newYearsCheck;
       }
     }
     
-    // Check federal holidays (can be ignored)
+    // Check federal holidays (can be ignored per tenant)
     const federalCheck = this.isFederalHoliday(dateStr);
     if (federalCheck.isHoliday && federalCheck.name) {
-      if (!await this.isHolidayIgnored(federalCheck.name)) {
+      if (!await this.isHolidayIgnored(federalCheck.name, tenantId)) {
         return { blocked: true, reason: federalCheck.name };
       }
     }
@@ -307,8 +309,11 @@ class HolidayCalendarService {
    * 
    * Priority order: Custom dates > Extended windows > Federal holidays
    * Holidays can be toggled OFF (ignored) by admins.
+   * 
+   * @param dateStr - Date string in YYYY-MM-DD format
+   * @param tenantId - Optional tenant ID to check tenant-specific holiday toggles
    */
-  async isNoSendDayByString(dateStr: string): Promise<BlockedDayResult> {
+  async isNoSendDayByString(dateStr: string, tenantId?: string): Promise<BlockedDayResult> {
     // Check custom blocked dates FIRST (highest priority - these are always enforced)
     const customBlocked = await this.getCustomBlockedDates();
     const customMatch = customBlocked.find(cb => cb.date === dateStr);
@@ -316,32 +321,32 @@ class HolidayCalendarService {
       return { blocked: true, reason: customMatch.reason };
     }
     
-    // Check extended windows (can be ignored)
+    // Check extended windows (can be ignored per tenant)
     const thanksgivingCheck = this.isThanksgivingWindow(dateStr);
     if (thanksgivingCheck.blocked && thanksgivingCheck.reason) {
-      if (!await this.isHolidayIgnored(thanksgivingCheck.reason)) {
+      if (!await this.isHolidayIgnored(thanksgivingCheck.reason, tenantId)) {
         return thanksgivingCheck;
       }
     }
     
     const christmasCheck = this.isChristmasWindow(dateStr);
     if (christmasCheck.blocked && christmasCheck.reason) {
-      if (!await this.isHolidayIgnored(christmasCheck.reason)) {
+      if (!await this.isHolidayIgnored(christmasCheck.reason, tenantId)) {
         return christmasCheck;
       }
     }
     
     const newYearsCheck = this.isNewYearsWindow(dateStr);
     if (newYearsCheck.blocked && newYearsCheck.reason) {
-      if (!await this.isHolidayIgnored(newYearsCheck.reason)) {
+      if (!await this.isHolidayIgnored(newYearsCheck.reason, tenantId)) {
         return newYearsCheck;
       }
     }
     
-    // Check federal holidays (can be ignored)
+    // Check federal holidays (can be ignored per tenant)
     const federalCheck = this.isFederalHoliday(dateStr);
     if (federalCheck.isHoliday && federalCheck.name) {
-      if (!await this.isHolidayIgnored(federalCheck.name)) {
+      if (!await this.isHolidayIgnored(federalCheck.name, tenantId)) {
         return { blocked: true, reason: federalCheck.name };
       }
     }
@@ -492,7 +497,7 @@ class HolidayCalendarService {
 
 export const holidayCalendarService = new HolidayCalendarService();
 
-export const isNoSendDay = (date: Date, timezone?: string) => holidayCalendarService.isNoSendDay(date, timezone);
+export const isNoSendDay = (date: Date, timezone?: string, tenantId?: string) => holidayCalendarService.isNoSendDay(date, timezone, tenantId);
 export const getUpcomingBlockedDays = (startDate: Date, days: number, timezone?: string) => 
   holidayCalendarService.getUpcomingBlockedDays(startDate, days, timezone);
 export const getCustomBlockedDates = () => holidayCalendarService.getCustomBlockedDates();

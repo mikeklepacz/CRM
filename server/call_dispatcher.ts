@@ -94,13 +94,6 @@ export class CallDispatcher {
       this.isRunning = true;
       console.log('[CallDispatcher][DEBUG] Set isRunning=true');
 
-      // Check if today is a no-send day (federal holiday or custom blackout)
-      const todayCheck = await isNoSendDay(new Date());
-      if (todayCheck.blocked) {
-        console.log(`[CallDispatcher] Today is blocked: ${todayCheck.reason} - skipping call processing`);
-        return;
-      }
-
       // Cleanup stale in-progress targets (older than 10 minutes)
       await this.cleanupStaleTargets();
 
@@ -113,12 +106,28 @@ export class CallDispatcher {
         return;
       }
 
-      // Cache configs by tenant to avoid redundant lookups
+      // Cache configs and holiday checks by tenant to avoid redundant lookups
       const configCache: Map<string, { apiKey: string; twilioNumber?: string } | null> = new Map();
+      const holidayCache: Map<string, { blocked: boolean; reason?: string }> = new Map();
 
       for (let i = 0; i < targets.length; i++) {
         const target = targets[i];
         console.log(`[CallDispatcher][DEBUG] Processing target ${i + 1}/${targets.length}: ${target.id}, tenantId: ${target.tenantId}`);
+        
+        // Check if today is a no-send day for this tenant (cached per tenant)
+        if (!holidayCache.has(target.tenantId)) {
+          const todayCheck = await isNoSendDay(new Date(), undefined, target.tenantId);
+          holidayCache.set(target.tenantId, todayCheck);
+          if (todayCheck.blocked) {
+            console.log(`[CallDispatcher] Today is blocked for tenant ${target.tenantId}: ${todayCheck.reason}`);
+          }
+        }
+        
+        const tenantHolidayCheck = holidayCache.get(target.tenantId)!;
+        if (tenantHolidayCheck.blocked) {
+          console.log(`[CallDispatcher][DEBUG] Skipping target ${target.id} - today is blocked: ${tenantHolidayCheck.reason}`);
+          continue;
+        }
         
         // Get config for this target's tenant (cached)
         if (!configCache.has(target.tenantId)) {
