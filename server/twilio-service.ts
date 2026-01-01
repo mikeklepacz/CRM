@@ -54,26 +54,25 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const response = new VoiceResponse();
   
-  // Determine connection mode: Internal Replit Proxy vs Fly.io Proxy vs Direct ElevenLabs
-  // Priority: USE_INTERNAL_PROXY env var > useDirectElevenLabs setting > default Fly.io proxy
+  // Determine connection mode: Fly.io Proxy (default) vs Direct ElevenLabs vs Internal Replit Proxy
+  // Priority: Fly.io proxy is default, direct mode only if explicitly enabled
   const useDirectMode = params.useDirectElevenLabs && params.elevenLabsApiKey;
   
   let wsUrl: string;
   let connectionMode: 'direct' | 'proxy' | 'internal';
   
-  if (USE_INTERNAL_PROXY) {
-    // Internal Replit proxy - bypasses Fly.io for audio quality testing
-    // This takes precedence over all other settings when enabled
-    wsUrl = INTERNAL_PROXY_URL;
-    connectionMode = 'internal';
-    console.log('[Twilio][DEBUG] Using INTERNAL Replit proxy (bypassing Fly.io)');
-    console.log(`[Twilio][DEBUG] Internal proxy URL: ${INTERNAL_PROXY_URL}`);
-  } else if (useDirectMode) {
+  if (useDirectMode) {
     // Direct ElevenLabs WebSocket connection (bypass proxy)
     // Note: This doesn't work due to protocol incompatibility - Twilio and ElevenLabs use different formats
     wsUrl = `${ELEVENLABS_DIRECT_WS_BASE}?agent_id=${params.agentId}&xi-api-key=${params.elevenLabsApiKey}`;
     connectionMode = 'direct';
     console.log('[Twilio][DEBUG] Using DIRECT ElevenLabs connection (bypass proxy) - WARNING: May not work');
+  } else if (USE_INTERNAL_PROXY) {
+    // Internal Replit proxy - bypasses Fly.io for audio quality testing
+    wsUrl = INTERNAL_PROXY_URL;
+    connectionMode = 'internal';
+    console.log('[Twilio][DEBUG] Using INTERNAL Replit proxy (bypassing Fly.io)');
+    console.log(`[Twilio][DEBUG] Internal proxy URL: ${INTERNAL_PROXY_URL}`);
   } else {
     // Default: Use Fly.io WebSocket proxy
     wsUrl = FLY_VOICE_PROXY_URL;
