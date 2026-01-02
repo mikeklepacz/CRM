@@ -2055,11 +2055,13 @@ export type NoSendDate = typeof noSendDates.$inferSelect;
 export const ignoredHolidays = pgTable("ignored_holidays", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
-  holidayId: varchar("holiday_id", { length: 100 }).notNull().unique(), // e.g., "columbus_day", "veterans_day", "thanksgiving_window"
+  holidayId: varchar("holiday_id", { length: 100 }).notNull(), // e.g., "columbus_day", "veterans_day", "thanksgiving_window"
   holidayName: varchar("holiday_name", { length: 255 }).notNull(), // Display name
   ignoredBy: varchar("ignored_by").notNull().references(() => users.id),
   ignoredAt: timestamp("ignored_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("idx_ignored_holidays_tenant_holiday").on(table.tenantId, table.holidayId),
+]);
 
 export const insertIgnoredHolidaySchema = createInsertSchema(ignoredHolidays).omit({
   id: true,
