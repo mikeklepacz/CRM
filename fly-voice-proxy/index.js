@@ -744,16 +744,24 @@ fastify.register(async function (fastify) {
             // Send to ElevenLabs
             if (session.elevenLabsWs?.readyState === WebSocket.OPEN) {
               const sendStart = Date.now();
-              const base64Audio = Buffer.from(pcm16k.buffer).toString('base64');
+              // Use explicit buffer slice to ensure correct byte extraction from Int16Array
+              const base64Audio = Buffer.from(pcm16k.buffer, pcm16k.byteOffset, pcm16k.byteLength).toString('base64');
               session.elevenLabsWs.send(JSON.stringify({
                 user_audio_chunk: base64Audio,
               }));
               const sendTime = Date.now() - sendStart;
               const totalTime = Date.now() - mediaStart;
               
-              // Log timing every 50th frame
+              // Log timing and audio levels every 50th frame for debugging
               if (messageCount % 50 === 0) {
-                console.log(`[VoiceProxy][TIMING] ⏱️  Media frame #${messageCount}: decode=${decodeTime}ms, resample=${resampleTime}ms, send=${sendTime}ms, total=${totalTime}ms`);
+                // Calculate RMS audio level to verify audio is actually present
+                let sumSquares = 0;
+                for (let i = 0; i < pcm16k.length; i++) {
+                  sumSquares += pcm16k[i] * pcm16k[i];
+                }
+                const rms = Math.sqrt(sumSquares / pcm16k.length);
+                const dbLevel = rms > 0 ? 20 * Math.log10(rms / 32768) : -100;
+                console.log(`[VoiceProxy][TIMING] ⏱️  Media frame #${messageCount}: decode=${decodeTime}ms, resample=${resampleTime}ms, send=${sendTime}ms, total=${totalTime}ms, audioRMS=${rms.toFixed(0)}, dB=${dbLevel.toFixed(1)}`);
               }
             } else if (messageCount % 50 === 0) {
               console.log('[VoiceProxy][DEBUG] ElevenLabs WS not open, state:', session.elevenLabsWs?.readyState);
