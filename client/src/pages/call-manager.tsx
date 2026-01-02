@@ -2026,9 +2026,35 @@ export default function CallManager() {
     failed: callQueueStats?.failedToday || 0,
   };
 
+  // Check if today is a blocked day (holiday or custom date block)
+  const { data: blockedDayData } = useQuery<{ blocked: boolean; reason: string | null }>({
+    queryKey: ['/api/voice/today-blocked'],
+    refetchInterval: 60000, // Refresh every minute
+    enabled: hasAccess,
+  });
+
   return (
     <div className="h-full overflow-auto p-6">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* Blocked Day Warning Banner */}
+        {blockedDayData?.blocked && (
+          <Card className="border-destructive bg-destructive/10" data-testid="card-blocked-day-warning">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-6 w-6 text-destructive flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-destructive" data-testid="text-blocked-day-title">
+                    NO CALLS TODAY
+                  </p>
+                  <p className="text-sm text-destructive/80" data-testid="text-blocked-day-reason">
+                    {blockedDayData.reason || 'Today is blocked for outbound calls'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold tracking-tight" data-testid="text-call-manager-title">

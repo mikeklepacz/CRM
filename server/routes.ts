@@ -2289,6 +2289,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get call sessions (history) with optional filtering
+  // Check if today is a blocked day for the current tenant (holidays/custom dates)
+  app.get('/api/voice/today-blocked', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = (req.user as any).tenantId;
+      const { isNoSendDay } = await import('./services/holidayCalendar');
+      const result = await isNoSendDay(new Date(), undefined, tenantId);
+      res.json({ blocked: result.blocked, reason: result.reason || null });
+    } catch (error: any) {
+      console.error('Error checking blocked day:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   app.get('/api/call-sessions', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
