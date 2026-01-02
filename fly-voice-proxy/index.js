@@ -165,7 +165,7 @@ function resample16to8(input) {
 // Connect to ElevenLabs
 async function connectToElevenLabs(params) {
   const connectStart = Date.now();
-  const { agentId, phoneNumberId, dynamicVariables, clientData, basePrompt } = params;
+  const { agentId, phoneNumberId, dynamicVariables, clientData, basePrompt, audioSettings } = params;
 
   console.log('[VoiceProxy][TIMING] ========== CONNECTING TO ELEVENLABS ==========');
   console.log('[VoiceProxy][TIMING] Timestamp:', new Date().toISOString());
@@ -174,6 +174,7 @@ async function connectToElevenLabs(params) {
   console.log('[VoiceProxy][DEBUG] Has dynamic variables:', !!dynamicVariables);
   console.log('[VoiceProxy][DEBUG] Has client data:', !!clientData);
   console.log('[VoiceProxy][DEBUG] Has base prompt:', !!basePrompt);
+  console.log('[VoiceProxy][DEBUG] Has audio settings:', !!audioSettings);
 
   if (!ELEVENLABS_API_KEY) {
     console.error('[VoiceProxy][DEBUG] *** ELEVENLABS_API_KEY NOT CONFIGURED ***');
@@ -234,19 +235,22 @@ async function connectToElevenLabs(params) {
       console.log('[VoiceProxy][DEBUG] Will send dynamic_variables:', Object.keys(dynamicVariables));
     }
 
-    // ALWAYS add conversation config override with BOTH TTS output format AND STT input format
-    // This enforces 16kHz audio for ALL agents regardless of their ElevenLabs configuration
+    // Use audio settings from CRM if synced, otherwise use defaults (16kHz PCM)
     // CRITICAL: Must specify input audio format or ElevenLabs won't know how to decode our audio
+    const sttEncoding = audioSettings?.sttEncoding || 'pcm_s16le';
+    const sttSampleRate = audioSettings?.sttSampleRate || 16000;
+    const ttsOutputFormat = audioSettings?.ttsOutputFormat || 'pcm_16000';
+    
     initMessage.conversation_config_override = {
       tts: {
-        output_format: "pcm_16000"
+        output_format: ttsOutputFormat
       },
       stt: {
-        encoding: "pcm_s16le",
-        sample_rate: 16000
+        encoding: sttEncoding,
+        sample_rate: sttSampleRate
       }
     };
-    console.log('[VoiceProxy][DEBUG] Enforcing audio format - TTS: pcm_16000, STT: pcm_s16le@16kHz');
+    console.log(`[VoiceProxy][DEBUG] Audio config - TTS: ${ttsOutputFormat}, STT: ${sttEncoding}@${sttSampleRate}Hz (${audioSettings ? 'from CRM' : 'defaults'})`);
 
     // Add prompt override if present
     if (basePrompt) {
@@ -640,6 +644,16 @@ fastify.register(async function (fastify) {
             const basePrompt = customParameters?.basePrompt 
               ? decodeURIComponent(customParameters.basePrompt)
               : '';
+            // Parse audio settings from CRM (synced from ElevenLabs agent config)
+            const audioSettings = customParameters?.audioSettings
+              ? JSON.parse(customParameters.audioSettings)
+              : null;
+            
+            if (audioSettings) {
+              console.log('[VoiceProxy][DEBUG] Using custom audio settings from CRM:', audioSettings);
+            } else {
+              console.log('[VoiceProxy][DEBUG] Using default audio settings (16kHz PCM)');
+            }
 
             // Connect to ElevenLabs
             const { ws: elevenLabsWs, conversationId } = await connectToElevenLabs({
@@ -648,6 +662,7 @@ fastify.register(async function (fastify) {
               dynamicVariables,
               clientData,
               basePrompt,
+              audioSettings,
             });
 
             if (!elevenLabsWs) {

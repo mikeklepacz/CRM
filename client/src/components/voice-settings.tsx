@@ -316,6 +316,26 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
     },
   });
 
+  const syncAgentSettingsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `${apiBase}/sync-all-agent-settings`);
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'agents'] });
+      toast({
+        title: "Success",
+        description: data.message || "Agent settings synced successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const registerWebhookMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest("POST", `${apiBase}/register-webhook`);
@@ -577,6 +597,20 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                     <RefreshCw className="h-4 w-4 mr-2" />
                   )}
                   Sync Phone Numbers
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => syncAgentSettingsMutation.mutate()}
+                  disabled={syncAgentSettingsMutation.isPending}
+                  data-testid="button-sync-agent-settings"
+                >
+                  {syncAgentSettingsMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Database className="h-4 w-4 mr-2" />
+                  )}
+                  Sync Agent Settings
                 </Button>
 
                 <Dialog open={!!editingAgent} onOpenChange={(open) => !open && setEditingAgent(null)}>

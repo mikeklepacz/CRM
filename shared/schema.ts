@@ -993,6 +993,13 @@ export const elevenLabsAgents = pgTable("elevenlabs_agents", {
   phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls (nullable)
   description: text("description"), // Purpose/description of this agent
   isDefault: boolean("is_default").default(false), // Default agent for calls
+  // Audio configuration synced from ElevenLabs
+  sttEncoding: varchar("stt_encoding", { length: 50 }), // e.g., "pcm_s16le", "ulaw_8000"
+  sttSampleRate: integer("stt_sample_rate"), // e.g., 16000, 8000
+  ttsOutputFormat: varchar("tts_output_format", { length: 50 }), // e.g., "pcm_16000", "mp3_44100_128"
+  voiceId: varchar("voice_id", { length: 255 }), // ElevenLabs voice ID used by agent
+  language: varchar("language", { length: 50 }), // Agent's configured language
+  lastSyncedAt: timestamp("last_synced_at"), // When settings were last synced from ElevenLabs
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [

@@ -325,6 +325,12 @@ export class CallDispatcher {
           ivrBehavior: ivrBehaviorSetting,
           basePrompt: combinedPrompt,
           fromNumber: fromNumber,
+          // Pass audio settings if synced from ElevenLabs
+          audioSettings: agent.sttEncoding || agent.ttsOutputFormat ? {
+            sttEncoding: agent.sttEncoding || undefined,
+            sttSampleRate: agent.sttSampleRate || undefined,
+            ttsOutputFormat: agent.ttsOutputFormat || undefined,
+          } : undefined,
         });
         console.log(`[CallDispatcher][DEBUG] Outbound call initiated in ${Date.now() - callStart}ms`);
         console.log('[CallDispatcher][DEBUG] Call SID:', result.callSid);
@@ -378,6 +384,11 @@ export class CallDispatcher {
     ivrBehavior?: string;
     basePrompt?: string;
     fromNumber?: string;
+    audioSettings?: {
+      sttEncoding?: string;
+      sttSampleRate?: number;
+      ttsOutputFormat?: string;
+    };
   }): Promise<{ success: boolean; message: string; conversation_id: string | null; callSid: string | null }> {
     // Helper to mask phone numbers for security
     const maskPhone = (phone: string) => phone.length > 4 ? `***${phone.slice(-4)}` : '****';
@@ -438,6 +449,7 @@ export class CallDispatcher {
       basePrompt: params.basePrompt || '',
       useDirectElevenLabs: useDirectMode,
       elevenLabsApiKey: config.apiKey,
+      audioSettings: params.audioSettings,
     });
     
     // Log connection mode for debugging

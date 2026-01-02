@@ -1436,6 +1436,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sync agent audio settings from ElevenLabs API
+  app.post('/api/elevenlabs/agents/:id/sync-settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const tenantId = req.user.tenantId;
+      
+      // Get the local agent record
+      const localAgent = await storage.getElevenLabsAgent(id, tenantId);
+      if (!localAgent) {
+        return res.status(404).json({ error: 'Agent not found' });
+      }
+      
+      const config = await storage.getElevenLabsConfig(tenantId);
+      if (!config?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+      
+      // Fetch agent details from ElevenLabs
+      console.log(`[Agent Sync] Fetching settings for agent ${localAgent.agentId} from ElevenLabs...`);
+      const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${localAgent.agentId}`, {
+        headers: {
+          'xi-api-key': config.apiKey,
+        },
+      });
+      
+      const elData = response.data;
+      
+      // Extract audio settings from ElevenLabs response
+      const conversationConfig = elData.conversation_config || {};
+      const ttsConfig = conversationConfig.tts || {};
+      const sttConfig = conversationConfig.stt || {};
+      
+      // Map ElevenLabs response to our schema
+      const audioSettings = {
+        sttEncoding: sttConfig.encoding || sttConfig.input_format || 'pcm_s16le',
+        sttSampleRate: sttConfig.sample_rate || 16000,
+        ttsOutputFormat: ttsConfig.output_format || 'pcm_16000',
+        voiceId: ttsConfig.voice_id || elData.voice?.voice_id || null,
+        language: conversationConfig.agent?.language || elData.language || null,
+        lastSyncedAt: new Date(),
+      };
+      
+      console.log(`[Agent Sync] Extracted settings for ${localAgent.name}:`, audioSettings);
+      
+      // Update local database with synced settings
+      const updatedAgent = await storage.updateElevenLabsAgent(id, tenantId, audioSettings);
+      
+      res.json({
+        message: 'Settings synced successfully',
+        agent: updatedAgent,
+        syncedSettings: audioSettings,
+      });
+    } catch (error: any) {
+      console.error('[Agent Sync] Error syncing agent settings:', error.response?.data || error.message);
+      res.status(500).json({ error: error.response?.data?.detail?.message || error.message || 'Failed to sync agent settings' });
+    }
+  });
+
+  // Sync all agents' settings from ElevenLabs
+  app.post('/api/elevenlabs/sync-all-agent-settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      
+      const config = await storage.getElevenLabsConfig(tenantId);
+      if (!config?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+      
+      // Get all local agents
+      const agents = await storage.getAllElevenLabsAgents(tenantId);
+      const results = { synced: 0, failed: 0, errors: [] as string[] };
+      
+      for (const agent of agents) {
+        try {
+          console.log(`[Agent Sync] Syncing ${agent.name} (${agent.agentId})...`);
+          
+          const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${agent.agentId}`, {
+            headers: {
+              'xi-api-key': config.apiKey,
+            },
+          });
+          
+          const elData = response.data;
+          const conversationConfig = elData.conversation_config || {};
+          const ttsConfig = conversationConfig.tts || {};
+          const sttConfig = conversationConfig.stt || {};
+          
+          const audioSettings = {
+            sttEncoding: sttConfig.encoding || sttConfig.input_format || 'pcm_s16le',
+            sttSampleRate: sttConfig.sample_rate || 16000,
+            ttsOutputFormat: ttsConfig.output_format || 'pcm_16000',
+            voiceId: ttsConfig.voice_id || elData.voice?.voice_id || null,
+            language: conversationConfig.agent?.language || elData.language || null,
+            lastSyncedAt: new Date(),
+          };
+          
+          await storage.updateElevenLabsAgent(agent.id, tenantId, audioSettings);
+          results.synced++;
+          console.log(`[Agent Sync] ✓ Synced ${agent.name}`);
+        } catch (err: any) {
+          results.failed++;
+          results.errors.push(`${agent.name}: ${err.message}`);
+          console.error(`[Agent Sync] ✗ Failed to sync ${agent.name}:`, err.message);
+        }
+      }
+      
+      res.json({
+        message: `Synced ${results.synced}/${agents.length} agents`,
+        ...results,
+      });
+    } catch (error: any) {
+      console.error('[Agent Sync] Error syncing all agents:', error);
+      res.status(500).json({ error: error.message || 'Failed to sync agents' });
+    }
+  });
+
   // Sync phone numbers from ElevenLabs API
   app.post('/api/elevenlabs/sync-phone-numbers', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -24203,6 +24319,96 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error("Error setting default agent:", error);
       res.status(500).json({ message: error.message || "Failed to set default agent" });
+    }
+  });
+
+  // POST /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/sync-settings - Sync single agent settings
+  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/sync-settings', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId, id } = req.params;
+      
+      const dbAgent = await storage.getElevenLabsAgentById(id, tenantId);
+      if (!dbAgent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      const config = await storage.getElevenLabsConfig(tenantId);
+      if (!config?.apiKey) {
+        return res.status(400).json({ message: "ElevenLabs API key not configured" });
+      }
+      
+      const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${dbAgent.agentId}`, {
+        headers: { "xi-api-key": config.apiKey },
+      });
+      
+      const agentData = response.data;
+      const conversationConfig = agentData.conversation_config || {};
+      const ttsConfig = conversationConfig.tts || {};
+      const sttConfig = conversationConfig.stt || {};
+      
+      await storage.updateElevenLabsAgent(id, {
+        sttEncoding: sttConfig.encoding || null,
+        sttSampleRate: sttConfig.sample_rate || null,
+        ttsOutputFormat: ttsConfig.agent_output_audio_format || null,
+        voiceId: ttsConfig.voice_id || null,
+        language: conversationConfig.language || null,
+        lastSyncedAt: new Date(),
+      }, tenantId);
+      
+      const updatedAgent = await storage.getElevenLabsAgentById(id, tenantId);
+      console.log(`[ElevenLabs] Super-admin synced settings for agent ${dbAgent.agentId}`);
+      res.json(updatedAgent);
+    } catch (error: any) {
+      console.error("Error syncing agent settings:", error);
+      res.status(500).json({ message: error.message || "Failed to sync agent settings" });
+    }
+  });
+
+  // POST /api/super-admin/tenants/:tenantId/elevenlabs/sync-all-agent-settings - Sync all agents' settings
+  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/sync-all-agent-settings', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      
+      const config = await storage.getElevenLabsConfig(tenantId);
+      if (!config?.apiKey) {
+        return res.status(400).json({ message: "ElevenLabs API key not configured" });
+      }
+      
+      const agents = await storage.getAllElevenLabsAgents(tenantId);
+      const results = { success: 0, failed: 0, errors: [] as string[] };
+      
+      for (const dbAgent of agents) {
+        try {
+          const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${dbAgent.agentId}`, {
+            headers: { "xi-api-key": config.apiKey },
+          });
+          
+          const agentData = response.data;
+          const conversationConfig = agentData.conversation_config || {};
+          const ttsConfig = conversationConfig.tts || {};
+          const sttConfig = conversationConfig.stt || {};
+          
+          await storage.updateElevenLabsAgent(dbAgent.id, {
+            sttEncoding: sttConfig.encoding || null,
+            sttSampleRate: sttConfig.sample_rate || null,
+            ttsOutputFormat: ttsConfig.agent_output_audio_format || null,
+            voiceId: ttsConfig.voice_id || null,
+            language: conversationConfig.language || null,
+            lastSyncedAt: new Date(),
+          }, tenantId);
+          
+          results.success++;
+        } catch (err: any) {
+          results.failed++;
+          results.errors.push(`${dbAgent.name || dbAgent.agentId}: ${err.message}`);
+        }
+      }
+      
+      console.log(`[ElevenLabs] Super-admin synced ${results.success}/${agents.length} agents for tenant ${tenantId}`);
+      res.json(results);
+    } catch (error: any) {
+      console.error("Error syncing all agent settings:", error);
+      res.status(500).json({ message: error.message || "Failed to sync agent settings" });
     }
   });
 

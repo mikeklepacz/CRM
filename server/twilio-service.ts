@@ -19,6 +19,12 @@ interface TwiMLStreamParams {
   basePrompt?: string;
   useDirectElevenLabs?: boolean;
   elevenLabsApiKey?: string;
+  // Audio settings synced from ElevenLabs
+  audioSettings?: {
+    sttEncoding?: string;
+    sttSampleRate?: number;
+    ttsOutputFormat?: string;
+  };
 }
 
 // Fly.io voice proxy URL - this handles WebSocket connections that Replit can't
@@ -123,6 +129,12 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   
   if (params.clientData) {
     stream.parameter({ name: 'clientData', value: JSON.stringify(params.clientData) });
+  }
+  
+  // Pass audio settings if synced from ElevenLabs
+  if (params.audioSettings) {
+    stream.parameter({ name: 'audioSettings', value: JSON.stringify(params.audioSettings) });
+    console.log('[Twilio][DEBUG] Passing audio settings:', params.audioSettings);
   }
   
   const twimlOutput = response.toString();
