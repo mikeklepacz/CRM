@@ -334,8 +334,22 @@ function handleElevenLabsMessage(session, data) {
     }
 
     if (message.type === 'interruption') {
-      console.log('[VoiceProxy][TIMING] 🛑 Interruption received, clearing output buffer');
+      console.log('[VoiceProxy][TIMING] 🛑 Interruption received, clearing output buffer and Twilio audio');
       session.outputBuffer = [];
+      
+      // CRITICAL: Send clear event to Twilio to stop playing buffered audio
+      // Without this, Twilio continues playing old audio which confuses turn-taking
+      if (session.twilioWs && session.streamSid) {
+        try {
+          session.twilioWs.send(JSON.stringify({
+            event: 'clear',
+            streamSid: session.streamSid
+          }));
+          console.log('[VoiceProxy][DEBUG] Sent clear event to Twilio streamSid:', session.streamSid);
+        } catch (clearError) {
+          console.error('[VoiceProxy][DEBUG] Failed to send clear to Twilio:', clearError.message);
+        }
+      }
     }
 
     if (message.type === 'ping' && message.ping_event?.event_id) {
