@@ -3459,6 +3459,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { agentId, startDate, endDate, outcome, projectId, limit = 50 } = req.query;
       const tenantId = req.user.tenantId;
 
+      // Translate local agent UUID to ElevenLabs agent_id if provided
+      let elevenLabsAgentId: string | undefined;
+      if (agentId) {
+        const localAgent = await storage.getElevenLabsAgent(agentId as string, tenantId);
+        if (localAgent) {
+          elevenLabsAgentId = localAgent.agentId;
+        }
+      }
+
       // Build SQL query for completed calls with transcripts
       let query = db
         .select({
@@ -3498,11 +3507,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .from(callSessions)
         .leftJoin(clients, eq(clients.id, callSessions.clientId))
-        .where(sql`${callSessions.status} IN ('completed', 'failed')`);
+        .where(sql`${callSessions.status} IN ('completed', 'failed') AND ${callSessions.tenantId} = ${tenantId}`);
 
-      // Apply filters
-      if (agentId) {
-        query = query.where(eq(callSessions.agentId, agentId as string));
+      // Apply filters - use translated ElevenLabs agent_id
+      if (elevenLabsAgentId) {
+        query = query.where(eq(callSessions.agentId, elevenLabsAgentId));
       }
       if (startDate) {
         query = query.where(sql`${callSessions.startedAt} >= ${new Date(startDate as string)}`);
