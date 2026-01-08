@@ -3537,7 +3537,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const categoryNames = projectCategories.map(c => c.name.toLowerCase());
         
         if (categoryNames.length > 0) {
-          query = query.where(inArray(sql`LOWER(${clients.category})`, categoryNames));
+          // Include calls where client category matches project categories OR client has no category assigned
+          query = query.where(
+            or(
+              inArray(sql`LOWER(${clients.category})`, categoryNames),
+              isNull(clients.category),
+              eq(clients.category, '')
+            )
+          );
         } else {
           // No categories for project = no calls should match
           query = query.where(sql`1 = 0`);
