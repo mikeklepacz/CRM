@@ -1663,7 +1663,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[ElevenLabs Webhook][DEBUG] =====================');
 
       // SECURITY: Validate webhook signature
-      const config = await storage.getElevenLabsConfig();
+      // Get tenantId from webhook metadata for config lookup
+      const webhookTenantId = payload.data?.metadata?.tenantId as string | undefined;
+      const config = webhookTenantId ? await storage.getElevenLabsConfig(webhookTenantId) : null;
       if (config?.webhookSecret) {
         const signature = req.headers['elevenlabs-signature'] as string | undefined;
         const rawBody = (req as any).rawBody;
@@ -2263,7 +2265,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get ElevenLabs configuration
-      const config = await storage.getElevenLabsConfig();
+      const tenantId = (req.user as any).tenantId;
+      const config = await storage.getElevenLabsConfig(tenantId);
       if (!config?.apiKey) {
         return res.status(500).json({ error: 'ElevenLabs API key not configured' });
       }
@@ -3669,7 +3672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Delete from ElevenLabs if conversation ID exists
       if (conversationId) {
-        const elevenLabsConfig = await storage.getElevenLabsConfig();
+        const elevenLabsConfig = await storage.getElevenLabsConfig(req.user.tenantId);
         if (!elevenLabsConfig?.apiKey) {
           if (!forceDelete) {
             // API key missing - abort to prevent orphaned conversations (unless forced)
@@ -3775,7 +3778,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sync calls from ElevenLabs (import historical conversations)
   app.post('/api/elevenlabs/sync-calls', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const config = await storage.getElevenLabsConfig();
+      const tenantId = (req.user as any).tenantId;
+      const config = await storage.getElevenLabsConfig(tenantId);
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
@@ -3786,7 +3790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const errors: string[] = [];
 
       // Get all configured agents to validate against
-      const tenantId = (req.user as any).tenantId;
+      
       const configuredAgents = await storage.getAllElevenLabsAgents(tenantId);
       const validAgentIds = new Set(configuredAgents.map(a => a.agentId));
       console.log(`[Sync] Configured agents:`, Array.from(validAgentIds));
@@ -4405,7 +4409,8 @@ Ready to receive calls?`;
       console.log('[NUKE CALL DATA] Clearing all call test data...');
       
       // Get ElevenLabs config for API calls
-      const config = await storage.getElevenLabsConfig();
+      const tenantId = (req.user as any).tenantId;
+      const config = await storage.getElevenLabsConfig(tenantId);
       
       // 1. Get all call sessions to delete from ElevenLabs
       let elevenLabsDeletedCount = 0;
@@ -4413,7 +4418,7 @@ Ready to receive calls?`;
       
       if (config?.apiKey) {
         // Get all unique conversation IDs from call history (admin route - use requesting user's tenant)
-        const tenantId = (req.user as any).tenantId;
+        
         const callHistory = await storage.getAllCallHistory(tenantId);
         const conversationIds = [...new Set(callHistory.map(c => c.conversationId).filter(Boolean))];
         

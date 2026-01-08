@@ -494,9 +494,10 @@ export interface IStorage {
   }>;
 
   // ElevenLabs settings operations
-  getElevenLabsConfig(tenantId: string): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string; useDirectElevenLabs?: boolean } | undefined>;
-  updateElevenLabsConfig(tenantId: string, config: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void>;
-  updateElevenLabsConfigDirectMode(tenantId: string, useDirectElevenLabs: boolean): Promise<void>;
+  // projectId is optional - if provided, looks for project-specific config first, then falls back to tenant-wide (projectId=null)
+  getElevenLabsConfig(tenantId: string, projectId?: string | null): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string; useDirectElevenLabs?: boolean; projectId?: string | null } | undefined>;
+  updateElevenLabsConfig(tenantId: string, config: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }, projectId?: string | null): Promise<void>;
+  updateElevenLabsConfigDirectMode(tenantId: string, useDirectElevenLabs: boolean, projectId?: string | null): Promise<void>;
 
   // ElevenLabs Phone Numbers operations
   getAllElevenLabsPhoneNumbers(tenantId: string): Promise<ElevenLabsPhoneNumber[]>;
@@ -3112,8 +3113,85 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ElevenLabs settings operations
-  async getElevenLabsConfig(tenantId: string): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string; useDirectElevenLabs?: boolean } | undefined> {
-    const [config] = await db.select().from(elevenLabsConfig).where(eq(elevenLabsConfig.tenantId, tenantId)).limit(1);
+  // If projectId provided, looks for project-specific config first, then falls back to tenant-wide (projectId=null)
+  async getElevenLabsConfig(tenantId: string, projectId?: string | null): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string; useDirectElevenLabs?: boolean; projectId?: string | null } | undefined> {
+    let config;
+    
+    // If projectId is provided, first try to find project-specific config
+    if (projectId) {
+      const [projectConfig] = await db.select().from(elevenLabsConfig).where(
+        and(eq(elevenLabsConfig.tenantId, tenantId), eq(elevenLabsConfig.projectId, projectId))
+      ).limit(1);
+      config = projectConfig;
+    }
+    
+    // Fallback to tenant-wide config (projectId is null) if no project-specific config found
+    if (!config) {
+      const [tenantConfig] = await db.select().from(elevenLabsConfig).where(
+        and(eq(elevenLabsConfig.tenantId, tenantId), isNull(elevenLabsConfig.projectId))
+      ).limit(1);
+      config = tenantConfig;
+    }
+    
+    if (!config) return undefined;
+    return {
+      apiKey: config.apiKey,
+      twilioNumber: config.twilioNumber || undefined,
+      webhookSecret: config.webhookSecret || undefined,
+      phoneNumberId: config.phoneNumberId || undefined,
+      useDirectElevenLabs: config.useDirectElevenLabs ?? false,
+      projectId: config.projectId || null
+    };
+  }
+
+  async updateElevenLabsConfig(tenantId: string, configData: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }, projectId?: string | null): Promise<void> {
+    // Get existing config for the exact scope first
+    const existing = await this.getElevenLabsConfigExact(tenantId, projectId);
+    
+    // If creating a new project-specific config, inherit from tenant-wide as fallback
+    let fallback: { apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string } | undefined;
+    if (!existing && projectId) {
+      fallback = await this.getElevenLabsConfigExact(tenantId, null);
+    }
+
+    // Merge with existing values (only update provided fields), using fallback for new project configs
+    const baseConfig = existing || fallback;
+    const merged = {
+      tenantId,
+      projectId: projectId || null,
+      apiKey: configData.apiKey !== undefined ? configData.apiKey : (baseConfig?.apiKey ?? ''),
+      twilioNumber: configData.twilioNumber !== undefined ? configData.twilioNumber : (baseConfig?.twilioNumber ?? null),
+      webhookSecret: configData.webhookSecret !== undefined ? configData.webhookSecret : (baseConfig?.webhookSecret ?? null),
+      phoneNumberId: configData.phoneNumberId !== undefined ? configData.phoneNumberId : (baseConfig?.phoneNumberId ?? null)
+    };
+
+    // Delete old config for this tenant+project and insert new
+    if (projectId) {
+      await db.delete(elevenLabsConfig).where(
+        and(eq(elevenLabsConfig.tenantId, tenantId), eq(elevenLabsConfig.projectId, projectId))
+      );
+    } else {
+      await db.delete(elevenLabsConfig).where(
+        and(eq(elevenLabsConfig.tenantId, tenantId), isNull(elevenLabsConfig.projectId))
+      );
+    }
+    await db.insert(elevenLabsConfig).values(merged);
+  }
+  
+  // Helper: Get config for exact scope (no fallback)
+  private async getElevenLabsConfigExact(tenantId: string, projectId?: string | null): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string; useDirectElevenLabs?: boolean } | undefined> {
+    let config;
+    if (projectId) {
+      const [projectConfig] = await db.select().from(elevenLabsConfig).where(
+        and(eq(elevenLabsConfig.tenantId, tenantId), eq(elevenLabsConfig.projectId, projectId))
+      ).limit(1);
+      config = projectConfig;
+    } else {
+      const [tenantConfig] = await db.select().from(elevenLabsConfig).where(
+        and(eq(elevenLabsConfig.tenantId, tenantId), isNull(elevenLabsConfig.projectId))
+      ).limit(1);
+      config = tenantConfig;
+    }
     if (!config) return undefined;
     return {
       apiKey: config.apiKey,
@@ -3124,28 +3202,16 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async updateElevenLabsConfig(tenantId: string, configData: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void> {
-    // Get existing config first to preserve values
-    const existing = await this.getElevenLabsConfig(tenantId);
-
-    // Merge with existing values (only update provided fields)
-    const merged = {
-      tenantId,
-      apiKey: configData.apiKey !== undefined ? configData.apiKey : (existing?.apiKey ?? ''),
-      twilioNumber: configData.twilioNumber !== undefined ? configData.twilioNumber : (existing?.twilioNumber ?? null),
-      webhookSecret: configData.webhookSecret !== undefined ? configData.webhookSecret : (existing?.webhookSecret ?? null),
-      phoneNumberId: configData.phoneNumberId !== undefined ? configData.phoneNumberId : (existing?.phoneNumberId ?? null)
-    };
-
-    // Delete old config for this tenant and insert new
-    await db.delete(elevenLabsConfig).where(eq(elevenLabsConfig.tenantId, tenantId));
-    await db.insert(elevenLabsConfig).values(merged);
-  }
-
-  async updateElevenLabsConfigDirectMode(tenantId: string, useDirectElevenLabs: boolean): Promise<void> {
-    await db.update(elevenLabsConfig)
-      .set({ useDirectElevenLabs, updatedAt: new Date() })
-      .where(eq(elevenLabsConfig.tenantId, tenantId));
+  async updateElevenLabsConfigDirectMode(tenantId: string, useDirectElevenLabs: boolean, projectId?: string | null): Promise<void> {
+    if (projectId) {
+      await db.update(elevenLabsConfig)
+        .set({ useDirectElevenLabs, updatedAt: new Date() })
+        .where(and(eq(elevenLabsConfig.tenantId, tenantId), eq(elevenLabsConfig.projectId, projectId)));
+    } else {
+      await db.update(elevenLabsConfig)
+        .set({ useDirectElevenLabs, updatedAt: new Date() })
+        .where(and(eq(elevenLabsConfig.tenantId, tenantId), isNull(elevenLabsConfig.projectId)));
+    }
   }
 
   // ElevenLabs Phone Numbers operations
@@ -3195,11 +3261,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllElevenLabsAgents(tenantId: string, projectId?: string): Promise<ElevenLabsAgent[]> {
-    const conditions = [eq(elevenLabsAgents.tenantId, tenantId)];
+    // If projectId is provided, return agents for that project OR tenant-wide agents (null projectId)
     if (projectId) {
-      conditions.push(eq(elevenLabsAgents.projectId, projectId));
+      return await db.select().from(elevenLabsAgents).where(
+        and(
+          eq(elevenLabsAgents.tenantId, tenantId),
+          or(eq(elevenLabsAgents.projectId, projectId), isNull(elevenLabsAgents.projectId))
+        )
+      );
     }
-    return await db.select().from(elevenLabsAgents).where(and(...conditions));
+    // If no projectId, return all agents for the tenant
+    return await db.select().from(elevenLabsAgents).where(eq(elevenLabsAgents.tenantId, tenantId));
   }
 
   async getElevenLabsAgent(id: string, tenantId: string): Promise<ElevenLabsAgent | undefined> {

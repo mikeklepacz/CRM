@@ -948,9 +948,11 @@ export const driveFolders = pgTable("drive_folders", {
 });
 
 // ElevenLabs API configuration (stores API key and Twilio number)
+// Can be scoped to tenant-only (projectId=null) or tenant+project for project-specific config
 export const elevenLabsConfig = pgTable("elevenlabs_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Optional: null = tenant-wide default, set = project-specific config
   apiKey: text("api_key").notNull(), // ElevenLabs API key
   phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls
   twilioNumber: varchar("twilio_number", { length: 50 }), // Twilio phone number (for display only)
@@ -958,7 +960,9 @@ export const elevenLabsConfig = pgTable("elevenlabs_config", {
   useDirectElevenLabs: boolean("use_direct_elevenlabs").default(false), // Bypass Fly.io proxy and route calls directly to ElevenLabs
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_elevenlabs_config_tenant_project").on(table.tenantId, table.projectId),
+]);
 
 // Twilio configuration (credentials stored as environment secrets)
 export const twilioConfig = pgTable("twilio_config", {
