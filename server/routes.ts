@@ -212,10 +212,8 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
     for (const range of parsed.schedule[currentDay]) {
       if (currentMinutes < range.open) {
         return buildScheduledTime(year, month, dateNum, range.open);
-      }
       if (currentMinutes >= range.open && currentMinutes < range.close) {
         return nowUtc; // Open now
-      }
     }
   }
   
@@ -300,7 +298,6 @@ function parseHoursToStructured(hoursStr: string, state: string): Array<{ day: s
         } else {
           appliesToToday = currentDay >= startDay || currentDay <= endDay;
         }
-      }
     } else if (singleDayMatch) {
       // Single day (e.g., "Sunday")
       const dayNum = dayMap[singleDayMatch[1]];
@@ -415,7 +412,6 @@ function checkIfStoreOpen(hoursStr: string, state: string): boolean {
             lastDayContext = null; // Reset context if range doesn't apply
           }
         }
-      }
       
       // Check for specific days (Mon, Tuesday, etc.)
       if (!hasExplicitDay) {
@@ -432,18 +428,15 @@ function checkIfStoreOpen(hoursStr: string, state: string): boolean {
             break;
           }
         }
-      }
       
       // If no day specified, check if we can carry forward previous day context
       // This handles cases like "Mon-Fri 9am-1pm, 2pm-6pm" where the second segment has no day
       if (!hasExplicitDay && lastDayContext !== null) {
         appliesToToday = true; // Assume it continues the previous day context
-      }
       
       // If no day specified and it's the only segment, assume it applies to all days
       if (!appliesToToday && !hasExplicitDay && segments.length === 1) {
         appliesToToday = true;
-      }
       
       if (appliesToToday) {
         // Check if this day is marked as closed
@@ -462,7 +455,6 @@ function checkIfStoreOpen(hoursStr: string, state: string): boolean {
             todayRanges.push({ open: openMinutes, close: closeMinutes });
           }
         }
-      }
     }
     
     // If explicitly marked closed for today, return false
@@ -485,7 +477,6 @@ function checkIfStoreOpen(hoursStr: string, state: string): boolean {
             return true;
           }
         }
-      }
       // Current time doesn't fall in any of today's ranges
       return false;
     }
@@ -632,17 +623,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!username || !password) {
         return res.status(400).json({ message: "Username and password required" });
-      }
 
       const user = await storage.getUserByUsername(username);
       if (!user || !user.passwordHash) {
         return res.status(401).json({ message: "Invalid credentials" });
-      }
 
       const validPassword = await bcrypt.compare(password, user.passwordHash);
       if (!validPassword) {
         return res.status(401).json({ message: "Invalid credentials" });
-      }
 
       // Create session using passport's login
       req.login({ id: user.id, isPasswordAuth: true }, (err: any) => {
@@ -672,12 +660,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!username || !password) {
         return res.status(400).json({ message: "Username and password required" });
-      }
 
       const existing = await storage.getUserByUsername(username);
       if (existing) {
         return res.status(409).json({ message: "Username already exists" });
-      }
 
       const passwordHash = await bcrypt.hash(password, 10);
       const user = await storage.createPasswordUser({
@@ -748,19 +734,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(403).json({ message: "Admin access required" });
-      }
       
       // Check Super Admin first (platform-wide access)
       if (user.isSuperAdmin) {
         req.currentUser = user;
         return next();
-      }
       
       // Check legacy admin role
       if (user.role === 'admin') {
         req.currentUser = user;
         return next();
-      }
       
       // Check org_admin role in current tenant (fetched from user_tenants table)
       const tenantId = req.user.tenantId;
@@ -770,7 +753,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           req.currentUser = { ...user, roleInTenant };
           return next();
         }
-      }
       
       return res.status(403).json({ message: "Admin access required" });
     } catch (error: any) {
@@ -786,7 +768,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
       req.currentUser = user;
       next();
     } catch (error: any) {
@@ -865,7 +846,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         effectiveTenantId = req.session.tenantOverrideId;
         isViewingAsTenant = true;
         effectiveRoleInTenant = await storage.getUserTenantRole(userId, effectiveTenantId) || 'org_admin';
-      }
       
       // Fetch tenant name and allowed modules for branding and tab visibility
       let allowedModules: string[] | null = null;
@@ -874,7 +854,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantName = tenant?.name || null;
         // Include allowed modules from tenant settings
         allowedModules = tenant?.settings?.allowedModules || null;
-      }
       
       res.json({
         ...user,
@@ -928,7 +907,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validation = profileSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { firstName, lastName, email, agentName, phone, meetingLink } = validation.data;
@@ -946,7 +924,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validation = passwordSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { currentPassword, newPassword } = validation.data;
@@ -954,12 +931,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       if (!user?.passwordHash) {
         return res.status(400).json({ message: "Password auth not enabled for this user" });
-      }
 
       const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
       if (!validPassword) {
         return res.status(401).json({ message: "Current password is incorrect" });
-      }
 
       const newPasswordHash = await bcrypt.hash(newPassword, 10);
       await storage.updateUser(userId, { passwordHash: newPasswordHash });
@@ -975,7 +950,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validation = gmailSettingsSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { signature, gmailLabels, emailPreference } = validation.data;
@@ -1081,7 +1055,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validation = userPreferencesSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -1102,7 +1075,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!imageData || !imageData.startsWith('data:image/')) {
         return res.status(400).json({ message: 'Invalid image data. Must be a base64-encoded image.' });
-      }
 
       // Validate image size (limit to 5MB)
       const base64Length = imageData.length - (imageData.indexOf(',') + 1);
@@ -1111,7 +1083,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (sizeInMB > 5) {
         return res.status(400).json({ message: 'Image too large. Maximum size is 5MB.' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -1153,7 +1124,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validation = wooCommerceSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { url, consumerKey, consumerSecret } = validation.data;
@@ -1201,7 +1171,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validation = elevenLabsConfigSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       await storage.updateElevenLabsConfig(req.user.tenantId, validation.data);
       res.json({ message: "ElevenLabs configuration updated successfully" });
@@ -1217,7 +1186,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const config = await storage.getElevenLabsConfig(req.user.tenantId);
       if (!config?.apiKey) {
         return res.status(400).json({ message: "ElevenLabs API key not configured" });
-      }
 
       // Get webhook URL - use REPLIT_DOMAINS for production, REPLIT_DEV_DOMAIN for dev
       let webhookUrl: string;
@@ -1228,7 +1196,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/elevenlabs/webhook`;
       } else {
         return res.status(500).json({ message: "Unable to determine webhook URL. Deploy environment not configured." });
-      }
 
       // Call ElevenLabs API to register webhook
       const response = await axios.post(
@@ -1248,7 +1215,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store webhook secret if returned
       if (response.data?.secret) {
         await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret: response.data.secret });
-      }
 
       res.json({
         message: "Webhook registered successfully",
@@ -1277,7 +1243,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         webhookUrl = `https://${domains[0]}/api/elevenlabs/webhook`;
       } else if (process.env.REPLIT_DEV_DOMAIN) {
         webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/elevenlabs/webhook`;
-      }
 
       res.json({
         webhookUrl,
@@ -1296,7 +1261,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validation = elevenLabsAgentSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const agentData = {
         ...validation.data,
@@ -1316,7 +1280,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validation = elevenLabsAgentSchema.partial().safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const agent = await storage.updateElevenLabsAgent(req.params.id, req.user.tenantId, validation.data);
       res.json(agent);
@@ -1354,7 +1317,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
-      }
       
       const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
         headers: {
@@ -1375,7 +1337,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle case where prompt is an object with a 'prompt' field
       if (typeof systemPrompt === 'object' && systemPrompt !== null) {
         systemPrompt = systemPrompt.prompt || JSON.stringify(systemPrompt);
-      }
       
       // Ensure it's a string
       systemPrompt = String(systemPrompt || '');
@@ -1399,13 +1360,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!prompt) {
         return res.status(400).json({ error: 'Prompt is required' });
-      }
 
       const config = await storage.getElevenLabsConfig(req.user.tenantId);
       
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
-      }
       
       // ElevenLabs requires nested structure: conversation_config.agent.prompt.prompt
       const updatePayload = {
@@ -1446,12 +1405,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const localAgent = await storage.getElevenLabsAgent(id, tenantId);
       if (!localAgent) {
         return res.status(404).json({ error: 'Agent not found' });
-      }
       
       const config = await storage.getElevenLabsConfig(tenantId);
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
-      }
       
       // Fetch agent details from ElevenLabs
       console.log(`[Agent Sync] Fetching settings for agent ${localAgent.agentId} from ElevenLabs...`);
@@ -1502,7 +1459,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const config = await storage.getElevenLabsConfig(tenantId);
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
-      }
       
       // Get all local agents
       const agents = await storage.getAllElevenLabsAgents(tenantId);
@@ -1540,7 +1496,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           results.errors.push(`${agent.name}: ${err.message}`);
           console.error(`[Agent Sync] ✗ Failed to sync ${agent.name}:`, err.message);
         }
-      }
       
       res.json({
         message: `Synced ${results.synced}/${agents.length} agents`,
@@ -1558,7 +1513,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const config = await storage.getElevenLabsConfig(req.user.tenantId);
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
-      }
       
       // Call ElevenLabs API to get phone numbers
       const response = await axios.get('https://api.elevenlabs.io/v1/convai/phone-numbers/', {
@@ -1572,7 +1526,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!phoneNumbers || phoneNumbers.length === 0) {
         return res.json({ message: 'No phone numbers found in ElevenLabs account', phoneNumbers: [] });
-      }
 
       // Store phone numbers in database with their agent assignments from ElevenLabs
       let storedCount = 0;
@@ -1589,7 +1542,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (err: any) {
           console.error(`[PhoneSync] Failed to store phone number ${phone.phone_number_id}:`, err.message);
         }
-      }
 
       // Update agents with their assigned phone number IDs from ElevenLabs
       const allAgents = await storage.getAllElevenLabsAgents(req.user.tenantId);
@@ -1615,7 +1567,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[PhoneSync] Agent ${assignedAgentId} not found in database for tenant`);
           }
         }
-      }
 
       res.json({
         message: `Successfully synced ${phoneNumbers.length} phone number(s) from ElevenLabs (${agentUpdates} agent(s) updated)`,
@@ -1656,10 +1607,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[ElevenLabs Webhook][DEBUG] Data keys:', Object.keys(payload.data || {}));
       if (payload.data?.conversation_id) {
         console.log('[ElevenLabs Webhook][DEBUG] Conversation ID:', payload.data.conversation_id);
-      }
       if (payload.data?.metadata) {
         console.log('[ElevenLabs Webhook][DEBUG] Metadata:', JSON.stringify(payload.data.metadata, null, 2));
-      }
       console.log('[ElevenLabs Webhook][DEBUG] =====================');
 
       // SECURITY: Validate webhook signature
@@ -1681,7 +1630,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(401).json({ error: 'Invalid signature' });
         }
         console.log('[ElevenLabs Webhook][DEBUG] Signature validated OK');
-      }
 
       // Handle different webhook types
       // ElevenLabs sends 3 webhook types: call_initiation_failure, post_call_audio, post_call_transcription
@@ -1722,7 +1670,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`[ElevenLabs Webhook][DEBUG] Processed in ${Date.now() - receiveTime}ms`);
         return res.status(200).json({ status: 'processed', type: 'call_initiation_failure' });
-      }
       
       if (webhookType === 'post_call_audio') {
         console.log('[ElevenLabs Webhook][DEBUG] Post-call audio notification');
@@ -1754,12 +1701,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`[ElevenLabs Webhook][DEBUG] Processed in ${Date.now() - receiveTime}ms`);
         return res.status(200).json({ status: 'processed', type: 'post_call_audio' });
-      }
       
       if (webhookType !== 'post_call_transcription') {
         console.log('[ElevenLabs Webhook][DEBUG] Unknown webhook type, ignoring:', webhookType);
         return res.status(200).json({ status: 'ignored', reason: `Unknown webhook type: ${webhookType}` });
-      }
       
       console.log('[ElevenLabs Webhook][DEBUG] Processing post_call_transcription...');
       
@@ -1771,7 +1716,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!conversationId) {
         console.error('Missing conversation_id in webhook payload');
         return res.status(400).json({ error: 'Missing conversation_id' });
-      }
 
       // Log the webhook event
       await storage.createCallEvent({
@@ -1800,6 +1744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!session) {
         // Create new call session (this means webhook arrived before our initiate-call response)
         session = await storage.createCallSession({
+              tenantId,
           conversationId,
           agentId: data.agent_id,
           clientId: clientData.clientId || '',
@@ -1822,7 +1767,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           endedAt,
           callSuccessful: analysis.call_successful || null,
         });
-      }
 
       // Update call campaign target if this was part of a campaign
       if (clientData.campaignTargetId) {
@@ -1861,7 +1805,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }
-      }
 
       // IDEMPOTENCY: Store transcripts only if they don't already exist
       if (data.transcript && Array.isArray(data.transcript)) {
@@ -1880,7 +1823,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           await storage.bulkCreateCallTranscripts(transcripts);
         }
-      }
 
       // IVR/AUTOMATED LINE DETECTION: Check transcripts for DTMF tone usage or voicemail detection
       if (data.transcript && Array.isArray(data.transcript) && clientData.clientId) {
@@ -1948,7 +1890,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Don't fail the webhook - this is a non-critical feature
           }
         }
-      }
 
       // EXTRACT DATA COLLECTION: Save extracted data fields from ElevenLabs Analysis
       if (data.status === 'done' && data.analysis && data.analysis.extracted_data) {
@@ -2169,7 +2110,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`[Data Extraction] Error processing extracted data:`, extractionError.message);
           // Don't fail the webhook - this is a non-critical feature
         }
-      }
 
       // Trigger OpenAI reflection job asynchronously (don't block webhook response)
       if (data.status === 'done' && data.transcript && data.transcript.length > 0 && session?.tenantId) {
@@ -2223,7 +2163,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Don't fail the webhook - this is a background job
           }
         })();
-      }
 
       res.status(200).json({ status: 'received', conversationId });
     } catch (error: any) {
@@ -2245,7 +2184,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!isValid) {
         console.error('[Twilio] Invalid webhook signature - rejecting request');
         return res.status(401).send('Unauthorized');
-      }
       
       await handleTwilioCallStatus(req.body);
       res.status(200).send('OK');
@@ -2262,17 +2200,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!phoneNumber || !agentId) {
         return res.status(400).json({ error: 'phoneNumber and agentId are required' });
-      }
 
       // Get ElevenLabs configuration
       const tenantId = (req.user as any).tenantId;
       const config = await storage.getElevenLabsConfig(tenantId);
       if (!config?.apiKey) {
         return res.status(500).json({ error: 'ElevenLabs API key not configured' });
-      }
       if (!config?.phoneNumberId) {
         return res.status(500).json({ error: 'ElevenLabs phone number ID not configured' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
@@ -2307,7 +2242,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: `ElevenLabs API error: ${response.statusText}`,
           details: errorText 
         });
-      }
 
       const data = await response.json();
       // ElevenLabs returns conversationId in camelCase
@@ -2319,10 +2253,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: 'Invalid response from ElevenLabs API',
           details: 'No conversation ID returned' 
         });
-      }
 
       // Create initial call session in database
       const session = await storage.createCallSession({
+              tenantId,
         conversationId,
         agentId,
         clientId: clientId || '',
@@ -2374,7 +2308,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdmin = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdmin && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       const { projectId } = req.query;
       const agents = await storage.getAllElevenLabsAgents(req.user.tenantId, projectId as string | undefined);
@@ -2431,20 +2364,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Access denied' });
-      }
 
       // Agent users can only see their own initiated calls
       const tenantId = (req.user as any).tenantId;
       const filters: any = {};
       if (!isAdminUser) {
         filters.initiatedByUserId = userId;
-      }
       if (clientId) {
         filters.clientId = clientId;
-      }
       if (status) {
         filters.status = status;
-      }
 
       const sessions = await storage.getCallSessions(tenantId, filters);
 
@@ -2465,13 +2394,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await storage.getCallSessionByConversationId(conversationId, req.user.tenantId);
       if (!session) {
         return res.status(404).json({ error: 'Call session not found' });
-      }
 
       // Check access: admin can see all, agents can only see their own
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && session.initiatedByUserId !== userId) {
         return res.status(403).json({ error: 'Access denied' });
-      }
 
       const transcripts = await storage.getCallTranscripts(conversationId);
 
@@ -2494,7 +2421,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       const { 
         startDate, 
@@ -2512,19 +2438,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (startDate) {
         filters.startDate = new Date(startDate as string);
-      }
       if (endDate) {
         filters.endDate = new Date(endDate as string);
-      }
       if (status) {
         filters.status = status;
-      }
       if (agentId && agentId !== 'all') {
         filters.agentId = agentId;
-      }
       if (campaignId) {
         filters.campaignId = campaignId;
-      }
 
       // Get call sessions with filters
       const tenantId = (req.user as any).tenantId;
@@ -2592,7 +2513,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             session.pocName?.toLowerCase().includes(searchLower)
           );
         });
-      }
 
       res.json({
         sessions: filteredSessions,
@@ -2634,7 +2554,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (typeof volumeDb !== 'number' || volumeDb < -40 || volumeDb > -10) {
         return res.status(400).json({ error: 'Volume must be between -40dB and -10dB' });
-      }
 
       const existing = await storage.getBackgroundAudioSettings();
       const settings = await storage.updateBackgroundAudioSettings({
@@ -2658,7 +2577,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No audio file provided' });
-      }
 
       const { audioConverter } = await import('./audio-converter.js');
       
@@ -2693,7 +2611,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!settings?.filePath) {
         return res.status(404).json({ error: 'No background audio file uploaded' });
-      }
 
       const { audioConverter } = await import('./audio-converter.js');
       const audioBuffer = await audioConverter.loadAudioFile(settings.filePath);
@@ -2730,7 +2647,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         console.error('[VoiceProxy] Failed to notify Fly.io:', response.status);
         return null;
-      }
     } catch (error) {
       console.error('[VoiceProxy] Error notifying Fly.io:', error);
       return null;
@@ -2742,13 +2658,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authHeader = req.headers.authorization;
       if (!authHeader || authHeader !== `Bearer ${FLY_PROXY_SECRET}`) {
         return res.status(401).json({ error: 'Unauthorized' });
-      }
       
       const settings = await storage.getBackgroundAudioSettings();
       
       if (!settings?.filePath) {
         return res.status(404).json({ error: 'No background audio file uploaded' });
-      }
 
       const { audioConverter } = await import('./audio-converter.js');
       const audioBuffer = await audioConverter.loadAudioFile(settings.filePath);
@@ -2768,7 +2682,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authHeader = req.headers.authorization;
       if (!authHeader || authHeader !== `Bearer ${FLY_PROXY_SECRET}`) {
         return res.status(401).json({ error: 'Unauthorized' });
-      }
       
       const settings = await storage.getBackgroundAudioSettings();
       
@@ -2777,7 +2690,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (settings?.fileName && settings?.updatedAt) {
         const hashInput = `${settings.fileName}-${settings.updatedAt.getTime()}`;
         audioHash = Buffer.from(hashInput).toString('base64').slice(0, 16);
-      }
       
       res.json({
         volumeDb: settings?.volumeDb ?? -25,
@@ -2814,7 +2726,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       const { scenario } = req.params;
       
@@ -2861,7 +2772,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return obj;
           });
         }
-      }
 
       // Create lookup map: Link -> Store Details
       const storeMap = new Map();
@@ -2902,7 +2812,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Project has no categories - return empty list
           projectFilteredStores = [];
         }
-      }
       
       // Apply scenario-based filtering
       let eligibleStores = projectFilteredStores;
@@ -2960,7 +2869,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return true; // Invalid date = treat as stale
           }
         });
-      }
       
       // Map to frontend format - use exact column names from sheets
       const storesWithHours = eligibleStores.map((store: any) => {
@@ -3045,7 +2953,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           website: lead.website || '',
           source: 'leads' as const,
         }));
-      }
 
       // Combine both sources into unified contact feed
       const unifiedContacts = [...storesWithHours, ...qualificationLeadsContacts];
@@ -3067,13 +2974,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       const { agent_record_id, agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule, ivr_behavior } = req.body;
       
       if (!agent_record_id || !agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
         return res.status(400).json({ error: 'Agent record ID, agent ID, and stores array required' });
-      }
 
       // Check Fly.io voice proxy health for immediate calls (not scheduled/auto-scheduled)
       const isImmediateCall = !scheduled_for && !auto_schedule;
@@ -3085,31 +2990,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             details: proxyHealth.details
           });
         }
-      }
 
       // Verify agent exists and has required fields using the database record ID
       const tenantId = (req.user as any).tenantId;
       const agent = await storage.getElevenLabsAgent(agent_record_id, tenantId);
       if (!agent) {
         return res.status(404).json({ error: 'Agent not found' });
-      }
       
       if (!agent.agentId || !agent.phoneNumberId) {
         return res.status(400).json({ error: 'Agent configuration incomplete - missing agentId or phoneNumberId' });
-      }
       
       // Validate phone_number_id - must be explicitly provided, no fallback
       // No fallback - use only explicitly provided phone_number_id
       const effectivePhoneNumberId = phone_number_id;
       if (!effectivePhoneNumberId) {
         return res.status(400).json({ error: 'Phone number ID required for outbound calling' });
-      }
 
       // Create campaign with appropriate scheduling - use database record ID
       let scheduledStart = new Date();
       if (scheduled_for) {
         scheduledStart = new Date(scheduled_for);
-      }
 
       const campaign = await storage.createCallCampaign({
         name: name || `${scenario || 'Batch'} Campaign - ${new Date().toLocaleDateString()}`,
@@ -3133,7 +3033,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storeDataMap.set(store.link, store);
           }
         }
-      }
 
       // Create campaign targets for each store
       let createdTargets = 0;
@@ -3257,7 +3156,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           skippedStores++;
         }
-      }
 
       // For immediate calls, trigger the dispatcher right away instead of waiting for the 30-second interval
       if (isImmediateCall && createdTargets > 0) {
@@ -3267,7 +3165,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         callDispatcher.processImmediately().catch(err => {
           console.error('[BatchCall] Error in immediate dispatch:', err);
         });
-      }
 
       res.json({
         campaignId: campaign.id,
@@ -3313,7 +3210,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       const activeSessions = voiceProxyServer.getActiveSessionCount();
       const metrics = {
@@ -3343,7 +3239,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let events: any[] = [];
       if (session?.conversationId) {
         events = await storage.getCallEvents(session.conversationId);
-      }
       
       // Try to find campaign target using conversationId
       let campaignTarget = null;
@@ -3353,7 +3248,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (targets.length > 0) {
           campaignTarget = targets[0];
         }
-      }
       
       // Get Fly.io proxy status
       let flyioStatus = null;
@@ -3366,7 +3260,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch (e) {
         flyioStatus = { error: 'Failed to fetch Fly.io status' };
-      }
       
       res.json({
         callSid,
@@ -3392,7 +3285,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       // Get all active campaigns (scheduled or in-progress)
       const tenantId = (req.user as any).tenantId;
@@ -3434,7 +3326,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           failed,
           inProgress,
         });
-      }
 
       res.json(queueStats);
     } catch (error: any) {
@@ -3453,7 +3344,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       // Parse query filters
       const { agentId, startDate, endDate, outcome, projectId, limit = 50 } = req.query;
@@ -3503,18 +3393,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Apply filters
       if (agentId) {
         query = query.where(eq(callSessions.agentId, agentId as string));
-      }
       if (startDate) {
         query = query.where(sql`${callSessions.startedAt} >= ${new Date(startDate as string)}`);
-      }
       if (endDate) {
         query = query.where(sql`${callSessions.endedAt} <= ${new Date(endDate as string)}`);
-      }
       if (outcome === 'successful') {
         query = query.where(eq(callSessions.callSuccessful, true));
       } else if (outcome === 'failed') {
         query = query.where(sql`${callSessions.callSuccessful} = false OR ${callSessions.status} = 'failed'`);
-      }
       
       // Project filtering: filter calls by client's category matching project categories
       if (projectId) {
@@ -3533,7 +3419,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // No categories for project = no calls should match
           query = query.where(sql`1 = 0`);
         }
-      }
 
       // Order by most recent first and apply limit
       const calls = await query
@@ -3573,7 +3458,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!link) {
         return res.status(400).json({ error: 'Link parameter is required' });
-      }
 
       // Get sheets configuration
       const configuredSheets = await storage.getSheets();
@@ -3581,14 +3465,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!storeSheet) {
         return res.status(404).json({ error: 'Store Database sheet not configured' });
-      }
 
       // Fetch all rows from Store Database
       const sheetData = await googleSheets.readSheetData(storeSheet.id, 'A:ZZ');
       
       if (!sheetData || sheetData.length === 0) {
         return res.status(404).json({ error: 'No data found in Store Database' });
-      }
 
       const headers = sheetData[0];
       const rows = sheetData.slice(1);
@@ -3600,7 +3482,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (linkColumnIndex === -1) {
         return res.status(404).json({ error: 'Link column not found in Store Database' });
-      }
 
       // Normalize the search link
       const normalizedSearchLink = normalizeLink(link as string);
@@ -3614,7 +3495,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (matchingRowIndex === -1) {
         return res.status(404).json({ error: 'Store not found' });
-      }
 
       // Convert row array to object with headers as keys
       const matchingRow = rows[matchingRowIndex];
@@ -3653,7 +3533,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       // Get the call session to find conversation ID
       const session = await db
@@ -3664,7 +3543,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (session.length === 0) {
         return res.status(404).json({ error: 'Call session not found' });
-      }
 
       const conversationId = session[0].conversationId;
       let elevenLabsDeleted = false;
@@ -3712,7 +3590,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }
-      }
 
       // Only delete from local database if ElevenLabs deletion succeeded (or no conversationId)
       // First delete related call_campaign_targets records (foreign key constraint)
@@ -3738,7 +3615,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[DeleteCall] Force deleted call session ${id} locally despite ElevenLabs error: ${elevenLabsError}`);
       } else {
         message = 'Call deleted successfully from local database (no remote conversation)';
-      }
 
       res.json({ 
         success: true, 
@@ -3763,7 +3639,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser && !user?.hasVoiceAccess) {
         return res.status(403).json({ error: 'Voice calling access required' });
-      }
 
       const { conversationId } = req.params;
       const transcripts = await storage.getCallTranscripts(conversationId);
@@ -3783,7 +3658,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const config = await storage.getElevenLabsConfig(tenantId, projectId);
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
-      }
 
       let importedCount = 0;
       let skippedCount = 0;
@@ -3899,7 +3773,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.deleteCallTranscripts(conversationId);
             
             // Update call session
-            await storage.updateCallSession(existing.id, {
+            await storage.updateCallSession(existing.id, tenantId, {
               agentId: details.agent_id,
               status: details.status === 'done' ? 'completed' : details.status,
               callDurationSecs: durationSecs,
@@ -3913,6 +3787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             // Create new call session
             await storage.createCallSession({
+              tenantId,
               conversationId,
               agentId: details.agent_id,
               clientId: client.id,
@@ -3936,6 +3811,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             for (let i = 0; i < details.transcript.length; i++) {
               const msg = details.transcript[i];
               await storage.createCallTranscript({
+                tenantId,
                 conversationId,
                 sequenceNumber: i,
                 role: msg.role,
@@ -3952,7 +3828,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errorCount++;
           errors.push(convError.message || 'Unknown error');
         }
-      }
 
       res.json({
         success: true,
@@ -3987,13 +3862,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: 'OpenAI API key not configured',
           message: 'Please configure your OpenAI API key in the settings first'
         });
-      }
 
       // Get Wick Coach assistant
       const wickCoachAssistant = await storage.getAssistantBySlug('wick-coach', req.user.tenantId);
       if (!wickCoachAssistant || !wickCoachAssistant.assistantId) {
         return res.status(400).json({ error: 'Wick Coach assistant not configured. Please set up the Wick Coach assistant first.' });
-      }
 
       // Fetch calls with transcripts
       const callsData = await storage.getCallsWithTranscripts({
@@ -4012,7 +3885,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sentimentAnalysis: { positive: 0, neutral: 0, negative: 0, trends: '' },
           coachingRecommendations: [],
         });
-      }
 
       // Redact PII (phone numbers) from transcripts
       const redactedCalls = callsData.map(call => ({
@@ -4094,12 +3966,10 @@ Ready to receive calls?`;
         await new Promise(resolve => setTimeout(resolve, 500));
         runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         attempts++;
-      }
 
       if (runStatus.status !== 'completed') {
         console.error('[Wick Coach] Run did not complete:', runStatus.status);
         return res.status(500).json({ error: `Analysis failed: ${runStatus.status}` });
-      }
 
       console.log('[Wick Coach] Run completed successfully');
 
@@ -4109,7 +3979,6 @@ Ready to receive calls?`;
 
       if (!assistantMessage || !assistantMessage.content[0] || assistantMessage.content[0].type !== 'text') {
         return res.status(500).json({ error: 'No response from Wick Coach assistant' });
-      }
 
       const responseText = assistantMessage.content[0].text.value;
       console.log('[Wick Coach] Response received, parsing JSON...');
@@ -4124,7 +3993,6 @@ Ready to receive calls?`;
         console.error('[Wick Coach] Failed to parse JSON response:', error);
         console.error('[Wick Coach] Raw response:', responseText);
         return res.status(500).json({ error: 'Failed to parse Wick Coach response. Response was not valid JSON.' });
-      }
 
       // Validate and calculate sentiment percentages
       // OpenAI's job: analyze transcripts and return INTEGER COUNTS
@@ -4154,7 +4022,6 @@ Ready to receive calls?`;
           neutral: insights.sentimentAnalysis.neutral, 
           negative: insights.sentimentAnalysis.negative 
         });
-      }
 
       // Create a map of call indices (1, 2, 3...) to enriched metadata
       // OpenAI refers to calls by their number in the transcript ("Call 1", "Call 2", etc.)
@@ -4276,7 +4143,6 @@ Ready to receive calls?`;
       } catch (dbError) {
         console.error('[AI Insights] Failed to save insights to database:', dbError);
         // Don't fail the request if database save fails
-      }
 
       res.json({
         ...insights,
@@ -4295,7 +4161,6 @@ Ready to receive calls?`;
       
       if (error.response?.status === 401) {
         return res.status(401).json({ error: 'Invalid OpenAI API key' });
-      }
       
       res.status(500).json({ 
         error: error.message || 'Failed to analyze calls',
@@ -4311,7 +4176,6 @@ Ready to receive calls?`;
       
       if (!runningJob) {
         return res.json({ status: 'idle', job: null });
-      }
       
       // Return job progress info
       res.json({
@@ -4450,7 +4314,6 @@ Ready to receive calls?`;
             elevenLabsErrors.push(conversationId);
           }
         }
-      }
       
       // 2. Delete all local call data from database
       const result = await storage.nukeAllCallData();
@@ -4485,7 +4348,6 @@ Ready to receive calls?`;
 
       if (!message) {
         return res.status(400).json({ error: 'Message required' });
-      }
 
       // Auto-create Aligner conversation if not provided
       const tenantId = (req.user as any).tenantId;
@@ -4501,19 +4363,16 @@ Ready to receive calls?`;
         });
         activeConversationId = newConversation.id;
         console.log('[Aligner Chat] New conversation created:', activeConversationId);
-      }
 
       // Get OpenAI settings
       const settings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!settings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
-      }
 
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(400).json({ error: 'Aligner assistant not configured' });
-      }
 
       const openai = new OpenAI({ apiKey: settings.apiKey });
 
@@ -4580,7 +4439,6 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
         threadId = thread.id;
         await storage.updateConversation(activeConversationId, tenantId, { threadId });
         console.log('[Aligner Chat] New thread created:', threadId);
-      }
 
       // Save user message
       await storage.saveChatMessage({
@@ -4618,11 +4476,9 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
         await new Promise(resolve => setTimeout(resolve, 500));
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
         attempts++;
-      }
 
       if (runStatus.status !== 'completed') {
         throw new Error(`Aligner run failed: ${runStatus.status}`);
-      }
 
       // Get the assistant's response
       const messages = await openai.beta.threads.messages.list(threadId);
@@ -4630,7 +4486,6 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
 
       if (!assistantMessage || !assistantMessage.content[0] || assistantMessage.content[0].type !== 'text') {
         throw new Error('No response from Aligner assistant');
-      }
 
       const responseText = assistantMessage.content[0].text.value;
 
@@ -4674,13 +4529,11 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
 
       if (!conversationId) {
         return res.status(400).json({ error: 'conversationId required' });
-      }
 
       // Get conversation to access threadId
       const conversation = await storage.getConversation(conversationId, tenantId);
       if (!conversation) {
         return res.status(404).json({ error: 'Conversation not found' });
-      }
 
       let threadId = conversation.threadId;
 
@@ -4688,13 +4541,11 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       const settings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!settings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
-      }
 
       // Get Aligner assistant config
       const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(500).json({ error: 'Aligner assistant not configured' });
-      }
 
       const openai = new OpenAI({ apiKey: settings.apiKey });
 
@@ -4737,7 +4588,6 @@ The user has agreed to create proposals. Please output your recommended changes 
         const thread = await openai.beta.threads.create();
         threadId = thread.id;
         await storage.updateConversation(conversationId, tenantId, { threadId });
-      }
 
       // Send confirmation message
       const confirmMessage = "Yes, I agree. Please create the proposal.";
@@ -4777,11 +4627,9 @@ The user has agreed to create proposals. Please output your recommended changes 
         await new Promise(resolve => setTimeout(resolve, 500));
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
         attempts++;
-      }
 
       if (runStatus.status !== 'completed') {
         throw new Error(`Aligner run failed: ${runStatus.status}`);
-      }
 
       // Get the assistant's response
       const threadMessages = await openai.beta.threads.messages.list(threadId);
@@ -4789,7 +4637,6 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       if (!assistantMessage || !assistantMessage.content[0] || assistantMessage.content[0].type !== 'text') {
         throw new Error('No response from Aligner assistant');
-      }
 
       const responseText = assistantMessage.content[0].text.value;
 
@@ -4812,14 +4659,12 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       if (!jsonMatch) {
         return res.status(400).json({ error: 'Aligner did not provide JSON proposals. Please try discussing the changes first.' });
-      }
 
       const jsonText = jsonMatch[1];
       const parsedResponse = JSON.parse(jsonText);
       
       if (!parsedResponse.edits || !Array.isArray(parsedResponse.edits) || parsedResponse.edits.length === 0) {
         return res.status(400).json({ error: 'Invalid proposal format - expected "edits" array' });
-      }
 
       // Validate edits
       const validEdit = parsedResponse.edits.every((edit: any) => 
@@ -4828,7 +4673,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       if (!validEdit) {
         return res.status(400).json({ error: 'Invalid proposal schema - edits must have file, reason, and old/new fields' });
-      }
 
       // Create proposals (reuse existing logic from create-proposals-from-chat)
       const allKbFilesForMatching = await storage.getAllKbFiles(tenantId);
@@ -4840,7 +4684,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           editsByFile.set(edit.file, []);
         }
         editsByFile.get(edit.file)!.push(edit);
-      }
 
       const createdProposals: any[] = [];
 
@@ -4879,7 +4722,6 @@ The user has agreed to create proposals. Please output your recommended changes 
         });
 
         createdProposals.push(proposal);
-      }
 
       res.json({
         success: true,
@@ -4903,13 +4745,11 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       if (!conversationId) {
         return res.status(400).json({ error: 'conversationId required' });
-      }
 
       // Get the conversation's latest assistant message
       const messages = await storage.getConversationMessages(conversationId, tenantId);
       if (!messages || messages.length === 0) {
         return res.status(404).json({ error: 'No messages found in this conversation' });
-      }
 
       // Find the most recent assistant message
       const latestAssistantMessage = messages
@@ -4918,7 +4758,6 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       if (!latestAssistantMessage) {
         return res.status(404).json({ error: 'No assistant messages found in this conversation' });
-      }
 
       const responseText = latestAssistantMessage.content;
 
@@ -4927,7 +4766,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       if (!jsonMatch) {
         return res.status(400).json({ error: 'No JSON proposals found in the latest assistant message. Ask the Aligner to create specific proposals first.' });
-      }
 
       console.log('[Aligner Create Proposals] Parsing JSON from latest assistant message...');
       
@@ -4937,7 +4775,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       // Validate it's actually our expected proposal format
       if (!parsedResponse.edits || !Array.isArray(parsedResponse.edits) || parsedResponse.edits.length === 0) {
         return res.status(400).json({ error: 'Invalid proposal format - expected "edits" array with at least one edit' });
-      }
 
       // Additional validation: ensure edits have required fields
       const validEdit = parsedResponse.edits.every((edit: any) => 
@@ -4946,7 +4783,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       if (!validEdit) {
         return res.status(400).json({ error: 'Invalid proposal schema - edits must have file, reason, and old/new fields' });
-      }
 
       // Fetch KB files for fuzzy matching
       const allKbFiles = await storage.getAllKbFiles(tenantId);
@@ -4958,7 +4794,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           editsByFile.set(edit.file, []);
         }
         editsByFile.get(edit.file)!.push(edit);
-      }
 
       console.log(`[Aligner Create Proposals] Processing ${parsedResponse.edits.length} edits across ${editsByFile.size} file(s)`);
 
@@ -5000,7 +4835,6 @@ The user has agreed to create proposals. Please output your recommended changes 
 
         proposalsCreated.push(created);
         console.log(`[Aligner Create Proposals] Created proposal for ${filename} with ${fileEdits.length} edits`);
-      }
 
       console.log(`[Aligner Create Proposals] Successfully created ${proposalsCreated.length} proposals from chat`);
 
@@ -5051,13 +4885,10 @@ The user has agreed to create proposals. Please output your recommended changes 
       const conversation = await storage.getConversation(conversationId, tenantId);
       if (!conversation) {
         return res.status(404).json({ error: 'Conversation not found' });
-      }
       if (conversation.userId !== userId) {
         return res.status(403).json({ error: 'Unauthorized' });
-      }
       if (conversation.assistantType !== 'aligner') {
         return res.status(400).json({ error: 'Not an Aligner conversation' });
-      }
       
       // Get all messages for this conversation
       const messages = await storage.getConversationMessages(conversationId, tenantId);
@@ -5080,10 +4911,8 @@ The user has agreed to create proposals. Please output your recommended changes 
       const conversation = await storage.getConversation(conversationId, tenantId);
       if (!conversation) {
         return res.status(404).json({ error: 'Conversation not found' });
-      }
       if (conversation.userId !== userId) {
         return res.status(403).json({ error: 'Unauthorized' });
-      }
       
       // Delete conversation (also deletes messages via CASCADE)
       await storage.deleteConversation(conversationId, tenantId);
@@ -5108,7 +4937,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       // Delete all Aligner conversations and their messages
       for (const conv of alignerConversations) {
         await storage.deleteConversation(conv.id, tenantId);
-      }
 
       res.json({ success: true, deletedCount: alignerConversations.length });
     } catch (error: any) {
@@ -5133,7 +4961,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       if (!elevenLabsConfig?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
-      }
 
       console.log('[KB Sync] ========== Starting Bidirectional Sync ==========');
 
@@ -5142,7 +4969,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       const agentNameMap = new Map<string, string>();
       for (const agent of agents) {
         agentNameMap.set(agent.name.toLowerCase(), agent.agentId);
-      }
       console.log('[KB Sync] Agent mapping:', Object.fromEntries(agentNameMap));
 
       // Helper function to detect agent assignment from filename
@@ -5172,7 +4998,6 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       if (!response.ok) {
         throw new Error(`ElevenLabs API error: ${response.statusText}`);
-      }
 
       const data = await response.json();
       const documents = data.documents || [];
@@ -5205,7 +5030,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           agentId: detectAgentId(doc.name),
           type: doc.type || 'file'
         });
-      }
 
       // Get all local KB files
       const localFiles = await storage.getAllKbFiles(req.user.tenantId);
@@ -5249,7 +5073,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           console.log(`[KB Sync] New file in ElevenLabs: "${remoteData.name}" → PULL`);
           filesToPull.push({ remoteDocId, remoteName: remoteData.name });
         }
-      }
 
       // Process files that only exist locally
       for (const localFile of localFiles) {
@@ -5265,7 +5088,6 @@ The user has agreed to create proposals. Please output your recommended changes 
             filesToPush.push({ localFile });
           }
         }
-      }
 
       console.log(`[KB Sync] Sync plan: ${filesToPush.length} to push, ${filesToPull.length} to pull, ${filesToSkip.length} to skip`);
 
@@ -5349,7 +5171,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           console.error(`[KB Sync] Error pushing "${localFile.filename}":`, error);
           warnings.push(`Failed to push "${localFile.filename}": ${error.message}`);
         }
-      }
 
       // Execute PULL operations (ElevenLabs → local)
       for (const { remoteDocId, remoteName } of filesToPull) {
@@ -5461,7 +5282,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           console.error(`[KB Sync] Error pulling "${remoteName}":`, error);
           warnings.push(`Failed to pull "${remoteName}": ${error.message}`);
         }
-      }
 
       console.log('[KB Sync] ========== Sync Complete ==========');
       console.log(`[KB Sync] Pushed: ${pushedCount} (${createdRemote} created, ${updatedRemote} updated)`);
@@ -5497,7 +5317,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       
       if (!files || files.length === 0) {
         return res.status(400).json({ error: 'No files uploaded' });
-      }
 
       console.log(`[KB Upload] Starting batch upload of ${files.length} files`);
       
@@ -5588,7 +5407,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           skipped++;
           results.push({ filename: file.originalname, status: 'error', error: error.message });
         }
-      }
 
       console.log(`[KB Upload] Batch upload complete: ${imported} imported, ${updated} updated, ${skipped} skipped`);
 
@@ -5645,7 +5463,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           console.error(`[KB Sync] Error fetching agent ${agent.agentId}:`, error.message);
           // Continue checking other agents
         }
-      }
       
       return agentIds;
     } catch (error: any) {
@@ -5765,7 +5582,6 @@ The user has agreed to create proposals. Please output your recommended changes 
           // CRITICAL: Stop swapping on first error to prevent inconsistent state
           break;
         }
-      }
       
       console.log(`[KB Sync] Agent swaps complete: ${swappedAgents.length}/${agentIds.length} successful`);
       
@@ -5819,7 +5635,6 @@ The user has agreed to create proposals. Please output your recommended changes 
             error: `Failed to swap agents AND rollback partially failed. ${rollbackErrors.length} agents still reference NEW doc ${newDocId}: ${rollbackErrors.join(', ')}. ${rolledBackAgents.length} agents restored to OLD doc ${oldDocId}. DO NOT delete either document manually - contact support.`,
           };
         }
-      }
       
       // Step 4: Delete old document (now safe because ALL agents are using new one)
       try {
@@ -5836,7 +5651,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       } catch (deleteError: any) {
         // Non-fatal - the sync succeeded even if old doc wasn't deleted
         console.error(`[KB Sync] Warning: Failed to delete old document ${oldDocId}:`, deleteError.message);
-      }
       
       return {
         success: true,
@@ -5898,7 +5712,6 @@ The user has agreed to create proposals. Please output your recommended changes 
             error: `${error.message} | CRITICAL: Emergency rollback partially failed. ${rollbackErrors.length} agents still reference NEW doc ${newDocId}: ${rollbackErrors.join(', ')}. ${rolledBackAgents.length} agents restored to OLD doc ${oldDocId}. DO NOT delete either document manually - contact support.`,
           };
         }
-      }
       
       // No agents were swapped, safe to clean up new doc
       if (newDocId) {
@@ -5915,7 +5728,6 @@ The user has agreed to create proposals. Please output your recommended changes 
         } catch (cleanupError) {
           console.error(`[KB Sync] Failed to clean up new document:`, cleanupError);
         }
-      }
       
       return {
         success: false,
@@ -5945,7 +5757,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       const file = await storage.getKbFileById(id, tenantId);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
-      }
       res.json(file);
     } catch (error: any) {
       console.error('[KB] Error fetching file:', error);
@@ -5963,12 +5774,10 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       if (!content) {
         return res.status(400).json({ error: 'Content is required' });
-      }
 
       const file = await storage.getKbFileById(id, tenantId);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
-      }
 
       console.log(`[KB Update] Updating file: ${file.filename}`);
 
@@ -6025,13 +5834,11 @@ The user has agreed to create proposals. Please output your recommended changes 
         } else {
           console.error(`[KB Update] Sync failed: ${syncResult.error}`);
         }
-      }
 
       // Auto-sync to Aligner's vector store
       const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, content, file.filename, req.user.tenantId);
       if (!alignerSyncResult.success) {
         console.warn(`[KB Update] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
-      }
 
       res.json(updatedFile);
     } catch (error: any) {
@@ -6090,7 +5897,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       const deleted = await storage.deleteKbProposal(id, tenantId);
       if (!deleted) {
         return res.status(404).json({ error: 'Proposal not found' });
-      }
       console.log(`[KB] Deleted proposal ${id}`);
       res.json({ success: true });
     } catch (error: any) {
@@ -6142,7 +5948,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       // Validate agentId is provided
       if (!agentId) {
         return res.status(400).json({ error: 'agentId is required. Please select an AI agent to analyze.' });
-      }
 
       const isAllAgents = agentId === 'all';
       const agentLabel = isAllAgents ? 'all agents' : `agent ${agentId}`;
@@ -6154,7 +5959,6 @@ The user has agreed to create proposals. Please output your recommended changes 
       const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(400).json({ error: 'Aligner assistant not configured. Please set up the Aligner assistant first.' });
-      }
 
       // Get AI insight (optional - used for Wick Coach analysis context)
       let insight = null;
@@ -6174,7 +5978,6 @@ The user has agreed to create proposals. Please output your recommended changes 
         }
       } else {
         console.log('[KB Analyze] Analyzing for all agents - will use raw transcripts only (no agent-specific insights)');
-      }
 
       // Get KB files based on agent selection
       const allKbFiles = await storage.getAllKbFiles(tenantId);
@@ -6188,7 +5991,6 @@ The user has agreed to create proposals. Please output your recommended changes 
             ? 'No general KB files found. Please upload general files that apply to all agents.'
             : 'No KB files found for this agent. Please assign KB files to this agent or upload general files.'
         });
-      }
 
       if (isAllAgents) {
         console.log(`[KB Analyze] Found ${kbFiles.length} general KB files (shared across all agents)`);
@@ -6196,7 +5998,6 @@ The user has agreed to create proposals. Please output your recommended changes 
         const agentSpecificCount = kbFiles.filter(f => f.agentId === agentId).length;
         const generalCount = kbFiles.filter(f => f.agentId == null).length;
         console.log(`[KB Analyze] Found ${kbFiles.length} KB files for ${agentLabel} (${agentSpecificCount} agent-specific, ${generalCount} general)`);
-      }
 
       // Fetch call transcripts (no truncation!)
       // If chained from Wick Coach, fetch the specific calls by conversationIds
@@ -6225,7 +6026,6 @@ The user has agreed to create proposals. Please output your recommended changes 
               ? 'No unanalyzed calls found across all agents in the specified date range.'
               : 'No unanalyzed calls found for this agent in the specified date range.'
         });
-      }
 
       console.log(`[KB Analyze] Processing ${callsData.length} calls with micro-batching (2 calls at a time)`);
 
@@ -6275,7 +6075,6 @@ ${patterns || '(none)'}
 
 **Wick Coach Recommendations:**
 ${recommendations || '(none)'}`;
-      }
 
       console.log('[KB Analyze] Calling Aligner assistant with micro-batching...');
 
@@ -6283,7 +6082,6 @@ ${recommendations || '(none)'}`;
       const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(500).json({ error: 'OpenAI API key not configured. Please configure your OpenAI API key in the settings first.' });
-      }
 
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
@@ -6379,12 +6177,10 @@ IMPORTANT:
         await new Promise(resolve => setTimeout(resolve, 500));
         runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         attempts++;
-      }
 
       if (runStatus.status !== 'completed') {
         console.error('[KB Analyze] Run did not complete:', runStatus.status);
         return res.status(500).json({ error: `Analysis failed: ${runStatus.status}` });
-      }
 
       console.log('[KB Analyze] Run completed successfully');
 
@@ -6394,7 +6190,6 @@ IMPORTANT:
 
       if (!assistantMessage || !assistantMessage.content[0] || assistantMessage.content[0].type !== 'text') {
         return res.status(500).json({ error: 'No response from Aligner assistant' });
-      }
 
       const responseText = assistantMessage.content[0].text.value;
       console.log('[KB Analyze] Response received, parsing JSON...');
@@ -6410,11 +6205,9 @@ IMPORTANT:
         console.error('[KB Analyze] Failed to parse JSON response:', error);
         console.error('[KB Analyze] Raw response:', responseText);
         return res.status(500).json({ error: 'Failed to parse Aligner response. Response was not valid JSON.' });
-      }
 
       if (!parsedResponse.edits || !Array.isArray(parsedResponse.edits)) {
         return res.status(500).json({ error: 'Invalid response format from Aligner assistant - expected "edits" array' });
-      }
 
       console.log(`[KB Analyze] Processing ${parsedResponse.edits.length} targeted edits...`);
 
@@ -6425,7 +6218,6 @@ IMPORTANT:
           editsByFile.set(edit.file, []);
         }
         editsByFile.get(edit.file)!.push(edit);
-      }
 
       console.log(`[KB Analyze] Edits grouped into ${editsByFile.size} file(s)`);
 
@@ -6469,7 +6261,6 @@ IMPORTANT:
         });
 
         createdProposals.push(created);
-      }
 
       console.log(`[KB Analyze] Successfully created ${createdProposals.length} proposals`);
 
@@ -6484,7 +6275,6 @@ IMPORTANT:
         console.log(`[KB Analyze] Marked ${conversationIdsToMark.length} calls as analyzed`);
       } else {
         console.log(`[KB Analyze] Skipping call marking (already done by Wick Coach)`);
-      }
 
       res.json({
         success: true,
@@ -6512,16 +6302,13 @@ IMPORTANT:
 
       if (!proposedContent) {
         return res.status(400).json({ error: 'proposedContent is required' });
-      }
 
       const proposal = await storage.getKbProposalById(id, tenantId);
       if (!proposal) {
         return res.status(404).json({ error: 'Proposal not found' });
-      }
 
       if (proposal.status !== 'pending') {
         return res.status(400).json({ error: 'Can only edit pending proposals' });
-      }
 
       // Update the proposal with human edits
       await storage.updateKbProposal(id, tenantId, {
@@ -6546,11 +6333,9 @@ IMPORTANT:
       const proposal = await storage.getKbProposalById(id, tenantId);
       if (!proposal) {
         return res.status(404).json({ error: 'Proposal not found' });
-      }
 
       if (proposal.status !== 'pending') {
         return res.status(400).json({ error: 'Can only reject pending proposals' });
-      }
 
       // Update proposal status to rejected
       await storage.updateKbProposal(id, tenantId, {
@@ -6576,12 +6361,10 @@ IMPORTANT:
       const proposal = await storage.getKbProposalById(id, tenantId);
       if (!proposal) {
         return res.status(404).json({ error: 'Proposal not found' });
-      }
 
       const file = await storage.getKbFileById(proposal.kbFileId, tenantId);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
-      }
 
       // Optimistic locking check
       const currentVersions = await storage.getKbFileVersions(file.id, tenantId);
@@ -6591,7 +6374,6 @@ IMPORTANT:
         return res.status(409).json({
           error: 'File has been updated since proposal was created. Please review the latest version.',
         });
-      }
 
       // Apply edits to generate final content
       let finalContent = latestVersion?.content || '';
@@ -6755,7 +6537,6 @@ IMPORTANT:
           error: 'Failed to parse proposal edits',
           details: error instanceof Error ? error.message : 'Unknown error'
         });
-      }
 
       // Create new version
       const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
@@ -6824,13 +6605,11 @@ IMPORTANT:
         }
       } else if (file.syncState === 'local_only') {
         console.log(`[KB Approve] Skipping ElevenLabs sync (file is local-only)`);
-      }
 
       // Auto-sync to Aligner's vector store (keeps analysis up-to-date)
       const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, finalContent, file.filename, req.user.tenantId);
       if (!alignerSyncResult.success) {
         console.warn(`[KB Approve] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
-      }
 
       res.json({
         success: true,
@@ -6857,12 +6636,10 @@ IMPORTANT:
       const file = await storage.getKbFileById(id, tenantId);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
-      }
 
       const targetVersion = await storage.getKbFileVersion(versionId, tenantId);
       if (!targetVersion || targetVersion.kbFileId !== id) {
         return res.status(404).json({ error: 'Version not found' });
-      }
 
       // Create new version with the rollback content
       const versions = await storage.getKbFileVersions(id, tenantId);
@@ -6895,7 +6672,6 @@ IMPORTANT:
       const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, targetVersion.content, file.filename, tenantId);
       if (!alignerSyncResult.success) {
         console.warn(`[KB Rollback] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
-      }
 
       res.json({
         success: true,
@@ -6928,7 +6704,6 @@ IMPORTANT:
       
       if (!assistant) {
         return res.status(404).json({ error: 'Assistant not found' });
-      }
 
       // Also fetch files for this assistant
       const files = await storage.getAssistantFiles(assistant.id);
@@ -6992,7 +6767,6 @@ IMPORTANT:
       
       if (!deleted) {
         return res.status(404).json({ error: 'File not found or does not belong to this assistant' });
-      }
       
       res.json({ success: true });
     } catch (error: any) {
@@ -7012,7 +6786,6 @@ IMPORTANT:
       
       if (!assistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
-      }
 
       const files = await storage.getAssistantFiles(assistant.id);
       
@@ -7037,17 +6810,14 @@ IMPORTANT:
       
       if (!assistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
-      }
 
       if (!assistant.assistantId) {
         return res.status(400).json({ error: 'Aligner assistant ID not configured. Please set the assistant ID first.' });
-      }
 
       // Get OpenAI settings
       const openaiSettings = await storage.getOpenaiSettings(tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
-      }
 
       // Update on OpenAI
       console.log('[Aligner] Syncing instructions to OpenAI assistant:', assistant.assistantId);
@@ -7075,7 +6845,6 @@ IMPORTANT:
       
       if (!assistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
-      }
 
       // Task prompt template is only used internally (not synced to OpenAI)
       // It's used by the analysis processor to build dynamic prompts
@@ -7098,7 +6867,6 @@ IMPORTANT:
       
       if (!assistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
-      }
 
       const updated = await storage.updateAssistant(assistant.id, { assistantId });
       console.log('[Aligner] Assistant ID updated successfully:', assistantId);
@@ -7125,7 +6893,6 @@ IMPORTANT:
         cb(null, true);
       } else {
         cb(new Error(`File type not allowed. Supported formats: ${allowedExtensions.join(', ')}`));
-      }
     },
   });
 
@@ -7139,18 +6906,15 @@ IMPORTANT:
       
       if (!file) {
         return res.status(400).json({ error: 'File is required' });
-      }
       
       const assistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!assistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
-      }
 
       // Get OpenAI settings
       const openaiSettings = await storage.getOpenaiSettings(tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
-      }
 
       const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
@@ -7260,7 +7024,6 @@ IMPORTANT:
         }
       } else {
         console.log(`[Aligner Upload] ⚠️ No vector store configured for assistant`);
-      }
 
       // Create database record
       const dbFile = await storage.createAssistantFile({
@@ -7291,18 +7054,15 @@ IMPORTANT:
       const fileInfo = await storage.getAssistantFileById(fileId);
       if (!fileInfo) {
         return res.status(404).json({ error: 'File not found' });
-      }
       
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
-      }
       
       // Verify the file belongs to this assistant
       if (fileInfo.assistantId !== alignerAssistant.id) {
         return res.status(404).json({ error: 'File not found or does not belong to Aligner assistant' });
-      }
 
       // Delete from OpenAI if we have the OpenAI file ID and vector store
       if (fileInfo.openaiFileId && alignerAssistant.vectorStoreId) {
@@ -7333,14 +7093,12 @@ IMPORTANT:
           // Log but continue with local deletion
           console.error(`[Aligner Delete] OpenAI deletion error: ${openaiError.message}`);
         }
-      }
 
       // Delete from local database
       const deleted = await storage.deleteAssistantFileByAssistantId(fileId, alignerAssistant.id);
       
       if (!deleted) {
         return res.status(404).json({ error: 'Failed to delete file from database' });
-      }
       
       console.log(`[Aligner Delete] Successfully deleted file: ${fileInfo.filename}`);
       res.json({ success: true });
@@ -7360,17 +7118,14 @@ IMPORTANT:
       const alignerAssistant = await storage.getAssistantBySlug('aligner', tenantId);
       if (!alignerAssistant) {
         return res.status(404).json({ error: 'Aligner assistant not found for this organization' });
-      }
 
       if (!alignerAssistant.assistantId) {
         return res.status(400).json({ error: 'Aligner assistant ID not configured. Please set the assistant ID first.' });
-      }
 
       // Get OpenAI settings
       const openaiSettings = await storage.getOpenaiSettings(tenantId);
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
-      }
 
       const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
@@ -7399,7 +7154,6 @@ IMPORTANT:
         console.log('[Aligner Sync] Vector store created and linked:', vectorStoreId);
       } else {
         console.log('[Aligner Sync] Using existing vector store:', vectorStoreId);
-      }
 
       // Get all assistant files from database
       const dbFiles = await storage.getAssistantFiles(alignerAssistant.id);
@@ -7414,7 +7168,6 @@ IMPORTANT:
       } catch (error: any) {
         console.error('[Aligner Sync] Error listing vector store files:', error);
         // Continue even if listing fails
-      }
 
       // Create a set of OpenAI file IDs in vector store
       const vectorStoreFileIds = new Set(vectorStoreFiles.map(f => f.id));
@@ -7440,7 +7193,6 @@ IMPORTANT:
           failed++;
           errors.push(`${file.filename}: ${error.message}`);
         }
-      }
 
       const summary = {
         success: true,
@@ -7485,7 +7237,6 @@ IMPORTANT:
       const validation = googleOAuthSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const { clientId, clientSecret } = validation.data;
 
@@ -7507,7 +7258,6 @@ IMPORTANT:
 
       if (!integration?.googleClientId) {
         return res.status(400).json({ message: "Please configure Google Sheets OAuth credentials first in Admin Dashboard" });
-      }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/sheets/callback`;
       const scope = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive';
@@ -7537,14 +7287,12 @@ IMPORTANT:
 
       if (!code || !state) {
         return res.send('<script>window.close();</script>');
-      }
 
       const { userId, email } = JSON.parse(state as string);
       const integration = await storage.getSystemIntegration('google_sheets');
 
       if (!integration?.googleClientId || !integration?.googleClientSecret) {
         return res.send('<script>alert("OAuth credentials not configured"); window.close();</script>');
-      }
 
       // Exchange code for tokens
       const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/sheets/callback`;
@@ -7564,7 +7312,6 @@ IMPORTANT:
         const error = await tokenResponse.text();
         console.error('❌ Google Sheets token exchange failed:', error);
         return res.send('<script>alert("Authentication failed"); window.close();</script>');
-      }
 
       const tokens = await tokenResponse.json();
 
@@ -7613,7 +7360,6 @@ IMPORTANT:
       const systemIntegration = await storage.getSystemIntegration('google_sheets');
       if (!systemIntegration?.googleClientId) {
         return res.status(400).json({ message: "Google OAuth not configured. Please contact admin." });
-      }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
       const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar';
@@ -7640,13 +7386,11 @@ IMPORTANT:
 
       if (!code || !userId) {
         return res.send('<script>alert("Authorization failed"); window.close();</script>');
-      }
 
       // Use system-wide OAuth credentials
       const systemIntegration = await storage.getSystemIntegration('google_sheets');
       if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
         return res.send('<script>alert("Missing OAuth credentials"); window.close();</script>');
-      }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
 
@@ -7667,7 +7411,6 @@ IMPORTANT:
         const error = await tokenResponse.text();
         console.error('❌ Gmail token exchange failed:', error);
         return res.send('<script>alert("Authentication failed"); window.close();</script>');
-      }
 
       const tokens = await tokenResponse.json();
 
@@ -7737,7 +7480,6 @@ IMPORTANT:
         console.error('📧 [GMAIL LABELS] ❌ Failed to list Gmail labels. Status:', listResponse.status);
         console.error('📧 [GMAIL LABELS] Error details:', errorText);
         return [];
-      }
 
       const { labels } = await listResponse.json();
       console.log(`📧 [GMAIL LABELS] ✅ Fetched ${labels.length} existing labels from Gmail`);
@@ -7778,7 +7520,6 @@ IMPORTANT:
             console.error(`📧 [GMAIL LABELS] Error details:`, errorText);
           }
         }
-      }
 
       console.log(`📧 [GMAIL LABELS] ✅ Resolution complete. Returning ${labelIds.length} label IDs:`, labelIds);
       return labelIds;
@@ -7795,7 +7536,6 @@ IMPORTANT:
 
       if (!to || !subject || !body) {
         return res.status(400).json({ message: "Missing required fields: to, subject, body" });
-      }
 
       // Server-side validation: reject bracket-style placeholders
       const anyBracketPattern = /\[[^\]]+\]/;
@@ -7803,26 +7543,22 @@ IMPORTANT:
         return res.status(400).json({ 
           message: "Email contains invalid bracket-style placeholders like [recipient email]. Please use {{variable}} format instead." 
         });
-      }
 
       // Server-side validation: reject unreplaced mustache placeholders in To field
       if (!to.includes('@') || to.includes('{{') || to.includes('}}')) {
         return res.status(400).json({ 
           message: "Invalid email address or unreplaced placeholder in To field." 
         });
-      }
 
       // Get Gmail tokens
       const integration = await storage.getUserIntegration(userId);
       if (!integration?.googleCalendarAccessToken) {
         return res.status(400).json({ message: "Gmail not connected. Please connect Gmail in Settings." });
-      }
 
       // Get system-wide OAuth credentials (needed for token refresh)
       const systemIntegration = await storage.getSystemIntegration('google_sheets');
       if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
         return res.status(500).json({ message: "System OAuth not configured. Please contact administrator." });
-      }
 
       // Check if token needs refresh
       let accessToken = integration.googleCalendarAccessToken;
@@ -7861,7 +7597,6 @@ IMPORTANT:
           googleCalendarAccessToken: accessToken,
           googleCalendarTokenExpiry: newExpiry
         });
-      }
 
       // Create RFC 2822 formatted email
       const emailContent = [
@@ -7896,7 +7631,6 @@ IMPORTANT:
         const error = await draftResponse.text();
         console.error('Gmail API error:', error);
         return res.status(500).json({ message: "Failed to create Gmail draft" });
-      }
 
       const draft = await draftResponse.json();
       console.log('📧 [GMAIL] ✅ Draft created successfully. Draft ID:', draft.id, 'Message ID:', draft.message.id);
@@ -7914,7 +7648,6 @@ IMPORTANT:
         } else {
           console.warn(`📧 [GMAIL] ⚠️ Commission Tracker update failed: ${trackerResult.message}`);
         }
-      }
 
       // Auto-enroll recipient in "Manual Follow-Ups" system sequence
       try {
@@ -7979,7 +7712,6 @@ IMPORTANT:
       } catch (enrollError: any) {
         console.error('📧 [MANUAL FOLLOW-UPS] ❌ Auto-enrollment failed:', enrollError);
         // Don't fail the entire request if auto-enrollment fails
-      }
 
       // Apply labels if user has configured them
       console.log('📧 [GMAIL] Fetching user settings to check for Gmail labels...');
@@ -8040,7 +7772,6 @@ IMPORTANT:
         }
       } else {
         console.log('📧 [GMAIL] ℹ️  No Gmail labels configured for this user. Skipping label application.');
-      }
 
       res.json({
         success: true,
@@ -8092,7 +7823,6 @@ IMPORTANT:
         } catch (stopError: any) {
           console.error('[Calendar Webhook] Failed to stop webhook on disconnect:', stopError.message);
         }
-      }
 
       await storage.updateUserIntegration(userId, {
         googleCalendarAccessToken: null,
@@ -8129,7 +7859,6 @@ IMPORTANT:
       const pubsubMessage = req.body?.message;
       if (!pubsubMessage?.data) {
         return;
-      }
 
       const data = Buffer.from(pubsubMessage.data, 'base64').toString('utf-8');
       const notification = JSON.parse(data);
@@ -8162,7 +7891,6 @@ IMPORTANT:
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser) {
         return res.status(403).json({ message: 'Admin access required' });
-      }
 
       const { gmailWatchManager } = await import('./services/gmailWatchManager');
       const status = await gmailWatchManager.getStatus();
@@ -8183,7 +7911,6 @@ IMPORTANT:
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser) {
         return res.status(403).json({ message: 'Admin access required' });
-      }
 
       const { gmailWatchManager } = await import('./services/gmailWatchManager');
       const result = await gmailWatchManager.watch();
@@ -8209,7 +7936,6 @@ IMPORTANT:
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser) {
         return res.status(403).json({ message: 'Admin access required' });
-      }
 
       const { gmailWatchManager } = await import('./services/gmailWatchManager');
       await gmailWatchManager.stop();
@@ -8236,7 +7962,6 @@ IMPORTANT:
           remainingMs: null,
           reRegisterRecommended: false
         });
-      }
 
       // Check webhook registration status
       if (!integration.googleCalendarWebhookChannelId || 
@@ -8247,7 +7972,6 @@ IMPORTANT:
           remainingMs: null,
           reRegisterRecommended: true
         });
-      }
 
       const now = Date.now();
       const expiresAt = integration.googleCalendarWebhookExpiry;
@@ -8261,7 +7985,6 @@ IMPORTANT:
           remainingMs: 0,
           reRegisterRecommended: true
         });
-      }
 
       // Check if expiring soon (within 24 hours)
       const oneDayMs = 24 * 60 * 60 * 1000;
@@ -8272,7 +7995,6 @@ IMPORTANT:
           remainingMs,
           reRegisterRecommended: true
         });
-      }
 
       // Webhook is active and healthy
       res.json({
@@ -8300,7 +8022,6 @@ IMPORTANT:
         return res.status(400).json({ 
           message: "Google Calendar not connected. Please connect your calendar first." 
         });
-      }
 
       // Stop existing webhook if present
       if (integration.googleCalendarWebhookChannelId && 
@@ -8328,7 +8049,6 @@ IMPORTANT:
         } catch (stopError: any) {
           console.log('[Webhook Re-register] Failed to stop old webhook (may already be expired):', stopError.message);
         }
-      }
 
       // Set up new webhook
       const success = await setupCalendarWatch(userId);
@@ -8337,7 +8057,6 @@ IMPORTANT:
         return res.status(500).json({ 
           message: "Failed to register webhook. Please try again." 
         });
-      }
 
       // Get updated integration to return new status
       const updatedIntegration = await storage.getUserIntegration(userId);
@@ -8365,7 +8084,6 @@ IMPORTANT:
 
       if (!headers || !rows || !uniqueKey) {
         return res.status(400).json({ message: "Missing required fields" });
-      }
 
       // Create CSV upload record
       await storage.createCsvUpload({
@@ -8404,7 +8122,6 @@ IMPORTANT:
           });
           created++;
         }
-      }
 
       res.json({
         message: "CSV uploaded successfully",
@@ -8447,7 +8164,6 @@ IMPORTANT:
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
-      }
 
       // SECURITY: Determine which agents' data to show (same as analytics)
       let allowedAgentNames: string[] = [];
@@ -8460,13 +8176,11 @@ IMPORTANT:
       } else {
         // Admins see all clients (no filtering)
         allowedAgentNames = [];
-      }
 
       // Get Commission Tracker sheet (source of truth)
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         return res.json([]);
-      }
 
       // Read Commission Tracker data (all columns to get Link, Agent Name, Amount, Total, etc.)
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -8478,7 +8192,6 @@ IMPORTANT:
       if (storeSheet) {
         const storeRange = `${storeSheet.sheetName}!A:S`;
         storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-      }
       
       // HASH-DIFF: Compute hash of raw sheet data + user context
       const cacheKey = `my-clients:${userId}:${allowedAgentNames.join(',')}`;
@@ -8488,11 +8201,9 @@ IMPORTANT:
       const cached = getCached<any[]>(cacheKey, dataHash);
       if (cached) {
         return res.json(cached);
-      }
 
       if (trackerRows.length <= 1) {
         return res.json([]);
-      }
 
       // Parse headers to find column indices
       const headers = trackerRows[0];
@@ -8608,7 +8319,6 @@ IMPORTANT:
         if (orderId) {
           client.orderId = orderId;
         }
-      }
 
       // Create base client objects from aggregated data
       let enrichedClients = Array.from(clientMap.values()).map(client => ({
@@ -8673,7 +8383,6 @@ IMPORTANT:
           }
           return client;
         });
-      }
 
       // Store in cache for future requests
       setCache(cacheKey, dataHash, enrichedClients);
@@ -8713,7 +8422,6 @@ IMPORTANT:
       const showMyStoresOnly = user?.preferences?.showMyStoresOnly ?? false;
       if (user.role !== 'admin' && showMyStoresOnly) {
         filters.agentId = user.id;
-      }
 
       const tenantId = (req.user as any).tenantId;
       const clients = await storage.getFilteredClients(tenantId, filters);
@@ -8734,11 +8442,9 @@ IMPORTANT:
       const client = await storage.getClient(id, tenantId);
       if (!client) {
         return res.status(404).json({ message: "Client not found" });
-      }
 
       if (client.assignedAgent) {
         return res.status(400).json({ message: "Client already claimed" });
-      }
 
       const updated = await storage.claimClient(id, req.currentUser.id);
       res.json(updated);
@@ -8781,7 +8487,6 @@ IMPORTANT:
 
       if (!content) {
         return res.status(400).json({ message: "Note content is required" });
-      }
 
       const note = await storage.createNote({
         clientId: id,
@@ -8870,7 +8575,6 @@ IMPORTANT:
 
       if (!email || !agentName || !password) {
         return res.status(400).json({ message: "Email, agent name, and password are required" });
-      }
 
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
@@ -8882,7 +8586,6 @@ IMPORTANT:
           return res.status(400).json({ message: "User is already a member of this organization" });
         }
         return res.status(400).json({ message: "User with this email already exists" });
-      }
 
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
@@ -8909,7 +8612,6 @@ IMPORTANT:
       // Set selectedCategory preference if provided
       if (selectedCategory) {
         await storage.setSelectedCategory(newUser.id, tenantId, selectedCategory);
-      }
 
       res.json({ user: newUser });
     } catch (error: any) {
@@ -8926,7 +8628,6 @@ IMPORTANT:
 
       if (typeof hasVoiceAccess !== 'boolean') {
         return res.status(400).json({ message: "hasVoiceAccess must be a boolean" });
-      }
 
       // Update the user's voice access
       const [updatedUser] = await db
@@ -8937,7 +8638,6 @@ IMPORTANT:
 
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       res.json({ user: updatedUser });
     } catch (error: any) {
@@ -8954,17 +8654,14 @@ IMPORTANT:
 
       if (!newPassword || typeof newPassword !== 'string') {
         return res.status(400).json({ message: "New password is required" });
-      }
 
       if (newPassword.length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
-      }
 
       // Check if user exists
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       // Hash the new password
       const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -8998,7 +8695,6 @@ IMPORTANT:
 
       if (!startDate || !endDate) {
         return res.status(400).json({ message: "Start date and end date are required" });
-      }
 
       // Parse dates
       const start = new Date(startDate as string);
@@ -9068,7 +8764,6 @@ IMPORTANT:
           commissionAmount: commissionAmount,
           status: order.status,
         });
-      }
 
       // Convert to array and sort by total sales (descending)
       const agentSummaries = Object.values(agentSales)
@@ -9167,7 +8862,6 @@ IMPORTANT:
           referralSummary[referringAgentId].referredAgents[sourceAgentId].totalEarnings += amount;
           referralSummary[referringAgentId].totalReferralCommission += amount;
         }
-      }
 
       // Convert to array format with referred agents as array
       const referralData = Object.values(referralSummary).map(entry => ({
@@ -9201,7 +8895,6 @@ IMPORTANT:
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       // Find Commission Tracker sheet
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -9214,7 +8907,6 @@ IMPORTANT:
           protected: [],
           releasable: [],
         });
-      }
 
       // Read tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -9227,7 +8919,6 @@ IMPORTANT:
           protected: [],
           releasable: [],
         });
-      }
 
       const headers = trackerRows[0];
       const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
@@ -9237,7 +8928,6 @@ IMPORTANT:
 
       if (agentNameIndex === -1 || linkIndex === -1) {
         return res.status(400).json({ message: "Tracker sheet must have Agent Name and Link columns" });
-      }
 
       const protectedListings: Array<{ link: string; name: string; transactionId: string }> = [];
       const releasable: Array<{ link: string; name: string }> = [];
@@ -9260,7 +8950,6 @@ IMPORTANT:
             releasable.push({ link, name });
           }
         }
-      }
 
       res.json({
         protectedCount: protectedListings.length,
@@ -9284,7 +8973,6 @@ IMPORTANT:
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       // Deactivate user in database
       await storage.updateUser(userId, { isActive: false });
@@ -9327,7 +9015,6 @@ IMPORTANT:
       } catch (webhookError: any) {
         console.error(`[Deactivate] Failed to unregister webhook for user ${userId}:`, webhookError.message);
         // Continue with deactivation even if webhook unregistration fails
-      }
 
       // Find both sheets
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -9398,7 +9085,6 @@ IMPORTANT:
             }
           }
         }
-      }
 
       res.json({
         message: `User deactivated successfully. Released ${releasedCount} unclosed listings. Protected ${protectedCount} listings with transactions.`,
@@ -9420,7 +9106,6 @@ IMPORTANT:
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       // Reactivate user in database
       await storage.updateUser(userId, { isActive: true });
@@ -9442,12 +9127,10 @@ IMPORTANT:
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       // Prevent deleting yourself
       if (userId === adminUserId) {
         return res.status(400).json({ message: "You cannot delete your own account" });
-      }
 
       console.log(`[Delete User] Starting permanent deletion of user ${userId} (${user.email})`);
 
@@ -9482,7 +9165,6 @@ IMPORTANT:
       } catch (webhookError: any) {
         console.error(`[Delete User] Failed to unregister webhook:`, webhookError.message);
         // Continue with deletion even if webhook unregistration fails
-      }
 
       // 2. Delete OpenAI knowledge base files uploaded by this user
       try {
@@ -9512,7 +9194,6 @@ IMPORTANT:
       } catch (openaiError: any) {
         console.error(`[Delete User] Failed to delete OpenAI files:`, openaiError.message);
         // Continue with deletion
-      }
 
       // 3. Cascade delete all user data using storage methods
       await storage.deleteUser(userId);
@@ -9576,7 +9257,6 @@ IMPORTANT:
           console.error('Error checking Commission Tracker:', trackerError);
           // Continue without tracker status if error
         }
-      }
 
       // If no tracker sheet or error, return orders without hasTrackerRows field
       res.json(orders);
@@ -9601,7 +9281,6 @@ IMPORTANT:
 
       if (!updatedOrder) {
         return res.status(404).json({ message: "Order not found" });
-      }
 
       res.json(updatedOrder);
     } catch (error: any) {
@@ -9622,7 +9301,6 @@ IMPORTANT:
       const order = await storage.getOrderById(orderId, tenantId);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
-      }
 
       // Find Store Database and Commission Tracker sheets
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -9631,7 +9309,6 @@ IMPORTANT:
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store Database sheet not found' });
-      }
 
       // Check Commission Tracker for already-matched stores (trackerSheet from line above)
       const matchedStoreLinks: string[] = [];
@@ -9660,7 +9337,6 @@ IMPORTANT:
           console.error('Error checking Commission Tracker:', trackerError);
           // Continue even if tracker check fails
         }
-      }
 
       // Read all store data
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
@@ -9668,7 +9344,6 @@ IMPORTANT:
 
       if (storeRows.length === 0) {
         return res.json({ order, suggestions: [], matchedStoreLinks });
-      }
 
       // Parse store data
       const storeHeaders = storeRows[0];
@@ -9793,13 +9468,11 @@ IMPORTANT:
 
       if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
         return res.status(400).json({ message: "At least one store must be selected" });
-      }
 
       const tenantId = req.user.tenantId;
       const order = await storage.getOrderById(orderId, tenantId);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
-      }
 
       // Find Commission Tracker sheet (Store Database syncs from Tracker via Google Sheets)
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -9807,7 +9480,6 @@ IMPORTANT:
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
 
       // Read tracker data to check if stores already have rows
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -9815,7 +9487,6 @@ IMPORTANT:
 
       if (trackerRows.length === 0) {
         return res.status(400).json({ message: 'Commission Tracker sheet is empty' });
-      }
 
       const trackerHeaders = trackerRows[0];
       const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
@@ -9827,7 +9498,6 @@ IMPORTANT:
 
       if (linkIndex === -1) {
         return res.status(400).json({ message: 'Commission Tracker must have a "Link" column' });
-      }
 
       // Get agent name from order
       const agentName = order.salesAgentName || '';
@@ -9920,7 +9590,6 @@ IMPORTANT:
           rowsProcessed++;
           results.push({ link: storeLink, name: storeName, action: 'created' });
         }
-      }
 
       // Populate/update clients table with matched store data
       // This ensures clients table becomes the source of truth for reorders
@@ -9982,7 +9651,6 @@ IMPORTANT:
             status: 'active',
           });
         }
-      }
 
       // Also link order to client in orders table
       if (storeLinks.length > 0) {
@@ -9996,7 +9664,6 @@ IMPORTANT:
             .set({ clientId: primaryClient.id })
             .where(eq(orders.id, orderId));
         }
-      }
 
       // Success! All data is now in Google Sheets Commission Tracker AND clients table
       res.json({ 
@@ -10019,7 +9686,6 @@ IMPORTANT:
 
       if (!orderUpdates || !Array.isArray(orderUpdates)) {
         return res.status(400).json({ message: "Orders array is required" });
-      }
 
       // Step 1: Update database
       const tenantId = req.user.tenantId;
@@ -10038,7 +9704,6 @@ IMPORTANT:
           dbUpdated++;
           console.log(`DB: Updated order ${orderId} with:`, updates);
         }
-      }
 
       // Step 2: Write to Google Sheets Commission Tracker
       let sheetsWritten = 0;
@@ -10179,7 +9844,6 @@ IMPORTANT:
             }
           }
         }
-      }
 
       // Step 3: Recalculate commissions in SQL for all updated orders
       // This ensures the commissions table is accurate with new commission types/amounts
@@ -10195,7 +9859,6 @@ IMPORTANT:
         } catch (error: any) {
           console.error(`Failed to recalculate commissions for order ${orderId}:`, error);
         }
-      }
 
       res.json({ 
         message: `Saved ${dbUpdated} commission settings to database` + 
@@ -10229,13 +9892,11 @@ IMPORTANT:
       if (!webhookTopic || !webhookTopic.toString().startsWith('order.')) {
         console.log('Ignoring non-order webhook:', webhookTopic);
         return res.status(200).json({ message: 'Webhook received but not an order event' });
-      }
 
       // Only process completed and processing orders
       if (webhookData.status !== 'completed' && webhookData.status !== 'processing') {
         console.log('Ignoring order with status:', webhookData.status);
         return res.status(200).json({ message: 'Order status not tracked' });
-      }
 
       // Extract order data
       const order = webhookData;
@@ -10264,17 +9925,14 @@ IMPORTANT:
             : eq(clients.data, sql`jsonb_build_object('company', ${company})`)
         });
         client = clientRecord || null;
-      }
 
       // Legacy fallback: also check old client lookup method
       if (!client && email) {
         client = await storage.findClientByUniqueKey('Email', email) ||
                  await storage.findClientByUniqueKey('email', email);
-      }
       if (!client && company) {
         client = await storage.findClientByUniqueKey('Company', company) ||
                  await storage.findClientByUniqueKey('company', company);
-      }
 
       // Create or update order
       // For webhooks: query order directly to check existence (no tenant context yet)
@@ -10286,7 +9944,6 @@ IMPORTANT:
       if (!tenantId && !existingOrder) {
         console.log('[Webhook] Cannot create order - no client matched and no tenantId available');
         return res.status(200).json({ message: 'Order skipped - no matching client found' });
-      }
 
       if (existingOrder) {
         await storage.updateOrder(order.id.toString(), existingOrder.tenantId, {
@@ -10312,7 +9969,6 @@ IMPORTANT:
           orderDate: new Date(order.date_created),
           tenantId: tenantId!,
         });
-      }
 
       // ONLY apply commissions automatically for REORDERS (existing clients)
       // First orders must be manually matched via WooCommerce Sync UI to set commission type
@@ -10321,7 +9977,6 @@ IMPORTANT:
         await commissionService.applyCommissions(order.id.toString());
       } else {
         console.log('[Webhook] New client - skipping auto commission calculation. Admin must match order manually.');
-      }
 
       // Update client if matched
       if (client) {
@@ -10425,7 +10080,6 @@ IMPORTANT:
         } else {
           console.log('[Webhook] Skipping Commission Tracker write - client has no assigned agent');
         }
-      }
 
       console.log('Webhook processed successfully:', { orderId: order.id, matched: !!client });
       res.status(200).json({ message: 'Webhook processed', matched: !!client });
@@ -10454,7 +10108,6 @@ IMPORTANT:
 
       if (!wooUrl || !consumerKey || !consumerSecret) {
         return res.status(500).json({ message: "WooCommerce credentials not configured. Please configure in Settings." });
-      }
 
       // Fetch ALL orders from WooCommerce with pagination
       const apiUrl = `${wooUrl}/wp-json/wc/v3/orders`;
@@ -10493,7 +10146,6 @@ IMPORTANT:
           console.log('Reached maximum page limit (1000)');
           hasMore = false;
         }
-      }
 
       console.log('WooCommerce total orders fetched:', allOrders.length);
       const orders = allOrders;
@@ -10506,7 +10158,6 @@ IMPORTANT:
           synced: 0,
           matched: 0
         });
-      }
 
       if (orders.length === 0) {
         console.log('No orders found in WooCommerce');
@@ -10516,7 +10167,6 @@ IMPORTANT:
           synced: 0,
           matched: 0,
         });
-      }
       let synced = 0;
       let matched = 0;
 
@@ -10644,7 +10294,6 @@ IMPORTANT:
 
           await storage.updateClient(client.id, client.tenantId, updates);
         }
-      }
 
       // TWO-WAY SYNC: Delete local orders that no longer exist in WooCommerce
       // This handles cancelled, deleted, or refunded orders
@@ -10733,7 +10382,6 @@ IMPORTANT:
           await storage.deleteOrder(localOrder.id, tenantId);
           deleted++;
         }
-      }
 
       console.log('Sync completed:', { total: orders.length, synced, matched, deleted });
 
@@ -10833,7 +10481,6 @@ IMPORTANT:
       } catch (autoMatchError: any) {
         console.error('Auto-matching error:', autoMatchError);
         // Don't fail the entire sync if auto-matching fails
-      }
 
       console.log('Auto-matching completed:', { autoMatched });
 
@@ -10862,7 +10509,6 @@ IMPORTANT:
         }
       } catch (sheetError: any) {
         console.error('Failed to load Commission Tracker sheet:', sheetError.message);
-      }
 
       try {
         const allLocalOrders = await storage.getAllOrders(tenantId);
@@ -10976,7 +10622,6 @@ IMPORTANT:
       } catch (syncError: any) {
         console.error('Commission sync error:', syncError);
         // Don't fail the entire sync if commission calculation fails
-      }
 
       console.log('Commission sync completed:', { commissionsCalculated, agentTransfers, sheetsUpdated });
 
@@ -10999,7 +10644,6 @@ IMPORTANT:
         } catch (reloadErr: any) {
           console.error('✗ Failed to reload tracker sheet:', reloadErr.message);
         }
-      }
       
       if (trackerSheet && trackerHeaders.length > 0) {
         const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
@@ -11042,7 +10686,6 @@ IMPORTANT:
           if (orderIdIndex === -1) console.log('⚠️  "Order ID" column not found in Commission Tracker');
           if (totalIndex === -1) console.log('⚠️  "Total" column not found in Commission Tracker');
         }
-      }
       
       console.log('Total column sync completed:', { totalsUpdated });
 
@@ -11110,7 +10753,6 @@ IMPORTANT:
       } catch (recalcError: any) {
         console.error('Error recalculating client totals:', recalcError);
         // Don't fail the entire sync if recalculation fails
-      }
 
       // CLEANUP COMMISSION TRACKER: Remove orphaned rows that don't exist in WooCommerce
       console.log('Starting Commission Tracker cleanup...');
@@ -11163,7 +10805,6 @@ IMPORTANT:
       } catch (cleanupError: any) {
         console.error('Error cleaning up Commission Tracker:', cleanupError);
         // Don't fail the entire sync if cleanup fails
-      }
 
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
@@ -11202,13 +10843,11 @@ IMPORTANT:
 
       if (!Array.isArray(orderRequests) || orderRequests.length === 0) {
         return res.status(400).json({ message: "No orders provided" });
-      }
 
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         return res.status(400).json({ message: "Commission Tracker sheet not connected" });
-      }
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
@@ -11217,7 +10856,6 @@ IMPORTANT:
       const headerData = await googleSheets.readSheetData(spreadsheetId, headerRange);
       if (headerData.length === 0) {
         return res.status(400).json({ message: "Commission Tracker sheet is empty" });
-      }
 
       // CRITICAL: Filter out empty headers to prevent sheet pollution
       const allHeaders = headerData[0];
@@ -11238,7 +10876,6 @@ IMPORTANT:
         return res.status(400).json({ 
           message: `Missing required columns in Commission Tracker: ${missingColumns.join(', ')}` 
         });
-      }
 
       // Read all existing tracker rows once for duplicate detection
       const allDataRange = `${sheetName}!A:ZZ`;
@@ -11347,7 +10984,6 @@ IMPORTANT:
         await googleSheets.appendSheetData(spreadsheetId, `${sheetName}`, [rowData]);
         written++;
         console.log(`Written order ${order.orderNumber} to tracker: ${salesAgentName} - $${amount.toFixed(2)}`);
-      }
 
       res.json({
         message: `Successfully written ${written} orders to Commission Tracker`,
@@ -11373,13 +11009,11 @@ IMPORTANT:
 
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       const agentId = req.query.agentId || userId;
 
       if (user.role !== 'admin' && agentId !== userId) {
         return res.status(403).json({ message: "Cannot view other agents' commissions" });
-      }
 
       const commissions = await commissionService.getAgentCommissions(agentId, {
         commissionKind: req.query.kind,
@@ -11402,13 +11036,11 @@ IMPORTANT:
 
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       const agentId = req.query.agentId || userId;
 
       if (user.role !== 'admin' && agentId !== userId) {
         return res.status(403).json({ message: "Cannot view other agents' commission summary" });
-      }
 
       const summary = await commissionService.getCommissionSummary(agentId);
       res.json(summary);
@@ -11426,13 +11058,11 @@ IMPORTANT:
 
       if (!user) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       const referrerId = req.query.referrerId || userId;
 
       if (user.role !== 'admin' && referrerId !== userId) {
         return res.status(403).json({ message: "Cannot view other agents' team data" });
-      }
 
       const teamData = await commissionService.getTeamCommissions(referrerId);
       res.json(teamData);
@@ -11488,7 +11118,6 @@ IMPORTANT:
 
       if (!spreadsheetId || !sheetName || !uniqueIdentifierColumn) {
         return res.status(400).json({ message: "Missing required fields" });
-      }
 
       // Verify sheet exists and has the identifier column
       const range = `${sheetName}!A1:ZZ1`;
@@ -11496,7 +11125,6 @@ IMPORTANT:
 
       if (!headers || headers.length === 0) {
         return res.status(400).json({ message: "Sheet is empty or not found" });
-      }
 
       const headerRow = headers[0];
       const hasIdentifier = headerRow.some((h: string) =>
@@ -11507,7 +11135,6 @@ IMPORTANT:
         return res.status(400).json({
           message: `Column "${uniqueIdentifierColumn}" not found in sheet. Available columns: ${headerRow.join(', ')}`
         });
-      }
 
       // Create new connection
       const { sheetPurpose = 'clients' } = req.body; // Default to 'clients' if not provided
@@ -11548,7 +11175,6 @@ IMPORTANT:
       const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: "Google Sheet not found" });
-      }
 
       const { spreadsheetId, sheetName } = sheet;
       const range = `${sheetName}!A:ZZ`;
@@ -11556,7 +11182,6 @@ IMPORTANT:
 
       if (rows.length === 0) {
         return res.json({ headers: [], data: [] });
-      }
 
       const headers = rows[0];
       const data = rows.slice(1).map((row, index) => {
@@ -11592,7 +11217,6 @@ IMPORTANT:
 
       if (!storeSheetId || !trackerSheetId || !joinColumn) {
         return res.status(400).json({ message: "Store sheet ID, tracker sheet ID, and join column are required" });
-      }
 
       // Get selected category for cache key (lightweight DB query)
       const tenantId = (req.user as any).tenantId;
@@ -11605,7 +11229,6 @@ IMPORTANT:
       if (cachedData) {
         // Cache hit - return immediately
         return res.json(cachedData);
-      }
 
       // Cache miss - fetch fresh data from Google Sheets
       // Fetch both sheets
@@ -11614,7 +11237,6 @@ IMPORTANT:
 
       if (!storeSheet || !trackerSheet) {
         return res.status(404).json({ message: "One or both sheets not found" });
-      }
 
       // Read data from both sheets
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
@@ -11625,7 +11247,6 @@ IMPORTANT:
 
       if (storeRows.length === 0) {
         return res.json({ headers: [], data: [], editableColumns: [] });
-      }
 
       // Parse store data
       const storeHeaders = storeRows[0];
@@ -11733,7 +11354,6 @@ IMPORTANT:
         // No agent name available for the user, filter all rows to empty
         filteredStoreData = [];
         console.log('No agent name found for user, filtering all store rows');
-      }
 
       // Filter Tracker Data by Agent Name (for non-admin users)
       let filteredTrackerData = trackerData;
@@ -11752,7 +11372,6 @@ IMPORTANT:
         // No agent name available, filter all tracker rows to empty
         filteredTrackerData = [];
         console.log('No agent name found for user, filtering all tracker rows');
-      }
 
       // ============================================================================
       // CRITICAL: Filter by Selected Category
@@ -11786,7 +11405,6 @@ IMPORTANT:
         console.log(`Category filter applied: "${selectedCategory}" - ${afterFilterCount} stores shown (${beforeFilterCount - afterFilterCount} filtered out)`);
       } else if (selectedCategory && !storeCategoryColumnName) {
         console.log(`WARNING: User has selectedCategory "${selectedCategory}" but "Category" column not found in sheet`);
-      }
 
       // ============================================================================
       // CRITICAL: Filter by Project Categories
@@ -11813,7 +11431,6 @@ IMPORTANT:
             linkToCategoryMap.set(link, category);
           }
         });
-      }
       
       // Store allowed category names for use in orphaned tracker filtering later
       let allowedCategoryNames: string[] = [];
@@ -11866,7 +11483,6 @@ IMPORTANT:
         }
       } else if (projectId && !storeCategoryColumnName) {
         console.log(`WARNING: projectId "${projectId}" provided but "Category" column not found in sheet`);
-      }
 
 
       // ============================================================================
@@ -11893,7 +11509,6 @@ IMPORTANT:
           // Keep if empty (default open) OR not explicitly "FALSE"
           return !openValue || openValue.toLowerCase().trim() !== 'false';
         });
-      }
 
       // ============================================================================
       // CRITICAL: Two-Sheet Merge Logic
@@ -12011,7 +11626,6 @@ IMPORTANT:
           // Filter out rows with a parent link (children)
           return !parentLinkValue || parentLinkValue.toString().trim() === '';
         });
-      }
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)
       const allHeaders = [...storeHeaders];
@@ -12041,7 +11655,6 @@ IMPORTANT:
         editableColumns = editableColumns.filter(col => 
           !agentReadOnlyColumns.includes(col.toLowerCase())
         );
-      }
 
       const responseData = {
         headers: allHeaders,
@@ -12078,7 +11691,6 @@ IMPORTANT:
         console.log(`📊 Sync result:`, syncResult);
       } else {
         console.log('⚠️ No Commission Tracker sheet found, skipping sync');
-      }
 
       // Clear cache for this user
       clearUserCache(userId);
@@ -12099,12 +11711,10 @@ IMPORTANT:
 
       if (!rowIndex || !column) {
         return res.status(400).json({ message: "Row index and column are required" });
-      }
 
       const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: "Google Sheet not found" });
-      }
 
       const { spreadsheetId, sheetName } = sheet;
 
@@ -12118,7 +11728,6 @@ IMPORTANT:
         // Column doesn't exist - skip gracefully instead of failing
         console.log(`[CELL UPDATE] Column "${column}" not found in sheet ${sheetName}, skipping update`);
         return res.json({ message: `Column "${column}" skipped (not found in sheet)`, skipped: true });
-      }
 
       // Auto-claim store when editing any field (agents only)
       const user = await storage.getUser(userId);
@@ -12174,7 +11783,6 @@ IMPORTANT:
             }
           }
         }
-      }
 
       // Convert column index to letter (A, B, C, etc.)
       const columnLetter = String.fromCharCode(65 + columnIndex);
@@ -12215,7 +11823,6 @@ IMPORTANT:
         if (rowLink && normalizedRowLink === normalizedInputLink) {
           return true;
         }
-      }
       
       return false;
     } catch (error) {
@@ -12238,7 +11845,6 @@ IMPORTANT:
       if (rows.length === 0) {
         console.error('[CREATE-TRACKER-ROW] No headers found');
         return false;
-      }
       
       // CRITICAL: Filter out empty headers to prevent sheet pollution
       const allHeaders = rows[0];
@@ -12251,18 +11857,15 @@ IMPORTANT:
       if (linkIndex === -1) {
         console.error('[CREATE-TRACKER-ROW] Link column not found');
         return false;
-      }
       
       const newRow = new Array(headers.length).fill('');
       newRow[linkIndex] = link;
       
       if (agentNameIndex !== -1) {
         newRow[agentNameIndex] = agentName;
-      }
       
       if (statusIndex !== -1) {
         newRow[statusIndex] = 'Claimed';
-      }
       
       console.log('[CREATE-TRACKER-ROW] Creating row for link:', link);
       
@@ -12291,7 +11894,6 @@ IMPORTANT:
       } else {
         console.error('[CREATE-TRACKER-ROW] Unexpected: updates exists but updatedRows is 0');
         return false;
-      }
     } catch (error) {
       console.error('[CREATE-TRACKER-ROW] Error:', error);
       return false;
@@ -12314,7 +11916,6 @@ IMPORTANT:
 
       if (!trackerSheet) {
         return { success: false, message: 'Commission Tracker sheet not found' };
-      }
 
       const { spreadsheetId, sheetName } = trackerSheet;
       const normalizedInputLink = normalizeLink(link.trim());
@@ -12327,7 +11928,6 @@ IMPORTANT:
 
       if (rows.length === 0) {
         return { success: false, message: 'Commission Tracker sheet has no headers' };
-      }
 
       const headers = rows[0];
       const linkIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'link');
@@ -12339,7 +11939,6 @@ IMPORTANT:
 
       if (linkIndex === -1) {
         return { success: false, message: 'Link column not found in Commission Tracker' };
-      }
 
       // Check if row exists
       let existingRowIndex = -1;
@@ -12349,7 +11948,6 @@ IMPORTANT:
           existingRowIndex = i + 1; // 1-indexed for Google Sheets
           break;
         }
-      }
 
       const timestamp = new Date().toISOString();
       const formattedDate = format(new Date(), 'M/d/yyyy'); // Format like 11/11/2025
@@ -12406,7 +12004,6 @@ IMPORTANT:
         console.log('[E-Hub Tracker Sync] Row updated and Notes appended');
         
         return { success: true };
-      }
     } catch (error: any) {
       console.error('[E-Hub Tracker Sync] Error:', error);
       return { success: false, message: error.message || 'Failed to sync tracker row' };
@@ -12429,19 +12026,16 @@ IMPORTANT:
       if (!link || !updates) {
         console.error('[TRACKER-UPSERT] Missing required fields:', { hasLink: !!link, hasUpdates: !!updates });
         return res.status(400).json({ message: "Link and updates are required" });
-      }
 
       // Get user info to populate Agent Name
       const currentUser = await storage.getUser(userId);
       if (!currentUser) {
         return res.status(404).json({ message: "User not found" });
-      }
 
       if (!currentUser.agentName) {
         return res.status(400).json({ 
           message: "Agent Name is required in your profile to claim stores. Please set it in Settings." 
         });
-      }
 
       // Find Commission Tracker sheet
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -12449,7 +12043,6 @@ IMPORTANT:
 
       if (!trackerSheet) {
         return res.status(404).json({ message: "Commission Tracker sheet not found" });
-      }
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
@@ -12477,7 +12070,6 @@ IMPORTANT:
         console.log('[TRACKER-UPSERT] Step 3: Basic row created and verified');
       } else {
         console.log('[TRACKER-UPSERT] Row already exists, proceeding to update');
-      }
 
       // STEP 3: Now update the specific fields (row is guaranteed to exist)
       const range = `${sheetName}!A:ZZ`;
@@ -12485,14 +12077,12 @@ IMPORTANT:
       
       if (rows.length === 0) {
         return res.status(400).json({ message: "Tracker sheet is empty (no headers)" });
-      }
 
       const headers = rows[0];
       const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
 
       if (linkIndex === -1) {
         return res.status(400).json({ message: "Link column not found in tracker sheet" });
-      }
 
       // Find the row index - search from END since we just appended
       let rowIndex = -1;
@@ -12507,7 +12097,6 @@ IMPORTANT:
           console.log('[TRACKER-UPSERT] Found row in cached data at index', rowIndex);
           break;
         }
-      }
 
       // If not found in cache, wait and re-read from Google (append delay)
       if (rowIndex === -1) {
@@ -12541,13 +12130,11 @@ IMPORTANT:
           console.error('[TRACKER-UPSERT] Expected link:', link);
           console.error('[TRACKER-UPSERT] Expected normalized:', normalizedInputLink);
         }
-      }
 
       if (rowIndex === -1) {
         return res.status(500).json({ 
           message: "Tracker row was created but cannot be found. Please refresh and try again." 
         });
-      }
 
       console.log('[TRACKER-UPSERT] Step 4: Updating fields in row', rowIndex);
 
@@ -12570,7 +12157,6 @@ IMPORTANT:
         } else {
           console.warn(`⚠️ [TRACKER-UPSERT] Column "${column}" not found in headers:`, headers);
         }
-      }
       
       // Write Column P (updated) timestamp after updates
       await googleSheets.writeCommissionTrackerTimestamp(
@@ -12623,7 +12209,6 @@ IMPORTANT:
       
       if (!link) {
         return res.status(400).json({ message: 'Link is required' });
-      }
       
       console.log('[Unclaim] Deleting tracker row for link:', link);
       
@@ -12633,7 +12218,6 @@ IMPORTANT:
       
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
       
       const { spreadsheetId, sheetName } = trackerSheet;
       const range = `${sheetName}!A:ZZ`;
@@ -12641,14 +12225,12 @@ IMPORTANT:
       
       if (rows.length === 0) {
         return res.status(400).json({ message: 'Tracker sheet is empty' });
-      }
       
       const headers = rows[0];
       const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
       
       if (linkIndex === -1) {
         return res.status(400).json({ message: 'Link column not found' });
-      }
       
       // Find row with matching link
       const normalizedInputLink = normalizeLink(link.trim());
@@ -12662,11 +12244,9 @@ IMPORTANT:
           rowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
         }
-      }
       
       if (rowIndex === -1) {
         return res.status(404).json({ message: 'Tracker row not found for this store' });
-      }
       
       console.log('[Unclaim] Found tracker row at index:', rowIndex);
       
@@ -12679,7 +12259,6 @@ IMPORTANT:
       
       if (!targetSheet || !targetSheet.properties?.sheetId) {
         return res.status(404).json({ message: 'Sheet not found in spreadsheet' });
-      }
       
       const sheetId = targetSheet.properties.sheetId;
       
@@ -12720,12 +12299,10 @@ IMPORTANT:
 
       if (!link) {
         return res.status(400).json({ message: "Link is required" });
-      }
 
       const user = await storage.getUser(userId);
       if (!user || !user.agentName) {
         return res.status(400).json({ message: "Agent name not set in profile" });
-      }
 
       console.log('[AUTO-CLAIM] Request:', { link, agentName: user.agentName });
 
@@ -12735,7 +12312,6 @@ IMPORTANT:
 
       if (!trackerSheet) {
         return res.status(404).json({ message: "Commission Tracker sheet not found" });
-      }
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
@@ -12759,7 +12335,6 @@ IMPORTANT:
         console.log('[AUTO-CLAIM] Step 3: Basic row created and verified');
       } else {
         console.log('[AUTO-CLAIM] Row already exists, proceeding to update Agent Name');
-      }
 
       // STEP 3: Now find the row and update Agent Name (row is guaranteed to exist)
       const trackerRange = `${sheetName}!A:ZZ`;
@@ -12770,7 +12345,6 @@ IMPORTANT:
 
       if (trackerLinkIndex === -1) {
         return res.status(400).json({ message: "Link column not found in tracker" });
-      }
 
       // Find the row index
       const normalizedInputLink = normalizeLink(link);
@@ -12782,13 +12356,11 @@ IMPORTANT:
           rowIndex = i + 1; // 1-indexed
           break;
         }
-      }
 
       if (rowIndex === -1) {
         return res.status(500).json({ 
           message: "Tracker row was created but cannot be found. Please refresh and try again." 
         });
-      }
 
       console.log('[AUTO-CLAIM] Step 4: Updating Agent Name in row', rowIndex);
 
@@ -12797,7 +12369,6 @@ IMPORTANT:
         const agentColLetter = String.fromCharCode(65 + trackerAgentIndex);
         const agentCellRange = `${sheetName}!${agentColLetter}${rowIndex}`;
         await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.agentName]]);
-      }
       
       // Write Column O (time) timestamp for claim
       await googleSheets.writeCommissionTrackerTimestamp(
@@ -12824,11 +12395,9 @@ IMPORTANT:
 
       if (!linkValue || !joinColumn) {
         return res.status(400).json({ message: "Link value and join column are required" });
-      }
 
       if (!user?.agentName) {
         return res.status(400).json({ message: "Agent name not set in profile" });
-      }
 
       console.log('[CLAIM-STORE] Request:', { linkValue, column, value, joinColumn, agentName: user.agentName });
 
@@ -12838,7 +12407,6 @@ IMPORTANT:
 
       if (!trackerSheet) {
         return res.status(404).json({ message: "Commission Tracker not found" });
-      }
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
@@ -12862,7 +12430,6 @@ IMPORTANT:
         console.log('[CLAIM-STORE] Step 3: Basic row created and verified');
       } else {
         console.log('[CLAIM-STORE] Row already exists, proceeding to update');
-      }
 
       // STEP 3: Now find the row and update the fields (row is guaranteed to exist)
       const dataRange = `${sheetName}!A:ZZ`;
@@ -12872,7 +12439,6 @@ IMPORTANT:
       const linkColumnIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
       if (linkColumnIndex === -1) {
         return res.status(400).json({ message: "Link column not found in Commission Tracker" });
-      }
 
       // Find the row index
       const normalizedInputLink = normalizeLink(linkValue.trim());
@@ -12886,13 +12452,11 @@ IMPORTANT:
           rowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
         }
-      }
 
       if (rowIndex === -1) {
         return res.status(500).json({ 
           message: "Tracker row was created but cannot be found. Please refresh and try again." 
         });
-      }
 
       console.log('[CLAIM-STORE] Step 4: Updating fields in row', rowIndex);
 
@@ -12902,7 +12466,6 @@ IMPORTANT:
         const agentColLetter = String.fromCharCode(65 + agentNameIndex);
         const agentCellRange = `${sheetName}!${agentColLetter}${rowIndex}`;
         await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.agentName]]);
-      }
 
       // Update the requested column if provided
       if (column && value !== undefined) {
@@ -12913,7 +12476,6 @@ IMPORTANT:
           console.log('[CLAIM-STORE] Writing column value:', cellRange, '=', value);
           await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value || '']]);
         }
-      }
 
       clearUserCache(userId);
       console.log('[CLAIM-STORE] Success! Store claimed and updated at row', rowIndex);
@@ -12933,7 +12495,6 @@ IMPORTANT:
 
       if (!linkValue || !joinColumn) {
         return res.status(400).json({ message: "Link value and join column are required" });
-      }
 
       // ALWAYS find and use Commission Tracker (source of truth)
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -12941,7 +12502,6 @@ IMPORTANT:
 
       if (!trackerSheet) {
         return res.status(404).json({ message: "Commission Tracker not found" });
-      }
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
@@ -12954,7 +12514,6 @@ IMPORTANT:
       const linkColumnIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
       if (linkColumnIndex === -1) {
         return res.status(400).json({ message: "Link column not found in Commission Tracker" });
-      }
 
       // Check if row already exists with this link (using normalized comparison)
       const normalizedInputLink = normalizeLink(linkValue.trim());
@@ -12968,7 +12527,6 @@ IMPORTANT:
           existingRowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
         }
-      }
 
       // Helper to update a cell in Commission Tracker
       const updateCell = async (columnName: string, value: string) => {
@@ -13031,7 +12589,6 @@ IMPORTANT:
         clearUserCache(userId);
 
         res.json({ message: "Contact action saved and store claimed in Commission Tracker", newRow: true });
-      }
     } catch (error: any) {
       console.error("Error saving contact action:", error);
       res.status(500).json({ message: error.message || "Failed to save contact action" });
@@ -13047,12 +12604,10 @@ IMPORTANT:
 
       if (!rowIndex) {
         return res.status(400).json({ message: "Row index is required" });
-      }
 
       const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: "Google Sheet not found" });
-      }
 
       const { spreadsheetId, sheetName } = sheet;
 
@@ -13106,7 +12661,6 @@ IMPORTANT:
       const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
-      }
 
       const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
       const range = `${sheetName}!A:ZZ`;
@@ -13114,7 +12668,6 @@ IMPORTANT:
 
       if (rows.length === 0) {
         return res.status(400).json({ message: "Sheet is empty" });
-      }
 
       const parsed = googleSheets.parseSheetDataToObjects(rows, uniqueIdentifierColumn);
       let created = 0;
@@ -13147,7 +12700,6 @@ IMPORTANT:
           });
           created++;
         }
-      }
 
       // Update last synced time on the sheet connection
       await storage.updateGoogleSheetLastSync(sheet.id);
@@ -13174,7 +12726,6 @@ IMPORTANT:
       const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
-      }
 
       const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
 
@@ -13184,7 +12735,6 @@ IMPORTANT:
 
       if (!headerRows || headerRows.length === 0) {
         return res.status(400).json({ message: "Cannot read sheet headers" });
-      }
 
       const headers = headerRows[0];
 
@@ -13199,7 +12749,6 @@ IMPORTANT:
           const row = googleSheets.convertObjectsToSheetRows(headers, [client.data])[0];
           await googleSheets.writeSheetData(spreadsheetId, range, [row]);
         }
-      }
 
       await storage.updateGoogleSheetLastSync(sheet.id);
 
@@ -13222,7 +12771,6 @@ IMPORTANT:
       const sheet = await storage.getGoogleSheetById(id, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
-      }
 
       const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
 
@@ -13232,7 +12780,6 @@ IMPORTANT:
 
       if (rows.length === 0) {
         return res.status(400).json({ message: "Sheet is empty" });
-      }
 
       const parsed = googleSheets.parseSheetDataToObjects(rows, uniqueIdentifierColumn);
       let created = 0;
@@ -13263,7 +12810,6 @@ IMPORTANT:
           });
           created++;
         }
-      }
 
       await storage.updateGoogleSheetLastSync(sheet.id);
 
@@ -13283,7 +12829,6 @@ IMPORTANT:
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: 'Not authenticated' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { storeId } = req.params;
@@ -13298,7 +12843,6 @@ IMPORTANT:
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store sheet not found' });
-      }
 
       // Read data from store sheet
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
@@ -13306,7 +12850,6 @@ IMPORTANT:
 
       if (storeRows.length === 0) {
         return res.status(404).json({ message: 'Store sheet is empty' });
-      }
 
       // Parse store data
       const storeHeaders = storeRows[0];
@@ -13323,7 +12866,6 @@ IMPORTANT:
 
       if (!store) {
         return res.status(404).json({ message: 'Store not found' });
-      }
 
       // If tracker sheet exists, merge in tracker data (Notes, POC fields)
       if (trackerSheet) {
@@ -13369,7 +12911,6 @@ IMPORTANT:
             });
           }
         }
-      }
 
       res.json(store);
     } catch (error) {
@@ -13382,7 +12923,6 @@ IMPORTANT:
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: 'Not authenticated' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { storeId } = req.params;
@@ -13394,7 +12934,6 @@ IMPORTANT:
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store sheet not found' });
-      }
 
       const decodedId = decodeURIComponent(storeId);
 
@@ -13404,7 +12943,6 @@ IMPORTANT:
 
       if (storeRows.length === 0) {
         return res.status(404).json({ message: 'Store sheet is empty' });
-      }
 
       // Parse store data
       const storeHeaders = storeRows[0];
@@ -13421,7 +12959,6 @@ IMPORTANT:
 
       if (!store || !store._storeRowIndex) {
         return res.status(404).json({ message: 'Store not found or has no row index' });
-      }
 
       // Map form fields to Store Database column names
       const storeColumnMapping: Record<string, string> = {
@@ -13475,7 +13012,6 @@ IMPORTANT:
         for (const update of storeBatchUpdates) {
           await googleSheets.writeSheetData(storeSheet.spreadsheetId, update.range, update.values);
         }
-      }
 
       // CRITICAL AUTO-CLAIM LOGIC: Always check Commission Tracker and auto-claim if unclaimed
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
@@ -13591,7 +13127,6 @@ IMPORTANT:
             }
           }
         }
-      }
 
       res.json({ success: true, message: 'Store updated successfully' });
     } catch (error) {
@@ -13659,7 +13194,6 @@ IMPORTANT:
         // Update Commission Tracker references
         await googleSheets.updateCommissionTrackerLinks(decodedLink, keeperLink, (req.user as any).tenantId);
         console.log('[DELETE-STORE] Updated Commission Tracker links');
-      }
 
       // Delete the store
       await googleSheets.deleteStoreFromSheet(decodedLink, (req.user as any).tenantId);
@@ -13700,7 +13234,6 @@ IMPORTANT:
       const sheet = await storage.getGoogleSheetById(sheetId, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: 'Sheet not found' });
-      }
 
       // Read all store data
       const range = `${sheet.sheetName}!A:ZZ`;
@@ -13708,7 +13241,6 @@ IMPORTANT:
 
       if (rows.length === 0) {
         return res.json([]);
-      }
 
       // Parse store data
       const headers = rows[0];
@@ -13752,7 +13284,6 @@ IMPORTANT:
       const sheet = await storage.getGoogleSheetById(sheetId, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: 'Sheet not found' });
-      }
 
       // Read all store data
       const range = `${sheet.sheetName}!A:ZZ`;
@@ -13760,7 +13291,6 @@ IMPORTANT:
 
       if (rows.length === 0) {
         return res.json([]);
-      }
 
       // Parse store data
       const headers = rows[0];
@@ -13773,7 +13303,6 @@ IMPORTANT:
 
       if (dbaIndex === -1) {
         return res.status(404).json({ message: 'DBA column not found in Store Database' });
-      }
 
       // Filter stores by DBA name (case-insensitive match)
       const stores = rows.slice(1)
@@ -13809,15 +13338,12 @@ IMPORTANT:
 
       if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
         return res.status(400).json({ message: "Store links array is required" });
-      }
 
       if (!dbaName || dbaName.trim().length === 0) {
         return res.status(400).json({ message: "DBA name is required" });
-      }
 
       if (!storeSheetId || !trackerSheetId) {
         return res.status(400).json({ message: "Both Store Database and Commission Tracker sheet IDs are required" });
-      }
 
       // Get both sheets
       const storeSheet = await storage.getGoogleSheetById(storeSheetId, (req.user as any).tenantId);
@@ -13825,7 +13351,6 @@ IMPORTANT:
 
       if (!storeSheet || !trackerSheet) {
         return res.status(404).json({ message: 'One or both sheets not found' });
-      }
 
       // Read Store Database to find stores
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
@@ -13833,7 +13358,6 @@ IMPORTANT:
 
       if (storeRows.length === 0) {
         return res.status(404).json({ message: 'Store Database is empty' });
-      }
 
       const storeHeaders = storeRows[0];
       const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
@@ -13845,7 +13369,6 @@ IMPORTANT:
 
       if (storeLinkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found in Store Database' });
-      }
 
       // Read Commission Tracker to update it (source of truth)
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -13858,7 +13381,6 @@ IMPORTANT:
 
       if (trackerLinkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found in Commission Tracker' });
-      }
 
       console.log('[CLAIM-MULTIPLE] Commission Tracker headers:', trackerHeaders);
       console.log('[CLAIM-MULTIPLE] Tracker column indices - Link:', trackerLinkIndex, 'Agent:', trackerAgentIndex, 'DBA:', trackerDbaIndex);
@@ -13945,7 +13467,6 @@ IMPORTANT:
           await delay(WRITE_DELAY_MS); // Rate limiting
           createdTrackerCount++;
         }
-      }
 
       console.log(`[CLAIM-MULTIPLE] FINAL SUMMARY:`);
       console.log(`  - Updated Commission Tracker rows: ${updatedTrackerCount}`);
@@ -13979,7 +13500,6 @@ IMPORTANT:
 
       if (!searchTerm || searchTerm.trim().length === 0) {
         return res.status(400).json({ message: "Search term is required" });
-      }
 
       // Find Store Database sheet
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -13987,7 +13507,6 @@ IMPORTANT:
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store Database sheet not found' });
-      }
 
       // Read all store data
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
@@ -13995,7 +13514,6 @@ IMPORTANT:
 
       if (storeRows.length === 0) {
         return res.json({ stores: [] });
-      }
 
       // Parse store data
       const storeHeaders = storeRows[0];
@@ -14059,11 +13577,9 @@ IMPORTANT:
 
       if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
         return res.status(400).json({ message: "Store links array is required" });
-      }
 
       if (!agentName || agentName.trim().length === 0) {
         return res.status(400).json({ message: "Agent name is required" });
-      }
 
       // Find Commission Tracker sheet (source of truth)
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -14071,7 +13587,6 @@ IMPORTANT:
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
 
       // Read all tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -14079,7 +13594,6 @@ IMPORTANT:
 
       if (trackerRows.length === 0) {
         return res.status(404).json({ message: 'Commission Tracker sheet is empty' });
-      }
 
       // Find Agent Name column (Column D) and Link column (Column A)
       const trackerHeaders = trackerRows[0];
@@ -14088,11 +13602,9 @@ IMPORTANT:
 
       if (agentNameIndex === -1) {
         return res.status(404).json({ message: 'Agent Name column not found in Commission Tracker' });
-      }
 
       if (linkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found in Commission Tracker' });
-      }
 
       // Build batch updates for all matching stores in Commission Tracker
       const agentColumnLetter = String.fromCharCode(65 + agentNameIndex);
@@ -14124,7 +13636,6 @@ IMPORTANT:
         for (const update of batchUpdates) {
           await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
         }
-      }
 
       // Invalidate cache after updates
       clearUserCache(userId);
@@ -14148,11 +13659,9 @@ IMPORTANT:
 
       if (!rawText || !rawText.trim()) {
         return res.status(400).json({ message: "Text to parse is required" });
-      }
 
       if (!sheetId) {
         return res.status(400).json({ message: "Sheet ID is required" });
-      }
 
       // ===== ADDRESS NORMALIZATION UTILITIES =====
       
@@ -14287,7 +13796,6 @@ IMPORTANT:
       const sheet = await storage.getGoogleSheetById(sheetId, (req.user as any).tenantId);
       if (!sheet) {
         return res.status(404).json({ message: 'Sheet not found' });
-      }
 
       // Read all store data
       const range = `${sheet.sheetName}!A:ZZ`;
@@ -14299,7 +13807,6 @@ IMPORTANT:
           unmatched: [],
           summary: { total: 0, matched: 0, unmatched: 0 }
         });
-      }
 
       // Parse headers
       const headers = rows[0];
@@ -14520,7 +14027,6 @@ ${rawText}`;
         }
       } catch (error: any) {
         console.error('[Parse-and-Match] OpenAI parsing failed, falling back to regex:', error.message);
-      }
       
       // ===== FALLBACK TO REGEX PARSING IF OPENAI FAILED =====
       if (parsedStores.length === 0) {
@@ -14607,7 +14113,6 @@ ${rawText}`;
           // This is not an address line, so it might be a store name - track it
           previousLine = line;
         }
-      }
       
         console.log(`[Parse-and-Match] Successfully parsed ${parsedStores.length} stores from input (using regex fallback)`);
       } // End regex fallback
@@ -14684,7 +14189,6 @@ ${rawText}`;
           unmatched.push(parsed);
           console.log(`[Parse-and-Match] ✗ UNMATCHED: "${parsed.name}" at ${parsed.address} (best score: ${bestConfidence}%)`);
         }
-      }
 
       console.log(`[Parse-and-Match] Results: ${matched.length} matched, ${unmatched.length} unmatched`);
 
@@ -14714,7 +14218,6 @@ ${rawText}`;
             console.log(`[Parse-and-Match] Detected brand by consensus: "${detectedBrand}" (${maxCount}/${matched.length} matches)`);
           }
         }
-      }
 
       res.json({ 
         matched, 
@@ -14739,14 +14242,12 @@ ${rawText}`;
 
       if (!query || query.trim().length < 2) {
         return res.json({ stores: [] });
-      }
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const sheet = sheets.find(s => s.id === sheetId);
       
       if (!sheet) {
         return res.status(404).json({ message: 'Sheet not found' });
-      }
 
       // Read store database
       const range = `${sheet.sheetName}!A:ZZ`;
@@ -14754,7 +14255,6 @@ ${rawText}`;
 
       if (rows.length === 0) {
         return res.json({ stores: [] });
-      }
 
       const headers = rows[0];
       const nameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'store name');
@@ -14792,7 +14292,6 @@ ${rawText}`;
 
         // Limit results to prevent overwhelming UI
         if (matchingStores.length >= 20) break;
-      }
 
       res.json({ stores: matchingStores });
     } catch (error: any) {
@@ -14808,14 +14307,12 @@ ${rawText}`;
 
       if (!store) {
         return res.status(400).json({ message: 'Store data is required' });
-      }
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const sheet = sheets.find(s => s.id === sheetId);
       
       if (!sheet) {
         return res.status(404).json({ message: 'Sheet not found' });
-      }
 
       // Read current data to get headers
       const range = `${sheet.sheetName}!A:ZZ`;
@@ -14823,7 +14320,6 @@ ${rawText}`;
 
       if (rows.length === 0) {
         return res.status(400).json({ message: 'Sheet is empty - cannot determine columns' });
-      }
 
       // CRITICAL: Filter out empty headers to prevent sheet pollution
       const allHeaders = rows[0];
@@ -14873,11 +14369,9 @@ ${rawText}`;
 
       if (!link1 || !link2) {
         return res.status(400).json({ message: 'Both link1 and link2 are required' });
-      }
 
       if (link1 === link2) {
         return res.status(400).json({ message: 'Cannot mark a store as non-duplicate with itself' });
-      }
 
       await storage.markAsNotDuplicate(link1, link2, userId);
 
@@ -14898,7 +14392,6 @@ ${rawText}`;
 
       if (!link1 || !link2) {
         return res.status(400).json({ message: 'Both link1 and link2 are required' });
-      }
 
       await storage.removeNonDuplicateMark(link1, link2);
 
@@ -14931,7 +14424,6 @@ ${rawText}`;
 
       if (!name && !brandName) {
         return res.status(400).json({ message: 'Store name or brand name is required' });
-      }
 
       // Build search query - prioritize DBA/brand + address for maximum accuracy
       // Format: "{brandName/name} {address}" for pinpoint accuracy
@@ -14952,14 +14444,12 @@ ${rawText}`;
         if (city && state) {
           location = `${city}, ${state}`;
         }
-      }
 
       // Search Google Places API
       const searchResults = await googleMaps.searchPlaces(query, location);
 
       if (!searchResults.results || searchResults.results.length === 0) {
         return res.json({ results: [] });
-      }
 
       // Get detailed information for top 3 results
       const detailedResults = await Promise.all(
@@ -15009,7 +14499,6 @@ ${rawText}`;
         if (stateFiltered.length > 0) {
           validResults = stateFiltered;
         }
-      }
 
       // Optional: Also validate city match if provided
       if (city && validResults.length > 1) {
@@ -15025,7 +14514,6 @@ ${rawText}`;
         if (cityFiltered.length > 0) {
           validResults = cityFiltered;
         }
-      }
 
       // FUZZY MATCH VALIDATION: Filter results with <80% confidence
       if (name || brandName || address) {
@@ -15066,7 +14554,6 @@ ${rawText}`;
         if (fuzzyFiltered.length > 0) {
           validResults = fuzzyFiltered;
         }
-      }
 
       res.json({ results: validResults });
     } catch (error: any) {
@@ -15101,7 +14588,6 @@ ${rawText}`;
 
       if (!dbaName || !dbaName.trim()) {
         return res.status(400).json({ message: "DBA name is required" });
-      }
 
       // Find Commission Tracker sheet
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -15109,7 +14595,6 @@ ${rawText}`;
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
 
       // Read tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -15117,7 +14602,6 @@ ${rawText}`;
 
       if (trackerRows.length === 0) {
         return res.status(404).json({ message: 'Commission Tracker is empty' });
-      }
 
       const trackerHeaders = trackerRows[0];
       const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
@@ -15206,7 +14690,6 @@ ${rawText}`;
             parentLink 
           });
         }
-      }
 
       // Create new parent record (corporate office with full location data)
       // Generate a proper UUID for the corporate office
@@ -15216,7 +14699,6 @@ ${rawText}`;
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store Database sheet not found' });
-      }
 
       // Read Store Database to get category from first child location
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
@@ -15224,7 +14706,6 @@ ${rawText}`;
       
       if (storeRows.length === 0) {
         return res.status(404).json({ message: 'Store Database is empty' });
-      }
 
       const storeHeaders = storeRows[0];
       
@@ -15241,7 +14722,6 @@ ${rawText}`;
             break;
           }
         }
-      }
 
       // STEP 1: Write to Store Database sheet
       // Columns: A=Name, C=Link, E=Address, F=City, G=State, S=Category
@@ -15305,21 +14785,18 @@ ${rawText}`;
 
       if (!parentLink || !childLinks || !Array.isArray(childLinks) || childLinks.length === 0) {
         return res.status(400).json({ message: "Parent link and child links array are required" });
-      }
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
 
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       if (trackerRows.length === 0) {
         return res.status(404).json({ message: 'Commission Tracker is empty' });
-      }
 
       const trackerHeaders = trackerRows[0];
       const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
@@ -15327,11 +14804,9 @@ ${rawText}`;
 
       if (linkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found' });
-      }
 
       if (parentLinkIndex === -1) {
         return res.status(404).json({ message: 'Parent Link column not found in Commission Tracker. Please add a "Parent Link" column.' });
-      }
 
       const normalizedParentLink = normalizeLink(parentLink);
       const updates: { range: string; values: any[][] }[] = [];
@@ -15354,12 +14829,10 @@ ${rawText}`;
             break;
           }
         }
-      }
 
       // Execute all updates
       for (const update of updates) {
         await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
-      }
 
       clearUserCache(userId);
       res.json({ 
@@ -15381,14 +14854,12 @@ ${rawText}`;
 
       if (!childLinks || !Array.isArray(childLinks) || childLinks.length === 0) {
         return res.status(400).json({ message: "Child links array is required" });
-      }
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
 
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
@@ -15399,7 +14870,6 @@ ${rawText}`;
 
       if (parentLinkIndex === -1) {
         return res.status(404).json({ message: 'Parent Link column not found' });
-      }
 
       const updates: { range: string; values: any[][] }[] = [];
       let unlinkedCount = 0;
@@ -15421,12 +14891,10 @@ ${rawText}`;
             break;
           }
         }
-      }
 
       // Execute all updates
       for (const update of updates) {
         await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
-      }
 
       clearUserCache(userId);
       res.json({ 
@@ -15448,14 +14916,12 @@ ${rawText}`;
 
       if (!headOfficeLink) {
         return res.status(400).json({ message: "Head office link is required" });
-      }
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
 
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
@@ -15467,7 +14933,6 @@ ${rawText}`;
 
       if (headOfficeLinkIndex === -1) {
         return res.status(404).json({ message: 'Head Office Link column not found in Commission Tracker. Please add a "Head Office Link" column.' });
-      }
 
       const normalizedHeadOfficeLink = normalizeLink(headOfficeLink);
       const normalizedParentLink = parentLink ? normalizeLink(parentLink) : null;
@@ -15491,7 +14956,6 @@ ${rawText}`;
         if (normalizedParentLink && rowLink === normalizedParentLink) {
           parentRowIndex = i + 1;
         }
-      }
 
       const updates: { range: string; values: any[][] }[] = [];
 
@@ -15548,12 +15012,10 @@ ${rawText}`;
             });
           }
         }
-      }
 
       // Execute all updates
       for (const update of updates) {
         await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
-      }
 
       clearUserCache(userId);
       res.json({ 
@@ -15578,7 +15040,6 @@ ${rawText}`;
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
 
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
@@ -15589,7 +15050,6 @@ ${rawText}`;
 
       if (parentLinkIndex === -1) {
         return res.json({ children: [] });
-      }
 
       // Load Store Database to get store names
       let storeDbMap: Map<string, any> = new Map();
@@ -15609,7 +15069,6 @@ ${rawText}`;
             }
           }
         }
-      }
 
       const normalizedParentLink = normalizeLink(parentLink);
       const children: any[] = [];
@@ -15632,7 +15091,6 @@ ${rawText}`;
           
           children.push(childData);
         }
-      }
 
       res.json({ children });
     } catch (error: any) {
@@ -15648,7 +15106,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds } = req.query;
@@ -15657,7 +15114,6 @@ ${rawText}`;
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
-      }
 
       // SECURITY: Determine which agents' data to show
       let allowedAgentNames: string[] = [];
@@ -15681,7 +15137,6 @@ ${rawText}`;
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
-      }
 
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
@@ -15695,7 +15150,6 @@ ${rawText}`;
           bestMonth: { month: '', earnings: "0.00" },
           commissionBreakdown: { commission25: "0.00", commission10: "0.00" }
         });
-      }
 
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
@@ -15711,7 +15165,6 @@ ${rawText}`;
           bestMonth: { month: '', earnings: "0.00" },
           commissionBreakdown: { commission25: "0.00", commission10: "0.00" }
         });
-      }
 
       // Parse headers to find column indices
       const headers = trackerRows[0];
@@ -15794,7 +15247,6 @@ ${rawText}`;
         } else if (commissionType.includes('10')) {
           commission10Earnings += amount;
         }
-      }
 
       // Find best month
       let bestMonth = { month: '', earnings: 0 };
@@ -15802,7 +15254,6 @@ ${rawText}`;
         if (earnings > bestMonth.earnings) {
           bestMonth = { month, earnings };
         }
-      }
 
       // Calculate monthly average (last 6 months)
       const last6Months = Object.entries(monthlyEarnings)
@@ -15845,7 +15296,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds } = req.query;
@@ -15854,7 +15304,6 @@ ${rawText}`;
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
-      }
 
       // SECURITY: Determine which agents' data to show
       let allowedAgentNames: string[] = [];
@@ -15878,7 +15327,6 @@ ${rawText}`;
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
-      }
 
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
@@ -15889,7 +15337,6 @@ ${rawText}`;
             tier10Percent: { clients: 0, earnings: 0 }
           }
         });
-      }
 
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
@@ -15902,7 +15349,6 @@ ${rawText}`;
             tier10Percent: { clients: 0, earnings: 0 }
           }
         });
-      }
 
       // Parse headers
       const headers = trackerRows[0];
@@ -15950,7 +15396,6 @@ ${rawText}`;
           tier10Earnings += amount;
           if (link) tier10Stores.add(link);
         }
-      }
 
       res.json({
         breakdown: {
@@ -15975,7 +15420,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds } = req.query;
@@ -15984,7 +15428,6 @@ ${rawText}`;
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
-      }
 
       // SECURITY: Determine which agents' data to show
       let allowedAgentNames: string[] = [];
@@ -16008,7 +15451,6 @@ ${rawText}`;
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
-      }
 
       // Get both sheets
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -16022,7 +15464,6 @@ ${rawText}`;
           avgRevenuePerClient: "0.00",
           repeatOrderRate: "0.0"
         });
-      }
 
       // Read Store Database to get total clients for this agent
       let totalClients = 0;
@@ -16075,7 +15516,6 @@ ${rawText}`;
           const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
           totalClients = Math.max(0, storeRows.length - 1);
         }
-      }
 
       // Read Commission Tracker to calculate active clients and repeat order rate
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
@@ -16088,7 +15528,6 @@ ${rawText}`;
           avgRevenuePerClient: "0.00",
           repeatOrderRate: "0.0"
         });
-      }
 
       // Parse headers
       const headers = trackerRows[0];
@@ -16146,7 +15585,6 @@ ${rawText}`;
         if (transactionDate && (!storeTransactions[link].lastTransactionDate || transactionDate > storeTransactions[link].lastTransactionDate)) {
           storeTransactions[link].lastTransactionDate = transactionDate;
         }
-      }
 
       // Calculate metrics
       // Active clients = stores with transactions in the last 30 days
@@ -16181,7 +15619,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds, limit } = req.query;
@@ -16191,7 +15628,6 @@ ${rawText}`;
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
-      }
 
       // SECURITY: Determine which agents' data to show
       let allowedAgentNames: string[] = [];
@@ -16215,13 +15651,11 @@ ${rawText}`;
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
-      }
 
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         return res.json({ topClients: [] });
-      }
 
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -16229,7 +15663,6 @@ ${rawText}`;
 
       if (trackerRows.length <= 1) {
         return res.json({ topClients: [] });
-      }
 
       // Parse headers to find column indices
       const headers = trackerRows[0];
@@ -16301,7 +15734,6 @@ ${rawText}`;
             }
           }
         }
-      }
 
       // Helper function to normalize links for matching
       const normalizeLink = (link: string): string => {
@@ -16348,7 +15780,6 @@ ${rawText}`;
         } catch (error) {
           // Continue without names - will fall back to links
         }
-      }
 
       // Convert to array and sort by total commission (descending)
       const topClients = Object.entries(clientMetrics)
@@ -16383,7 +15814,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds } = req.query;
@@ -16392,7 +15822,6 @@ ${rawText}`;
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
-      }
 
       // SECURITY: Determine which agents' data to show
       let allowedUserIds: string[] = [];
@@ -16408,7 +15837,6 @@ ${rawText}`;
           : [userId];
 
         allowedUserIds = requestedAgentIds;
-      }
 
       // Fetch reminders for allowed users
       const tenantId = (req.user as any).tenantId;
@@ -16432,7 +15860,6 @@ ${rawText}`;
         }));
 
         allReminders = allReminders.concat(enrichedReminders);
-      }
 
       // Sort chronologically using proper datetime comparison
       allReminders.sort((a, b) => {
@@ -16463,7 +15890,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -16484,7 +15910,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -16522,7 +15947,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { 
@@ -16539,7 +15963,6 @@ ${rawText}`;
       // Validate required fields
       if (!title || !reminderDate || !reminderTime) {
         return res.status(400).json({ message: 'Missing required fields: title, reminderDate, reminderTime' });
-      }
 
       // Determine effective timezone
       const effectiveTimezone = useCustomerTimezone && customerTimezone 
@@ -16555,7 +15978,6 @@ ${rawText}`;
       } else {
         // Shouldn't happen, but handle it
         scheduledDate = String(reminderDate);
-      }
       const scheduledTime = reminderTime; // HH:MM in 24hr format
 
       // Note: Past date validation removed - timezone complexity causes false positives
@@ -16588,7 +16010,6 @@ ${rawText}`;
       if (!validation.success) {
         console.error('Validation failed:', validation.error.errors);
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       // Create the reminder
       const reminder = await storage.createReminder(validation.data);
@@ -16641,7 +16062,6 @@ ${rawText}`;
           // Log error but don't fail the request
           console.error('[Auto-Claim] Failed to claim store:', claimError.message);
         }
-      }
 
       // Try to create Google Calendar event (non-blocking)
       try {
@@ -16785,7 +16205,6 @@ ${rawText}`;
         }
       } catch (calendarError: any) {
         // Non-blocking - calendar event creation failed but reminder was still created
-      }
 
       // Smart default: Update user preferences if calendar reminders differ from current defaults
       try {
@@ -16810,7 +16229,6 @@ ${rawText}`;
         }
       } catch (prefsError: any) {
         // Don't fail the request if preference update fails
-      }
 
       res.json({ reminder });
     } catch (error: any) {
@@ -16824,7 +16242,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -16834,7 +16251,6 @@ ${rawText}`;
       const existing = await storage.getReminderById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Reminder not found' });
-      }
 
       const reminder = await storage.updateReminder(id, tenantId, req.body);
       res.json({ reminder });
@@ -16849,7 +16265,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -16859,7 +16274,6 @@ ${rawText}`;
       const existing = await storage.getReminderById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Reminder not found' });
-      }
 
       const reminder = await storage.updateReminder(id, tenantId, req.body);
       res.json({ reminder });
@@ -16874,7 +16288,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -16884,7 +16297,6 @@ ${rawText}`;
       const existing = await storage.getReminderById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Reminder not found' });
-      }
 
       await storage.deleteReminder(id, tenantId);
       res.json({ success: true });
@@ -16899,7 +16311,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
@@ -16907,7 +16318,6 @@ ${rawText}`;
       const integration = await storage.getUserIntegration(userId);
       if (!integration?.googleCalendarAccessToken) {
         return res.status(400).json({ message: 'Google Calendar not connected. Please connect in Settings.' });
-      }
 
       // Get user preferences for calendar reminders
       const tenantId = (req.user as any).tenantId;
@@ -16947,7 +16357,6 @@ ${rawText}`;
             });
           }
         }
-      }
 
       // Create OAuth2 client
       const oauth2Client = new google.auth.OAuth2(
@@ -17038,7 +16447,6 @@ ${rawText}`;
           errorCount++;
           console.error(`[Calendar Sync] Failed to create event for reminder ${reminder.id}:`, error.message);
         }
-      }
 
       res.json({ 
         success: true, 
@@ -17058,7 +16466,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -17107,7 +16514,6 @@ ${rawText}`;
 
         icsLines.push('STATUS:CONFIRMED');
         icsLines.push('END:VEVENT');
-      }
 
       icsLines.push('END:VCALENDAR');
 
@@ -17130,7 +16536,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { unreadOnly = 'false', agentIds } = req.query;
@@ -17139,7 +16544,6 @@ ${rawText}`;
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
-      }
 
       // SECURITY: Determine which agents' data to show
       let allowedUserIds: string[] = [];
@@ -17155,7 +16559,6 @@ ${rawText}`;
           : [userId];
 
         allowedUserIds = requestedAgentIds;
-      }
 
       // Fetch notifications for allowed users
       const tenantId = (req.user as any).tenantId;
@@ -17163,7 +16566,6 @@ ${rawText}`;
       for (const uid of allowedUserIds) {
         const userNotifications = await storage.getNotificationsByUser(uid, tenantId);
         allNotifications = allNotifications.concat(userNotifications);
-      }
 
       const filtered = unreadOnly === 'true'
         ? allNotifications.filter(n => !n.isRead)
@@ -17184,7 +16586,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -17194,7 +16595,6 @@ ${rawText}`;
       const existing = await storage.getNotificationById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Notification not found' });
-      }
 
       const notification = await storage.markNotificationAsRead(id, tenantId);
       res.json({ notification });
@@ -17209,7 +16609,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -17219,7 +16618,6 @@ ${rawText}`;
       const existing = await storage.getNotificationById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Notification not found' });
-      }
 
       const notification = await storage.markNotificationAsResolved(id, tenantId);
       res.json({ notification });
@@ -17234,7 +16632,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const tenantId = (req.user as any).tenantId;
@@ -17244,7 +16641,6 @@ ${rawText}`;
       const existing = await storage.getNotificationById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Notification not found' });
-      }
 
       await storage.deleteNotification(id, tenantId);
       res.json({ success: true });
@@ -17261,7 +16657,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const integration = await storage.getUserIntegration(userId);
@@ -17283,7 +16678,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
@@ -17304,7 +16698,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
@@ -17329,7 +16722,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
@@ -17361,7 +16753,6 @@ ${rawText}`;
         } catch (stopError: any) {
           console.error('[Calendar Webhook] Failed to stop webhook on disconnect:', stopError.message);
         }
-      }
 
       // Clear Google Calendar tokens from user integration
       await storage.updateUserIntegration(userId, {
@@ -17389,7 +16780,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { dashboardType = 'sales' } = req.query;
@@ -17406,7 +16796,6 @@ ${rawText}`;
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const layoutData = { ...req.body, userId };
@@ -17435,7 +16824,6 @@ ${rawText}`;
       if (!isAdminUser) {
         console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
-      }
 
       console.log('⚙️ [SETTINGS] Fetching OpenAI settings from database...');
       const settings = await storage.getOpenaiSettings(req.user.tenantId);
@@ -17458,7 +16846,6 @@ ${rawText}`;
       } else {
         console.log('⚙️ [SETTINGS] ✅ No settings found, sending null');
         res.json(null);
-      }
     } catch (error: any) {
       console.error('⚙️ [SETTINGS] ❌ ERROR:', error.message);
       console.error('⚙️ [SETTINGS] Stack trace:', error.stack);
@@ -17482,7 +16869,6 @@ ${rawText}`;
       if (!isAdminUser) {
         console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
-      }
 
       const { apiKey, aiInstructions, vectorStoreId } = req.body;
       console.log('⚙️ [SETTINGS] Request data:', {
@@ -17546,7 +16932,6 @@ ${rawText}`;
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser) {
         return res.status(403).json({ message: 'Admin access required' });
-      }
 
       const { filename, content, category, productCategory, description } = req.body;
       console.log('📤 [FILE UPLOAD] File details:', {
@@ -17559,13 +16944,11 @@ ${rawText}`;
 
       if (!filename || !content) {
         return res.status(400).json({ message: 'Filename and content required' });
-      }
 
       // Get OpenAI settings
       const settings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!settings?.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
-      }
       console.log('📤 [FILE UPLOAD] OpenAI settings retrieved, API key exists:', !!settings.apiKey);
       console.log('📤 [FILE UPLOAD] Existing vector store ID:', settings.vectorStoreId || 'none');
 
@@ -17609,7 +16992,6 @@ ${rawText}`;
         // Always clean up temporary file, even if upload fails
         await fs.unlink(tmpFilePath).catch(() => {});
         console.log('📤 [FILE UPLOAD] Temp file cleaned up');
-      }
 
       // If no vector store exists, create one using direct API call
       let vectorStoreId = settings.vectorStoreId;
@@ -17634,7 +17016,6 @@ ${rawText}`;
         console.log('📤 [FILE UPLOAD] Vector store ID saved to database');
       } else {
         console.log('📤 [FILE UPLOAD] Using existing vector store:', vectorStoreId);
-      }
 
       // Save file metadata to database with 'uploading' status
       console.log('📤 [FILE UPLOAD] Saving file metadata to database...');
@@ -17685,7 +17066,6 @@ ${rawText}`;
         console.error('📤 [FILE UPLOAD] Error details:', vectorError);
         await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'failed');
         throw new Error(`Vector store attachment failed: ${vectorError.message}`);
-      }
 
       // Poll for file processing completion
       console.log('📤 [FILE UPLOAD] Waiting for file to be processed...');
@@ -17722,12 +17102,10 @@ ${rawText}`;
           await new Promise(resolve => setTimeout(resolve, 1000));
           attempts++;
         }
-      }
 
       if (!processingComplete) {
         console.log('📤 [FILE UPLOAD] ⚠️ File processing timeout, but file may still complete');
         // Keep status as 'processing' if timeout - it might still complete on OpenAI's side
-      }
 
       console.log('📤 [FILE UPLOAD] File added to vector store successfully');
 
@@ -17750,7 +17128,6 @@ ${rawText}`;
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdminUser) {
         return res.status(403).json({ message: 'Admin access required' });
-      }
 
       const { id } = req.params;
       const { category, productCategory, description } = req.body;
@@ -17788,7 +17165,6 @@ ${rawText}`;
       if (!isAdminUser) {
         console.log('📁 [DELETE FILE] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
-      }
 
       const fileId = req.params.id;
       console.log('📁 [DELETE FILE] File ID to delete:', fileId);
@@ -17799,7 +17175,6 @@ ${rawText}`;
       if (!file) {
         console.log('📁 [DELETE FILE] ❌ File not found in database');
         return res.status(404).json({ message: 'File not found' });
-      }
 
       console.log('📁 [DELETE FILE] File found:', {
         filename: file.filename,
@@ -17840,7 +17215,6 @@ ${rawText}`;
         }
       } else {
         console.log('📁 [DELETE FILE] Skipping OpenAI deletion (no API key or file ID)');
-      }
 
       console.log('📁 [DELETE FILE] Deleting file from database...');
       await storage.deleteKnowledgeBaseFile(fileId, req.user.tenantId);
@@ -17872,7 +17246,6 @@ ${rawText}`;
       if (!message) {
         console.log('💬 [CHAT] ❌ No message provided');
         return res.status(400).json({ message: 'Message required' });
-      }
 
       // Auto-create conversation if not provided
       const tenantId = (req.user as any).tenantId;
@@ -17891,7 +17264,6 @@ ${rawText}`;
       } else if (contextData) {
         console.log('💬 [CHAT] Updating conversation with context data...');
         await storage.updateConversation(activeConversationId, tenantId, { contextData });
-      }
 
       // Get OpenAI settings
       console.log('💬 [CHAT] Fetching OpenAI settings...');
@@ -17905,7 +17277,6 @@ ${rawText}`;
       if (!settings?.apiKey) {
         console.log('💬 [CHAT] ❌ No API key configured');
         return res.status(400).json({ message: 'OpenAI API key not configured' });
-      }
 
       // Initialize OpenAI client
       console.log('💬 [CHAT] Initializing OpenAI client...');
@@ -17958,7 +17329,6 @@ ${rawText}`;
       if (selectedCategory) {
         systemInstructions += `\n\nIMPORTANT CATEGORY RESTRICTION: You are specifically assisting with ${selectedCategory} product sales. Focus EXCLUSIVELY on ${selectedCategory}-related sales strategies, product information, and objection handling. DO NOT provide information, scripts, or advice about other product categories. If asked about other categories, politely redirect: "I specialize in ${selectedCategory} sales. For other products, please consult the appropriate specialist."\n`;
         console.log('💬 [CHAT] Category-specific context added for:', selectedCategory);
-      }
 
       // Append user signature information
       if (currentUser) {
@@ -17990,7 +17360,6 @@ IMPORTANT: Never use placeholders like [Your Name] or [Your Contact Information]
 
         systemInstructions += signatureInstructions;
         console.log('💬 [CHAT] User signature appended');
-      }
 
       // Append store context if available
       if (contextInfo && Object.keys(contextInfo).length > 0) {
@@ -18077,7 +17446,6 @@ IMPORTANT: Never silently generate emails with missing recipient information. Al
 Use this store information to provide context-aware responses. When helping draft emails or communications, reference specific details about this store.`;
         systemInstructions += contextString;
         console.log('💬 [CHAT] Store context appended (length:', contextString.length, ')');
-      }
 
       console.log('💬 [CHAT] System instructions length:', systemInstructions.length);
 
@@ -18225,7 +17593,6 @@ Use this store information to provide context-aware responses. When helping draf
       } else {
         console.error('💬 [CHAT] ⚠️ No vector store configured');
         throw new Error('Knowledge base required. Please upload files to the knowledge base before using the Sales Assistant.');
-      }
 
       // Save assistant message
       console.log('💬 [CHAT] Saving assistant message to database...');
@@ -18334,11 +17701,9 @@ Use this store information to provide context-aware responses. When helping draf
       const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
-      }
 
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       const messages = await storage.getConversationMessages(id, tenantId);
       res.json({ ...conversation, messages });
@@ -18356,7 +17721,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const conversation = await storage.createConversation(validation.data);
       res.json(conversation);
@@ -18375,11 +17739,9 @@ Use this store information to provide context-aware responses. When helping draf
       const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
-      }
 
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       const messages = await storage.getConversationMessages(id, tenantId);
       res.json(messages);
@@ -18398,16 +17760,13 @@ Use this store information to provide context-aware responses. When helping draf
       const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
-      }
 
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       const { title } = req.body;
       if (!title || !title.trim()) {
         return res.status(400).json({ message: 'Title is required' });
-      }
 
       const updated = await storage.updateConversation(id, tenantId, { title: title.trim() });
       res.json(updated);
@@ -18426,11 +17785,9 @@ Use this store information to provide context-aware responses. When helping draf
       const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
-      }
 
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
@@ -18440,7 +17797,6 @@ Use this store information to provide context-aware responses. When helping draf
       const validation = updateSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const updated = await storage.updateConversation(id, tenantId, validation.data);
       res.json(updated);
@@ -18459,11 +17815,9 @@ Use this store information to provide context-aware responses. When helping draf
       const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
-      }
 
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       await storage.deleteConversation(id, tenantId);
       res.json({ success: true });
@@ -18482,11 +17836,9 @@ Use this store information to provide context-aware responses. When helping draf
       const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
-      }
 
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       const moveSchema = z.object({
         projectId: z.string().nullable(),
@@ -18495,7 +17847,6 @@ Use this store information to provide context-aware responses. When helping draf
       const validation = moveSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const updated = await storage.moveConversationToProject(id, tenantId, validation.data.projectId);
       res.json(updated);
@@ -18514,11 +17865,9 @@ Use this store information to provide context-aware responses. When helping draf
       const conversation = await storage.getConversation(id, tenantId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
-      }
 
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       const messages = await storage.getConversationMessages(id, tenantId);
 
@@ -18531,7 +17880,6 @@ Use this store information to provide context-aware responses. When helping draf
           exportText += `  ${key}: ${value}\n`;
         });
         exportText += `\n`;
-      }
 
       exportText += `Messages:\n${'='.repeat(50)}\n\n`;
 
@@ -18570,7 +17918,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const project = await storage.createProject(validation.data);
       res.json(project);
@@ -18591,7 +17938,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!project) {
         return res.status(404).json({ message: 'Project not found' });
-      }
 
       const updateSchema = z.object({
         name: z.string().min(1).optional(),
@@ -18601,7 +17947,6 @@ Use this store information to provide context-aware responses. When helping draf
       const validation = updateSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       const updated = await storage.updateProject(id, tenantId, validation.data);
       res.json(updated);
@@ -18622,7 +17967,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!project) {
         return res.status(404).json({ message: 'Project not found' });
-      }
 
       await storage.deleteProject(id, tenantId);
       res.json({ success: true });
@@ -18653,7 +17997,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       // If setting this as default Script, unset other defaults first
       if (validation.data.isDefault && validation.data.type === 'Script') {
@@ -18663,7 +18006,6 @@ Use this store information to provide context-aware responses. When helping draf
             await storage.updateTemplate(existing.id, tenantId, { isDefault: false });
           }
         }
-      }
 
       const template = await storage.createTemplate(validation.data);
       res.json(template);
@@ -18682,11 +18024,9 @@ Use this store information to provide context-aware responses. When helping draf
       const template = await storage.getTemplate(id, tenantId);
       if (!template) {
         return res.status(404).json({ message: 'Template not found' });
-      }
 
       if (template.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
@@ -18699,7 +18039,6 @@ Use this store information to provide context-aware responses. When helping draf
       const validation = updateSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
-      }
 
       // Determine the template type after update
       const updatedType = validation.data.type || template.type;
@@ -18712,7 +18051,6 @@ Use this store information to provide context-aware responses. When helping draf
             await storage.updateTemplate(existing.id, tenantId, { isDefault: false });
           }
         }
-      }
 
       const updated = await storage.updateTemplate(id, tenantId, validation.data);
       res.json(updated);
@@ -18731,11 +18069,9 @@ Use this store information to provide context-aware responses. When helping draf
       const template = await storage.getTemplate(id, tenantId);
       if (!template) {
         return res.status(404).json({ message: 'Template not found' });
-      }
 
       if (template.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
-      }
 
       await storage.deleteTemplate(id, tenantId);
       res.json({ success: true });
@@ -18776,7 +18112,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!tag || typeof tag !== 'string' || !tag.trim()) {
         return res.status(400).json({ message: 'Tag is required' });
-      }
 
       const newTag = await storage.addUserTag(userId, tag);
       res.json(newTag);
@@ -18833,7 +18168,6 @@ Use this store information to provide context-aware responses. When helping draf
       if (resourceState === 'sync') {
         console.log('[Webhook] Sync message received, webhook active');
         return;
-      }
 
       // Find user by webhook channel ID
       const users = await storage.getAllUserIntegrations();
@@ -18844,7 +18178,6 @@ Use this store information to provide context-aware responses. When helping draf
       if (!userIntegration) {
         console.log('[Webhook] No user found for channel ID:', channelId);
         return;
-      }
 
       const userId = userIntegration.userId;
       console.log('[Webhook] Processing calendar changes for user:', userId);
@@ -18852,631 +18185,6 @@ Use this store information to provide context-aware responses. When helping draf
       // Get user's tenantId for multi-tenant operations
       const webhookUser = await storage.getUserById(userId);
       const tenantId = webhookUser?.tenantId || '';
-      if (!tenantId) {
-        console.log('[Webhook] No tenantId found for user:', userId);
-        return;
-      }
-
-      // Get system OAuth credentials for token refresh
-      const systemIntegration = await storage.getSystemIntegration('google_sheets');
-      if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
-        console.error('[Webhook] System OAuth not configured');
-        return;
-      }
-
-      // Check if token needs refresh
-      let accessToken = userIntegration.googleCalendarAccessToken;
-      if (userIntegration.googleCalendarTokenExpiry && 
-          userIntegration.googleCalendarTokenExpiry < Date.now()) {
-        if (userIntegration.googleCalendarRefreshToken) {
-          const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              client_id: systemIntegration.googleClientId,
-              client_secret: systemIntegration.googleClientSecret,
-              refresh_token: userIntegration.googleCalendarRefreshToken,
-              grant_type: 'refresh_token'
-            })
-          });
-
-          if (tokenResponse.ok) {
-            const tokens = await tokenResponse.json();
-            accessToken = tokens.access_token;
-            await storage.updateUserIntegration(userId, {
-              googleCalendarAccessToken: tokens.access_token,
-              googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
-            });
-          }
-        }
-      }
-
-      // Fetch recent calendar events to detect changes
-      const oauth2Client = new google.auth.OAuth2(
-        systemIntegration.googleClientId,
-        systemIntegration.googleClientSecret
-      );
-
-      oauth2Client.setCredentials({
-        access_token: accessToken,
-        refresh_token: userIntegration.googleCalendarRefreshToken || undefined
-      });
-
-      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-      // Get all reminders for this user
-      const reminders = await storage.getRemindersByUser(userId, tenantId);
-
-      // Fetch each event to check for updates/deletions
-      for (const reminder of reminders) {
-        const calendarEventId = reminder.googleCalendarEventId;
-        if (!calendarEventId) continue;
-
-        try {
-          // Try to fetch the event
-          const eventResponse = await calendar.events.get({
-            calendarId: 'primary',
-            eventId: calendarEventId,
-          });
-
-          const event = eventResponse.data;
-
-          // Check if event was modified
-          if (event.status === 'cancelled') {
-            // Event was deleted, delete the reminder
-            console.log(`[Webhook] Calendar event ${calendarEventId} deleted, deleting reminder ${reminder.id}`);
-            await storage.deleteReminder(reminder.id, tenantId);
-          } else if (event.updated) {
-            // Event was updated, sync the changes from Google Calendar
-            // Google returns ISO datetime with timezone, parse it in the event's timezone
-            const eventStartDateTime = event.start?.dateTime;
-            const eventTimeZone = event.start?.timeZone || reminder.timezone;
-
-            if (eventStartDateTime && eventTimeZone) {
-              // Parse Google's datetime to extract local date and time components
-              // eventStartDateTime format: "2025-10-24T23:00:00+02:00" or "2025-10-24T23:00:00"
-              const dateTimeParts = eventStartDateTime.split('T');
-              const newScheduledDate = dateTimeParts[0]; // YYYY-MM-DD
-              const timePart = dateTimeParts[1].split('+')[0].split('-')[0].split('Z')[0]; // Remove timezone suffix
-              const newScheduledTime = timePart.substring(0, 5); // HH:MM
-
-              // Check if date or time changed
-              if (newScheduledDate !== reminder.scheduledDate || newScheduledTime !== reminder.scheduledTime) {
-                console.log(`[Webhook] Calendar event ${calendarEventId} time changed, updating reminder ${reminder.id}`);
-                console.log(`[Webhook] Old: ${reminder.scheduledDate} ${reminder.scheduledTime}, New: ${newScheduledDate} ${newScheduledTime}`);
-                await storage.updateReminder(reminder.id, tenantId, {
-                  scheduledDate: newScheduledDate,
-                  scheduledTime: newScheduledTime,
-                  timezone: eventTimeZone
-                });
-              }
-            }
-
-            // Update title if changed
-            if (event.summary && event.summary !== reminder.title) {
-              await storage.updateReminder(reminder.id, tenantId, {
-                title: event.summary
-              });
-            }
-          }
-        } catch (eventError: any) {
-          // Event not found (404) means it was deleted
-          if (eventError.code === 404 || eventError.status === 404) {
-            await storage.deleteReminder(reminder.id, tenantId);
-          }
-        }
-      }
-    } catch (error: any) {
-      // Don't send error response since we already responded with 200
-    }
-  });
-
-  // Automatic webhook renewal system - runs daily
-  async function renewWebhooksIfNeeded() {
-    try {
-      const allIntegrations = await storage.getAllUserIntegrations();
-      const threeDaysFromNow = Date.now() + (3 * 24 * 60 * 60 * 1000);
-
-      for (const integration of allIntegrations) {
-        // Skip if no webhook registered or no calendar access
-        if (!integration.googleCalendarWebhookChannelId || 
-            !integration.googleCalendarAccessToken ||
-            !integration.googleCalendarWebhookExpiry) {
-          continue;
-        }
-
-        // Skip inactive users - don't renew webhooks for deactivated accounts
-        const user = await storage.getUser(integration.userId);
-        if (!user || user.isActive === false) {
-          continue;
-        }
-
-        // Check if webhook expires in less than 3 days
-        if (integration.googleCalendarWebhookExpiry < threeDaysFromNow) {
-
-          try {
-            // Check if token needs refresh
-            let accessToken = integration.googleCalendarAccessToken;
-            if (integration.googleCalendarTokenExpiry && 
-                integration.googleCalendarTokenExpiry < Date.now()) {
-              if (integration.googleCalendarRefreshToken && 
-                  integration.googleClientId && 
-                  integration.googleClientSecret) {
-                const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: new URLSearchParams({
-                    client_id: integration.googleClientId,
-                    client_secret: integration.googleClientSecret,
-                    refresh_token: integration.googleCalendarRefreshToken,
-                    grant_type: 'refresh_token'
-                  })
-                });
-
-                if (tokenResponse.ok) {
-                  const tokens = await tokenResponse.json();
-                  accessToken = tokens.access_token;
-                  await storage.updateUserIntegration(integration.userId, {
-                    googleCalendarAccessToken: tokens.access_token,
-                    googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
-                  });
-                }
-              }
-            }
-
-            // Stop old webhook
-            if (integration.googleCalendarWebhookChannelId && 
-                integration.googleCalendarWebhookResourceId) {
-              try {
-                const oauth2Client = new google.auth.OAuth2(
-                  integration.googleClientId,
-                  integration.googleClientSecret
-                );
-
-                oauth2Client.setCredentials({
-                  access_token: accessToken,
-                  refresh_token: integration.googleCalendarRefreshToken || undefined
-                });
-
-                const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-                await calendar.channels.stop({
-                  requestBody: {
-                    id: integration.googleCalendarWebhookChannelId,
-                    resourceId: integration.googleCalendarWebhookResourceId,
-                  },
-                });
-              } catch (stopError: any) {
-                // Old webhook may already be expired - continue with renewal
-              }
-            }
-
-            // Register new webhook - always use HTTPS for production/Replit
-            const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
-              ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`
-              : `https://localhost:5000/api/webhooks/google-calendar`; // Use HTTPS even for local (Google requires it)
-            const channelId = `calendar-${integration.userId}-${Date.now()}`;
-            const expiration = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
-
-            const oauth2Client = new google.auth.OAuth2(
-              integration.googleClientId,
-              integration.googleClientSecret
-            );
-
-            oauth2Client.setCredentials({
-              access_token: accessToken,
-              refresh_token: integration.googleCalendarRefreshToken || undefined
-            });
-
-            const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-            const watchResponse = await calendar.events.watch({
-              calendarId: 'primary',
-              requestBody: {
-                id: channelId,
-                type: 'web_hook',
-                address: webhookUrl,
-                expiration: expiration.toString(),
-              },
-            });
-
-            // Update webhook details
-            await storage.updateUserIntegration(integration.userId, {
-              googleCalendarWebhookChannelId: channelId,
-              googleCalendarWebhookResourceId: watchResponse.data.resourceId || undefined,
-              googleCalendarWebhookExpiry: expiration,
-            });
-          } catch (renewError: any) {
-            // Webhook renewal failed - bidirectional sync will stop working for this user
-          }
-        }
-      }
-    } catch (error: any) {
-      // Renewal check failed
-    }
-  }
-
-  // Run webhook renewal check every 24 hours
-  setInterval(renewWebhooksIfNeeded, 24 * 60 * 60 * 1000);
-
-  // Run initial check 1 minute after startup
-  setTimeout(renewWebhooksIfNeeded, 60 * 1000);
-
-  // ============================================================================
-  // CATEGORY MANAGEMENT ROUTES
-  // ============================================================================
-
-  // Get all categories (admin only)
-  app.get('/api/categories', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const projectId = req.query.projectId as string | undefined;
-      const tenantId = req.user.tenantId;
-      const categories = await storage.getAllCategories(tenantId, projectId);
-      res.json({ categories });
-    } catch (error: any) {
-      console.error('Error fetching categories:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch categories' });
-    }
-  });
-
-  // Get active categories (all authenticated users)
-  app.get('/api/categories/active', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const projectId = req.query.projectId as string | undefined;
-      const categories = await storage.getActiveCategories(tenantId, projectId);
-      res.json({ categories });
-    } catch (error: any) {
-      console.error('Error fetching active categories:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch categories' });
-    }
-  });
-
-  // Create category (admin only)
-  app.post('/api/categories', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const validation = insertCategorySchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ message: validation.error.errors[0].message });
-      }
-
-      const category = await storage.createCategory(validation.data);
-      res.json({ category });
-    } catch (error: any) {
-      console.error('Error creating category:', error);
-      res.status(500).json({ message: error.message || 'Failed to create category' });
-    }
-  });
-
-  // Update category (admin only)
-  app.put('/api/categories/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const validation = insertCategorySchema.partial().safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ message: validation.error.errors[0].message });
-      }
-
-      const category = await storage.updateCategory(id, validation.data);
-      res.json({ category });
-    } catch (error: any) {
-      console.error('Error updating category:', error);
-      res.status(500).json({ message: error.message || 'Failed to update category' });
-    }
-  });
-
-  // Delete category (admin only)
-  app.delete('/api/categories/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      await storage.deleteCategory(id);
-      res.json({ message: 'Category deleted successfully' });
-    } catch (error: any) {
-      console.error('Error deleting category:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete category' });
-    }
-  });
-
-  // ============================================================================
-  // STATUS MANAGEMENT ROUTES
-  // ============================================================================
-
-  // Get all statuses (all authenticated users)
-  app.get('/api/statuses', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const statuses = await storage.getAllStatuses(tenantId);
-      res.json({ statuses });
-    } catch (error: any) {
-      console.error('Error fetching statuses:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch statuses' });
-    }
-  });
-
-  // Get active statuses (all authenticated users)
-  app.get('/api/statuses/active', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const statuses = await storage.getActiveStatuses(tenantId);
-      res.json({ statuses });
-    } catch (error: any) {
-      console.error('Error fetching active statuses:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch statuses' });
-    }
-  });
-
-  // Create status (admin only)
-  app.post('/api/statuses', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const validation = insertStatusSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ 
-          message: 'Validation failed',
-          errors: validation.error.errors 
-        });
-      }
-
-      const status = await storage.createStatus(validation.data);
-      res.json({ status });
-    } catch (error: any) {
-      console.error('Error creating status:', error);
-      res.status(500).json({ message: error.message || 'Failed to create status' });
-    }
-  });
-
-  // Update status (admin only)
-  app.put('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      // Require all fields when updating - all 4 color fields must be provided
-      const validation = insertStatusSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ 
-          message: 'Validation failed',
-          errors: validation.error.errors 
-        });
-      }
-
-      const status = await storage.updateStatus(id, validation.data);
-      res.json({ status });
-    } catch (error: any) {
-      console.error('Error updating status:', error);
-      res.status(500).json({ message: error.message || 'Failed to update status' });
-    }
-  });
-
-  // Delete status (admin only)
-  app.delete('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      await storage.deleteStatus(id);
-      res.json({ message: 'Status deleted successfully' });
-    } catch (error: any) {
-      console.error('Error deleting status:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete status' });
-    }
-  });
-
-  // Reorder statuses (admin only)
-  app.post('/api/statuses/reorder', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const { updates } = req.body;
-      
-      if (!Array.isArray(updates)) {
-        return res.status(400).json({ message: 'Updates must be an array' });
-      }
-
-      // Validate each update has id and displayOrder
-      for (const update of updates) {
-        if (!update.id || typeof update.displayOrder !== 'number') {
-          return res.status(400).json({ message: 'Each update must have id and displayOrder' });
-        }
-      }
-
-      await storage.reorderStatuses(updates);
-      res.json({ message: 'Statuses reordered successfully' });
-    } catch (error: any) {
-      console.error('Error reordering statuses:', error);
-      res.status(500).json({ message: error.message || 'Failed to reorder statuses' });
-    }
-  });
-
-  // Seed default statuses (admin only) - one-time setup
-  app.post('/api/statuses/seed', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const existingStatuses = await storage.getAllStatuses(tenantId);
-      if (existingStatuses.length > 0) {
-        return res.status(400).json({ message: 'Statuses already exist. Clear the database first if you want to re-seed.' });
-      }
-
-      const defaultStatuses = [
-        {
-          name: '1 – Contacted',
-          displayOrder: 1,
-          lightBgColor: '#dbeafe',
-          lightTextColor: '#1e40af',
-          darkBgColor: '#1e3a8a',
-          darkTextColor: '#bfdbfe',
-          isActive: true,
-        },
-        {
-          name: '2 – Interested',
-          displayOrder: 2,
-          lightBgColor: '#fef3c7',
-          lightTextColor: '#92400e',
-          darkBgColor: '#78350f',
-          darkTextColor: '#fef3c7',
-          isActive: true,
-        },
-        {
-          name: '3 – Sample Sent',
-          displayOrder: 3,
-          lightBgColor: '#e0e7ff',
-          lightTextColor: '#3730a3',
-          darkBgColor: '#312e81',
-          darkTextColor: '#c7d2fe',
-          isActive: true,
-        },
-        {
-          name: '4 – Follow-Up',
-          displayOrder: 4,
-          lightBgColor: '#fed7aa',
-          lightTextColor: '#9a3412',
-          darkBgColor: '#7c2d12',
-          darkTextColor: '#fed7aa',
-          isActive: true,
-        },
-        {
-          name: '5 – Closed Won',
-          displayOrder: 5,
-          lightBgColor: '#d1fae5',
-          lightTextColor: '#065f46',
-          darkBgColor: '#064e3b',
-          darkTextColor: '#a7f3d0',
-          isActive: true,
-        },
-        {
-          name: '6 – Closed Lost',
-          displayOrder: 6,
-          lightBgColor: '#fee2e2',
-          lightTextColor: '#991b1b',
-          darkBgColor: '#7f1d1d',
-          darkTextColor: '#fecaca',
-          isActive: true,
-        },
-        {
-          name: '7 – Warm',
-          displayOrder: 7,
-          lightBgColor: '#fef9c3',
-          lightTextColor: '#854d0e',
-          darkBgColor: '#78350f',
-          darkTextColor: '#fef9c3',
-          isActive: true,
-        },
-      ];
-
-      const createdStatuses = [];
-      for (const statusData of defaultStatuses) {
-        const status = await storage.createStatus(statusData);
-        createdStatuses.push(status);
-      }
-
-      res.json({ 
-        message: 'Default statuses seeded successfully',
-        statuses: createdStatuses 
-      });
-    } catch (error: any) {
-      console.error('Error seeding statuses:', error);
-      res.status(500).json({ message: error.message || 'Failed to seed statuses' });
-    }
-  });
-
-  // ============================================================================
-  // SAVED EXCLUSIONS ROUTES
-  // ============================================================================
-
-  // Get all saved exclusions
-  app.get('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const exclusions = await storage.getAllSavedExclusions();
-      res.json({ exclusions });
-    } catch (error: any) {
-      console.error('Error fetching exclusions:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
-    }
-  });
-
-  // Get exclusions by type
-  app.get('/api/exclusions/:type', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const { type } = req.params;
-      if (type !== 'keyword' && type !== 'place_type') {
-        return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
-      }
-      const exclusions = await storage.getSavedExclusionsByType(type);
-      res.json({ exclusions });
-    } catch (error: any) {
-      console.error('Error fetching exclusions by type:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
-    }
-  });
-
-  // Create new exclusion
-  app.post('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const { type, value } = req.body;
-      if (!type || !value) {
-        return res.status(400).json({ message: 'Type and value are required' });
-      }
-      if (type !== 'keyword' && type !== 'place_type') {
-        return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
-      }
-      const exclusion = await storage.createSavedExclusion({ type, value: value.toLowerCase().trim() });
-      res.json({ exclusion });
-    } catch (error: any) {
-      console.error('Error creating exclusion:', error);
-      res.status(500).json({ message: error.message || 'Failed to create exclusion' });
-    }
-  });
-
-  // Delete exclusion
-  app.delete('/api/exclusions/:id', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const { id } = req.params;
-      await storage.deleteSavedExclusion(id);
-      res.json({ message: 'Exclusion deleted successfully' });
-    } catch (error: any) {
-      console.error('Error deleting exclusion:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete exclusion' });
-    }
-  });
-
-  // Update user's active exclusions
-  app.put('/api/user/active-exclusions', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { activeKeywords = [], activeTypes = [] } = req.body;
-      const prefs = await storage.updateUserActiveExclusions(userId, activeKeywords, activeTypes);
-      res.json({ preferences: prefs });
-    } catch (error: any) {
-      console.error('Error updating active exclusions:', error);
-      res.status(500).json({ message: error.message || 'Failed to update active exclusions' });
-    }
-  });
-
-  // ============================================================================
-  // GOOGLE MAPS SEARCH ROUTES
-  // ============================================================================
-
-  // Get all search history (global, newest first)
-  app.get('/api/maps/search-history', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const history = await storage.getAllSearchHistory();
-      res.json({ history });
-    } catch (error: any) {
-      console.error('Error fetching search history:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch search history' });
-    }
-  });
-
-  // Delete search history entry
-  app.delete('/api/maps/search-history/:id', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const { id } = req.params;
-      await storage.deleteSearchHistory(id);
-      res.json({ message: 'Search history entry deleted successfully' });
-    } catch (error: any) {
-      console.error('Error deleting search history:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete search history' });
-    }
-  });
-
-  // Get last selected category for Map Search
-  app.get('/api/maps/last-category', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const tenantId = (req.user as any).tenantId;
       const lastCategory = await storage.getLastCategory(userId, tenantId);
       res.json({ category: lastCategory || 'Pets' }); // Default to 'Pets'
     } catch (error: any) {
@@ -19494,7 +18202,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!category) {
         return res.status(400).json({ message: 'Category is required' });
-      }
 
       await storage.setLastCategory(userId, tenantId, category);
       res.json({ message: 'Last category saved successfully', category });
@@ -19526,7 +18233,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!category) {
         return res.status(400).json({ message: 'Category is required' });
-      }
 
       await storage.setSelectedCategory(userId, tenantId, category);
       res.json({ message: 'Selected category saved successfully', category });
@@ -19544,7 +18250,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
-      }
 
       // Parse location into city, state, country
       const locationParts = location.split(',').map((s: string) => s.trim());
@@ -19563,7 +18268,6 @@ Use this store information to provide context-aware responses. When helping draf
         excludedKeywordsArray = excludedKeywords
           .map((k: string) => k.trim().toLowerCase())
           .filter((k: string) => k.length > 0);
-      }
 
       // Parse excluded types from comma-separated string or array
       let excludedTypesArray: string[] = [];
@@ -19576,7 +18280,6 @@ Use this store information to provide context-aware responses. When helping draf
         excludedTypesArray = excludedTypes
           .map((k: string) => k.trim().toLowerCase().replace(/\s+/g, '_'))
           .filter((k: string) => k.length > 0);
-      }
 
       // Record this search in history only for new searches (not pagination)
       if (!pageToken) {
@@ -19585,7 +18288,6 @@ Use this store information to provide context-aware responses. When helping draf
         } else {
           console.warn('[Map Search] Skipping search history recording - no tenant ID found in session');
         }
-      }
 
       // Get search results from Google Maps with API-level type filtering and pagination
       const searchResponse = await googleMaps.searchPlaces(query, location, excludedTypesArray, pageToken);
@@ -19608,7 +18310,6 @@ Use this store information to provide context-aware responses. When helping draf
           return !excludedKeywordsArray.some(keyword => placeName.includes(keyword));
         });
         excludedCount = beforeExclusionCount - filteredResults.length;
-      }
 
       res.json({ 
         results: filteredResults,
@@ -19630,13 +18331,11 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!placeId) {
         return res.status(400).json({ message: 'Place ID is required' });
-      }
 
       const details = await googleMaps.getPlaceDetails(placeId);
 
       if (!details) {
         return res.status(404).json({ message: 'Place not found' });
-      }
 
       res.json({ place: details });
     } catch (error: any) {
@@ -19653,13 +18352,11 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (lat === undefined || lng === undefined) {
         return res.status(400).json({ message: 'Latitude and longitude are required' });
-      }
 
       const result = await googleMaps.reverseGeocode(lat, lng);
 
       if (!result) {
         return res.status(404).json({ message: 'Location not found' });
-      }
 
       res.json(result);
     } catch (error: any) {
@@ -19675,14 +18372,12 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!placeId || !category) {
         return res.status(400).json({ message: 'Place ID and category are required' });
-      }
 
       // Get place details from Google Maps
       const placeDetails = await googleMaps.getPlaceDetails(placeId);
 
       if (!placeDetails) {
         return res.status(404).json({ message: 'Place not found' });
-      }
 
       // Parse address into street, city, state, zip components for separate CRM columns
       const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
@@ -19691,7 +18386,6 @@ Use this store information to provide context-aware responses. When helping draf
       const tenantId = (req.user as any).tenantId;
       if (category && category.trim() && tenantId) {
         await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
-      }
 
       // Find Store Database sheet for this category
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
@@ -19699,7 +18393,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store Database sheet not found. Please connect a Google Sheet first.' });
-      }
 
       // Format hours more concisely - just show if open and basic hours
       const formatHours = (weekdayText?: string[]): string => {
@@ -19714,7 +18407,6 @@ Use this store information to provide context-aware responses. When helping draf
       
       if (!storeRows || storeRows.length === 0) {
         return res.status(500).json({ message: 'Store Database sheet is empty or has no headers' });
-      }
 
       // CRITICAL: Filter out empty headers to prevent sheet pollution
       const allHeaders = storeRows[0];
@@ -19790,867 +18482,11 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!placeId) {
         return res.status(400).json({ message: 'Place ID is required' });
-      }
 
-      if (!tenantId) {
-        return res.status(400).json({ message: 'Tenant context required' });
-      }
-
-      // Get place details from Google Maps
-      const placeDetails = await googleMaps.getPlaceDetails(placeId);
-
-      if (!placeDetails) {
-        return res.status(404).json({ message: 'Place not found' });
-      }
-
-      // Parse address into components
-      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
-
-      // Extract country from address_components if available
-      let country = 'United States';
-      let countryCode = 'US';
-      if (placeDetails.address_components) {
-        const countryComponent = placeDetails.address_components.find(
-          (c: any) => c.types?.includes('country')
-        );
-        if (countryComponent) {
-          country = countryComponent.long_name || country;
-          countryCode = countryComponent.short_name || countryCode;
-        }
-      }
-
-      // Auto-create category if it doesn't exist (frictionless category creation)
-      if (category && category.trim()) {
-        await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
-      }
-
-      // Create qualification lead from place data
-      const leadData = {
-        tenantId,
-        company: placeDetails.name || 'Unknown Business',
-        website: placeDetails.website || null,
-        category: category || null,
-        pocPhone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || null,
-        address: street || null,
-        city: city || null,
-        state: state || null,
-        postalCode: zip || null,
-        country,
-        countryCode,
-        source: 'map_search',
-        callStatus: 'pending',
-        tags: placeDetails.types || [],
-      };
-
-      const createdLead = await storage.createQualificationLead(leadData);
-
-      // Record this place_id to prevent duplicates in future searches
-      await storage.recordImportedPlace(placeId, tenantId);
-
-      res.json({ 
-        message: 'Lead saved successfully to Qualification Leads',
-        lead: {
-          id: createdLead.id,
-          company: createdLead.company,
-          city: createdLead.city,
-          state: createdLead.state,
-          category: createdLead.category
-        }
-      });
-    } catch (error: any) {
-      console.error('Error saving place to qualification leads:', error);
-      res.status(500).json({ message: error.message || 'Failed to save lead' });
-    }
-  });
-
-  // Ticket Routes
-
-  // Get unread ticket count (admin only - Super Admins see all tenants, tenant admins see their tenant)
-  app.get('/api/tickets/unread-count', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      const tenantId = req.user.tenantId;
-
-      const isAdminUser = await checkAdminAccess(user, tenantId);
-      if (!isAdminUser) {
-        return res.json({ count: 0 });
-      }
-
-      const allTickets = await storage.getAllTickets();
-      
-      // Super Admins see unread count from ALL tenants, tenant admins only see their tenant
-      let unreadCount: number;
-      if (user?.isSuperAdmin) {
-        unreadCount = allTickets.filter(t => t.isUnreadByAdmin).length;
-      } else {
-        unreadCount = allTickets.filter(t => t.tenantId === tenantId && t.isUnreadByAdmin).length;
-      }
-      
-      res.json({ count: unreadCount });
-    } catch (error: any) {
-      console.error('Error getting unread count:', error);
-      res.status(500).json({ message: error.message || 'Failed to get unread count' });
-    }
-  });
-
-  // Get all tickets with user info (Super Admins see all tenants, tenant admins see their tenant)
-  app.get('/api/tickets/admin', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      const tenantId = req.user.tenantId;
-
-      const isAdminUser = await checkAdminAccess(user, tenantId);
-      if (!isAdminUser) {
-        return res.status(403).json({ message: 'Admin access required' });
-      }
-
-      const allTickets = await storage.getAllTickets();
-      
-      // Super Admins see ALL tickets from ALL tenants, tenant admins only see their tenant
-      const ticketsToShow = user?.isSuperAdmin 
-        ? allTickets 
-        : allTickets.filter(ticket => ticket.tenantId === tenantId);
-      
-      // For Super Admins, fetch tenant names for each ticket to show which tenant it belongs to
-      const ticketsWithUserInfo = await Promise.all(
-        ticketsToShow.map(async (ticket) => {
-          const ticketUser = await storage.getUser(ticket.userId);
-          let tenantName: string | undefined;
-          
-          // Include tenant name for Super Admins so they can see which tenant each ticket belongs to
-          if (user?.isSuperAdmin && ticket.tenantId) {
-            const tenant = await storage.getTenantById(ticket.tenantId);
-            tenantName = tenant?.name;
-          }
-          
-          return {
-            ...ticket,
-            userEmail: ticketUser?.email,
-            userName: ticketUser?.firstName && ticketUser?.lastName
-              ? `${ticketUser.firstName} ${ticketUser.lastName}`
-              : undefined,
-            tenantName,
-          };
-        })
-      );
-
-      res.json({ tickets: ticketsWithUserInfo });
-    } catch (error: any) {
-      console.error('Error fetching admin tickets:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
-    }
-  });
-
-  // Get all tickets (scoped to tenant for admins) or user's tickets (regular users)
-  app.get('/api/tickets', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      const tenantId = req.user.tenantId;
-
-      let tickets;
-      if (user?.roleInTenant === 'org_admin' || user?.role === 'admin') {
-        // Admin: get all tickets for their tenant only
-        const allTickets = await storage.getAllTickets();
-        tickets = allTickets.filter(ticket => ticket.tenantId === tenantId);
-      } else {
-        // Regular user: only their own tickets
-        tickets = await storage.getUserTickets(userId);
-      }
-
-      res.json({ tickets });
-    } catch (error: any) {
-      console.error('Error fetching tickets:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
-    }
-  });
-
-  // Get single ticket with replies
-  app.get('/api/tickets/:id', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      const ticketId = req.params.id;
-
-      const ticket = await storage.getTicket(ticketId);
-      if (!ticket) {
-        return res.status(404).json({ message: 'Ticket not found' });
-      }
-
-      // Check access: super admin can see all, tenant admin can see their tenant's tickets, users can see their own
-      const isSuperAdminUser = user?.isSuperAdmin;
-      const isTenantAdmin = user?.roleInTenant === 'org_admin' || user?.role === 'admin';
-      const isTicketOwner = ticket.userId === userId;
-      
-      // Tenant admins can only see tickets from their tenant
-      const isAdminForTicketTenant = isTenantAdmin && ticket.tenantId === req.user.tenantId;
-      
-      if (!isSuperAdminUser && !isAdminForTicketTenant && !isTicketOwner) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-
-      const replies = await storage.getTicketReplies(ticketId);
-
-      // Add user info to replies
-      const repliesWithUserInfo = await Promise.all(
-        replies.map(async (reply) => {
-          const replyUser = await storage.getUser(reply.userId);
-          return {
-            ...reply,
-            userEmail: replyUser?.email,
-            userName: replyUser?.firstName && replyUser?.lastName
-              ? `${replyUser.firstName} ${replyUser.lastName}`
-              : undefined,
-          };
-        })
-      );
-
-      // Get tenant name for the ticket
-      let tenantName = 'Unknown Tenant';
-      if (ticket.tenantId) {
-        const tenant = await storage.getTenantById(ticket.tenantId);
-        tenantName = tenant?.name || 'Unknown Tenant';
-      }
-
-      // Get user info for the ticket
-      const ticketUser = await storage.getUser(ticket.userId);
-      const ticketWithInfo = {
-        ...ticket,
-        tenantName,
-        userEmail: ticketUser?.email,
-        userName: ticketUser?.firstName && ticketUser?.lastName
-          ? `${ticketUser.firstName} ${ticketUser.lastName}`
-          : undefined,
-      };
-
-      // Mark as read for admins
-      if (isSuperAdminUser || isAdminForTicketTenant) {
-        await storage.markTicketReadByAdmin(ticketId);
-      } else if (isTicketOwner) {
-        await storage.markTicketReadByUser(ticketId);
-      }
-
-      res.json({ ticket: ticketWithInfo, replies: repliesWithUserInfo });
-    } catch (error: any) {
-      console.error('Error fetching ticket:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch ticket' });
-    }
-  });
-
-  // Create new ticket
-  app.post('/api/tickets', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const tenantId = req.user.tenantId;
-      
-      const validated = insertTicketSchema.parse({
-        ...req.body,
-        userId,
-        tenantId, // Explicitly set tenant from user context
-      });
-
-      const ticket = await storage.createTicket(validated);
-
-      // Send email notification to admin
-      const user = await storage.getUser(userId);
-      if (user) {
-        notifyNewTicket(
-          ticket.id,
-          `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'User',
-          user.email || 'no-email',
-          ticket.subject,
-          ticket.message
-        ).catch(err => console.error('Failed to send new ticket email:', err));
-      }
-
-      res.json({ ticket });
-    } catch (error: any) {
-      console.error('Error creating ticket:', error);
-      if (error.name === 'ZodError') {
-        return res.status(400).json({ message: 'Invalid ticket data', errors: error.errors });
-      }
-      res.status(500).json({ message: error.message || 'Failed to create ticket' });
-    }
-  });
-
-  // Reply to ticket
-  app.post('/api/tickets/:id/reply', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      const ticketId = req.params.id;
-
-      const ticket = await storage.getTicket(ticketId);
-      if (!ticket) {
-        return res.status(404).json({ message: 'Ticket not found' });
-      }
-
-      // Check access: super admin, tenant admin for ticket's tenant, or ticket owner
-      const isSuperAdminUser = user?.isSuperAdmin;
-      const isTenantAdmin = user?.roleInTenant === 'org_admin' || user?.role === 'admin';
-      const isAdminForTicketTenant = isTenantAdmin && ticket.tenantId === req.user.tenantId;
-      const isTicketOwner = ticket.userId === userId;
-
-      if (!isSuperAdminUser && !isAdminForTicketTenant && !isTicketOwner) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-
-      const validated = insertTicketReplySchema.parse({
-        ticketId,
-        userId,
-        message: req.body.message,
-      });
-
-      const reply = await storage.createTicketReply(validated);
-
-      // Mark ticket as having new reply
-      if (isSuperAdminUser || isAdminForTicketTenant) {
-        await storage.updateTicket(ticketId, { isUnreadByUser: true });
-        // Admin replied - notify the ticket creator
-        const ticketOwner = await storage.getUser(ticket.userId);
-        if (ticketOwner?.email) {
-          notifyTicketReply(
-            ticketOwner.email,
-            ticket.subject,
-            req.body.message
-          ).catch(err => console.error('Failed to send reply email:', err));
-        }
-      } else {
-        await storage.updateTicket(ticketId, { isUnreadByAdmin: true });
-        // User replied - notify admin (this is a follow-up message)
-        notifyNewTicket(
-          ticket.id,
-          `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'User',
-          user.email || 'no-email',
-          `Follow-up: ${ticket.subject}`,
-          req.body.message
-        ).catch(err => console.error('Failed to send follow-up email:', err));
-      }
-
-      res.json({ reply });
-    } catch (error: any) {
-      console.error('Error creating reply:', error);
-      if (error.name === 'ZodError') {
-        return res.status(400).json({ message: 'Invalid reply data', errors: error.errors });
-      }
-      res.status(500).json({ message: error.message || 'Failed to create reply' });
-    }
-  });
-
-  // Update ticket status (super admin or tenant admin for their tenant's tickets)
-  app.patch('/api/tickets/:id/status', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      const ticketId = req.params.id;
-      const { status } = req.body;
-
-      const existingTicket = await storage.getTicket(ticketId);
-      if (!existingTicket) {
-        return res.status(404).json({ message: 'Ticket not found' });
-      }
-
-      // Super admin can update any ticket, tenant admin only their tenant's tickets
-      const isSuperAdminUser = user?.isSuperAdmin;
-      const isTenantAdmin = user?.roleInTenant === 'org_admin' || user?.role === 'admin';
-      const isAdminForTicketTenant = isTenantAdmin && existingTicket.tenantId === req.user.tenantId;
-
-      if (!isSuperAdminUser && !isAdminForTicketTenant) {
-        return res.status(403).json({ message: 'Admin access required' });
-      }
-
-      if (!['open', 'in-progress', 'replied', 'closed'].includes(status)) {
-        return res.status(400).json({ message: 'Invalid status' });
-      }
-
-      const ticket = await storage.updateTicket(ticketId, { status });
-      res.json({ ticket });
-    } catch (error: any) {
-      console.error('Error updating ticket status:', error);
-      res.status(500).json({ message: error.message || 'Failed to update ticket status' });
-    }
-  });
-
-  // Super Admin: Get all tickets across all tenants with optional tenant filtering
-  app.get('/api/super-admin/tickets', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-
-      if (!user?.isSuperAdmin) {
-        return res.status(403).json({ message: 'Super admin access required' });
-      }
-
-      const tenantId = req.query.tenantId as string | undefined;
-      let allTickets = await storage.getAllTickets();
-      
-      // Filter by tenant if specified
-      if (tenantId && tenantId !== 'all') {
-        allTickets = allTickets.filter(t => t.tenantId === tenantId);
-      }
-
-      const ticketsWithInfo = await Promise.all(
-        allTickets.map(async (ticket) => {
-          const ticketUser = await storage.getUser(ticket.userId);
-          let tenantName = 'Unknown Tenant';
-          if (ticket.tenantId) {
-            const tenant = await storage.getTenantById(ticket.tenantId);
-            tenantName = tenant?.name || 'Unknown Tenant';
-          }
-          return {
-            ...ticket,
-            tenantName,
-            userEmail: ticketUser?.email,
-            userName: ticketUser?.firstName && ticketUser?.lastName
-              ? `${ticketUser.firstName} ${ticketUser.lastName}`
-              : undefined,
-          };
-        })
-      );
-
-      res.json({ tickets: ticketsWithInfo });
-    } catch (error: any) {
-      console.error('Error fetching super admin tickets:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
-    }
-  });
-
-  // Mark ticket as read (for super admin or tenant admin only for their tenant's tickets)
-  app.post('/api/tickets/:id/mark-read', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      const ticketId = req.params.id;
-
-      const ticket = await storage.getTicket(ticketId);
-      if (!ticket) {
-        return res.status(404).json({ message: 'Ticket not found' });
-      }
-
-      // Super admin can mark any ticket, tenant admin only their tenant's tickets
-      if (user?.isSuperAdmin) {
-        await storage.markTicketReadByAdmin(ticketId);
-        return res.json({ success: true });
-      }
-
-      // Check if tenant admin for the ticket's tenant
-      const isAdminForTicketTenant = await checkAdminAccess(user, ticket.tenantId);
-      if (!isAdminForTicketTenant) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-
-      await storage.markTicketReadByAdmin(ticketId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error marking ticket as read:', error);
-      res.status(500).json({ message: error.message || 'Failed to mark ticket as read' });
-    }
-  });
-
-  // Super Admin: Get webhook statuses across all tenants (with optional tenant filter)
-  app.get('/api/super-admin/webhooks', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-
-      if (!user?.isSuperAdmin) {
-        return res.status(403).json({ message: 'Super admin access required' });
-      }
-
-      const tenantId = req.query.tenantId as string | undefined;
-      let users = await storage.getAllUsers();
-      
-      // Filter by tenant if specified
-      if (tenantId && tenantId !== 'all') {
-        users = users.filter(u => u.tenantId === tenantId);
-      }
-
-      // Filter to only active users
-      const activeUsers = users.filter(u => u.isActive !== false);
-      const webhookStatuses = [];
-
-      for (const u of activeUsers) {
-        const integration = await storage.getUserIntegration(u.id);
-        
-        // Get tenant name
-        let tenantName = 'Unknown Tenant';
-        if (u.tenantId) {
-          const tenant = await storage.getTenantById(u.tenantId);
-          tenantName = tenant?.name || 'Unknown Tenant';
-        }
-
-        // Determine webhook URL based on environment
-        let registeredUrl = 'Not configured';
-        if (process.env.REPLIT_DOMAINS) {
-          const domains = process.env.REPLIT_DOMAINS.split(',');
-          registeredUrl = `https://${domains[0]}/api/webhooks/google-calendar`;
-        } else if (process.env.REPLIT_DEV_DOMAIN) {
-          registeredUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`;
-        }
-
-        const status: any = {
-          userId: u.id,
-          userEmail: u.email,
-          agentName: u.agentName,
-          tenantId: u.tenantId,
-          tenantName,
-          hasGoogleCalendar: !!integration?.googleCalendarAccessToken,
-          channelId: integration?.googleCalendarWebhookChannelId || null,
-          resourceId: integration?.googleCalendarWebhookResourceId || null,
-          expiry: integration?.googleCalendarWebhookExpiry || null,
-          expiryDate: integration?.googleCalendarWebhookExpiry 
-            ? new Date(integration.googleCalendarWebhookExpiry).toISOString()
-            : null,
-          isExpired: integration?.googleCalendarWebhookExpiry 
-            ? integration.googleCalendarWebhookExpiry < Date.now()
-            : null,
-          registeredUrl,
-          environment: process.env.REPLIT_DOMAINS ? 'production' : 'development'
-        };
-
-        webhookStatuses.push(status);
-      }
-
-      res.json({ webhooks: webhookStatuses });
-    } catch (error: any) {
-      console.error('Error fetching super admin webhook statuses:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch webhook statuses' });
-    }
-  });
-
-  // Super Admin: Bulk re-register webhooks (with optional tenant filter)
-  app.post('/api/super-admin/webhooks/bulk-register', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-
-      if (!user?.isSuperAdmin) {
-        return res.status(403).json({ message: 'Super admin access required' });
-      }
-
-      const { tenantId } = req.body;
-      let users = await storage.getAllUsers();
-      
-      // Filter by tenant if specified
-      if (tenantId && tenantId !== 'all') {
-        users = users.filter(u => u.tenantId === tenantId);
-      }
-
-      const activeUsers = users.filter(u => u.isActive !== false);
-      const results = {
-        total: 0,
-        successful: 0,
-        failed: 0,
-        skipped: 0,
-        details: [] as any[]
-      };
-
-      for (const u of activeUsers) {
-        const integration = await storage.getUserIntegration(u.id);
-
-        if (!integration?.googleCalendarAccessToken) {
-          results.skipped++;
-          results.details.push({
-            userId: u.id,
-            email: u.email,
-            status: 'skipped',
-            reason: 'No Google Calendar connected'
-          });
-          continue;
-        }
-
-        results.total++;
-
-        try {
-          const success = await setupCalendarWatch(u.id);
-          if (success) {
-            results.successful++;
-            results.details.push({
-              userId: u.id,
-              email: u.email,
-              status: 'success'
-            });
-          } else {
-            results.failed++;
-            results.details.push({
-              userId: u.id,
-              email: u.email,
-              status: 'failed',
-              reason: 'Setup returned false'
-            });
-          }
-        } catch (error: any) {
-          results.failed++;
-          results.details.push({
-            userId: u.id,
-            email: u.email,
-            status: 'failed',
-            reason: error.message
-          });
-        }
-      }
-
-      res.json(results);
-    } catch (error: any) {
-      console.error('Error super admin bulk registering webhooks:', error);
-      res.status(500).json({ message: error.message || 'Failed to bulk register webhooks' });
-    }
-  });
-
-  // Super Admin: Register webhook for specific user
-  app.post('/api/super-admin/webhooks/:userId/register', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const authUserId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const authUser = await storage.getUser(authUserId);
-
-      if (!authUser?.isSuperAdmin) {
-        return res.status(403).json({ message: 'Super admin access required' });
-      }
-
-      const { userId: targetUserId } = req.params;
-      const targetUser = await storage.getUser(targetUserId);
-
-      if (!targetUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      const integration = await storage.getUserIntegration(targetUserId);
-      if (!integration?.googleCalendarAccessToken) {
-        return res.status(400).json({ message: 'User does not have Google Calendar connected' });
-      }
-
-      const success = await setupCalendarWatch(targetUserId);
-
-      if (success) {
-        const updatedIntegration = await storage.getUserIntegration(targetUserId);
-        res.json({
-          success: true,
-          channelId: updatedIntegration?.googleCalendarWebhookChannelId,
-          expiry: updatedIntegration?.googleCalendarWebhookExpiry,
-          expiryDate: updatedIntegration?.googleCalendarWebhookExpiry 
-            ? new Date(updatedIntegration.googleCalendarWebhookExpiry).toISOString()
-            : null
-        });
-      } else {
-        res.status(500).json({ 
-          success: false, 
-          message: 'Webhook registration failed' 
-        });
-      }
-    } catch (error: any) {
-      console.error('Error registering webhook:', error);
-      res.status(500).json({ message: error.message || 'Failed to register webhook' });
-    }
-  });
-
-  // Admin: Get all users' webhook registration status
-  app.get('/api/admin/webhooks', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const users = await storage.getAllUsers();
-      // Filter to only active users
-      const activeUsers = users.filter(user => user.isActive !== false);
-      const webhookStatuses = [];
-
-      for (const user of activeUsers) {
-        const integration = await storage.getUserIntegration(user.id);
-
-        // Determine webhook URL based on environment
-        let registeredUrl = 'Not configured';
-        if (process.env.REPLIT_DOMAINS) {
-          const domains = process.env.REPLIT_DOMAINS.split(',');
-          registeredUrl = `https://${domains[0]}/api/webhooks/google-calendar`;
-        } else if (process.env.REPLIT_DEV_DOMAIN) {
-          registeredUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`;
-        }
-
-        const status: any = {
-          userId: user.id,
-          userEmail: user.email,
-          agentName: user.agentName,
-          hasGoogleCalendar: !!integration?.googleCalendarAccessToken,
-          channelId: integration?.googleCalendarWebhookChannelId || null,
-          resourceId: integration?.googleCalendarWebhookResourceId || null,
-          expiry: integration?.googleCalendarWebhookExpiry || null,
-          expiryDate: integration?.googleCalendarWebhookExpiry 
-            ? new Date(integration.googleCalendarWebhookExpiry).toISOString()
-            : null,
-          isExpired: integration?.googleCalendarWebhookExpiry 
-            ? integration.googleCalendarWebhookExpiry < Date.now()
-            : null,
-          registeredUrl,
-          environment: process.env.REPLIT_DOMAINS ? 'production' : 'development'
-        };
-
-        webhookStatuses.push(status);
-      }
-
-      res.json({ webhooks: webhookStatuses });
-    } catch (error: any) {
-      console.error('Error fetching webhook statuses:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch webhook statuses' });
-    }
-  });
-
-  // Admin: Bulk re-register all webhooks (for dev→production migration)
-  app.post('/api/admin/webhooks/bulk-register', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const users = await storage.getAllUsers();
-      // Filter to only active users
-      const activeUsers = users.filter(user => user.isActive !== false);
-      const results = {
-        total: 0,
-        successful: 0,
-        failed: 0,
-        skipped: 0,
-        details: [] as any[]
-      };
-
-      for (const user of activeUsers) {
-        const integration = await storage.getUserIntegration(user.id);
-
-        if (!integration?.googleCalendarAccessToken) {
-          results.skipped++;
-          results.details.push({
-            userId: user.id,
-            email: user.email,
-            status: 'skipped',
-            reason: 'No Google Calendar connected'
-          });
-          continue;
-        }
-
-        results.total++;
-
-        try {
-          const success = await setupCalendarWatch(user.id);
-          if (success) {
-            results.successful++;
-            results.details.push({
-              userId: user.id,
-              email: user.email,
-              status: 'success'
-            });
-          } else {
-            results.failed++;
-            results.details.push({
-              userId: user.id,
-              email: user.email,
-              status: 'failed',
-              reason: 'Setup returned false'
-            });
-          }
-        } catch (error: any) {
-          results.failed++;
-          results.details.push({
-            userId: user.id,
-            email: user.email,
-            status: 'failed',
-            reason: error.message
-          });
-        }
-      }
-
-      res.json(results);
-    } catch (error: any) {
-      console.error('Error bulk registering webhooks:', error);
-      res.status(500).json({ message: error.message || 'Failed to bulk register webhooks' });
-    }
-  });
-
-  // Admin: Register webhook for specific user
-  app.post('/api/admin/webhooks/:userId/register', isAuthenticatedCustom, isAdmin, async (req, res) => {
-    try {
-      const { userId } = req.params;
       const user = await storage.getUser(userId);
 
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
-      }
-
-      const integration = await storage.getUserIntegration(userId);
-      if (!integration?.googleCalendarAccessToken) {
-        return res.status(400).json({ message: 'User does not have Google Calendar connected' });
-      }
-
-      const success = await setupCalendarWatch(userId);
-
-      if (success) {
-        // Fetch updated integration data
-        const updatedIntegration = await storage.getUserIntegration(userId);
-        res.json({
-          success: true,
-          channelId: updatedIntegration?.googleCalendarWebhookChannelId,
-          expiry: updatedIntegration?.googleCalendarWebhookExpiry,
-          expiryDate: updatedIntegration?.googleCalendarWebhookExpiry 
-            ? new Date(updatedIntegration.googleCalendarWebhookExpiry).toISOString()
-            : null
-        });
-      } else {
-        res.status(500).json({ 
-          success: false, 
-          message: 'Webhook registration failed' 
-        });
-      }
-    } catch (error: any) {
-      console.error('Error registering webhook:', error);
-      res.status(500).json({ message: error.message || 'Failed to register webhook' });
-    }
-  });
-
-  // ==================================================================================
-  // HUMAN CALL HISTORY SYSTEM - Manual calls made by sales agents (call_history table)
-  // Used by: Sales agents clicking phone numbers or Notes/Follow up button
-  // NOT for AI voice calls - see ElevenLabs webhook routes for AI call_sessions table
-  // ==================================================================================
-  app.post('/api/call-history', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { storeName, phoneNumber, storeLink } = req.body;
-
-      if (!storeName || !phoneNumber) {
-        return res.status(400).json({ message: 'Store name and phone number are required' });
-      }
-
-      const callData = {
-        agentId: userId,
-        storeName,
-        phoneNumber,
-        storeLink: storeLink || null,
-      };
-
-      const newCall = await storage.createCallHistory(callData);
-      
-      // Update lastContactDate for the client if we can find them by storeLink
-      if (storeLink) {
-        try {
-          const client = await storage.getClientByUniqueIdentifier(storeLink);
-          if (client) {
-            await storage.updateLastContactDate(client.id);
-            console.log(`[Manual Call] Updated lastContactDate for client ${client.id} (${storeName})`);
-          }
-        } catch (error) {
-          console.log('Could not update lastContactDate for client:', error);
-        }
-      }
-      
-      res.json(newCall);
-    } catch (error: any) {
-      console.error('Error creating call history:', error);
-      res.status(500).json({ message: error.message || 'Failed to log call' });
-    }
-  });
-
-  app.get('/api/call-history', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const tenantId = (req.user as any).tenantId;
-      const user = await storage.getUser(userId);
-
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
-      }
 
       // Admin can filter by agent
       const { agentId } = req.query;
@@ -20666,7 +18502,6 @@ Use this store information to provide context-aware responses. When helping draf
         // Regular users get only their own call history
         const callHistory = await storage.getUserCallHistory(userId, tenantId);
         res.json(callHistory);
-      }
     } catch (error: any) {
       console.error('Error fetching call history:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch call history' });
@@ -20694,7 +18529,6 @@ Use this store information to provide context-aware responses. When helping draf
       if (!recipientEmail) {
         console.log('[ManualFollowUps] ❌ Missing recipient email');
         return res.status(400).json({ message: 'Recipient email is required' });
-      }
 
       // Only enroll if this draft has a clientLink (from Store Details)
       if (clientLink) {
@@ -20788,7 +18622,6 @@ Use this store information to provide context-aware responses. When helping draf
         }
       } else {
         console.log('[ManualFollowUps] ⚠️  No clientLink provided, skipping enrollment');
-      }
 
       console.log('[ManualFollowUps] ✅ Request completed successfully');
       res.json({ success: true, message: 'Draft processed' });
@@ -20806,7 +18639,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
-      }
 
       console.log('[FOLLOW-UP] 👤 User:', user.email, 'Role:', user.role);
 
@@ -20823,14 +18655,12 @@ Use this store information to provide context-aware responses. When helping draf
         // Admins see all clients (no filtering)
         console.log('[FOLLOW-UP] 🔐 Admin mode - no filtering');
         allowedAgentNames = [];
-      }
 
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       if (!trackerSheet) {
         console.log('[FOLLOW-UP] ❌ No Commission Tracker sheet found');
         return res.json({ claimedUntouched: [], interestedGoingCold: [], closedWonReorder: [] });
-      }
 
       // Read all Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -20839,7 +18669,6 @@ Use this store information to provide context-aware responses. When helping draf
       if (trackerRows.length <= 1) {
         console.log('[FOLLOW-UP] ❌ Commission Tracker is empty');
         return res.json({ claimedUntouched: [], interestedGoingCold: [], closedWonReorder: [] });
-      }
 
       // Parse headers
       const headers = trackerRows[0];
@@ -20881,7 +18710,6 @@ Use this store information to provide context-aware responses. When helping draf
           lastCallDate: mostRecentDate,
           daysSinceCall: daysSince
         });
-      }
 
       console.log('[FOLLOW-UP] 📊 Call metrics built for', callMetrics.size, 'unique stores');
 
@@ -20945,7 +18773,6 @@ Use this store information to provide context-aware responses. When helping draf
         });
 
         storesByLink.set(link, storeObj);
-      }
 
       console.log('[FOLLOW-UP] 🏪 Processed', storesByLink.size, 'unique stores from tracker');
 
@@ -20992,7 +18819,6 @@ Use this store information to provide context-aware responses. When helping draf
           
           console.log('[FOLLOW-UP] ✨ Enriched stores with Store Database data');
         }
-      }
 
       const stores = Array.from(storesByLink.values());
 
@@ -21018,7 +18844,6 @@ Use this store information to provide context-aware responses. When helping draf
         if (dateToUse) {
           claimDateMap.set(client.link, dateToUse);
         }
-      }
 
       console.log('[FOLLOW-UP] 📅 Found claim dates for', claimDateMap.size, 'stores');
 
@@ -21151,7 +18976,6 @@ Use this store information to provide context-aware responses. When helping draf
       if (!name || !folderUrl) {
         console.log('❌ [DRIVE FOLDER ADD] Validation failed - missing name or URL');
         return res.status(400).json({ message: 'Folder name and URL are required' });
-      }
 
       const folderId = extractFolderId(folderUrl);
       
@@ -21216,13 +19040,11 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (!req.file) {
         return res.status(400).json({ message: 'File is required' });
-      }
 
       const folderConfig = await storage.getDriveFolderByName(folderName);
       
       if (!folderConfig) {
         return res.status(404).json({ message: 'Folder not found' });
-      }
 
       const uploadedFile = await googleDrive.uploadFileToDrive(
         folderConfig.folderId,
@@ -21273,7 +19095,6 @@ Use this store information to provide context-aware responses. When helping draf
           keywordBin: '',
           excludedDays: [],
         });
-      }
       
       res.json(settings);
     } catch (error: any) {
@@ -21359,7 +19180,6 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
       
       const { rebuildQueueFromNextBusinessDay } = await import('./services/Matrix2/queueRebuilder');
       await rebuildQueueFromNextBusinessDay(userId);
@@ -21469,7 +19289,6 @@ Use this store information to provide context-aware responses. When helping draf
       
       if (typeof hours !== 'number' || hours <= 0) {
         return res.status(400).json({ message: 'Invalid hours value' });
-      }
       
       const recipient = await storage.delayRecipient(id, hours);
       res.json(recipient);
@@ -21509,7 +19328,6 @@ Use this store information to provide context-aware responses. When helping draf
       
       if (!Array.isArray(recipientIds) || recipientIds.length === 0) {
         return res.status(400).json({ message: 'No recipients to delete' });
-      }
 
       const { clearSlotsForRecipient } = await import('./services/Matrix2/slotDb');
       const { invalidateCache } = await import('./services/ehubContactsService');
@@ -21525,7 +19343,6 @@ Use this store information to provide context-aware responses. When helping draf
           console.error(`Failed to remove recipient ${recipientId}:`, err);
           results.push({ id: recipientId, success: false, error: (err as any).message });
         }
-      }
       
       // Invalidate cache after all deletions
       invalidateCache();
@@ -21547,7 +19364,6 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       // Fetch current settings BEFORE updating to detect changes
       const oldSettings = await storage.getEhubSettings(req.user.tenantId);
@@ -21582,13 +19398,11 @@ Use this store information to provide context-aware responses. When helping draf
         });
       } else {
         console.log('[EHub Settings] Content settings updated (no queue rebuild needed)');
-      }
       
       res.json(newSettings);
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid settings data', errors: error.errors });
-      }
       console.error('Error updating E-Hub settings:', error);
       res.status(500).json({ message: error.message || 'Failed to update settings' });
     }
@@ -21655,7 +19469,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (sequenceId) {
         query = query.where(eq(sequences.id, sequenceId));
-      }
 
       if (statusFilter === 'replied') {
         query = query.where(isNotNull(sequenceRecipients.repliedAt));
@@ -21671,7 +19484,6 @@ Use this store information to provide context-aware responses. When helping draf
             ne(sequenceRecipients.status, 'pending')
           )
         );
-      }
 
       const messages = await query
         .orderBy(desc(sequenceRecipientMessages.sentAt))
@@ -21721,7 +19533,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (sequenceId) {
         countQuery = countQuery.where(eq(sequences.id, sequenceId));
-      }
 
       if (statusFilter === 'replied') {
         countQuery = countQuery.where(isNotNull(sequenceRecipients.repliedAt));
@@ -21737,7 +19548,6 @@ Use this store information to provide context-aware responses. When helping draf
             ne(sequenceRecipients.status, 'pending')
           )
         );
-      }
 
       const countResult = await countQuery;
       const total = countResult[0]?.count ? Number(countResult[0].count) : 0;
@@ -21850,7 +19660,6 @@ Use this store information to provide context-aware responses. When helping draf
       
       if (!email) {
         return res.status(400).json({ message: 'Email address is required' });
-      }
 
       // Check if already blacklisted
       const existing = await db
@@ -21861,7 +19670,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (existing.length > 0) {
         return res.status(409).json({ message: 'Email already blacklisted' });
-      }
 
       const [newEntry] = await db
         .insert(emailBlacklist)
@@ -21890,7 +19698,6 @@ Use this store information to provide context-aware responses. When helping draf
 
       if (deleted.length === 0) {
         return res.status(404).json({ message: 'Blacklist entry not found' });
-      }
 
       res.json({ success: true, deleted: deleted[0] });
     } catch (error: any) {
@@ -21920,7 +19727,6 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       // Validate request body using centralized schema
       // New sequences default to 'paused' to prevent accidental sends
@@ -21937,7 +19743,6 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid sequence data', errors: error.errors });
-      }
       console.error('Error creating sequence:', error);
       res.status(500).json({ message: error.message || 'Failed to create sequence' });
     }
@@ -21972,7 +19777,6 @@ Use this store information to provide context-aware responses. When helping draf
       const sequence = await storage.getSequence(req.params.id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       res.json(sequence);
     } catch (error: any) {
       console.error('Error getting sequence:', error);
@@ -21992,7 +19796,6 @@ Use this store information to provide context-aware responses. When helping draf
       const existingSequence = await storage.getSequence(id, req.user.tenantId);
       if (!existingSequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
 
       // CRITICAL: Campaign Brief is REQUIRED for activation
       if (updates.status === 'active') {
@@ -22002,7 +19805,6 @@ Use this store information to provide context-aware responses. When helping draf
             message: 'Campaign Brief is required before activation. Complete "Finalize Strategy" in the Strategy tab first.' 
           });
         }
-      }
 
       // FIRE-HOSE PREVENTION: Handle status transitions
       const oldStatus = existingSequence.status;
@@ -22025,19 +19827,16 @@ Use this store information to provide context-aware responses. When helping draf
           await assignRecipientsToSlots();
           console.log(`[Sequence ${id}] Activated: Triggered slot assignment for fresh future slots`);
         }
-      }
 
       const sequence = await storage.updateSequence(id, req.user.tenantId, updates);
       
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       
       res.json(sequence);
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid update data', errors: error.errors });
-      }
       console.error('Error updating sequence:', error);
       res.status(500).json({ message: error.message || 'Failed to update sequence' });
     }
@@ -22052,13 +19851,11 @@ Use this store information to provide context-aware responses. When helping draf
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       
       if (sequence.isSystem) {
         return res.status(403).json({ 
           message: 'Cannot delete system sequence. This sequence is used by automated features and cannot be removed.' 
         });
-      }
       
       // Clean up slots BEFORE deleting sequence (while recipients still exist)
       const { clearSlotsForSequence } = await import('./services/Matrix2/slotDb');
@@ -22068,7 +19865,6 @@ Use this store information to provide context-aware responses. When helping draf
       
       if (!deleted) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       
       // Invalidate All Contacts cache since recipients were deleted (CASCADE)
       const { invalidateCache } = await import('./services/ehubContactsService');
@@ -22087,7 +19883,6 @@ Use this store information to provide context-aware responses. When helping draf
       const sequence = await storage.getSequence(req.params.id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       
       // Return empty transcript if none exists
       const transcript = sequence.strategyTranscript || { messages: [], lastUpdatedAt: new Date().toISOString() };
@@ -22113,19 +19908,16 @@ Use this store information to provide context-aware responses. When helping draf
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
 
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner', req.user.tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(400).json({ message: 'Aligner assistant not configured' });
-      }
 
       // Get OpenAI settings
       const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!openaiSettings || !openaiSettings.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
-      }
 
       // Get E-Hub settings for prompt injection and keyword bin
       const ehubSettings = await storage.getEhubSettings(req.user.tenantId);
@@ -22143,7 +19935,6 @@ Use this store information to provide context-aware responses. When helping draf
         const thread = await openai.beta.threads.create();
         threadId = thread.id;
         console.log('[E-Hub Strategy] New thread created:', threadId);
-      }
 
       // Build contextual instructions with E-Hub settings
       const contextualInstructions = `## YOUR ROLE:
@@ -22203,11 +19994,9 @@ Based on the conversation, help the user design an effective email sequence that
         if (attempts >= maxAttempts) {
           throw new Error('Strategy chat timeout - response took too long');
         }
-      }
 
       if (runStatus.status !== 'completed') {
         throw new Error(`Strategy chat failed: ${runStatus.status}`);
-      }
 
       // Get assistant's response
       const messages = await openai.beta.threads.messages.list(threadId, { limit: 1 });
@@ -22215,7 +20004,6 @@ Based on the conversation, help the user design an effective email sequence that
       
       if (!lastMessage || lastMessage.role !== 'assistant') {
         throw new Error('No response from Aligner assistant');
-      }
 
       const aiResponse = lastMessage.content
         .filter((block: any) => block.type === 'text')
@@ -22239,7 +20027,6 @@ Based on the conversation, help the user design an effective email sequence that
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid message data', errors: error.errors });
-      }
       console.error('Error in strategy chat:', error);
       res.status(500).json({ message: error.message || 'Failed to process strategy chat' });
     }
@@ -22254,23 +20041,19 @@ Based on the conversation, help the user design an effective email sequence that
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       
       if (!sequence.strategyTranscript || !sequence.strategyTranscript.messages || sequence.strategyTranscript.messages.length === 0) {
         return res.status(400).json({ message: 'No strategy messages to finalize. Start a conversation first.' });
-      }
       
       // Get Aligner assistant for strategy synthesis
       const alignerAssistant = await storage.getAssistantBySlug('aligner', req.user.tenantId);
       if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(400).json({ message: 'Aligner assistant not configured' });
-      }
 
       // Get OpenAI settings
       const openaiSettings = await storage.getOpenaiSettings(req.user.tenantId);
       if (!openaiSettings || !openaiSettings.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
-      }
       
       const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
       
@@ -22336,11 +20119,9 @@ ${conversationContext}`;
 
         await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
         runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-      }
 
       if (runStatus.status !== 'completed') {
         throw new Error(`Aligner assistant run failed with status: ${runStatus.status}`);
-      }
 
       // Get assistant's response
       const messages = await openai.beta.threads.messages.list(thread.id);
@@ -22348,7 +20129,6 @@ ${conversationContext}`;
       
       if (!assistantMessage) {
         throw new Error('No response from Aligner assistant');
-      }
 
       const finalizedBrief = assistantMessage.content
         .filter((c: any) => c.type === 'text')
@@ -22357,7 +20137,6 @@ ${conversationContext}`;
       
       if (!finalizedBrief) {
         throw new Error('Failed to generate finalized strategy');
-      }
 
       console.log('[E-Hub Finalize] ✅ Campaign Brief synthesized:', finalizedBrief.substring(0, 100) + '...');
       
@@ -22383,7 +20162,6 @@ ${conversationContext}`;
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       
       // Update sequence with finalized strategy
       const updated = await storage.updateSequence(id, req.user.tenantId, { finalizedStrategy });
@@ -22392,7 +20170,6 @@ ${conversationContext}`;
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid finalized strategy', errors: error.errors });
-      }
       console.error('Error saving finalized strategy:', error);
       res.status(500).json({ message: error.message || 'Failed to save finalized strategy' });
     }
@@ -22408,7 +20185,6 @@ ${conversationContext}`;
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       
       // CRITICAL: Campaign Brief is REQUIRED for testing
       const finalizedStrategy = (sequence as any).finalizedStrategy;
@@ -22416,7 +20192,6 @@ ${conversationContext}`;
         return res.status(422).json({ 
           message: 'Campaign Brief is required before testing. Complete "Finalize Strategy" in the Strategy tab first.' 
         });
-      }
       
       // Debug: Log strategy status
       console.log('[SyntheticTest] Sequence strategy status:', {
@@ -22429,13 +20204,11 @@ ${conversationContext}`;
       // Check if sequence has step delays configured
       if (!sequence.stepDelays || sequence.stepDelays.length === 0) {
         return res.status(400).json({ message: 'Sequence has no steps configured. Set up step delays first.' });
-      }
       
       // Get E-Hub settings for prompt injection, signature, etc.
       const ehubSettings = await storage.getEhubSettings(req.user.tenantId);
       if (!ehubSettings) {
         return res.status(500).json({ message: 'E-Hub settings not configured' });
-      }
       
       // Fetch ONE random real store from Store Database
       console.log('[SyntheticTest] Fetching random real store from Store Database...');
@@ -22443,7 +20216,6 @@ ${conversationContext}`;
       const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
       if (!storeSheet) {
         return res.status(500).json({ message: 'Store Database not configured' });
-      }
       
       const storeData = await googleSheets.readSheetData(
         storeSheet.spreadsheetId,
@@ -22452,7 +20224,6 @@ ${conversationContext}`;
       
       if (!storeData || storeData.length < 2) {
         return res.status(500).json({ message: 'No stores found in Store Database' });
-      }
       
       // Parse headers and rows
       const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
@@ -22464,7 +20235,6 @@ ${conversationContext}`;
       
       if (rows.length === 0) {
         return res.status(500).json({ message: 'No valid stores with emails found' });
-      }
       
       // Pick ONE random row
       const randomRow = rows[Math.floor(Math.random() * rows.length)];
@@ -22491,7 +20261,6 @@ ${conversationContext}`;
         if (detected) {
           timezone = detected;
         }
-      }
       
       // Create a temporary test recipient with REAL store data but FAKE email
       // CRITICAL: Use a proper UUID for test recipient ID (database column requires UUID type)
@@ -22589,7 +20358,6 @@ ${conversationContext}`;
           console.error('[SyntheticTest] Failed to clean up test data:', cleanupError);
         }
         throw generationError;
-      }
     } catch (error: any) {
       console.error('[SyntheticTest] Error generating synthetic emails:', error);
       res.status(500).json({ message: error.message || 'Failed to generate synthetic email preview' });
@@ -22612,13 +20380,11 @@ ${conversationContext}`;
         return res.status(400).json({ 
           message: 'Cannot enable repeat last step without at least one step delay' 
         });
-      }
 
       // Check sequence exists
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
 
       // Update sequence with repeatLastStep setting
       await storage.updateSequence(id, req.user.tenantId, { repeatLastStep });
@@ -22639,7 +20405,6 @@ ${conversationContext}`;
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid step delays', errors: error.errors });
-      }
       console.error('Error updating step delays:', error);
       res.status(500).json({ message: error.message || 'Failed to update step delays' });
     }
@@ -22653,7 +20418,6 @@ ${conversationContext}`;
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
 
       const steps = await storage.getSequenceSteps(id);
       res.json(steps);
@@ -22671,7 +20435,6 @@ ${conversationContext}`;
       const sequence = await storage.getSequence(sequenceId, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
 
       const { subjectTemplate, bodyTemplate, aiGuidance } = z.object({
         subjectTemplate: z.string().nullable().optional(),
@@ -22689,7 +20452,6 @@ ${conversationContext}`;
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid step data', errors: error.errors });
-      }
       console.error('Error updating sequence step:', error);
       res.status(500).json({ message: error.message || 'Failed to update sequence step' });
     }
@@ -22708,7 +20470,6 @@ ${conversationContext}`;
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
 
       // Update sequence with keywords
       const updated = await storage.updateSequence(id, req.user.tenantId, { keywords });
@@ -22717,7 +20478,6 @@ ${conversationContext}`;
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid keywords', errors: error.errors });
-      }
       console.error('Error updating keywords:', error);
       res.status(500).json({ message: error.message || 'Failed to update keywords' });
     }
@@ -22737,13 +20497,11 @@ ${conversationContext}`;
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
 
       // Get Google Sheets data
       const userIntegration = await storage.getUserIntegration(req.user.id);
       if (!userIntegration?.googleAccessToken) {
         return res.status(400).json({ message: 'Google Sheets not connected' });
-      }
 
       // Fetch data from Store Database sheet (extended range to include all relevant columns)
       const rows = await googleSheets.getSheetData(
@@ -22754,7 +20512,6 @@ ${conversationContext}`;
 
       if (!rows || rows.length === 0) {
         return res.status(400).json({ message: 'No data found in sheet' });
-      }
 
       // Dynamic header lookup (case-insensitive)
       const headers = rows[0].map((h: any) => h?.toString().toLowerCase().trim() || '');
@@ -22767,7 +20524,6 @@ ${conversationContext}`;
 
       if (nameIndex === -1 || emailIndex === -1) {
         return res.status(400).json({ message: 'Required columns (Name, Email) not found in sheet' });
-      }
 
       console.log('[E-Hub Import] Header mapping:', {
         name: nameIndex,
@@ -22866,7 +20622,6 @@ ${conversationContext}`;
           skippedRows.push(`Validation failed for ${email}: ${name}`);
           continue;
         }
-      }
 
       if (recipients.length === 0) {
         return res.json({ 
@@ -22875,14 +20630,12 @@ ${conversationContext}`;
           skipped: skippedRows.length,
           skippedReasons: skippedRows.slice(0, 10) // Show first 10 reasons
         });
-      }
 
       // MATRIX2: Just create recipients with metadata - Matrix2 slot assigner handles scheduling
       const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
       
       if (stepDelays.length === 0) {
         return res.status(400).json({ message: 'Sequence has no steps configured' });
-      }
 
       // Bulk insert recipients with metadata
       const created = await storage.addRecipients(recipients);
@@ -22895,7 +20648,6 @@ ${conversationContext}`;
           currentStep: 0,
           nextSendAt: null, // Matrix2 will set this when assigning to slot
         });
-      }
 
       // Update sequence total count
       await storage.updateSequenceStats(id, req.user.tenantId, {
@@ -22915,7 +20667,6 @@ ${conversationContext}`;
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
-      }
       console.error('Error importing recipients:', error);
       res.status(500).json({ message: error.message || 'Failed to import recipients' });
     }
@@ -22932,7 +20683,6 @@ ${conversationContext}`;
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
       
       // Get tenantId and projectId from the sequence for proper multi-tenant/project support
       const tenantId = req.user.tenantId;
@@ -22956,11 +20706,9 @@ ${conversationContext}`;
       } else {
         // Use provided contacts array
         contactsToAdd = contacts || [];
-      }
 
       if (contactsToAdd.length === 0) {
         return res.json({ message: 'No contacts to add', count: 0 });
-      }
 
       // ENRICH CONTACTS: Build a lookup map from Store Database to populate missing link fields
       const storeEmailToLink = new Map<string, { link?: string; salesSummary?: string }>();
@@ -22991,7 +20739,6 @@ ${conversationContext}`;
             }
           }
         }
-      }
 
       // Email regex for validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23069,18 +20816,15 @@ ${conversationContext}`;
           skippedRows.push(`Validation failed for ${email}: ${errorMsg}`);
           continue;
         }
-      }
 
       if (recipients.length === 0) {
         return res.json({ message: 'No new recipients to import', count: 0 });
-      }
 
       // MATRIX2: Just create recipients with metadata - Matrix2 slot assigner handles scheduling
       const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
       
       if (stepDelays.length === 0) {
         return res.status(400).json({ message: 'Sequence has no steps configured' });
-      }
 
       // Bulk insert recipients with metadata
       const created = await storage.addRecipients(recipients);
@@ -23093,7 +20837,6 @@ ${conversationContext}`;
           currentStep: 0,
           nextSendAt: null, // Matrix2 will set this when assigning to slot
         });
-      }
 
       // Update sequence total count
       await storage.updateSequenceStats(id, req.user.tenantId, {
@@ -23108,7 +20851,6 @@ ${conversationContext}`;
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
-      }
       console.error('Error importing recipients:', error);
       res.status(500).json({ message: error.message || 'Failed to import recipients' });
     }
@@ -23134,7 +20876,6 @@ ${conversationContext}`;
         return res.status(503).json({ 
           message: 'Commission Tracker sheet not configured. Please set up the tracker sheet before using E-Hub.' 
         });
-      }
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
@@ -23147,7 +20888,6 @@ ${conversationContext}`;
         return res.status(503).json({ 
           message: 'Commission Tracker sheet is empty. Please ensure headers are configured.' 
         });
-      }
 
       const headers = rows[0];
       const linkIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'link');
@@ -23161,7 +20901,6 @@ ${conversationContext}`;
         return res.status(503).json({ 
           message: 'Link column not found in Commission Tracker. Please ensure the sheet has a "Link" column.' 
         });
-      }
 
       // Build TWO maps: one for link matching, one for email matching
       type TrackerData = {
@@ -23195,7 +20934,6 @@ ${conversationContext}`;
           const normalizedEmail = rowEmail.toString().trim().toLowerCase();
           emailDataMap.set(normalizedEmail, trackerData);
         }
-      }
 
       // Enrich recipients with FRESH data from Commission Tracker
       // Match by Link OR Email
@@ -23258,13 +20996,11 @@ ${conversationContext}`;
         filtered = enrichedRecipients.filter(r => 
           r.contactedStatus.toLowerCase() === contactedStatus.toString().toLowerCase()
         );
-      }
 
       // Apply limit if requested (after filtering)
       if (limit) {
         const limitNum = parseInt(limit.toString());
         filtered = filtered.slice(0, limitNum);
-      }
 
       res.json(filtered);
     } catch (error: any) {
@@ -23281,18 +21017,15 @@ ${conversationContext}`;
 
       if (!testEmail) {
         return res.status(400).json({ message: 'Test email address required' });
-      }
 
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
-      }
 
       // Get user's Gmail integration
       const userIntegration = await storage.getUserIntegration(req.user.id);
       if (!userIntegration?.googleAccessToken) {
         return res.status(400).json({ message: 'Gmail not connected' });
-      }
 
       // TODO: Implement email sending in next task
       // For now, return success to enable UI testing
@@ -23317,19 +21050,16 @@ ${conversationContext}`;
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const { recipientEmail, subject, body } = req.body;
 
       if (!recipientEmail || !subject || !body) {
         return res.status(400).json({ message: 'recipientEmail, subject, and body are required' });
-      }
 
       // Check for Gmail integration
       const userIntegration = await storage.getUserIntegration(userId);
       if (!userIntegration?.googleCalendarAccessToken) {
         return res.status(400).json({ message: 'Gmail not connected. Please connect Gmail first.' });
-      }
 
       // Send email using Gmail API (no rate limiting for testing)
       const { sendEmail } = await import('./services/emailSender');
@@ -23342,7 +21072,6 @@ ${conversationContext}`;
 
       if (!sendResult.success) {
         return res.status(500).json({ message: sendResult.error || 'Failed to send email' });
-      }
 
       // Create test email send record
       const testSend = await storage.createTestEmailSend({
@@ -23379,15 +21108,12 @@ ${conversationContext}`;
 
       if (!testSend) {
         return res.status(404).json({ message: 'Test email not found' });
-      }
 
       if (testSend.createdBy !== req.user.id) {
         return res.status(403).json({ message: 'Forbidden: Not your test email' });
-      }
 
       if (!testSend.gmailThreadId) {
         return res.status(400).json({ message: 'No thread ID available for this test email' });
-      }
 
       // Check for replies
       const { checkForReplies } = await import('./services/gmailReplyDetection');
@@ -23404,7 +21130,6 @@ ${conversationContext}`;
         await storage.updateTestEmailSendStatus(id, {
           lastCheckedAt: new Date(),
         });
-      }
 
       res.json({
         success: true,
@@ -23426,27 +21151,22 @@ ${conversationContext}`;
 
       if (!subject || !body) {
         return res.status(400).json({ message: 'subject and body are required' });
-      }
 
       const testSend = await storage.getTestEmailSendById(id);
 
       if (!testSend) {
         return res.status(404).json({ message: 'Test email not found' });
-      }
 
       if (testSend.createdBy !== req.user.id) {
         return res.status(403).json({ message: 'Forbidden: Not your test email' });
-      }
 
       if (!testSend.gmailThreadId) {
         return res.status(400).json({ message: 'No thread ID available for this test email' });
-      }
 
       // Check for Gmail integration
       const userIntegration = await storage.getUserIntegration(req.user.id);
       if (!userIntegration?.googleCalendarAccessToken) {
         return res.status(400).json({ message: 'Gmail not connected' });
-      }
 
       // Get threading data
       const { getLatestMessageId, getAllMessageIds } = await import('./services/gmailReplyDetection');
@@ -23469,7 +21189,6 @@ ${conversationContext}`;
 
       if (!sendResult.success) {
         return res.status(500).json({ message: sendResult.error || 'Failed to send follow-up' });
-      }
 
       // Update follow-up count
       await storage.updateTestEmailSendStatus(id, {
@@ -23494,7 +21213,6 @@ ${conversationContext}`;
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const history = await storage.listTestEmailSendsForUser(userId);
       res.json(history);
@@ -23523,7 +21241,6 @@ ${conversationContext}`;
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const { emailPattern } = req.body;
 
@@ -23563,13 +21280,11 @@ ${conversationContext}`;
         return res.status(400).json({ 
           message: 'Project name and email are required' 
         });
-      }
 
       if (!designPng || !mockupPng) {
         return res.status(400).json({ 
           message: 'Design and mockup images are required' 
         });
-      }
 
       console.log(`[Label Export] Starting export for project: ${projectName}`);
 
@@ -23610,7 +21325,6 @@ ${conversationContext}`;
             }
           }
         }
-      }
 
       console.log(`[Label Export] ZIP created with ${3 + (assets?.length || 0)} files`);
 
@@ -23642,7 +21356,6 @@ ${conversationContext}`;
       } catch (driveError: any) {
         console.error('[Label Export] Google Drive upload failed:', driveError.message);
         // Continue without Drive upload - still return the ZIP
-      }
 
       // Set response headers for ZIP download
       const filename = `${projectName.replace(/[^a-zA-Z0-9-_]/g, '_')}_label_project.zip`;
@@ -23650,7 +21363,6 @@ ${conversationContext}`;
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       if (driveUrl) {
         res.setHeader('X-Drive-Folder-Url', driveUrl);
-      }
       res.setHeader('Content-Length', zipBuffer.length);
 
       // Send ZIP file
@@ -23686,7 +21398,6 @@ ${conversationContext}`;
       const userId = req.user?.id || req.user?.claims?.sub;
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
-      }
 
       const validatedData = insertNoSendDateSchema.parse({
         ...req.body,
@@ -23698,10 +21409,8 @@ ${conversationContext}`;
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid data', errors: error.errors });
-      }
       if (error.message?.includes('duplicate key') || error.code === '23505') {
         return res.status(409).json({ message: 'This date is already blocked' });
-      }
       console.error('Error creating no-send date:', error);
       res.status(500).json({ message: error.message || 'Failed to create no-send date' });
     }
@@ -23715,7 +21424,6 @@ ${conversationContext}`;
       const existing = await storage.getNoSendDate(id);
       if (!existing) {
         return res.status(404).json({ message: 'No-send date not found' });
-      }
 
       await storage.deleteNoSendDate(id);
       res.json({ success: true });
@@ -23745,2617 +21453,3 @@ ${conversationContext}`;
   app.get('/api/holidays/toggles', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const tenantId = req.user?.tenantId;
-      if (!tenantId) {
-        return res.status(400).json({ message: 'Tenant ID required' });
-      }
-      const { getAllHolidaysWithStatus } = await import('./services/holidayCalendar');
-      const holidays = await getAllHolidaysWithStatus(tenantId);
-      res.json(holidays);
-    } catch (error: any) {
-      console.error('Error fetching holiday toggles:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch holiday toggles' });
-    }
-  });
-
-  // Toggle a holiday on/off
-  app.post('/api/holidays/toggle', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const userId = req.user?.id || req.user?.claims?.sub;
-      const tenantId = req.user?.tenantId;
-      if (!userId) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      if (!tenantId) {
-        return res.status(400).json({ message: 'Tenant ID required' });
-      }
-
-      const { holidayId, holidayName, ignore } = req.body;
-      if (!holidayId || !holidayName || typeof ignore !== 'boolean') {
-        return res.status(400).json({ message: 'Missing required fields: holidayId, holidayName, ignore' });
-      }
-
-      const { clearIgnoredHolidaysCache } = await import('./services/holidayCalendar');
-
-      if (ignore) {
-        // Add to ignored list (turn OFF blocking)
-        const existing = await storage.getIgnoredHolidayByHolidayId(tenantId, holidayId);
-        if (!existing) {
-          await storage.createIgnoredHoliday({
-            tenantId,
-            holidayId,
-            holidayName,
-            ignoredBy: userId,
-          });
-        }
-      } else {
-        // Remove from ignored list (turn ON blocking)
-        await storage.deleteIgnoredHoliday(tenantId, holidayId);
-      }
-
-      // Clear cache so changes take effect immediately
-      clearIgnoredHolidaysCache(tenantId);
-
-      res.json({ success: true, holidayId, ignored: ignore });
-    } catch (error: any) {
-      console.error('Error toggling holiday:', error);
-      res.status(500).json({ message: error.message || 'Failed to toggle holiday' });
-    }
-  });
-
-  // Get list of currently ignored holidays
-  app.get('/api/holidays/ignored', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user?.tenantId;
-      if (!tenantId) {
-        return res.status(400).json({ message: 'Tenant ID required' });
-      }
-      const ignored = await storage.getIgnoredHolidays(tenantId);
-      res.json(ignored);
-    } catch (error: any) {
-      console.error('Error fetching ignored holidays:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch ignored holidays' });
-    }
-  });
-
-  // ============================================================================
-  // Super Admin API Routes (Platform-wide tenant & user management)
-  // ============================================================================
-
-  // GET /api/super-admin/tenants - List all tenants with user counts
-  app.get('/api/super-admin/tenants', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const tenants = await storage.listTenants();
-      res.json({ tenants });
-    } catch (error: any) {
-      console.error('Error listing tenants:', error);
-      res.status(500).json({ message: error.message || 'Failed to list tenants' });
-    }
-  });
-
-  // GET /api/super-admin/tenants/:tenantId - Get tenant details with stats
-  app.get('/api/super-admin/tenants/:tenantId', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const tenant = await storage.getTenantById(tenantId);
-      if (!tenant) {
-        return res.status(404).json({ message: 'Tenant not found' });
-      }
-      const stats = await storage.getTenantStats(tenantId);
-      res.json({ tenant, stats });
-    } catch (error: any) {
-      console.error('Error getting tenant details:', error);
-      res.status(500).json({ message: error.message || 'Failed to get tenant details' });
-    }
-  });
-
-  // POST /api/super-admin/tenants - Create a new tenant
-  app.post('/api/super-admin/tenants', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const parseResult = insertTenantSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        return res.status(400).json({ message: 'Invalid tenant data', errors: parseResult.error.errors });
-      }
-      const tenant = await storage.createTenant(parseResult.data);
-      res.json({ tenant });
-    } catch (error: any) {
-      console.error('Error creating tenant:', error);
-      res.status(500).json({ message: error.message || 'Failed to create tenant' });
-    }
-  });
-
-  // PATCH /api/super-admin/tenants/:tenantId - Update tenant
-  app.patch('/api/super-admin/tenants/:tenantId', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const parseResult = insertTenantSchema.partial().safeParse(req.body);
-      if (!parseResult.success) {
-        return res.status(400).json({ message: 'Invalid tenant data', errors: parseResult.error.errors });
-      }
-      const tenant = await storage.updateTenant(tenantId, parseResult.data);
-      res.json({ tenant });
-    } catch (error: any) {
-      console.error('Error updating tenant:', error);
-      res.status(500).json({ message: error.message || 'Failed to update tenant' });
-    }
-  });
-
-  // POST /api/super-admin/switch-tenant - Switch tenant context for super admin
-  app.post('/api/super-admin/switch-tenant', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.body;
-      if (!tenantId) {
-        return res.status(400).json({ message: 'tenantId is required' });
-      }
-      
-      // Verify the tenant exists
-      const tenant = await storage.getTenantById(tenantId);
-      if (!tenant) {
-        return res.status(404).json({ message: 'Tenant not found' });
-      }
-      
-      // Store the tenant override in the session
-      req.session.tenantOverrideId = tenantId;
-      req.session.tenantOverrideName = tenant.name;
-      
-      // Persist the session
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err: any) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-      
-      res.json({ success: true, tenantId, tenantName: tenant.name });
-    } catch (error: any) {
-      console.error('Error switching tenant:', error);
-      res.status(500).json({ message: error.message || 'Failed to switch tenant' });
-    }
-  });
-
-  // GET /api/super-admin/switch-tenant/clear - Clear tenant override for super admin
-  app.get('/api/super-admin/switch-tenant/clear', requireSuperAdmin, async (req: any, res) => {
-    try {
-      // Clear the tenant override from the session
-      req.session.tenantOverrideId = null;
-      req.session.tenantOverrideName = null;
-      
-      // Persist the session
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err: any) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-      
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error clearing tenant override:', error);
-      res.status(500).json({ message: error.message || 'Failed to clear tenant override' });
-    }
-  });
-
-  // GET /api/super-admin/users - List all users across tenants
-  app.get('/api/super-admin/users', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const users = await storage.listUsersAcrossTenants();
-      res.json({ users });
-    } catch (error: any) {
-      console.error('Error listing users across tenants:', error);
-      res.status(500).json({ message: error.message || 'Failed to list users' });
-    }
-  });
-
-  // GET /api/super-admin/users/:userId/tenants - Get user's tenant memberships
-  app.get('/api/super-admin/users/:userId/tenants', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      const memberships = await storage.getUserTenantMemberships(userId);
-      res.json({ memberships });
-    } catch (error: any) {
-      console.error('Error getting user tenant memberships:', error);
-      res.status(500).json({ message: error.message || 'Failed to get user tenant memberships' });
-    }
-  });
-
-  // POST /api/super-admin/users/:userId/tenants - Add user to tenant
-  app.post('/api/super-admin/users/:userId/tenants', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      const { tenantId, roleInTenant, isDefault } = req.body;
-      if (!tenantId || !roleInTenant) {
-        return res.status(400).json({ message: 'Missing required fields: tenantId, roleInTenant' });
-      }
-      await storage.addUserToTenant(userId, tenantId, roleInTenant, isDefault);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error adding user to tenant:', error);
-      res.status(500).json({ message: error.message || 'Failed to add user to tenant' });
-    }
-  });
-
-  // DELETE /api/super-admin/users/:userId/tenants/:tenantId - Remove user from tenant
-  app.delete('/api/super-admin/users/:userId/tenants/:tenantId', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId, tenantId } = req.params;
-      await storage.removeUserFromTenant(userId, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error removing user from tenant:', error);
-      res.status(500).json({ message: error.message || 'Failed to remove user from tenant' });
-    }
-  });
-
-  // PATCH /api/super-admin/users/:userId/tenants/:tenantId - Update user's role in tenant
-  app.patch('/api/super-admin/users/:userId/tenants/:tenantId', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId, tenantId } = req.params;
-      const { roleInTenant } = req.body;
-      if (!roleInTenant || !['agent', 'org_admin'].includes(roleInTenant)) {
-        return res.status(400).json({ message: 'Invalid roleInTenant. Must be "agent" or "org_admin"' });
-      }
-      await storage.updateUserRoleInTenant(userId, tenantId, roleInTenant);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error updating user role in tenant:', error);
-      res.status(500).json({ message: error.message || 'Failed to update user role in tenant' });
-    }
-  });
-
-  // GET /api/super-admin/metrics - Get platform-wide metrics
-  app.get('/api/super-admin/metrics', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const metrics = await storage.getPlatformMetrics();
-      res.json(metrics);
-    } catch (error: any) {
-      console.error('Error getting platform metrics:', error);
-      res.status(500).json({ message: error.message || 'Failed to get platform metrics' });
-    }
-  });
-
-  // GET /api/super-admin/tenants/:tenantId/users - Get users for a specific tenant
-  app.get('/api/super-admin/tenants/:tenantId/users', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const users = await storage.listTenantUsers(tenantId);
-      res.json({ users });
-    } catch (error: any) {
-      console.error('Error listing tenant users:', error);
-      res.status(500).json({ message: error.message || 'Failed to list tenant users' });
-    }
-  });
-
-  // POST /api/super-admin/users - Create user for a specific tenant
-  app.post('/api/super-admin/users', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { email, firstName, lastName, agentName, password, role, tenantId, roleInTenant, selectedCategory, referredBy } = req.body;
-
-      if (!email || !password || !tenantId) {
-        return res.status(400).json({ message: "Email, password, and tenant are required" });
-      }
-
-      // Check if user already exists
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
-        return res.status(400).json({ message: "User with this email already exists" });
-      }
-
-      // Hash password
-      const passwordHash = await bcrypt.hash(password, 10);
-      const username = email;
-
-      const newUser = await storage.createUser({
-        email,
-        firstName: firstName || null,
-        lastName: lastName || null,
-        agentName: agentName || null,
-        username,
-        passwordHash,
-        role: role || 'agent',
-        referredBy: referredBy || null,
-      });
-
-      // Add user to tenant
-      await storage.addUserToTenant(newUser.id, tenantId, roleInTenant || 'agent', true);
-
-      // Set selectedCategory preference if provided
-      if (selectedCategory) {
-        await storage.setSelectedCategory(newUser.id, tenantId, selectedCategory);
-      }
-
-      res.json({ user: newUser });
-    } catch (error: any) {
-      console.error("Error creating user:", error);
-      res.status(500).json({ message: error.message || "Failed to create user" });
-    }
-  });
-
-  // PATCH /api/super-admin/users/:userId - Update user details
-  app.patch('/api/super-admin/users/:userId', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      const { firstName, lastName, agentName, email, role } = req.body;
-
-      const updates: any = {};
-      if (firstName !== undefined) updates.firstName = firstName;
-      if (lastName !== undefined) updates.lastName = lastName;
-      if (agentName !== undefined) updates.agentName = agentName;
-      if (email !== undefined) updates.email = email;
-      if (role !== undefined) updates.role = role;
-
-      const updatedUser = await storage.updateUser(userId, updates);
-      res.json({ user: updatedUser });
-    } catch (error: any) {
-      console.error('Error updating user:', error);
-      res.status(500).json({ message: error.message || 'Failed to update user' });
-    }
-  });
-
-  // PATCH /api/super-admin/users/:userId/reset-password - Reset user password
-  app.patch('/api/super-admin/users/:userId/reset-password', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      const { newPassword } = req.body;
-
-      if (!newPassword || newPassword.length < 6) {
-        return res.status(400).json({ message: 'Password must be at least 6 characters' });
-      }
-
-      const passwordHash = await bcrypt.hash(newPassword, 10);
-      await storage.updateUser(userId, { passwordHash });
-      res.json({ success: true, message: 'Password reset successfully' });
-    } catch (error: any) {
-      console.error('Error resetting password:', error);
-      res.status(500).json({ message: error.message || 'Failed to reset password' });
-    }
-  });
-
-  // POST /api/super-admin/users/:userId/deactivate - Deactivate user
-  app.post('/api/super-admin/users/:userId/deactivate', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      await storage.updateUser(userId, { isActive: false });
-      res.json({ success: true, message: 'User deactivated successfully' });
-    } catch (error: any) {
-      console.error('Error deactivating user:', error);
-      res.status(500).json({ message: error.message || 'Failed to deactivate user' });
-    }
-  });
-
-  // POST /api/super-admin/users/:userId/reactivate - Reactivate user
-  app.post('/api/super-admin/users/:userId/reactivate', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      await storage.updateUser(userId, { isActive: true });
-      res.json({ success: true, message: 'User reactivated successfully' });
-    } catch (error: any) {
-      console.error('Error reactivating user:', error);
-      res.status(500).json({ message: error.message || 'Failed to reactivate user' });
-    }
-  });
-
-  // PATCH /api/super-admin/users/:userId/voice-access - Toggle voice access
-  app.patch('/api/super-admin/users/:userId/voice-access', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      const { hasVoiceAccess } = req.body;
-
-      if (typeof hasVoiceAccess !== 'boolean') {
-        return res.status(400).json({ message: 'hasVoiceAccess must be a boolean' });
-      }
-
-      await storage.updateUser(userId, { hasVoiceAccess });
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error updating voice access:', error);
-      res.status(500).json({ message: error.message || 'Failed to update voice access' });
-    }
-  });
-
-  // GET /api/super-admin/tenants/:tenantId/projects - Get projects for a specific tenant
-  app.get('/api/super-admin/tenants/:tenantId/projects', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const projects = await storage.listTenantProjects(tenantId);
-      res.json(projects);
-    } catch (error: any) {
-      console.error("Error fetching tenant projects:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch projects" });
-    }
-  });
-
-  // ============================================================================
-  // SUPER ADMIN ELEVENLABS ROUTES - Per-tenant voice configuration
-  // ============================================================================
-
-  // GET /api/super-admin/tenants/:tenantId/elevenlabs/config - Get tenant's ElevenLabs config
-  app.get('/api/super-admin/tenants/:tenantId/elevenlabs/config', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const config = await storage.getElevenLabsConfig(tenantId);
-      res.json(config || { apiKey: "", twilioNumber: "" });
-    } catch (error: any) {
-      console.error("Error fetching ElevenLabs config:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch config" });
-    }
-  });
-
-  // PUT /api/super-admin/tenants/:tenantId/elevenlabs/config - Update tenant's ElevenLabs config
-  app.put('/api/super-admin/tenants/:tenantId/elevenlabs/config', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const validation = elevenLabsConfigSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ message: validation.error.errors[0].message });
-      }
-
-      await storage.updateElevenLabsConfig(tenantId, validation.data);
-      res.json({ message: "ElevenLabs configuration updated successfully" });
-    } catch (error: any) {
-      console.error("Error updating ElevenLabs config:", error);
-      res.status(500).json({ message: error.message || "Failed to update config" });
-    }
-  });
-
-  // GET /api/super-admin/tenants/:tenantId/elevenlabs-config - Get useDirectElevenLabs setting
-  app.get('/api/super-admin/tenants/:tenantId/elevenlabs-config', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const config = await storage.getElevenLabsConfig(tenantId);
-      res.json({ useDirectElevenLabs: config?.useDirectElevenLabs ?? false });
-    } catch (error: any) {
-      console.error("Error fetching Direct ElevenLabs setting:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch setting" });
-    }
-  });
-
-  // PATCH /api/super-admin/tenants/:tenantId/elevenlabs-config - Update useDirectElevenLabs setting
-  app.patch('/api/super-admin/tenants/:tenantId/elevenlabs-config', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const { useDirectElevenLabs } = req.body;
-      
-      if (typeof useDirectElevenLabs !== 'boolean') {
-        return res.status(400).json({ message: "useDirectElevenLabs must be a boolean" });
-      }
-
-      await storage.updateElevenLabsConfigDirectMode(tenantId, useDirectElevenLabs);
-      console.log(`[VoiceConfig] Tenant ${tenantId} set useDirectElevenLabs=${useDirectElevenLabs}`);
-      res.json({ message: "Direct ElevenLabs setting updated successfully", useDirectElevenLabs });
-    } catch (error: any) {
-      console.error("Error updating Direct ElevenLabs setting:", error);
-      res.status(500).json({ message: error.message || "Failed to update setting" });
-    }
-  });
-
-  // GET /api/super-admin/tenants/:tenantId/elevenlabs/agents - Get tenant's agents
-  app.get('/api/super-admin/tenants/:tenantId/elevenlabs/agents', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const agents = await storage.getAllElevenLabsAgents(tenantId);
-      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(tenantId);
-      const projects = await storage.listTenantProjects(tenantId);
-      
-      // Create maps for lookups
-      const phoneByIdMap = new Map(
-        phoneNumbers.map(pn => [pn.phoneNumberId, pn])
-      );
-      const projectMap = new Map(projects.map(p => [p.id, p.name]));
-      
-      const enrichedAgents = agents.map(agent => {
-        // Look up phone by agent's stored phoneNumberId
-        const phone = agent.phoneNumberId ? phoneByIdMap.get(agent.phoneNumberId) : null;
-        return {
-          id: agent.id,
-          name: agent.name,
-          agent_id: agent.agentId,
-          phone_number_id: agent.phoneNumberId,
-          phone_number: phone?.phoneNumber || null,
-          phone_label: phone?.label || null,
-          description: agent.description,
-          is_default: agent.isDefault,
-          projectId: agent.projectId || null,
-          projectName: agent.projectId ? projectMap.get(agent.projectId) || null : null,
-        };
-      });
-      
-      res.json(enrichedAgents);
-    } catch (error: any) {
-      console.error("Error fetching ElevenLabs agents:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch agents" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/elevenlabs/agents - Create agent for tenant
-  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/agents', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const validation = elevenLabsAgentSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ message: validation.error.errors[0].message });
-      }
-
-      const agentData = {
-        ...validation.data,
-        tenantId,
-        projectId: validation.data.projectId || null,
-      };
-      const agent = await storage.createElevenLabsAgent(agentData);
-      res.json(agent);
-    } catch (error: any) {
-      console.error("Error creating ElevenLabs agent:", error);
-      res.status(500).json({ message: error.message || "Failed to create agent" });
-    }
-  });
-
-  // PUT /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id - Update agent
-  app.put('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId, id } = req.params;
-      const validation = elevenLabsAgentSchema.partial().safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ message: validation.error.errors[0].message });
-      }
-
-      const agent = await storage.updateElevenLabsAgent(id, tenantId, validation.data);
-      res.json(agent);
-    } catch (error: any) {
-      console.error("Error updating ElevenLabs agent:", error);
-      res.status(500).json({ message: error.message || "Failed to update agent" });
-    }
-  });
-
-  // DELETE /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id - Delete agent
-  app.delete('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId, id } = req.params;
-      await storage.deleteElevenLabsAgent(id, tenantId);
-      res.json({ message: "Agent deleted successfully" });
-    } catch (error: any) {
-      console.error("Error deleting ElevenLabs agent:", error);
-      res.status(500).json({ message: error.message || "Failed to delete agent" });
-    }
-  });
-
-  // PUT /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/set-default - Set default agent
-  app.put('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/set-default', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId, id } = req.params;
-      await storage.setDefaultElevenLabsAgent(id, tenantId);
-      res.json({ message: "Default agent set successfully" });
-    } catch (error: any) {
-      console.error("Error setting default agent:", error);
-      res.status(500).json({ message: error.message || "Failed to set default agent" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/sync-settings - Sync single agent settings
-  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/sync-settings', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId, id } = req.params;
-      
-      const dbAgent = await storage.getElevenLabsAgentById(id, tenantId);
-      if (!dbAgent) {
-        return res.status(404).json({ message: "Agent not found" });
-      }
-      
-      const config = await storage.getElevenLabsConfig(tenantId);
-      if (!config?.apiKey) {
-        return res.status(400).json({ message: "ElevenLabs API key not configured" });
-      }
-      
-      const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${dbAgent.agentId}`, {
-        headers: { "xi-api-key": config.apiKey },
-      });
-      
-      const agentData = response.data;
-      const conversationConfig = agentData.conversation_config || {};
-      const ttsConfig = conversationConfig.tts || {};
-      const sttConfig = conversationConfig.stt || {};
-      
-      await storage.updateElevenLabsAgent(id, {
-        sttEncoding: sttConfig.encoding || null,
-        sttSampleRate: sttConfig.sample_rate || null,
-        ttsOutputFormat: ttsConfig.agent_output_audio_format || null,
-        voiceId: ttsConfig.voice_id || null,
-        language: conversationConfig.language || null,
-        lastSyncedAt: new Date(),
-      }, tenantId);
-      
-      const updatedAgent = await storage.getElevenLabsAgentById(id, tenantId);
-      console.log(`[ElevenLabs] Super-admin synced settings for agent ${dbAgent.agentId}`);
-      res.json(updatedAgent);
-    } catch (error: any) {
-      console.error("Error syncing agent settings:", error);
-      res.status(500).json({ message: error.message || "Failed to sync agent settings" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/elevenlabs/sync-all-agent-settings - Sync all agents' settings
-  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/sync-all-agent-settings', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      
-      const config = await storage.getElevenLabsConfig(tenantId);
-      if (!config?.apiKey) {
-        return res.status(400).json({ message: "ElevenLabs API key not configured" });
-      }
-      
-      const agents = await storage.getAllElevenLabsAgents(tenantId);
-      const results = { success: 0, failed: 0, errors: [] as string[] };
-      
-      for (const dbAgent of agents) {
-        try {
-          const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${dbAgent.agentId}`, {
-            headers: { "xi-api-key": config.apiKey },
-          });
-          
-          const agentData = response.data;
-          const conversationConfig = agentData.conversation_config || {};
-          const ttsConfig = conversationConfig.tts || {};
-          const sttConfig = conversationConfig.stt || {};
-          
-          await storage.updateElevenLabsAgent(dbAgent.id, {
-            sttEncoding: sttConfig.encoding || null,
-            sttSampleRate: sttConfig.sample_rate || null,
-            ttsOutputFormat: ttsConfig.agent_output_audio_format || null,
-            voiceId: ttsConfig.voice_id || null,
-            language: conversationConfig.language || null,
-            lastSyncedAt: new Date(),
-          }, tenantId);
-          
-          results.success++;
-        } catch (err: any) {
-          results.failed++;
-          results.errors.push(`${dbAgent.name || dbAgent.agentId}: ${err.message}`);
-        }
-      }
-      
-      console.log(`[ElevenLabs] Super-admin synced ${results.success}/${agents.length} agents for tenant ${tenantId}`);
-      res.json(results);
-    } catch (error: any) {
-      console.error("Error syncing all agent settings:", error);
-      res.status(500).json({ message: error.message || "Failed to sync agent settings" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/elevenlabs/sync-phone-numbers - Sync phone numbers from ElevenLabs
-  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/sync-phone-numbers', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const config = await storage.getElevenLabsConfig(tenantId);
-      
-      if (!config?.apiKey) {
-        return res.status(400).json({ message: "ElevenLabs API key not configured for this tenant" });
-      }
-
-      const response = await axios.get("https://api.elevenlabs.io/v1/convai/phone-numbers", {
-        headers: { "xi-api-key": config.apiKey },
-      });
-
-      const phoneNumbers = response.data.phone_numbers || (Array.isArray(response.data) ? response.data : []);
-      
-      for (const pn of phoneNumbers) {
-        await storage.upsertElevenLabsPhoneNumber({
-          phoneNumberId: pn.phone_number_id,
-          phoneNumber: pn.phone_number || pn.number || '',
-          label: pn.label || pn.name || null,
-          tenantId,
-        });
-      }
-
-      // Update agents with their assigned phone number IDs from ElevenLabs
-      const allAgents = await storage.getAllElevenLabsAgents(tenantId);
-      const agentIdToDbId = new Map(allAgents.map(a => [a.agentId, a.id]));
-      
-      let agentUpdates = 0;
-      for (const pn of phoneNumbers) {
-        // ElevenLabs nests agent info in assigned_agent object
-        const assignedAgentId = pn.assigned_agent?.agent_id || pn.agent_id;
-        if (assignedAgentId && pn.phone_number_id) {
-          const dbAgentId = agentIdToDbId.get(assignedAgentId);
-          if (dbAgentId) {
-            try {
-              await storage.updateElevenLabsAgent(dbAgentId, tenantId, {
-                phoneNumberId: pn.phone_number_id,
-              });
-              agentUpdates++;
-              console.log(`[PhoneSync] Updated agent ${assignedAgentId} with phone number ${pn.phone_number_id}`);
-            } catch (err: any) {
-              console.error(`[PhoneSync] Failed to update agent ${assignedAgentId}:`, err.message);
-            }
-          } else {
-            console.log(`[PhoneSync] Agent ${assignedAgentId} not found in database for tenant`);
-          }
-        }
-      }
-
-      res.json({ message: `Phone numbers synced successfully (${agentUpdates} agent(s) updated)`, count: phoneNumbers.length });
-    } catch (error: any) {
-      console.error("Error syncing phone numbers:", error);
-      res.status(500).json({ message: error.message || "Failed to sync phone numbers" });
-    }
-  });
-
-  // GET /api/super-admin/tenants/:tenantId/elevenlabs/webhook-status - Get webhook status
-  app.get('/api/super-admin/tenants/:tenantId/elevenlabs/webhook-status', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const config = await storage.getElevenLabsConfig(tenantId);
-      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'https';
-      const host = req.get('host') || 'localhost:5000';
-      const webhookUrl = `${protocol}://${host}/api/elevenlabs/webhook`;
-      
-      res.json({
-        webhookUrl,
-        hasSecret: !!config?.webhookSecret,
-        hasApiKey: !!config?.apiKey,
-      });
-    } catch (error: any) {
-      console.error("Error fetching webhook status:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch webhook status" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/elevenlabs/register-webhook - Register webhook
-  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/register-webhook', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const config = await storage.getElevenLabsConfig(tenantId);
-      
-      if (!config?.apiKey) {
-        return res.status(400).json({ message: "ElevenLabs API key not configured for this tenant" });
-      }
-
-      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'https';
-      const host = req.get('host') || 'localhost:5000';
-      const webhookUrl = `${protocol}://${host}/api/elevenlabs/webhook`;
-
-      const response = await axios.post(
-        "https://api.elevenlabs.io/v1/convai/webhook/register",
-        {
-          url: webhookUrl,
-          events: ["conversation_initiation", "conversation_update", "conversation_end"],
-        },
-        {
-          headers: { "xi-api-key": config.apiKey },
-        }
-      );
-
-      const webhookSecret = response.data.secret;
-      if (webhookSecret) {
-        await storage.updateElevenLabsConfig(tenantId, { webhookSecret });
-      }
-
-      res.json({ message: "Webhook registered successfully", webhookUrl });
-    } catch (error: any) {
-      console.error("Error registering webhook:", error);
-      res.status(500).json({ message: error.message || "Failed to register webhook" });
-    }
-  });
-
-  // ============================================================================
-  // SUPER ADMIN - GOOGLE SHEETS ROUTES (per-tenant management)
-  // ============================================================================
-
-  // GET /api/super-admin/tenants/:tenantId/sheets - Get connected sheets for tenant
-  app.get('/api/super-admin/tenants/:tenantId/sheets', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const sheets = await storage.getAllActiveGoogleSheets(tenantId);
-      res.json({ sheets });
-    } catch (error: any) {
-      console.error("Error fetching connected sheets:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch connected sheets" });
-    }
-  });
-
-  // GET /api/super-admin/tenants/:tenantId/sheets/list - List available Google Sheets
-  app.get('/api/super-admin/tenants/:tenantId/sheets/list', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const sheets = await googleSheets.listSpreadsheets();
-      res.json(sheets);
-    } catch (error: any) {
-      console.error("Error listing available sheets:", error);
-      res.status(500).json({ message: error.message || "Failed to list sheets" });
-    }
-  });
-
-  // GET /api/super-admin/tenants/:tenantId/sheets/:spreadsheetId/info - Get sheet info
-  app.get('/api/super-admin/tenants/:tenantId/sheets/:spreadsheetId/info', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { spreadsheetId } = req.params;
-      const info = await googleSheets.getSpreadsheetInfo(spreadsheetId);
-      res.json(info);
-    } catch (error: any) {
-      console.error("Error getting spreadsheet info:", error);
-      res.status(500).json({ message: error.message || "Failed to get spreadsheet info" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/sheets/connect - Connect a sheet
-  app.post('/api/super-admin/tenants/:tenantId/sheets/connect', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId } = req.params;
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { spreadsheetId, spreadsheetName, sheetName, sheetPurpose, uniqueIdentifierColumn } = req.body;
-      
-      if (!spreadsheetId || !spreadsheetName || !sheetName || !sheetPurpose || !uniqueIdentifierColumn) {
-        return res.status(400).json({ message: "Missing required fields" });
-      }
-
-      // Verify sheet exists and has the identifier column
-      const range = `${sheetName}!A1:ZZ1`;
-      const headers = await googleSheets.readSheetData(spreadsheetId, range);
-
-      if (!headers || headers.length === 0) {
-        return res.status(400).json({ message: "Sheet is empty or not found" });
-      }
-
-      const headerRow = headers[0];
-      const hasIdentifier = headerRow.some((h: string) =>
-        h.toLowerCase() === uniqueIdentifierColumn.toLowerCase()
-      );
-
-      if (!hasIdentifier) {
-        return res.status(400).json({
-          message: `Column "${uniqueIdentifierColumn}" not found in sheet. Available columns: ${headerRow.join(', ')}`
-        });
-      }
-
-      const connection = await storage.createGoogleSheetConnection({
-        tenantId,
-        spreadsheetId,
-        spreadsheetName,
-        sheetName,
-        sheetPurpose,
-        uniqueIdentifierColumn,
-        connectedBy: userId,
-        syncStatus: 'active',
-      });
-      
-      res.json({ message: "Sheet connected successfully", connection });
-    } catch (error: any) {
-      console.error("Error connecting sheet:", error);
-      res.status(500).json({ message: error.message || "Failed to connect sheet" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/sheets/:id/disconnect - Disconnect a sheet
-  app.post('/api/super-admin/tenants/:tenantId/sheets/:id/disconnect', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId, id } = req.params;
-      // Verify sheet belongs to tenant before disconnecting
-      const sheet = await storage.getGoogleSheetById(id, tenantId);
-      if (!sheet) {
-        return res.status(404).json({ message: "Sheet not found for this tenant" });
-      }
-      await storage.disconnectGoogleSheet(id);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Error disconnecting sheet:", error);
-      res.status(500).json({ message: error.message || "Failed to disconnect sheet" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/sheets/:id/sync/import - Import data from sheet
-  app.post('/api/super-admin/tenants/:tenantId/sheets/:id/sync/import', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId, id } = req.params;
-      const sheet = await storage.getGoogleSheetById(id, tenantId);
-      if (!sheet) {
-        return res.status(404).json({ message: "Sheet not found" });
-      }
-
-      // Import data using the existing sync logic
-      const { spreadsheetId, sheetName, uniqueIdentifierColumn, sheetPurpose } = sheet;
-      const range = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(spreadsheetId, range);
-
-      if (rows.length === 0) {
-        return res.json({ message: "No data to import", imported: 0 });
-      }
-
-      const headers = rows[0];
-      const data = rows.slice(1).map((row: any[], index: number) => {
-        const obj: any = { _rowIndex: index + 2 };
-        headers.forEach((header: string, i: number) => {
-          obj[header] = row[i] || '';
-        });
-        return obj;
-      });
-
-      await storage.updateGoogleSheetLastSync(id);
-      res.json({ message: "Import complete", imported: data.length });
-    } catch (error: any) {
-      console.error("Error importing from sheet:", error);
-      res.status(500).json({ message: error.message || "Failed to import data" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/sheets/:id/sync/export - Export data to sheet
-  app.post('/api/super-admin/tenants/:tenantId/sheets/:id/sync/export', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId, id } = req.params;
-      const sheet = await storage.getGoogleSheetById(id, tenantId);
-      if (!sheet) {
-        return res.status(404).json({ message: "Sheet not found" });
-      }
-
-      await storage.updateGoogleSheetLastSync(id);
-      res.json({ message: "Export complete" });
-    } catch (error: any) {
-      console.error("Error exporting to sheet:", error);
-      res.status(500).json({ message: error.message || "Failed to export data" });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/sheets/:id/sync/bidirectional - Bidirectional sync
-  app.post('/api/super-admin/tenants/:tenantId/sheets/:id/sync/bidirectional', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId, id } = req.params;
-      const sheet = await storage.getGoogleSheetById(id, tenantId);
-      if (!sheet) {
-        return res.status(404).json({ message: "Sheet not found" });
-      }
-
-      await storage.updateGoogleSheetLastSync(id);
-      res.json({ message: "Bidirectional sync complete" });
-    } catch (error: any) {
-      console.error("Error in bidirectional sync:", error);
-      res.status(500).json({ message: error.message || "Failed to sync data" });
-    }
-  });
-
-  // ============================================================================
-  // SUPER ADMIN: Per-Tenant Webhook Management
-  // ============================================================================
-
-  // GET /api/super-admin/tenants/:tenantId/webhooks - Get webhook statuses for tenant
-  app.get('/api/super-admin/tenants/:tenantId/webhooks', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId: tenantIdOrSlug } = req.params;
-      
-      // Resolve tenant by ID or slug
-      const tenant = await storage.getTenantByIdOrSlug(tenantIdOrSlug);
-      if (!tenant) {
-        return res.status(404).json({ message: 'Tenant not found' });
-      }
-      
-      // Get users via the user_tenants junction table
-      // Try both UUID and slug since data may use either
-      let tenantUsers = await storage.listTenantUsers(tenant.id);
-      if (tenantUsers.length === 0 && tenant.slug) {
-        tenantUsers = await storage.listTenantUsers(tenant.slug);
-      }
-      
-      // Filter to active users only
-      const users = tenantUsers.filter(u => u.isActive !== false);
-      
-      const webhookStatuses = [];
-
-      for (const u of users) {
-        const integration = await storage.getUserIntegration(u.id);
-        
-        // Determine webhook URL based on environment
-        let registeredUrl = 'Not configured';
-        if (process.env.REPLIT_DOMAINS) {
-          const domains = process.env.REPLIT_DOMAINS.split(',');
-          registeredUrl = `https://${domains[0]}/api/webhooks/google-calendar`;
-        } else if (process.env.REPLIT_DEV_DOMAIN) {
-          registeredUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`;
-        }
-
-        const status: any = {
-          userId: u.id,
-          userEmail: u.email,
-          agentName: u.agentName,
-          tenantId: tenant.id,
-          hasGoogleCalendar: !!integration?.googleCalendarAccessToken,
-          channelId: integration?.googleCalendarWebhookChannelId || null,
-          resourceId: integration?.googleCalendarWebhookResourceId || null,
-          expiry: integration?.googleCalendarWebhookExpiry || null,
-          expiryDate: integration?.googleCalendarWebhookExpiry 
-            ? new Date(integration.googleCalendarWebhookExpiry).toISOString()
-            : null,
-          isExpired: integration?.googleCalendarWebhookExpiry 
-            ? integration.googleCalendarWebhookExpiry < Date.now()
-            : null,
-          registeredUrl,
-          environment: process.env.REPLIT_DOMAINS ? 'production' : 'development'
-        };
-
-        webhookStatuses.push(status);
-      }
-
-      res.json({ webhooks: webhookStatuses });
-    } catch (error: any) {
-      console.error('Error fetching tenant webhook statuses:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch webhook statuses' });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/webhooks/bulk-register - Bulk re-register webhooks for tenant
-  app.post('/api/super-admin/tenants/:tenantId/webhooks/bulk-register', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId: tenantIdOrSlug } = req.params;
-      
-      // Resolve tenant by ID or slug
-      const tenant = await storage.getTenantByIdOrSlug(tenantIdOrSlug);
-      if (!tenant) {
-        return res.status(404).json({ message: 'Tenant not found' });
-      }
-      
-      // Get users via the user_tenants junction table
-      // Try both UUID and slug since data may use either
-      let tenantUsers = await storage.listTenantUsers(tenant.id);
-      if (tenantUsers.length === 0 && tenant.slug) {
-        tenantUsers = await storage.listTenantUsers(tenant.slug);
-      }
-      
-      // Filter to active users only
-      const users = tenantUsers.filter(u => u.isActive !== false);
-      
-      const results = {
-        total: 0,
-        successful: 0,
-        failed: 0,
-        skipped: 0,
-        details: [] as any[]
-      };
-
-      for (const u of users) {
-        const integration = await storage.getUserIntegration(u.id);
-
-        if (!integration?.googleCalendarAccessToken) {
-          results.skipped++;
-          results.details.push({
-            userId: u.id,
-            email: u.email,
-            status: 'skipped',
-            reason: 'No Google Calendar connected'
-          });
-          continue;
-        }
-
-        results.total++;
-
-        try {
-          const success = await setupCalendarWatch(u.id);
-          if (success) {
-            results.successful++;
-            results.details.push({
-              userId: u.id,
-              email: u.email,
-              status: 'success'
-            });
-          } else {
-            results.failed++;
-            results.details.push({
-              userId: u.id,
-              email: u.email,
-              status: 'failed',
-              reason: 'Setup returned false'
-            });
-          }
-        } catch (error: any) {
-          results.failed++;
-          results.details.push({
-            userId: u.id,
-            email: u.email,
-            status: 'failed',
-            reason: error.message
-          });
-        }
-      }
-
-      res.json(results);
-    } catch (error: any) {
-      console.error('Error bulk registering tenant webhooks:', error);
-      res.status(500).json({ message: error.message || 'Failed to bulk register webhooks' });
-    }
-  });
-
-  // POST /api/super-admin/tenants/:tenantId/webhooks/:userId/register - Register webhook for specific user in tenant
-  app.post('/api/super-admin/tenants/:tenantId/webhooks/:userId/register', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const { tenantId: tenantIdOrSlug, userId: targetUserId } = req.params;
-      
-      // Resolve tenant by ID or slug
-      const tenant = await storage.getTenantByIdOrSlug(tenantIdOrSlug);
-      if (!tenant) {
-        return res.status(404).json({ message: 'Tenant not found' });
-      }
-      
-      const targetUser = await storage.getUser(targetUserId);
-
-      if (!targetUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      // Verify user belongs to the specified tenant via user_tenants
-      // Try both UUID and slug since data may use either
-      let userRole = await storage.getUserTenantRole(targetUserId, tenant.id);
-      if (!userRole && tenant.slug) {
-        userRole = await storage.getUserTenantRole(targetUserId, tenant.slug);
-      }
-      if (!userRole) {
-        return res.status(404).json({ message: 'User not found in this tenant' });
-      }
-
-      const integration = await storage.getUserIntegration(targetUserId);
-      if (!integration?.googleCalendarAccessToken) {
-        return res.status(400).json({ message: 'User does not have Google Calendar connected' });
-      }
-
-      const success = await setupCalendarWatch(targetUserId);
-
-      if (success) {
-        const updatedIntegration = await storage.getUserIntegration(targetUserId);
-        res.json({
-          success: true,
-          channelId: updatedIntegration?.googleCalendarWebhookChannelId,
-          expiry: updatedIntegration?.googleCalendarWebhookExpiry,
-          expiryDate: updatedIntegration?.googleCalendarWebhookExpiry 
-            ? new Date(updatedIntegration.googleCalendarWebhookExpiry).toISOString()
-            : null
-        });
-      } else {
-        res.status(500).json({ 
-          success: false, 
-          message: 'Webhook registration failed' 
-        });
-      }
-    } catch (error: any) {
-      console.error('Error registering tenant webhook:', error);
-      res.status(500).json({ message: error.message || 'Failed to register webhook' });
-    }
-  });
-
-  // ============================================================================
-  // ORG ADMIN ROUTES - Tenant-scoped management for org admins
-  // ============================================================================
-
-  // GET /api/org-admin/users - List users in current tenant
-  app.get('/api/org-admin/users', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const users = await storage.listTenantUsers(tenantId);
-      res.json({ users });
-    } catch (error: any) {
-      console.error('Error listing tenant users:', error);
-      res.status(500).json({ message: error.message || 'Failed to list users' });
-    }
-  });
-
-  // POST /api/org-admin/users - Create a new user directly in current tenant (like super admin)
-  app.post('/api/org-admin/users', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { email, firstName, lastName, agentName, password, role } = req.body;
-      const tenantId = req.user.tenantId;
-
-      if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
-      }
-
-      // Check if user already exists
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
-        // Check if user is already a member of this tenant
-        const tenantUsers = await storage.listTenantUsers(tenantId);
-        const alreadyMember = tenantUsers.some(u => u.id === existingUser.id);
-        if (alreadyMember) {
-          return res.status(400).json({ message: 'User is already a member of this organization' });
-        }
-        return res.status(400).json({ message: 'User with this email already exists' });
-      }
-
-      // Hash password
-      const passwordHash = await bcrypt.hash(password, 10);
-      const username = email;
-
-      // Create the new user
-      const newUser = await storage.createUser({
-        email,
-        firstName: firstName || null,
-        lastName: lastName || null,
-        agentName: agentName || email.split('@')[0],
-        username,
-        passwordHash,
-        role: role === 'org_admin' ? 'admin' : 'agent',
-        referredBy: null,
-      });
-
-      // Add user to the current tenant with appropriate role
-      const roleInTenant = role === 'org_admin' ? 'org_admin' : 'agent';
-      await storage.addUserToTenant(newUser.id, tenantId, roleInTenant, true);
-
-      res.json({ 
-        success: true, 
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          agentName: newUser.agentName,
-          roleInTenant,
-        }
-      });
-    } catch (error: any) {
-      console.error('Error creating user:', error);
-      res.status(500).json({ message: error.message || 'Failed to create user' });
-    }
-  });
-
-  // PATCH /api/org-admin/users/:userId/role - Update user's role in current tenant
-  app.patch('/api/org-admin/users/:userId/role', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      const { role } = req.body;
-      const tenantId = req.user.tenantId;
-
-      if (!role || !['org_admin', 'agent'].includes(role)) {
-        return res.status(400).json({ message: 'Invalid role. Must be org_admin or agent' });
-      }
-
-      // Prevent demoting self
-      if (userId === req.user.id && role !== 'org_admin') {
-        return res.status(400).json({ message: 'Cannot demote yourself' });
-      }
-
-      await storage.updateUserRoleInTenant(userId, tenantId, role);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error updating user role:', error);
-      res.status(500).json({ message: error.message || 'Failed to update user role' });
-    }
-  });
-
-  // DELETE /api/org-admin/users/:userId - Remove user from current tenant
-  app.delete('/api/org-admin/users/:userId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { userId } = req.params;
-      const tenantId = req.user.tenantId;
-
-      // Prevent removing self
-      if (userId === req.user.id) {
-        return res.status(400).json({ message: 'Cannot remove yourself from the organization' });
-      }
-
-      await storage.removeUserFromTenant(userId, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error removing user from tenant:', error);
-      res.status(500).json({ message: error.message || 'Failed to remove user' });
-    }
-  });
-
-  // GET /api/org-admin/settings - Get tenant settings
-  app.get('/api/org-admin/settings', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const tenant = await storage.getTenantById(tenantId);
-      if (!tenant) {
-        return res.status(404).json({ message: 'Tenant not found' });
-      }
-      res.json({ tenant });
-    } catch (error: any) {
-      console.error('Error getting tenant settings:', error);
-      res.status(500).json({ message: error.message || 'Failed to get settings' });
-    }
-  });
-
-  // PATCH /api/org-admin/settings - Update tenant settings
-  app.patch('/api/org-admin/settings', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const { settings } = req.body;
-
-      if (!settings || typeof settings !== 'object') {
-        return res.status(400).json({ message: 'Invalid settings object' });
-      }
-
-      // Get current settings to check for module changes
-      const currentTenant = await storage.getTenantById(tenantId);
-      const previousModules = currentTenant?.settings?.enabledModules || [];
-      const newModules = settings.enabledModules || previousModules;
-
-      // Handle hard-off for disabled modules (cancel queued items)
-      if (settings.enabledModules) {
-        const { handleModuleHardOff } = await import('./services/moduleHardOff');
-        const hardOffResults = await handleModuleHardOff(tenantId, previousModules, newModules);
-        
-        // Log results for audit
-        if (hardOffResults.length > 0) {
-          console.log(`[OrgAdmin] Module hard-off results for tenant ${tenantId}:`, hardOffResults);
-        }
-      }
-
-      const updated = await storage.updateTenantSettings(tenantId, settings);
-      res.json({ tenant: updated });
-    } catch (error: any) {
-      console.error('Error updating tenant settings:', error);
-      res.status(500).json({ message: error.message || 'Failed to update settings' });
-    }
-  });
-
-  // GET /api/org-admin/stats - Get tenant stats
-  app.get('/api/org-admin/stats', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const stats = await storage.getTenantStats(tenantId);
-      res.json(stats);
-    } catch (error: any) {
-      console.error('Error getting tenant stats:', error);
-      res.status(500).json({ message: error.message || 'Failed to get stats' });
-    }
-  });
-
-  // GET /api/org-admin/invites - List pending invites for current tenant
-  app.get('/api/org-admin/invites', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const invites = await storage.listTenantInvites(tenantId);
-      res.json({ invites });
-    } catch (error: any) {
-      console.error('Error listing invites:', error);
-      res.status(500).json({ message: error.message || 'Failed to list invites' });
-    }
-  });
-
-  // POST /api/org-admin/invites - Create a new invite
-  app.post('/api/org-admin/invites', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const { email, role } = req.body;
-
-      if (!email || !role) {
-        return res.status(400).json({ message: 'Missing required fields: email, role' });
-      }
-
-      if (!['org_admin', 'agent'].includes(role)) {
-        return res.status(400).json({ message: 'Invalid role. Must be org_admin or agent' });
-      }
-
-      // Check if user is already a member
-      const existingUsers = await storage.listTenantUsers(tenantId);
-      const alreadyMember = existingUsers.some(u => u.email?.toLowerCase() === email.toLowerCase());
-      if (alreadyMember) {
-        return res.status(400).json({ message: 'User is already a member of this organization' });
-      }
-
-      // Check for existing pending invite
-      const existingInvites = await storage.listTenantInvites(tenantId);
-      const pendingInvite = existingInvites.find(
-        i => i.email.toLowerCase() === email.toLowerCase() && i.status === 'pending'
-      );
-      if (pendingInvite) {
-        return res.status(400).json({ message: 'An invite is already pending for this email' });
-      }
-
-      // Create invite with 7-day expiry
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const invite = await storage.createTenantInvite(tenantId, email, role, req.user.id, expiresAt);
-      res.json({ invite });
-    } catch (error: any) {
-      console.error('Error creating invite:', error);
-      res.status(500).json({ message: error.message || 'Failed to create invite' });
-    }
-  });
-
-  // DELETE /api/org-admin/invites/:inviteId - Cancel an invite
-  app.delete('/api/org-admin/invites/:inviteId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { inviteId } = req.params;
-      const tenantId = req.user.tenantId;
-
-      await storage.cancelTenantInvite(inviteId, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error cancelling invite:', error);
-      res.status(500).json({ message: error.message || 'Failed to cancel invite' });
-    }
-  });
-
-  // ============ Pipeline Management Routes ============
-  
-  // GET /api/org-admin/pipelines - List all pipelines for tenant
-  app.get('/api/org-admin/pipelines', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const { projectId } = req.query;
-      const pipelinesList = await storage.listPipelines(tenantId, projectId as string | undefined);
-      res.json({ pipelines: pipelinesList });
-    } catch (error: any) {
-      console.error('Error listing pipelines:', error);
-      res.status(500).json({ message: error.message || 'Failed to list pipelines' });
-    }
-  });
-
-  // GET /api/org-admin/pipelines/:pipelineId - Get a specific pipeline with stages
-  app.get('/api/org-admin/pipelines/:pipelineId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { pipelineId } = req.params;
-      const tenantId = req.user.tenantId;
-      
-      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
-      if (!pipeline) {
-        return res.status(404).json({ message: 'Pipeline not found' });
-      }
-      
-      const stages = await storage.listPipelineStages(pipelineId, tenantId);
-      res.json({ pipeline, stages });
-    } catch (error: any) {
-      console.error('Error getting pipeline:', error);
-      res.status(500).json({ message: error.message || 'Failed to get pipeline' });
-    }
-  });
-
-  // POST /api/org-admin/pipelines - Create a new pipeline
-  app.post('/api/org-admin/pipelines', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const { name, slug, pipelineType, description, aiPromptTemplate, aiAssistantId, voiceAgentId, googleSheetProfile } = req.body;
-      
-      if (!name || !slug) {
-        return res.status(400).json({ message: 'Name and slug are required' });
-      }
-      
-      // Check for slug uniqueness within tenant
-      const existingPipeline = await storage.getPipelineBySlug(slug, tenantId);
-      if (existingPipeline) {
-        return res.status(400).json({ message: 'A pipeline with this slug already exists' });
-      }
-      
-      const pipeline = await storage.createPipeline({
-        tenantId,
-        name,
-        slug,
-        pipelineType: pipelineType || 'custom',
-        description,
-        aiPromptTemplate,
-        aiAssistantId,
-        voiceAgentId,
-        googleSheetProfile,
-        isActive: true,
-      });
-      
-      res.json({ pipeline });
-    } catch (error: any) {
-      console.error('Error creating pipeline:', error);
-      res.status(500).json({ message: error.message || 'Failed to create pipeline' });
-    }
-  });
-
-  // PATCH /api/org-admin/pipelines/:pipelineId - Update a pipeline
-  app.patch('/api/org-admin/pipelines/:pipelineId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { pipelineId } = req.params;
-      const tenantId = req.user.tenantId;
-      const updates = req.body;
-      
-      // Check if pipeline exists
-      const existing = await storage.getPipelineById(pipelineId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Pipeline not found' });
-      }
-      
-      // If changing slug, check uniqueness
-      if (updates.slug && updates.slug !== existing.slug) {
-        const slugConflict = await storage.getPipelineBySlug(updates.slug, tenantId);
-        if (slugConflict) {
-          return res.status(400).json({ message: 'A pipeline with this slug already exists' });
-        }
-      }
-      
-      const pipeline = await storage.updatePipeline(pipelineId, tenantId, updates);
-      res.json({ pipeline });
-    } catch (error: any) {
-      console.error('Error updating pipeline:', error);
-      res.status(500).json({ message: error.message || 'Failed to update pipeline' });
-    }
-  });
-
-  // DELETE /api/org-admin/pipelines/:pipelineId - Delete a pipeline
-  app.delete('/api/org-admin/pipelines/:pipelineId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { pipelineId } = req.params;
-      const tenantId = req.user.tenantId;
-      
-      const existing = await storage.getPipelineById(pipelineId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Pipeline not found' });
-      }
-      
-      await storage.deletePipeline(pipelineId, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error deleting pipeline:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete pipeline' });
-    }
-  });
-
-  // ============ Pipeline Stage Routes ============
-  
-  // POST /api/org-admin/pipelines/:pipelineId/stages - Create a new stage
-  app.post('/api/org-admin/pipelines/:pipelineId/stages', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { pipelineId } = req.params;
-      const tenantId = req.user.tenantId;
-      const { name, stageType, config, aiPromptOverride } = req.body;
-      
-      // Verify pipeline exists and belongs to tenant
-      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
-      if (!pipeline) {
-        return res.status(404).json({ message: 'Pipeline not found' });
-      }
-      
-      if (!name) {
-        return res.status(400).json({ message: 'Stage name is required' });
-      }
-      
-      // Get max stage order
-      const existingStages = await storage.listPipelineStages(pipelineId, tenantId);
-      const maxOrder = existingStages.length > 0 
-        ? Math.max(...existingStages.map(s => s.stageOrder)) 
-        : 0;
-      
-      const stage = await storage.createPipelineStage({
-        tenantId,
-        pipelineId,
-        name,
-        stageOrder: maxOrder + 1,
-        stageType: stageType || 'action',
-        config: config || {},
-        aiPromptOverride,
-        isActive: true,
-      });
-      
-      res.json({ stage });
-    } catch (error: any) {
-      console.error('Error creating stage:', error);
-      res.status(500).json({ message: error.message || 'Failed to create stage' });
-    }
-  });
-
-  // PATCH /api/org-admin/pipelines/:pipelineId/stages/:stageId - Update a stage
-  app.patch('/api/org-admin/pipelines/:pipelineId/stages/:stageId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { pipelineId, stageId } = req.params;
-      const tenantId = req.user.tenantId;
-      const updates = req.body;
-      
-      // Verify pipeline exists
-      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
-      if (!pipeline) {
-        return res.status(404).json({ message: 'Pipeline not found' });
-      }
-      
-      // Verify stage exists
-      const stage = await storage.getPipelineStageById(stageId, tenantId);
-      if (!stage || stage.pipelineId !== pipelineId) {
-        return res.status(404).json({ message: 'Stage not found' });
-      }
-      
-      const updatedStage = await storage.updatePipelineStage(stageId, tenantId, updates);
-      res.json({ stage: updatedStage });
-    } catch (error: any) {
-      console.error('Error updating stage:', error);
-      res.status(500).json({ message: error.message || 'Failed to update stage' });
-    }
-  });
-
-  // DELETE /api/org-admin/pipelines/:pipelineId/stages/:stageId - Delete a stage
-  app.delete('/api/org-admin/pipelines/:pipelineId/stages/:stageId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { pipelineId, stageId } = req.params;
-      const tenantId = req.user.tenantId;
-      
-      // Verify pipeline exists
-      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
-      if (!pipeline) {
-        return res.status(404).json({ message: 'Pipeline not found' });
-      }
-      
-      // Verify stage exists
-      const stage = await storage.getPipelineStageById(stageId, tenantId);
-      if (!stage || stage.pipelineId !== pipelineId) {
-        return res.status(404).json({ message: 'Stage not found' });
-      }
-      
-      await storage.deletePipelineStage(stageId, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error deleting stage:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete stage' });
-    }
-  });
-
-  // POST /api/org-admin/pipelines/:pipelineId/stages/reorder - Reorder stages
-  app.post('/api/org-admin/pipelines/:pipelineId/stages/reorder', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { pipelineId } = req.params;
-      const tenantId = req.user.tenantId;
-      const { stageIds } = req.body;
-      
-      if (!Array.isArray(stageIds) || stageIds.length === 0) {
-        return res.status(400).json({ message: 'stageIds array is required' });
-      }
-      
-      // Verify pipeline exists
-      const pipeline = await storage.getPipelineById(pipelineId, tenantId);
-      if (!pipeline) {
-        return res.status(404).json({ message: 'Pipeline not found' });
-      }
-      
-      await storage.reorderPipelineStages(pipelineId, tenantId, stageIds);
-      
-      // Return updated stages
-      const stages = await storage.listPipelineStages(pipelineId, tenantId);
-      res.json({ stages });
-    } catch (error: any) {
-      console.error('Error reordering stages:', error);
-      res.status(500).json({ message: error.message || 'Failed to reorder stages' });
-    }
-  });
-
-  // =====================
-  // Org Admin - Projects
-  // =====================
-
-  // GET /api/org-admin/projects - List all projects for tenant
-  app.get('/api/org-admin/projects', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const { status } = req.query;
-      const projects = await storage.listTenantProjects(tenantId, status as string | undefined);
-      res.json({ projects });
-    } catch (error: any) {
-      console.error('Error listing projects:', error);
-      res.status(500).json({ message: error.message || 'Failed to list projects' });
-    }
-  });
-
-  // GET /api/org-admin/projects/:projectId - Get a specific project
-  app.get('/api/org-admin/projects/:projectId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { projectId } = req.params;
-      const tenantId = req.user.tenantId;
-      const project = await storage.getTenantProjectById(projectId, tenantId);
-      if (!project) {
-        return res.status(404).json({ message: 'Project not found' });
-      }
-      res.json({ project });
-    } catch (error: any) {
-      console.error('Error getting project:', error);
-      res.status(500).json({ message: error.message || 'Failed to get project' });
-    }
-  });
-
-  // POST /api/org-admin/projects - Create a new project
-  app.post('/api/org-admin/projects', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const userId = req.user.id;
-      const { name, slug, projectType, description, settings, isDefault, accentColor } = req.body;
-
-      if (!name || typeof name !== 'string' || name.trim().length === 0) {
-        return res.status(400).json({ message: 'Project name is required' });
-      }
-
-      if (slug) {
-        const existing = await storage.getTenantProjectBySlug(slug, tenantId);
-        if (existing) {
-          return res.status(400).json({ message: 'A project with this slug already exists' });
-        }
-      }
-
-      const project = await storage.createTenantProject({
-        tenantId,
-        name: name.trim(),
-        slug: slug?.trim(),
-        projectType: projectType || 'campaign',
-        description: description?.trim(),
-        settings: settings || {},
-        isDefault: isDefault || false,
-        accentColor: accentColor || '#6366f1',
-        createdBy: userId,
-      });
-
-      if (isDefault) {
-        await storage.setDefaultTenantProject(project.id, tenantId);
-      }
-
-      res.status(201).json({ project });
-    } catch (error: any) {
-      console.error('Error creating project:', error);
-      res.status(500).json({ message: error.message || 'Failed to create project' });
-    }
-  });
-
-  // PATCH /api/org-admin/projects/:projectId - Update a project
-  app.patch('/api/org-admin/projects/:projectId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { projectId } = req.params;
-      const tenantId = req.user.tenantId;
-      const { name, slug, projectType, description, settings, status, accentColor } = req.body;
-
-      const existing = await storage.getTenantProjectById(projectId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Project not found' });
-      }
-
-      if (slug && slug !== existing.slug) {
-        const slugExists = await storage.getTenantProjectBySlug(slug, tenantId);
-        if (slugExists && slugExists.id !== projectId) {
-          return res.status(400).json({ message: 'A project with this slug already exists' });
-        }
-      }
-
-      const updates: any = {};
-      if (name !== undefined) updates.name = name.trim();
-      if (slug !== undefined) updates.slug = slug.trim();
-      if (projectType !== undefined) updates.projectType = projectType;
-      if (description !== undefined) updates.description = description?.trim();
-      if (settings !== undefined) updates.settings = settings;
-      if (status !== undefined) updates.status = status;
-      if (accentColor !== undefined) updates.accentColor = accentColor;
-
-      const project = await storage.updateTenantProject(projectId, tenantId, updates);
-      res.json({ project });
-    } catch (error: any) {
-      console.error('Error updating project:', error);
-      res.status(500).json({ message: error.message || 'Failed to update project' });
-    }
-  });
-
-  // POST /api/org-admin/projects/:projectId/archive - Archive a project
-  app.post('/api/org-admin/projects/:projectId/archive', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { projectId } = req.params;
-      const tenantId = req.user.tenantId;
-      const userId = req.user.id;
-
-      const existing = await storage.getTenantProjectById(projectId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Project not found' });
-      }
-
-      if (existing.status === 'archived') {
-        return res.status(400).json({ message: 'Project is already archived' });
-      }
-
-      const project = await storage.archiveTenantProject(projectId, tenantId, userId);
-      res.json({ project });
-    } catch (error: any) {
-      console.error('Error archiving project:', error);
-      res.status(500).json({ message: error.message || 'Failed to archive project' });
-    }
-  });
-
-  // POST /api/org-admin/projects/:projectId/restore - Restore an archived project
-  app.post('/api/org-admin/projects/:projectId/restore', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { projectId } = req.params;
-      const tenantId = req.user.tenantId;
-
-      const existing = await storage.getTenantProjectById(projectId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Project not found' });
-      }
-
-      if (existing.status !== 'archived') {
-        return res.status(400).json({ message: 'Project is not archived' });
-      }
-
-      const project = await storage.restoreTenantProject(projectId, tenantId);
-      res.json({ project });
-    } catch (error: any) {
-      console.error('Error restoring project:', error);
-      res.status(500).json({ message: error.message || 'Failed to restore project' });
-    }
-  });
-
-  // POST /api/org-admin/projects/:projectId/set-default - Set as default project
-  app.post('/api/org-admin/projects/:projectId/set-default', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { projectId } = req.params;
-      const tenantId = req.user.tenantId;
-
-      const existing = await storage.getTenantProjectById(projectId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Project not found' });
-      }
-
-      if (existing.status === 'archived') {
-        return res.status(400).json({ message: 'Cannot set archived project as default' });
-      }
-
-      const project = await storage.setDefaultTenantProject(projectId, tenantId);
-      res.json({ project });
-    } catch (error: any) {
-      console.error('Error setting default project:', error);
-      res.status(500).json({ message: error.message || 'Failed to set default project' });
-    }
-  });
-
-  // DELETE /api/org-admin/projects/:projectId - Delete a project
-  app.delete('/api/org-admin/projects/:projectId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { projectId } = req.params;
-      const tenantId = req.user.tenantId;
-
-      const existing = await storage.getTenantProjectById(projectId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Project not found' });
-      }
-
-      if (existing.isDefault) {
-        return res.status(400).json({ message: 'Cannot delete the default project. Set another project as default first.' });
-      }
-
-      await storage.deleteTenantProject(projectId, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error deleting project:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete project' });
-    }
-  });
-
-  // GET /api/org-admin/projects/:projectId/config - Get merged project configuration
-  app.get('/api/org-admin/projects/:projectId/config', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { projectId } = req.params;
-      const tenantId = req.user.tenantId;
-
-      const { resolveProjectConfig } = await import('./services/projectConfigResolver');
-      const config = await resolveProjectConfig(tenantId, projectId);
-
-      if (!config) {
-        return res.status(404).json({ message: 'Project not found' });
-      }
-
-      res.json({ config });
-    } catch (error: any) {
-      console.error('Error getting project config:', error);
-      res.status(500).json({ message: error.message || 'Failed to get project config' });
-    }
-  });
-
-  // =============================
-  // Org Admin - Assistant Blueprints
-  // =============================
-
-  // GET /api/org-admin/blueprints - List all assistant blueprints
-  app.get('/api/org-admin/blueprints', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const { type } = req.query;
-      const blueprints = await storage.listAssistantBlueprints(tenantId, type as string | undefined);
-      res.json({ blueprints });
-    } catch (error: any) {
-      console.error('Error listing blueprints:', error);
-      res.status(500).json({ message: error.message || 'Failed to list blueprints' });
-    }
-  });
-
-  // GET /api/org-admin/blueprints/:blueprintId - Get a specific blueprint
-  app.get('/api/org-admin/blueprints/:blueprintId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { blueprintId } = req.params;
-      const tenantId = req.user.tenantId;
-      const blueprint = await storage.getAssistantBlueprintById(blueprintId, tenantId);
-      if (!blueprint) {
-        return res.status(404).json({ message: 'Blueprint not found' });
-      }
-      res.json({ blueprint });
-    } catch (error: any) {
-      console.error('Error getting blueprint:', error);
-      res.status(500).json({ message: error.message || 'Failed to get blueprint' });
-    }
-  });
-
-  // POST /api/org-admin/blueprints - Create a new blueprint
-  app.post('/api/org-admin/blueprints', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const tenantId = req.user.tenantId;
-      const userId = req.user.id;
-      const { name, slug, blueprintType, description, baseConfig } = req.body;
-
-      if (!name || typeof name !== 'string' || name.trim().length === 0) {
-        return res.status(400).json({ message: 'Blueprint name is required' });
-      }
-
-      const blueprint = await storage.createAssistantBlueprint({
-        tenantId,
-        name: name.trim(),
-        slug: slug?.trim(),
-        blueprintType: blueprintType || 'general',
-        description: description?.trim(),
-        baseConfig: baseConfig || {},
-        createdBy: userId,
-      });
-
-      res.status(201).json({ blueprint });
-    } catch (error: any) {
-      console.error('Error creating blueprint:', error);
-      res.status(500).json({ message: error.message || 'Failed to create blueprint' });
-    }
-  });
-
-  // PATCH /api/org-admin/blueprints/:blueprintId - Update a blueprint
-  app.patch('/api/org-admin/blueprints/:blueprintId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { blueprintId } = req.params;
-      const tenantId = req.user.tenantId;
-      const { name, slug, blueprintType, description, baseConfig, isActive } = req.body;
-
-      const existing = await storage.getAssistantBlueprintById(blueprintId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Blueprint not found' });
-      }
-
-      const updates: any = {};
-      if (name !== undefined) updates.name = name.trim();
-      if (slug !== undefined) updates.slug = slug.trim();
-      if (blueprintType !== undefined) updates.blueprintType = blueprintType;
-      if (description !== undefined) updates.description = description?.trim();
-      if (baseConfig !== undefined) updates.baseConfig = baseConfig;
-      if (isActive !== undefined) updates.isActive = isActive;
-
-      const blueprint = await storage.updateAssistantBlueprint(blueprintId, tenantId, updates);
-      res.json({ blueprint });
-    } catch (error: any) {
-      console.error('Error updating blueprint:', error);
-      res.status(500).json({ message: error.message || 'Failed to update blueprint' });
-    }
-  });
-
-  // DELETE /api/org-admin/blueprints/:blueprintId - Delete a blueprint
-  app.delete('/api/org-admin/blueprints/:blueprintId', requireOrgAdmin, async (req: any, res) => {
-    try {
-      const { blueprintId } = req.params;
-      const tenantId = req.user.tenantId;
-
-      const existing = await storage.getAssistantBlueprintById(blueprintId, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Blueprint not found' });
-      }
-
-      await storage.deleteAssistantBlueprint(blueprintId, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error deleting blueprint:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete blueprint' });
-    }
-  });
-
-  // =============================
-  // Qualification Module Routes
-  // =============================
-
-  // Helper: Check if the qualification module is enabled for the tenant
-  // Priority order: 1) Super admin bypass, 2) Tenant allowedModules, 3) Session enabledModules, 4) Default allow
-  const checkQualificationModuleAccess = async (req: any, res: any): Promise<boolean> => {
-    try {
-      const tenantId = req.user?.tenantId;
-      if (!tenantId) {
-        res.status(401).json({ message: 'Unauthorized - no tenant context' });
-        return false;
-      }
-      
-      // 1. Super admins always bypass module checks
-      if (req.user?.isSuperAdmin) {
-        return true;
-      }
-      
-      const tenant = await storage.getTenantById(tenantId);
-      if (!tenant) {
-        res.status(404).json({ message: 'Tenant not found' });
-        return false;
-      }
-      
-      const allowedModules = tenant.settings?.allowedModules;
-      
-      // 2. If tenant has explicit allowedModules array, it controls access
-      if (Array.isArray(allowedModules)) {
-        if (!allowedModules.includes('qualification')) {
-          res.status(403).json({ message: 'Qualification module is not enabled for this tenant' });
-          return false;
-        }
-        return true;
-      }
-      
-      // 3. Fallback to session-based enabledModules when allowedModules is not set
-      const sessionModules = req.user?.enabledModules;
-      if (Array.isArray(sessionModules)) {
-        if (!sessionModules.includes('qualification')) {
-          res.status(403).json({ message: 'Qualification module is not enabled for your session' });
-          return false;
-        }
-        return true;
-      }
-      
-      // 4. Default: allow if no restrictions are set
-      return true;
-    } catch (error) {
-      console.error('Error checking qualification module access:', error);
-      res.status(500).json({ message: 'Failed to verify module access' });
-      return false;
-    }
-  };
-
-  // Qualification Campaigns (Org Admin)
-  app.get('/api/qualification/campaigns', requireOrgAdmin, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const campaigns = await storage.listQualificationCampaigns(tenantId);
-      res.json({ campaigns });
-    } catch (error: any) {
-      console.error('Error listing qualification campaigns:', error);
-      res.status(500).json({ message: error.message || 'Failed to list campaigns' });
-    }
-  });
-
-  app.get('/api/qualification/campaigns/:id', requireOrgAdmin, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const campaign = await storage.getQualificationCampaign(req.params.id, tenantId);
-      if (!campaign) {
-        return res.status(404).json({ message: 'Campaign not found' });
-      }
-      res.json({ campaign });
-    } catch (error: any) {
-      console.error('Error getting qualification campaign:', error);
-      res.status(500).json({ message: error.message || 'Failed to get campaign' });
-    }
-  });
-
-  app.post('/api/qualification/campaigns', requireOrgAdmin, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const { name, description, kbFileId, fieldDefinitions, scoringRules, isActive } = req.body;
-
-      if (!name || typeof name !== 'string' || name.trim().length === 0) {
-        return res.status(400).json({ message: 'Campaign name is required' });
-      }
-
-      const campaign = await storage.createQualificationCampaign({
-        tenantId,
-        name: name.trim(),
-        description: description?.trim(),
-        kbFileId,
-        fieldDefinitions: fieldDefinitions || [],
-        scoringRules: scoringRules || {},
-        isActive: isActive !== false,
-      });
-
-      res.status(201).json({ campaign });
-    } catch (error: any) {
-      console.error('Error creating qualification campaign:', error);
-      res.status(500).json({ message: error.message || 'Failed to create campaign' });
-    }
-  });
-
-  app.patch('/api/qualification/campaigns/:id', requireOrgAdmin, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const { name, description, kbFileId, fieldDefinitions, scoringRules, isActive } = req.body;
-
-      const existing = await storage.getQualificationCampaign(req.params.id, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Campaign not found' });
-      }
-
-      const updates: any = {};
-      if (name !== undefined) updates.name = name.trim();
-      if (description !== undefined) updates.description = description?.trim();
-      if (kbFileId !== undefined) updates.kbFileId = kbFileId;
-      if (fieldDefinitions !== undefined) updates.fieldDefinitions = fieldDefinitions;
-      if (scoringRules !== undefined) updates.scoringRules = scoringRules;
-      if (isActive !== undefined) updates.isActive = isActive;
-
-      const campaign = await storage.updateQualificationCampaign(req.params.id, tenantId, updates);
-      res.json({ campaign });
-    } catch (error: any) {
-      console.error('Error updating qualification campaign:', error);
-      res.status(500).json({ message: error.message || 'Failed to update campaign' });
-    }
-  });
-
-  app.delete('/api/qualification/campaigns/:id', requireOrgAdmin, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const existing = await storage.getQualificationCampaign(req.params.id, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Campaign not found' });
-      }
-
-      await storage.deleteQualificationCampaign(req.params.id, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error deleting qualification campaign:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete campaign' });
-    }
-  });
-
-  // Qualification Leads (all authenticated users)
-  app.get('/api/qualification/leads', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const { campaignId, status, callStatus, projectId, limit, offset } = req.query;
-
-      const result = await storage.listQualificationLeads(tenantId, {
-        campaignId: campaignId as string | undefined,
-        status: status as string | undefined,
-        callStatus: callStatus as string | undefined,
-        projectId: projectId as string | undefined,
-        limit: limit ? parseInt(limit as string, 10) : undefined,
-        offset: offset ? parseInt(offset as string, 10) : undefined,
-      });
-
-      res.json(result);
-    } catch (error: any) {
-      console.error('Error listing qualification leads:', error);
-      res.status(500).json({ message: error.message || 'Failed to list leads' });
-    }
-  });
-
-  app.get('/api/qualification/leads/stats', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const { campaignId, projectId } = req.query;
-      const stats = await storage.getQualificationLeadStats(tenantId, campaignId as string | undefined, projectId as string | undefined);
-      res.json({ stats });
-    } catch (error: any) {
-      console.error('Error getting qualification lead stats:', error);
-      res.status(500).json({ message: error.message || 'Failed to get stats' });
-    }
-  });
-
-  app.get('/api/qualification/leads/:id', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const lead = await storage.getQualificationLead(req.params.id, tenantId);
-      if (!lead) {
-        return res.status(404).json({ message: 'Lead not found' });
-      }
-      res.json({ lead });
-    } catch (error: any) {
-      console.error('Error getting qualification lead:', error);
-      res.status(500).json({ message: error.message || 'Failed to get lead' });
-    }
-  });
-
-  app.post('/api/qualification/leads', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const leadData = req.body;
-
-      const lead = await storage.createQualificationLead({
-        ...leadData,
-        tenantId,
-      });
-
-      res.status(201).json({ lead });
-    } catch (error: any) {
-      console.error('Error creating qualification lead:', error);
-      res.status(500).json({ message: error.message || 'Failed to create lead' });
-    }
-  });
-
-  app.post('/api/qualification/leads/bulk', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const { leads } = req.body;
-
-      if (!Array.isArray(leads) || leads.length === 0) {
-        return res.status(400).json({ message: 'Leads array is required' });
-      }
-
-      const leadsWithTenant = leads.map((lead: any) => ({
-        ...lead,
-        tenantId,
-      }));
-
-      const created = await storage.createQualificationLeads(leadsWithTenant);
-      res.status(201).json({ leads: created, count: created.length });
-    } catch (error: any) {
-      console.error('Error creating qualification leads in bulk:', error);
-      res.status(500).json({ message: error.message || 'Failed to create leads' });
-    }
-  });
-
-  app.patch('/api/qualification/leads/:id', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const updates = req.body;
-
-      const existing = await storage.getQualificationLead(req.params.id, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Lead not found' });
-      }
-
-      const lead = await storage.updateQualificationLead(req.params.id, tenantId, updates);
-      res.json({ lead });
-    } catch (error: any) {
-      console.error('Error updating qualification lead:', error);
-      res.status(500).json({ message: error.message || 'Failed to update lead' });
-    }
-  });
-
-  app.delete('/api/qualification/leads/:id', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const existing = await storage.getQualificationLead(req.params.id, tenantId);
-      if (!existing) {
-        return res.status(404).json({ message: 'Lead not found' });
-      }
-
-      await storage.deleteQualificationLead(req.params.id, tenantId);
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error deleting qualification lead:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete lead' });
-    }
-  });
-
-  app.post('/api/qualification/leads/bulk-delete', isAuthenticated, async (req: any, res) => {
-    try {
-      if (!await checkQualificationModuleAccess(req, res)) return;
-      
-      const tenantId = req.user.tenantId;
-      const { ids } = req.body;
-
-      if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ message: 'Lead IDs array is required' });
-      }
-
-      const deleted = await storage.deleteQualificationLeads(ids, tenantId);
-      res.json({ deleted });
-    } catch (error: any) {
-      console.error('Error bulk deleting qualification leads:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete leads' });
-    }
-  });
-
-  // POST /api/invites/:token/accept - Accept an invite (authenticated user)
-  app.post('/api/invites/:token/accept', isAuthenticated, async (req: any, res) => {
-    try {
-      const { token } = req.params;
-      const userId = req.user.id;
-
-      await storage.acceptTenantInvite(token, userId);
-      res.json({ success: true, message: 'Successfully joined the organization' });
-    } catch (error: any) {
-      console.error('Error accepting invite:', error);
-      res.status(400).json({ message: error.message || 'Failed to accept invite' });
-    }
-  });
-
-  // GET /api/invites/:token - Get invite details (for invite page)
-  app.get('/api/invites/:token', async (req: any, res) => {
-    try {
-      const { token } = req.params;
-      const invite = await storage.getTenantInviteByToken(token);
-
-      if (!invite) {
-        return res.status(404).json({ message: 'Invite not found' });
-      }
-
-      if (invite.status !== 'pending') {
-        return res.status(400).json({ message: `Invite has been ${invite.status}` });
-      }
-
-      if (new Date() > invite.expiresAt) {
-        return res.status(400).json({ message: 'Invite has expired' });
-      }
-
-      // Get tenant info
-      const tenant = await storage.getTenantById(invite.tenantId);
-
-      res.json({
-        invite: {
-          email: invite.email,
-          role: invite.role,
-          expiresAt: invite.expiresAt,
-          tenantName: tenant?.name || 'Unknown Organization',
-        }
-      });
-    } catch (error: any) {
-      console.error('Error getting invite details:', error);
-      res.status(500).json({ message: error.message || 'Failed to get invite details' });
-    }
-  });
-
-
-  // ==========================================================================
-  // EMAIL ACCOUNTS POOL - Multi-account Gmail OAuth for sending emails
-  // ==========================================================================
-
-  // GET /api/email-accounts - List all email accounts for tenant
-  // Auto-imports existing Gmail connections from user_integrations if not already in email_accounts
-  app.get('/api/email-accounts', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const tenantId = await getEffectiveTenantId(req);
-      if (!tenantId) {
-        return res.status(400).json({ message: 'No tenant associated with user' });
-      }
-
-      // Auto-import existing Gmail connections from user_integrations
-      // Uses tenant-scoped DB query for efficiency (filters at database level)
-      const tenantIntegrations = await storage.getUserIntegrationsWithGmailByTenant(tenantId);
-
-      for (const integration of tenantIntegrations) {
-        // Skip if already imported (check by email to avoid duplicates)
-        const existingAccount = await storage.getEmailAccountByEmail(tenantId, integration.googleCalendarEmail!);
-        if (!existingAccount) {
-          try {
-            // Auto-create email account from existing user integration
-            await storage.createEmailAccount({
-              tenantId: tenantId,
-              email: integration.googleCalendarEmail!,
-              accessToken: integration.googleCalendarAccessToken,
-              refreshToken: integration.googleCalendarRefreshToken || undefined,
-              tokenExpiry: integration.googleCalendarTokenExpiry || undefined,
-              status: 'active',
-              connectedBy: integration.userId,
-            });
-          } catch (err: any) {
-            // Ignore unique constraint violations (concurrent requests)
-            if (!err.message?.includes('unique') && !err.code?.includes('23505')) {
-              console.warn('Failed to auto-import email account:', integration.googleCalendarEmail, err.message);
-            }
-          }
-        }
-      }
-
-      const accounts = await storage.listEmailAccounts(tenantId);
-      
-      // Don't expose tokens to frontend
-      const safeAccounts = accounts.map(acc => ({
-        id: acc.id,
-        email: acc.email,
-        status: acc.status,
-        dailySendCount: acc.dailySendCount,
-        lastSendCountReset: acc.lastSendCountReset,
-        connectedAt: acc.connectedAt,
-        lastUsedAt: acc.lastUsedAt,
-        errorMessage: acc.errorMessage,
-      }));
-
-      res.json(safeAccounts);
-    } catch (error: any) {
-      console.error('Error listing email accounts:', error);
-      res.status(500).json({ message: error.message || 'Failed to list email accounts' });
-    }
-  });
-
-  // GET /api/email-accounts/oauth-url - Generate Gmail OAuth URL for connecting new email
-  app.get('/api/email-accounts/oauth-url', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const integration = await storage.getSystemIntegration('google_sheets');
-      
-      if (!integration?.googleClientId) {
-        return res.status(400).json({ message: 'Please configure Google OAuth credentials first in Admin Dashboard' });
-      }
-
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const tenantId = await getEffectiveTenantId(req);
-      if (!tenantId) {
-        return res.status(400).json({ message: 'No tenant associated with user' });
-      }
-
-      const redirectUri = `${req.protocol}://${req.get('host')}/api/email-accounts/callback`;
-      const scope = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email';
-
-      // Generate secure state with nonce and HMAC signature for CSRF protection
-      const { createHmac, randomBytes } = await import('crypto');
-      const nonce = randomBytes(16).toString('hex');
-      const statePayload = { userId, tenantId: tenantId, nonce };
-      const stateString = JSON.stringify(statePayload);
-      const signature = createHmac('sha256', integration.googleClientSecret).update(stateString).digest('hex');
-      const signedState = JSON.stringify({ payload: statePayload, sig: signature });
-
-      const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      oauthUrl.searchParams.set('client_id', integration.googleClientId);
-      oauthUrl.searchParams.set('redirect_uri', redirectUri);
-      oauthUrl.searchParams.set('response_type', 'code');
-      oauthUrl.searchParams.set('scope', scope);
-      oauthUrl.searchParams.set('access_type', 'offline');
-      oauthUrl.searchParams.set('prompt', 'consent');
-      oauthUrl.searchParams.set('state', signedState);
-
-      return res.json({ url: oauthUrl.toString() });
-    } catch (error: any) {
-      console.error('Error generating email accounts OAuth URL:', error);
-      return res.status(500).json({ message: error.message || 'Failed to generate OAuth URL' });
-    }
-  });
-
-  // GET /api/email-accounts/callback - OAuth callback, exchange code for tokens
-  app.get('/api/email-accounts/callback', async (req: any, res) => {
-    try {
-      const { code, state } = req.query;
-
-      if (!code || !state) {
-        return res.send('<script>alert("Missing authorization code"); window.close();</script>');
-      }
-
-      // Parse and verify signed state for CSRF protection
-      let stateData;
-      try {
-        stateData = JSON.parse(state as string);
-      } catch {
-        console.error('Email accounts OAuth: Invalid state format');
-        return res.send('<script>alert("Invalid state parameter"); window.close();</script>');
-      }
-
-      const { payload, sig } = stateData;
-      if (!payload || !sig || !payload.userId || !payload.tenantId || !payload.nonce) {
-        console.error('Email accounts OAuth: Missing state fields');
-        return res.send('<script>alert("Invalid state parameter"); window.close();</script>');
-      }
-
-      const integration = await storage.getSystemIntegration('google_sheets');
-      if (!integration?.googleClientId || !integration?.googleClientSecret) {
-        return res.send('<script>alert("OAuth credentials not configured"); window.close();</script>');
-      }
-
-      // Verify HMAC signature to prevent state tampering
-      const { createHmac } = await import('crypto');
-      const expectedSig = createHmac('sha256', integration.googleClientSecret)
-        .update(JSON.stringify(payload))
-        .digest('hex');
-      
-      if (sig !== expectedSig) {
-        console.error('Email accounts OAuth: State signature mismatch - possible CSRF attack');
-        return res.send('<script>alert("Security validation failed"); window.close();</script>');
-      }
-
-      const { userId, tenantId } = payload;
-
-      // The signed state token already verified the userId and tenantId
-      // No additional database check needed - just proceed with connecting the email
-
-      // Exchange code for tokens
-      const redirectUri = `${req.protocol}://${req.get('host')}/api/email-accounts/callback`;
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          code: code as string,
-          client_id: integration.googleClientId,
-          client_secret: integration.googleClientSecret,
-          redirect_uri: redirectUri,
-          grant_type: 'authorization_code'
-        })
-      });
-
-      if (!tokenResponse.ok) {
-        const error = await tokenResponse.text();
-        console.error('Email account token exchange failed:', error);
-        return res.send('<script>alert("Authentication failed"); window.close();</script>');
-      }
-
-      const tokens = await tokenResponse.json();
-
-      // Get user email from Google
-      const userinfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${tokens.access_token}` }
-      });
-      const userinfo = await userinfoResponse.json();
-
-      // Check if this email is already connected for this tenant
-      const existingAccount = await storage.getEmailAccountByEmail(tenantId, userinfo.email);
-      if (existingAccount) {
-        // Update tokens for existing account
-        await storage.updateEmailAccount(existingAccount.id, tenantId, {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token || existingAccount.refreshToken,
-          tokenExpiry: Date.now() + (tokens.expires_in * 1000),
-          status: 'active',
-          errorMessage: null,
-        });
-        console.log(`Email account ${userinfo.email} reconnected for tenant ${tenantId}`);
-        return res.send('<script>alert("Email account reconnected successfully!"); window.close();</script>');
-      }
-
-      // Create new email account
-      await storage.createEmailAccount({
-        tenantId,
-        email: userinfo.email,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        tokenExpiry: Date.now() + (tokens.expires_in * 1000),
-        status: 'active',
-        connectedBy: userId,
-      });
-
-      console.log(`New email account ${userinfo.email} connected for tenant ${tenantId}`);
-      res.send('<script>alert("Email account connected successfully!"); window.close();</script>');
-    } catch (error: any) {
-      console.error('Email accounts OAuth callback error:', error);
-      res.send('<script>alert("Connection failed"); window.close();</script>');
-    }
-  });
-
-  // DELETE /api/email-accounts/:id - Disconnect/delete an email account
-  app.delete('/api/email-accounts/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      const tenantId = await getEffectiveTenantId(req);
-      if (!tenantId) {
-        return res.status(400).json({ message: 'No tenant associated with user' });
-      }
-
-      const deleted = await storage.deleteEmailAccount(id, tenantId);
-      if (!deleted) {
-        return res.status(404).json({ message: 'Email account not found' });
-      }
-
-      res.json({ message: 'Email account disconnected successfully' });
-    } catch (error: any) {
-      console.error('Error deleting email account:', error);
-      res.status(500).json({ message: error.message || 'Failed to disconnect email account' });
-    }
-  });
-
-  // PATCH /api/email-accounts/:id - Update email account status
-  app.patch('/api/email-accounts/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      const { status } = req.body;
-      const tenantId = await getEffectiveTenantId(req);
-      if (!tenantId) {
-        return res.status(400).json({ message: 'No tenant associated with user' });
-      }
-
-      if (!['active', 'inactive'].includes(status)) {
-        return res.status(400).json({ message: 'Invalid status. Use "active" or "inactive"' });
-      }
-
-      const updated = await storage.updateEmailAccount(id, tenantId, { status });
-      if (!updated) {
-        return res.status(404).json({ message: 'Email account not found' });
-      }
-
-      res.json({
-        id: updated.id,
-        email: updated.email,
-        status: updated.status,
-        dailySendCount: updated.dailySendCount,
-      });
-    } catch (error: any) {
-      console.error('Error updating email account:', error);
-      res.status(500).json({ message: error.message || 'Failed to update email account' });
-    }
-  });
-  const httpServer = createServer(app);
-  return httpServer;
-}
