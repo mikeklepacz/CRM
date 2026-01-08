@@ -1710,7 +1710,9 @@ export default function CallManager() {
   const handleSyncFromElevenLabs = async () => {
     setSyncingCalls(true);
     try {
-      const data = await apiRequest('POST', '/api/elevenlabs/sync-calls');
+      const data = await apiRequest('POST', '/api/elevenlabs/sync-calls', {
+        projectId: currentProject?.id
+      });
 
       if (data.success) {
         toast({

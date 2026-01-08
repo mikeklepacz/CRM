@@ -3779,7 +3779,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/elevenlabs/sync-calls', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const tenantId = (req.user as any).tenantId;
-      const config = await storage.getElevenLabsConfig(tenantId);
+      const projectId = req.body?.projectId as string | undefined;
+      const config = await storage.getElevenLabsConfig(tenantId, projectId);
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
@@ -3791,7 +3792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get all configured agents to validate against
       
-      const configuredAgents = await storage.getAllElevenLabsAgents(tenantId);
+      const configuredAgents = await storage.getAllElevenLabsAgents(tenantId, projectId);
       const validAgentIds = new Set(configuredAgents.map(a => a.agentId));
       console.log(`[Sync] Configured agents:`, Array.from(validAgentIds));
 
