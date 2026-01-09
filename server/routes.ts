@@ -17,6 +17,7 @@ import * as googleMaps from "./googleMaps";
 import * as commissionService from "./commission-service";
 import * as googleDrive from "./googleDrive";
 import { analyzeCallTranscript } from "./openai-reflection";
+import { analyzeTranscript as analyzeTranscriptQualification } from "./services/aiTranscriptAnalysis";
 import { validateElevenLabsSignature } from "./webhook-validation";
 import { handleTwilioCallStatus } from "./twilio-webhook";
 import { validateTwilioSignature } from "./twilio-signature-validation";
@@ -2178,6 +2179,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         analyzeCallTranscript(conversationId, session.tenantId).catch(err => {
           console.error('Async error in OpenAI reflection:', err);
         });
+        
+        // AUTO-TRIGGER QUALIFICATION ANALYSIS: Run campaign-specific transcript analysis
+        if (session?.id) {
+          analyzeTranscriptQualification(session.id, session.tenantId).catch(err => {
+            console.error('[Auto-Trigger] Error in qualification transcript analysis:', err.message);
+          });
+        }
         
         // AUTO-TRIGGER KB ANALYSIS: Check if threshold is met for this agent
         (async () => {
