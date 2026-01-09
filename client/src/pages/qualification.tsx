@@ -76,7 +76,7 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
 type SortField = 'company' | 'pocName' | 'status' | 'callStatus' | 'score' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 
-const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'not_qualified', 'followup', 'closed'];
+const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'not_qualified', 'followup', 'please_email', 'closed'];
 const CALL_STATUS_OPTIONS = ['pending', 'scheduled', 'in_progress', 'completed', 'failed', 'no_answer'];
 
 const getStatusBadgeVariant = (status?: string | null): "default" | "secondary" | "destructive" | "outline" => {

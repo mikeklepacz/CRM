@@ -56,6 +56,7 @@ import { eventGateway } from "./services/events/gateway";
 import { generateProjectSpecsPdf, type TextElement, type ColorSwatch } from "./services/pdfBuilder";
 import JSZip from "jszip";
 import { callDispatcher } from "./call_dispatcher";
+import { analyzeTranscript } from "./services/aiTranscriptAnalysis";
 
 const FLY_VOICE_PROXY_HEALTH_URL = process.env.FLY_VOICE_PROXY_HEALTH_URL || 'https://hemp-voice-proxy.fly.dev/health';
 
@@ -3788,6 +3789,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error fetching call transcript:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // POST /api/calls/:id/analyze - Trigger AI analysis for a call session
+  app.post('/api/calls/:id/analyze', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = (req.user as any).tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'Tenant ID not found' });
+      }
+
+      const callSessionId = req.params.id;
+      const result = await analyzeTranscript(callSessionId, tenantId);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.error || 'Analysis failed' });
+      }
+      
+      return res.json(result);
+    } catch (error: any) {
+      console.error('[API] Call analysis error:', error);
+      return res.status(500).json({ message: error.message || 'Internal server error' });
     }
   });
 
