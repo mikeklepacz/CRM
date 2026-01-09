@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,8 @@ import {
   MessageSquare,
   Lightbulb,
   Target,
-  Store
+  Store,
+  Brain
 } from "lucide-react";
 import { format } from "date-fns";
 import { StoreDetailsDialog } from "@/components/store-details-dialog";
@@ -106,10 +108,43 @@ export function CallDetailDialog({
 }: CallDetailDialogProps) {
   const [storeDialogOpen, setStoreDialogOpen] = useState(false);
   const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: transcriptData, isLoading } = useQuery<TranscriptResponse>({
     queryKey: ['/api/elevenlabs/call-transcript', conversationId],
     enabled: open && !!conversationId,
+  });
+
+  // AI Analysis mutation
+  const analyzeMutation = useMutation({
+    mutationFn: async (callSessionId: string) => {
+      const response = await fetch(`/api/calls/${callSessionId}/analyze`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Analysis failed');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Analysis Complete",
+        description: `Score: ${data.score} - ${data.qualificationResult}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/call-analytics'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
+      refetch?.();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Analysis Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const transcripts = transcriptData?.transcripts || [];
@@ -175,6 +210,26 @@ export function CallDetailDialog({
               )}
             </div>
           </DialogTitle>
+          {/* AI Analysis Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => session?.id && analyzeMutation.mutate(session.id)}
+            disabled={analyzeMutation.isPending || !session?.id}
+            data-testid="button-analyze-transcript"
+          >
+            {analyzeMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Brain className="mr-2 h-4 w-4" />
+                Analyze with AI
+              </>
+            )}
+          </Button>
         </DialogHeader>
 
         <Tabs defaultValue="transcript" className="flex-1 flex flex-col min-h-0">
