@@ -772,6 +772,21 @@ export interface IStorage {
   incrementEmailAccountDailySendCount(id: string, tenantId: string): Promise<EmailAccount>;
   getAvailableEmailAccount(tenantId: string, maxDailyLimit: number): Promise<EmailAccount | undefined>;
   getActiveEmailAccounts(tenantId: string): Promise<EmailAccount[]>;
+
+  // AI Transcript Analysis operations
+  getCallSessionWithContext(id: string, tenantId: string): Promise<{
+    session: CallSession;
+    transcripts: CallTranscript[];
+    lead: QualificationLead | null;
+    campaign: QualificationCampaign | null;
+  } | undefined>;
+  updateAnalysisResults(
+    sessionId: string,
+    leadId: string,
+    tenantId: string,
+    sessionUpdates: Partial<InsertCallSession>,
+    leadUpdates: Partial<InsertQualificationLead>
+  ): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6197,6 +6212,57 @@ export class DatabaseStorage implements IStorage {
         eq(emailAccounts.status, 'active')
       ))
       .orderBy(emailAccounts.email);
+  }
+
+  // AI Transcript Analysis operations
+  async getCallSessionWithContext(id: string, tenantId: string): Promise<{
+    session: CallSession;
+    transcripts: CallTranscript[];
+    lead: QualificationLead | null;
+    campaign: QualificationCampaign | null;
+  } | undefined> {
+    const session = await this.getCallSession(id, tenantId);
+    if (!session) {
+      return undefined;
+    }
+
+    const transcripts = session.conversationId 
+      ? await this.getCallTranscripts(session.conversationId)
+      : [];
+
+    let lead: QualificationLead | null = null;
+    let campaign: QualificationCampaign | null = null;
+
+    if (session.qualificationLeadId) {
+      const foundLead = await this.getQualificationLead(session.qualificationLeadId, tenantId);
+      if (foundLead) {
+        lead = foundLead;
+        if (lead.campaignId) {
+          const foundCampaign = await this.getQualificationCampaign(lead.campaignId, tenantId);
+          if (foundCampaign) {
+            campaign = foundCampaign;
+          }
+        }
+      }
+    }
+
+    return { session, transcripts, lead, campaign };
+  }
+
+  async updateAnalysisResults(
+    sessionId: string,
+    leadId: string,
+    tenantId: string,
+    sessionUpdates: Partial<InsertCallSession>,
+    leadUpdates: Partial<InsertQualificationLead>
+  ): Promise<void> {
+    await db.update(callSessions)
+      .set({ ...sessionUpdates, updatedAt: new Date() })
+      .where(and(eq(callSessions.id, sessionId), eq(callSessions.tenantId, tenantId)));
+
+    await db.update(qualificationLeads)
+      .set({ ...leadUpdates, updatedAt: new Date() })
+      .where(and(eq(qualificationLeads.id, leadId), eq(qualificationLeads.tenantId, tenantId)));
   }
 }
 
