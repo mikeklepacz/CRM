@@ -137,6 +137,94 @@ RULES:
 - Extract the most accurate information possible from the conversation`;
 }
 
+const NEGATIVE_PHRASES = new Set([
+  'no', 'nope', 'not', 'none', 'never', 'negative', 'declined', 'refused',
+  'false', 'n/a', 'na', 'not yet', 'not interested', 'they declined',
+  'don\'t know', 'dont know', 'unknown', 'unsure', 'maybe not', 'probably not',
+  'not really', 'no thanks', 'no thank you', 'later', 'no way', 'unlikely',
+  'we don\'t', 'we dont', 'i don\'t', 'i dont', 'can\'t', 'cant', 'won\'t', 'wont',
+  'nie', 'nie wiem', 'nie mam', 'nie jestem', 'nie mamy', 'nie używamy',
+  'chyba nie', 'raczej nie', 'niestety nie', 'nie dotyczy'
+]);
+
+const POSITIVE_PHRASES = new Set([
+  'yes', 'yeah', 'yep', 'correct', 'confirmed', 'absolutely', 'definitely',
+  'certainly', 'of course', 'sure', 'agreed', 'affirmative', 'right',
+  'tak', 'oczywiście', 'pewnie', 'jasne', 'zgadza się', 'potwierdzam'
+]);
+
+function stripPunctuation(s: string): string {
+  return s.replace(/[.,!?;:'"()]/g, '').trim();
+}
+
+function classifyResponse(value: string): 'positive' | 'negative' | 'neutral' {
+  const normalized = stripPunctuation(value.toLowerCase().trim());
+  
+  if (POSITIVE_PHRASES.has(normalized)) return 'positive';
+  if (NEGATIVE_PHRASES.has(normalized)) return 'negative';
+  
+  const firstWord = normalized.split(/\s+/)[0];
+  if (firstWord && POSITIVE_PHRASES.has(firstWord)) return 'positive';
+  if (firstWord && NEGATIVE_PHRASES.has(firstWord)) return 'negative';
+  
+  for (const phrase of NEGATIVE_PHRASES) {
+    if (normalized.startsWith(phrase + ' ') || normalized === phrase) {
+      return 'negative';
+    }
+  }
+  for (const phrase of POSITIVE_PHRASES) {
+    if (normalized.startsWith(phrase + ' ') || normalized === phrase) {
+      return 'positive';
+    }
+  }
+  
+  return 'neutral';
+}
+
+function normalizeToSet(value: any): Set<string> {
+  const result = new Set<string>();
+  
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parts = String(item).toLowerCase().split(/[,;]+/).map(s => s.trim()).filter(s => s.length > 0);
+      for (const part of parts) {
+        result.add(part);
+      }
+    }
+  } else if (typeof value === 'string') {
+    const parts = value.toLowerCase().split(/[,;]+/).map(s => s.trim()).filter(s => s.length > 0);
+    for (const part of parts) {
+      result.add(part);
+    }
+  }
+  
+  return result;
+}
+
+function checkKnockout(value: any, knockoutAnswer: any): boolean {
+  if (knockoutAnswer === undefined || knockoutAnswer === null) return false;
+  
+  if (typeof value === 'boolean') {
+    return value === knockoutAnswer;
+  }
+  
+  const valueSet = normalizeToSet(value);
+  if (valueSet.size === 0) return false;
+  
+  const knockoutStr = String(knockoutAnswer).toLowerCase().trim();
+  const knockoutSet = new Set(
+    knockoutStr.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+  );
+  
+  for (const v of valueSet) {
+    if (knockoutSet.has(v)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 function calculateScore(
   answers: AIAnalysisResponse['answers'],
   fieldDefinitions: FieldDefinition[]
@@ -153,24 +241,26 @@ function calculateScore(
     if (answer && answer.value !== null && answer.value !== undefined) {
       const value = answer.value;
 
-      if (field.isKnockout && field.knockoutAnswer !== undefined) {
-        const isKnockoutMatch = 
-          (typeof value === 'boolean' && value === field.knockoutAnswer) ||
-          (typeof value === 'string' && value.toLowerCase() === String(field.knockoutAnswer).toLowerCase()) ||
-          (value === field.knockoutAnswer);
-        
-        if (isKnockoutMatch) {
+      if (field.isKnockout) {
+        if (checkKnockout(value, field.knockoutAnswer)) {
           hasKnockout = true;
         }
       }
 
-      const isPositive = 
-        value === true ||
-        value === 'yes' ||
-        value === 'Yes' ||
-        value === 'YES' ||
-        (typeof value === 'number' && value > 0) ||
-        (typeof value === 'string' && value.length > 0 && !['no', 'No', 'NO', 'false', 'n/a', 'none'].includes(value));
+      let isPositive = false;
+      
+      if (typeof value === 'boolean') {
+        isPositive = value === true;
+      } else if (typeof value === 'number') {
+        isPositive = value > 0;
+      } else if (typeof value === 'string') {
+        const classification = classifyResponse(value);
+        isPositive = classification === 'positive';
+      } else if (Array.isArray(value)) {
+        isPositive = value.length > 0 && value.some(v => 
+          typeof v === 'string' ? classifyResponse(v) !== 'negative' : !!v
+        );
+      }
 
       if (isPositive && weight > 0) {
         earned = weight;
