@@ -59,6 +59,7 @@ import JSZip from "jszip";
 import { callDispatcher } from "./call_dispatcher";
 import { analyzeTranscript } from "./services/aiTranscriptAnalysis";
 import { reconcileOrphanedCallSessions, startReconciliationWorker } from "./services/elevenLabsReconciliation";
+import { crawlWebsiteForEmail } from "./emailCrawler";
 
 const FLY_VOICE_PROXY_HEALTH_URL = process.env.FLY_VOICE_PROXY_HEALTH_URL || 'https://hemp-voice-proxy.fly.dev/health';
 
@@ -8899,6 +8900,118 @@ IMPORTANT:
     } catch (error: any) {
       console.error("Error creating note:", error);
       res.status(500).json({ message: error.message || "Failed to create note" });
+    }
+  });
+
+
+
+  // Batch crawl websites for emails (limited per request for performance)
+  app.post('/api/clients/crawl-emails', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: "Tenant ID required" });
+      }
+
+      const MAX_PER_BATCH = 10; // Process max 10 per request to avoid timeouts
+
+      // Get all clients with website but no email
+      const allClients = await db.query.clients.findMany({
+        where: and(
+          eq(clients.tenantId, tenantId),
+          isNotNull(clients.data)
+        )
+      });
+
+      // Filter to only those needing crawl
+      const clientsToProcess = allClients.filter(client => {
+        const data = client.data as Record<string, any>;
+        const website = data?.website || data?.Website || data?.site || data?.Site || data?.url || data?.URL;
+        const existingEmail = data?.email || data?.Email || data?.['POC Email'] || data?.pocEmail;
+        const emailSearched = data?.emailSearched;
+        return website && !existingEmail && !emailSearched;
+      }).slice(0, MAX_PER_BATCH);
+
+      const totalRemaining = allClients.filter(client => {
+        const data = client.data as Record<string, any>;
+        const website = data?.website || data?.Website || data?.site || data?.Site || data?.url || data?.URL;
+        const existingEmail = data?.email || data?.Email || data?.['POC Email'] || data?.pocEmail;
+        const emailSearched = data?.emailSearched;
+        return website && !existingEmail && !emailSearched;
+      }).length;
+
+      const results: Array<{ id: string; email: string | null; searched: boolean; error?: string }> = [];
+      
+      for (const client of clientsToProcess) {
+        const data = client.data as Record<string, any>;
+        const website = data?.website || data?.Website || data?.site || data?.Site || data?.url || data?.URL;
+
+        try {
+          const crawlResult = await crawlWebsiteForEmail(website);
+          
+          // Only mark as searched if we actually attempted (not skipped for safety)
+          if (crawlResult.skipped) {
+            results.push({
+              id: client.id,
+              email: null,
+              searched: false,
+              error: crawlResult.error
+            });
+            continue;
+          }
+
+          // Update client data with result
+          const updatedData = { ...data };
+          if (crawlResult.email) {
+            updatedData.email = crawlResult.email;
+          }
+          if (crawlResult.searched) {
+            updatedData.emailSearched = true;
+            updatedData.emailSearchedAt = new Date().toISOString();
+          }
+          if (crawlResult.error) {
+            updatedData.emailSearchError = crawlResult.error;
+          }
+          
+          await db.update(clients)
+            .set({ data: updatedData, updatedAt: new Date() })
+            .where(eq(clients.id, client.id));
+          
+          results.push({
+            id: client.id,
+            email: crawlResult.email,
+            searched: crawlResult.searched,
+            error: crawlResult.error
+          });
+          
+          // Small delay between requests
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (error: any) {
+          console.error(`Error crawling ${website}:`, error.message);
+          results.push({
+            id: client.id,
+            email: null,
+            searched: false,
+            error: error.message
+          });
+        }
+      }
+
+      const foundCount = results.filter(r => r.email).length;
+      const searchedCount = results.filter(r => r.searched).length;
+      
+      res.json({ 
+        message: `Processed ${results.length} clients, found ${foundCount} emails`,
+        results,
+        totalProcessed: results.length,
+        emailsFound: foundCount,
+        searchedCount,
+        remainingToProcess: totalRemaining - results.length,
+        hasMore: totalRemaining > MAX_PER_BATCH
+      });
+    } catch (error: any) {
+      console.error("Error batch crawling emails:", error);
+      res.status(500).json({ message: error.message || "Failed to crawl emails" });
     }
   });
 

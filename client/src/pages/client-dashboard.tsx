@@ -452,6 +452,10 @@ export default function ClientDashboard() {
   // Call History dialog state
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
 
+  // Email crawler state
+  const [isEmailCrawling, setIsEmailCrawling] = useState(false);
+  const [emailCrawlResults, setEmailCrawlResults] = useState<{ totalProcessed: number; emailsFound: number } | null>(null);
+
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
   const [lightModeColors, setLightModeColors] = useState(lightColors);
@@ -2966,6 +2970,57 @@ export default function ClientDashboard() {
                   Call History
                 </Button>
 
+                {/* Find Emails Button */}
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (isEmailCrawling) return;
+                    setIsEmailCrawling(true);
+                    setEmailCrawlResults(null);
+                    try {
+                      const response = await fetch('/api/clients/crawl-emails', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include'
+                      });
+                      const data = await response.json();
+                      if (response.ok) {
+                        setEmailCrawlResults({ totalProcessed: data.totalProcessed, emailsFound: data.emailsFound });
+                        const moreText = data.hasMore ? ` (${data.remainingToProcess} more to check - click again)` : '';
+                        toast({
+                          title: data.emailsFound > 0 ? "Emails Found!" : "Crawl Complete",
+                          description: `Found ${data.emailsFound} emails from ${data.totalProcessed} websites${moreText}`,
+                        });
+                        refetch();
+                      } else {
+                        toast({
+                          title: "Error",
+                          description: data.message || "Failed to crawl emails",
+                          variant: "destructive"
+                        });
+                      }
+                    } catch (error: any) {
+                      toast({
+                        title: "Error",
+                        description: error.message || "Failed to crawl emails",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setIsEmailCrawling(false);
+                    }
+                  }}
+                  disabled={isEmailCrawling}
+                  data-testid="button-find-emails"
+                  style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
+                >
+                  {isEmailCrawling ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mail className="mr-2 h-4 w-4" />
+                  )}
+                  {isEmailCrawling ? "Crawling..." : "Find Emails"}
+                </Button>
+
                 {/* Export vCard Button */}
                 <Button
                   variant="outline"
@@ -3578,6 +3633,15 @@ export default function ClientDashboard() {
                                               <Mail className="h-4 w-4 flex-shrink-0" />
                                               <span>{displayValue}</span>
                                             </button>
+                                          ) : isEmailColumn && !cellValue && row.emailSearched ? (
+                                            <span 
+                                              className="flex items-center gap-1 text-muted-foreground italic text-sm"
+                                              title="Email searched but not found on website"
+                                              data-testid={`text-no-email-${rowKey}-${header}`}
+                                            >
+                                              <Mail className="h-3 w-3 opacity-50 line-through" />
+                                              <span className="line-through opacity-60">searched</span>
+                                            </span>
                                           ) : isSalesSummaryColumn && cellValue ? (
                                             <button
                                               onClick={() => openExpandedView(row, header, cellValue, false)}
