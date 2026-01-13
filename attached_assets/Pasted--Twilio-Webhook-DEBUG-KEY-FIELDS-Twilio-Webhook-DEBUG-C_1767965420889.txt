@@ -1,0 +1,50 @@
+}
+[Twilio Webhook][DEBUG] === KEY FIELDS ===
+[Twilio Webhook][DEBUG] CallSid: CA882de355d5f0782cf39b2a9a7304c7e6
+[Twilio Webhook][DEBUG] CallStatus: in-progress
+[Twilio Webhook][DEBUG] CallDuration: undefined
+[Twilio Webhook][DEBUG] Duration: undefined
+[Twilio Webhook][DEBUG] ErrorCode: none
+[Twilio Webhook][DEBUG] ErrorMessage: none
+[Twilio Webhook][DEBUG] SipResponseCode: none
+[Twilio Webhook][DEBUG] To: +48662331212
+[Twilio Webhook][DEBUG] From: +48556197118
+[Twilio Webhook][DEBUG] Direction: outbound-api
+[Twilio Webhook][DEBUG] AnsweredBy: unknown
+[Twilio Webhook][DEBUG] CallerName: none
+[Twilio Webhook][DEBUG] Timestamp field: Fri, 09 Jan 2026 13:29:09 +0000
+[Twilio Webhook][DEBUG] SequenceNumber: 2
+[Twilio Webhook][DEBUG] =====================
+[Twilio Webhook][DEBUG] Looking up session for CallSid: CA882de355d5f0782cf39b2a9a7304c7e6
+[Twilio Webhook][DEBUG] *** NO SESSION FOUND ***
+[Twilio Webhook][DEBUG] CallSid: CA882de355d5f0782cf39b2a9a7304c7e6
+[Twilio Webhook][DEBUG] This may indicate the call was initiated but session wasn't created
+1:29:09 PM [express] POST /api/twilio/call-status 200 in 72ms
+1:29:24 PM [express] GET /api/voice-proxy/background-audio/settings-public 200 in 276ms :: {"volumeD…
+1:29:30 PM [express] GET /api/voice-proxy/status 200 in 801ms :: {"healthy":true,"audioLoaded":true,…
+[CallDispatcher][DEBUG] ========== PROCESS QUEUED CALLS ==========
+[CallDispatcher][DEBUG] Cycle start: 2026-01-09T13:29:38.307Z
+[CallDispatcher][DEBUG] Set isRunning=true
+[CallDispatcher][DEBUG] Starting stale target cleanup at 2026-01-09T13:29:38.307Z
+[CallDispatcher][DEBUG] No stale targets found
+[CallDispatcher][DEBUG] Stale target cleanup completed in 66ms
+[CallDispatcher][DEBUG] Fetching targets ready for calling...
+[CallDispatcher][DEBUG] Found 0 targets ready for calling
+[CallDispatcher][DEBUG] No targets to process
+[CallDispatcher][DEBUG] Set isRunning=false
+1:29:41 PM [express] GET /api/elevenlabs/call-queue 304 in 2274ms :: {"activeCalls":1,"queuedCalls":…
+1:29:54 PM [express] GET /api/voice-proxy/background-audio/settings-public 200 in 266ms :: {"volumeD…
+1:30:00 PM [express] GET /api/analysis/job-status 304 in 715ms :: {"status":"idle","job":null}
+1:30:00 PM [express] GET /api/voice/today-blocked 304 in 325ms :: {"blocked":false,"reason":null}
+1:30:01 PM [express] GET /api/voice-proxy/status 304 in 455ms :: {"healthy":true,"audioLoaded":true,…
+[CallDispatcher][DEBUG] ========== PROCESS QUEUED CALLS ==========
+[CallDispatcher][DEBUG] Cycle start: 2026-01-09T13:30:08.308Z
+[CallDispatcher][DEBUG] Set isRunning=true
+[CallDispatcher][DEBUG] Starting stale target cleanup at 2026-01-09T13:30:08.308Z
+[CallDispatcher][DEBUG] No stale targets found
+[CallDispatcher][DEBUG] Stale target cleanup completed in 269ms
+[CallDispatcher][DEBUG] Fetching targets ready for calling...
+[CallDispatcher][DEBUG] Found 0 targets ready for calling
+[CallDispatcher][DEBUG] No targets to process
+[CallDispatcher][DEBUG] Set isRunning=false
+1:30:14 PM [express] GET /api/elevenlabs/call-queue 304 in 2689ms :: {"activeCalls":1,"queuedCalls":…
