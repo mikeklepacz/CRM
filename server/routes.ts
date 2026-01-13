@@ -3010,17 +3010,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ============================================================================
       let qualificationLeadsContacts: any[] = [];
       
-      // Only fetch leads for cold_calls scenario (pending calls)
-      if (scenario === 'cold_calls' || scenario === 'qualification') {
+      // Fetch leads for cold_calls (pending calls) OR follow_ups (scheduled follow-ups)
+      if (scenario === 'cold_calls' || scenario === 'qualification' || scenario === 'follow_ups') {
         const tenantId = (req.user as any).tenantId;
         const { leads } = await storage.listQualificationLeads(tenantId, { limit: 1000 });
         
-        // Filter leads with phone numbers (all call statuses eligible)
-        const callableLeads = leads.filter((lead: any) => {
-          const hasPhone = lead.pocPhone && lead.pocPhone.trim().length > 0;
-          // All call statuses eligible (scheduled = prioritized)
-          return hasPhone;
-        });
+        // Filter leads based on scenario
+        let callableLeads: any[] = [];
+        
+        if (scenario === 'follow_ups') {
+          // Follow-ups: leads with follow_up_needed=true AND follow_up_date is due (now or earlier)
+          const now = new Date();
+          
+          callableLeads = leads.filter((lead: any) => {
+            const hasPhone = lead.pocPhone && lead.pocPhone.trim().length > 0;
+            const needsFollowUp = lead.followUpNeeded === true;
+            const followUpDate = lead.followUpDate;
+            
+            if (!hasPhone || !needsFollowUp || !followUpDate) {
+              return false;
+            }
+            
+            try {
+              // Compare full timestamps (not just dates) so 5pm callbacks show at 5pm, not midnight
+              const followUpDateTime = new Date(followUpDate);
+              return followUpDateTime <= now;
+            } catch {
+              return false;
+            }
+          });
+        } else {
+          // Cold calls: all leads with phone numbers (all call statuses eligible)
+          callableLeads = leads.filter((lead: any) => {
+            const hasPhone = lead.pocPhone && lead.pocPhone.trim().length > 0;
+            // All call statuses eligible (scheduled = prioritized)
+            return hasPhone;
+          });
+        }
         
         // Project filtering for leads (if projectId specified)
         let filteredLeads = callableLeads;
@@ -3049,10 +3075,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           hoursSchedule: [],
           isOpen: true,  // Assume leads are always callable
           agentName: '',  // Not assigned yet
-          status: lead.callStatus || 'pending',
+          status: scenario === 'follow_ups' ? 'follow_up' : (lead.callStatus || 'pending'),
           pocName: lead.pocName || '',
           website: lead.website || '',
           source: 'leads' as const,
+          callbackNote: lead.callbackNote || '',  // Include callback note for follow-ups
+          followUpDate: lead.followUpDate || null,
         }));
       }
 

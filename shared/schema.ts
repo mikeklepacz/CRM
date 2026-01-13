@@ -2499,6 +2499,11 @@ export const qualificationLeads = pgTable("qualification_leads", {
   lastCallAt: timestamp("last_call_at"),
   callAttempts: integer("call_attempts").default(0),
   
+  // Follow-up scheduling (populated by AI transcript analysis)
+  followUpNeeded: boolean("follow_up_needed").default(false),
+  followUpDate: timestamp("follow_up_date"), // When to call back
+  callbackNote: text("callback_note"), // "Ask for Bob", "Call after 2pm", etc.
+  
   // Parsed answers from transcript (JSONB for flexibility)
   answers: jsonb("answers").$type<Record<string, any>>().default(sql`'{}'::jsonb`),
   rawAiOutput: jsonb("raw_ai_output").$type<{
@@ -2535,6 +2540,7 @@ export const qualificationLeads = pgTable("qualification_leads", {
   index("idx_qualification_leads_status").on(table.tenantId, table.status),
   index("idx_qualification_leads_call_status").on(table.tenantId, table.callStatus),
   index("idx_qualification_leads_score").on(table.tenantId, table.score),
+  index("idx_qualification_leads_follow_up").on(table.tenantId, table.followUpNeeded, table.followUpDate),
 ]);
 
 export const insertQualificationLeadSchema = createInsertSchema(qualificationLeads).omit({

@@ -1,5 +1,6 @@
 import { storage } from '../storage';
 import OpenAI from 'openai';
+import * as chrono from 'chrono-node';
 import type { CallSession, CallTranscript, QualificationLead, QualificationCampaign } from '@shared/schema';
 
 interface FieldDefinition {
@@ -348,10 +349,57 @@ Remember to respond with ONLY a valid JSON object in the specified format.`;
       qualificationResult = 'not_qualified';
     }
 
+    // Parse follow-up date and time into a proper timestamp using chrono-node for natural language
+    // This MUST happen before building sessionUpdates and leadUpdates so both use the parsed value
+    let followUpTimestamp: Date | null = null;
+    if (aiResponse.followUp.date || aiResponse.followUp.time) {
+      try {
+        // Combine date and time info for parsing
+        const dateStr = aiResponse.followUp.date || '';
+        const timeStr = aiResponse.followUp.time || '';
+        const combinedStr = `${dateStr} ${timeStr}`.trim();
+        
+        if (combinedStr) {
+          // Use chrono-node for natural language date parsing (handles "Thursday", "next week", "10am", etc.)
+          const parsedResults = chrono.parse(combinedStr, new Date(), { forwardDate: true });
+          
+          if (parsedResults.length > 0 && parsedResults[0].date()) {
+            followUpTimestamp = parsedResults[0].date();
+            
+            // If no time was specified in the parsed result, default to 10am business hours
+            const knownTime = parsedResults[0].start.isCertain('hour');
+            if (!knownTime) {
+              followUpTimestamp.setHours(10, 0, 0, 0);
+            }
+          } else {
+            // Fallback: try standard Date parsing for ISO-8601 formats
+            const isoAttempt = new Date(`${dateStr}T${timeStr || '10:00'}`);
+            if (!isNaN(isoAttempt.getTime())) {
+              followUpTimestamp = isoAttempt;
+            }
+          }
+        }
+        
+        console.log(`[AI Analysis] Parsed follow-up: "${combinedStr}" -> ${followUpTimestamp?.toISOString() || 'null'}`);
+      } catch (parseError) {
+        console.error('[AI Analysis] Failed to parse follow-up date:', parseError);
+        followUpTimestamp = null;
+      }
+    }
+
+    // Only set followUpNeeded=true when we have a valid timestamp
+    // If chrono-node couldn't parse a date (e.g., LLM returned "TBD"), leave followUpNeeded=false
+    const hasValidFollowUp = aiResponse.followUp.needed && followUpTimestamp !== null;
+    
+    if (aiResponse.followUp.needed && !followUpTimestamp) {
+      console.log(`[AI Analysis] Follow-up requested but no valid timestamp parsed. Setting followUpNeeded=false.`);
+    }
+
+    // Now use the chrono-derived timestamp for both session and lead updates
     const sessionUpdates: Partial<any> = {
       interestLevel: aiResponse.interestLevel,
-      followUpNeeded: aiResponse.followUp.needed,
-      followUpDate: aiResponse.followUp.date ? new Date(aiResponse.followUp.date) : null,
+      followUpNeeded: hasValidFollowUp,
+      followUpDate: followUpTimestamp, // Use chrono-parsed timestamp (null if unparseable)
       nextAction: aiResponse.followUp.action,
       aiAnalysis: {
         ...(session.aiAnalysis || {}),
@@ -370,6 +418,10 @@ Remember to respond with ONLY a valid JSON object in the specified format.`;
       pocEmail: aiResponse.poc.email,
       pocPhone: aiResponse.poc.phone,
       pocRole: aiResponse.poc.title,
+      // Follow-up fields for scheduling - only set when we have a valid timestamp
+      followUpNeeded: hasValidFollowUp,
+      followUpDate: followUpTimestamp,
+      callbackNote: hasValidFollowUp ? aiResponse.followUp.action : null, // Only store note if follow-up is scheduled
       rawAiOutput: {
         parsedAt: new Date().toISOString(),
         model: 'gpt-4o',
