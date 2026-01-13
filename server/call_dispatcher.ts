@@ -73,6 +73,12 @@ export class CallDispatcher {
         console.log('[CallDispatcher][DEBUG] No stale targets found');
       }
       
+      // Also cleanup stale call sessions stuck in 'initiated' status
+      const staleSessionCount = await storage.markStaleSessionsAsFailed(staleDate);
+      if (staleSessionCount > 0) {
+        console.log(`[CallDispatcher][DEBUG] Marked ${staleSessionCount} stale 'initiated' call sessions as failed`);
+      }
+      
       console.log(`[CallDispatcher][DEBUG] Stale target cleanup completed in ${Date.now() - cleanupStart}ms`);
     } catch (error) {
       console.error('[CallDispatcher][DEBUG] *** ERROR cleaning up stale targets ***');

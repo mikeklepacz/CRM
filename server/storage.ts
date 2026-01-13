@@ -608,6 +608,10 @@ export interface IStorage {
 
   // Stale target cleanup
   getStaleInProgressTargets(beforeDate: Date): Promise<any[]>;
+  
+  // Stale call session cleanup
+  getStaleInitiatedSessions(beforeDate: Date): Promise<CallSession[]>;
+  markStaleSessionsAsFailed(beforeDate: Date): Promise<number>;
 
   // Background Audio Settings operations
   getBackgroundAudioSettings(): Promise<BackgroundAudioSettings | undefined>;
@@ -4012,6 +4016,35 @@ export class DatabaseStorage implements IStorage {
           lte(callCampaignTargets.createdAt, beforeDate)
         )
       );
+  }
+
+  async getStaleInitiatedSessions(beforeDate: Date): Promise<CallSession[]> {
+    return await db
+      .select()
+      .from(callSessions)
+      .where(
+        and(
+          eq(callSessions.status, 'initiated'),
+          lte(callSessions.startedAt, beforeDate)
+        )
+      );
+  }
+
+  async markStaleSessionsAsFailed(beforeDate: Date): Promise<number> {
+    const result = await db
+      .update(callSessions)
+      .set({
+        status: 'failed',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(callSessions.status, 'initiated'),
+          lte(callSessions.startedAt, beforeDate)
+        )
+      )
+      .returning({ id: callSessions.id });
+    return result.length;
   }
 
   // Background Audio Settings operations
