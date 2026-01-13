@@ -8916,7 +8916,7 @@ IMPORTANT:
       const MAX_PER_BATCH = 10; // Process max 10 per request to avoid timeouts
 
       // Get the Store Database sheet for this tenant
-      const sheets = await storage.getGoogleSheetsByTenant(tenantId);
+      const sheets = await storage.getAllActiveGoogleSheets(tenantId);
       const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
       
       if (!storeSheet) {
