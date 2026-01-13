@@ -8917,7 +8917,7 @@ IMPORTANT:
 
       // Get the Store Database sheet for this tenant
       const sheets = await storage.getAllActiveGoogleSheets(tenantId);
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
       
       if (!storeSheet) {
         return res.status(400).json({ message: "No Store Database sheet configured for this tenant" });
