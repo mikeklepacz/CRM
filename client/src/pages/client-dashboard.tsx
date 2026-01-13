@@ -2981,6 +2981,7 @@ export default function ClientDashboard() {
                       const response = await fetch('/api/clients/crawl-emails', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ projectId: currentProject?.id }),
                         credentials: 'include'
                       });
                       const data = await response.json();
