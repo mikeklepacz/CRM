@@ -151,9 +151,10 @@ class VoiceProxyServer {
   }
 
   // Helper to retry session lookup with short delays (handles race condition with database commit)
+  // Uses getCallSessionByCallSidOnly since this is called from WebSocket context without tenant
   private async getCallSessionWithRetry(callSid: string, maxRetries: number = 5, delayMs: number = 100): Promise<any> {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const session = await storage.getCallSessionByCallSid(callSid);
+      const session = await storage.getCallSessionByCallSidOnly(callSid);
       if (session) {
         if (attempt > 0) {
           console.log(`[VoiceProxy] Found call session on attempt ${attempt + 1} for callSid ${callSid}`);
@@ -283,9 +284,9 @@ class VoiceProxyServer {
     // This is critical for webhook correlation regardless of call type (campaign or manual)
     if (conversationId) {
       try {
-        const callSession = await storage.getCallSessionByCallSid(callSid);
+        const callSession = await storage.getCallSessionByCallSidOnly(callSid);
         if (callSession) {
-          await storage.updateCallSession(callSession.id, {
+          await storage.updateCallSession(callSession.id, callSession.tenantId, {
             conversationId,
           });
         }

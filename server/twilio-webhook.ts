@@ -42,9 +42,9 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
   const callDuration = parseInt(payload.CallDuration || '0', 10); // Duration in seconds from Twilio
   
   try {
-    // Find the call session by callSid
+    // Find the call session by callSid (without tenant filter since webhooks don't have tenant context)
     console.log(`[Twilio Webhook][DEBUG] Looking up session for CallSid: ${callSid}`);
-    const session = await storage.getCallSessionByCallSid(callSid);
+    const session = await storage.getCallSessionByCallSidOnly(callSid);
     
     if (!session) {
       console.warn(`[Twilio Webhook][DEBUG] *** NO SESSION FOUND ***`);
@@ -90,7 +90,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
           newStatus = 'completed';
           console.log(`[Twilio Webhook][DEBUG] Call completed successfully, duration: ${callDuration}s`);
         }
-        await storage.updateCallSession(session.id, {
+        await storage.updateCallSession(session.id, session.tenantId, {
           status: newStatus,
           endedAt: now,
         });
@@ -99,7 +99,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
       case 'busy':
         console.log(`[Twilio Webhook][DEBUG] Call BUSY - line is occupied`);
         newStatus = 'failed';
-        await storage.updateCallSession(session.id, {
+        await storage.updateCallSession(session.id, session.tenantId, {
           status: newStatus,
           endedAt: now,
         });
@@ -107,7 +107,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
       case 'no-answer':
         console.log(`[Twilio Webhook][DEBUG] NO ANSWER - call wasn't picked up`);
         newStatus = 'failed';
-        await storage.updateCallSession(session.id, {
+        await storage.updateCallSession(session.id, session.tenantId, {
           status: newStatus,
           endedAt: now,
         });
@@ -118,7 +118,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
         console.log(`[Twilio Webhook][DEBUG] ErrorMessage: ${payload.ErrorMessage || 'none'}`);
         console.log(`[Twilio Webhook][DEBUG] SipResponseCode: ${payload.SipResponseCode || 'none'}`);
         newStatus = 'failed';
-        await storage.updateCallSession(session.id, {
+        await storage.updateCallSession(session.id, session.tenantId, {
           status: newStatus,
           endedAt: now,
         });
@@ -126,7 +126,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
       case 'canceled':
         console.log(`[Twilio Webhook][DEBUG] Call CANCELED`);
         newStatus = 'failed';
-        await storage.updateCallSession(session.id, {
+        await storage.updateCallSession(session.id, session.tenantId, {
           status: newStatus,
           endedAt: now,
         });
@@ -136,7 +136,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
     // Update status for initiated/in-progress
     if (newStatus !== session.status) {
       console.log(`[Twilio Webhook][DEBUG] Updating session status: ${session.status} -> ${newStatus}`);
-      await storage.updateCallSession(session.id, {
+      await storage.updateCallSession(session.id, session.tenantId, {
         status: newStatus,
       });
     }

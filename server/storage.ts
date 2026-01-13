@@ -518,6 +518,7 @@ export interface IStorage {
   getCallSession(id: string, tenantId: string): Promise<CallSession | undefined>;
   getCallSessionByConversationId(conversationId: string, tenantId: string): Promise<CallSession | undefined>;
   getCallSessionByCallSid(callSid: string, tenantId: string): Promise<CallSession | undefined>;
+  getCallSessionByCallSidOnly(callSid: string): Promise<CallSession | undefined>; // For external webhooks without tenant context
   getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]>;
   updateCallSession(id: string, tenantId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
   updateCallSessionByConversationId(conversationId: string, tenantId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
@@ -3347,6 +3348,13 @@ export class DatabaseStorage implements IStorage {
 
   async getCallSessionByCallSid(callSid: string, tenantId: string): Promise<CallSession | undefined> {
     const [session] = await db.select().from(callSessions).where(and(eq(callSessions.callSid, callSid), eq(callSessions.tenantId, tenantId)));
+    return session;
+  }
+
+  // For external webhooks (Twilio/ElevenLabs) that don't have tenant context
+  // CallSids are globally unique from Twilio, so this is safe
+  async getCallSessionByCallSidOnly(callSid: string): Promise<CallSession | undefined> {
+    const [session] = await db.select().from(callSessions).where(eq(callSessions.callSid, callSid));
     return session;
   }
 
