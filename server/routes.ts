@@ -8905,7 +8905,7 @@ IMPORTANT:
 
 
 
-  // Batch crawl websites for emails (limited per request for performance)
+  // Batch crawl websites for emails from Google Sheets (limited per request for performance)
   app.post('/api/clients/crawl-emails', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const tenantId = req.user?.tenantId;
@@ -8915,44 +8915,80 @@ IMPORTANT:
 
       const MAX_PER_BATCH = 10; // Process max 10 per request to avoid timeouts
 
-      // Get all clients with website but no email
-      const allClients = await db.query.clients.findMany({
-        where: and(
-          eq(clients.tenantId, tenantId),
-          isNotNull(clients.data)
-        )
-      });
-
-      // Filter to only those needing crawl
-      const clientsToProcess = allClients.filter(client => {
-        const data = client.data as Record<string, any>;
-        const website = data?.website || data?.Website || data?.site || data?.Site || data?.url || data?.URL;
-        const existingEmail = data?.email || data?.Email || data?.['POC Email'] || data?.pocEmail;
-        const emailSearched = data?.emailSearched;
-        return website && !existingEmail && !emailSearched;
-      }).slice(0, MAX_PER_BATCH);
-
-      const totalRemaining = allClients.filter(client => {
-        const data = client.data as Record<string, any>;
-        const website = data?.website || data?.Website || data?.site || data?.Site || data?.url || data?.URL;
-        const existingEmail = data?.email || data?.Email || data?.['POC Email'] || data?.pocEmail;
-        const emailSearched = data?.emailSearched;
-        return website && !existingEmail && !emailSearched;
-      }).length;
-
-      const results: Array<{ id: string; email: string | null; searched: boolean; error?: string }> = [];
+      // Get the Store Database sheet for this tenant
+      const sheets = await storage.getGoogleSheetsByTenant(tenantId);
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
       
-      for (const client of clientsToProcess) {
-        const data = client.data as Record<string, any>;
-        const website = data?.website || data?.Website || data?.site || data?.Site || data?.url || data?.URL;
+      if (!storeSheet) {
+        return res.status(400).json({ message: "No Store Database sheet configured for this tenant" });
+      }
 
+      // Read all data from the sheet
+      const range = `${storeSheet.sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(storeSheet.spreadsheetId, range);
+      
+      if (rows.length <= 1) {
+        return res.json({ 
+          message: "No data in sheet",
+          totalProcessed: 0,
+          emailsFound: 0,
+          remainingToProcess: 0,
+          hasMore: false
+        });
+      }
+
+      const headers = rows[0].map((h: string) => (h || '').toString());
+      
+      // Find column indices (case-insensitive, flexible matching)
+      const websiteColIndex = headers.findIndex((h: string) => {
+        const lower = h.toLowerCase();
+        return lower === 'website' || lower === 'site' || lower === 'url' || 
+               lower === 'web' || lower.includes('website') || lower.includes('site url');
+      });
+      const emailColIndex = headers.findIndex((h: string) => {
+        const lower = h.toLowerCase();
+        return lower === 'poc email' || lower === 'email' || lower === 'contact email' ||
+               lower === 'e-mail' || lower.includes('poc email') || lower.includes('contact email');
+      });
+      const emailSearchedColIndex = headers.findIndex((h: string) => {
+        const lower = h.toLowerCase();
+        return lower === 'email searched' || lower.includes('email searched');
+      });
+      
+      if (websiteColIndex === -1) {
+        return res.status(400).json({ message: "No 'Website' column found in Store Database. Headers found: " + headers.join(', ') });
+      }
+
+      // Find rows needing crawl: have website, no email, not already searched
+      const rowsToProcess: Array<{ rowIndex: number; website: string }> = [];
+      const allNeedingCrawl: number[] = [];
+      
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const website = row[websiteColIndex]?.toString().trim();
+        const email = emailColIndex !== -1 ? row[emailColIndex]?.toString().trim() : '';
+        const emailSearched = emailSearchedColIndex !== -1 ? row[emailSearchedColIndex]?.toString().trim().toLowerCase() : '';
+        
+        if (website && !email && emailSearched !== 'yes' && emailSearched !== 'true') {
+          allNeedingCrawl.push(i + 1); // +1 for sheet row number (1-indexed, after header)
+          if (rowsToProcess.length < MAX_PER_BATCH) {
+            rowsToProcess.push({ rowIndex: i + 1, website });
+          }
+        }
+      }
+
+      const results: Array<{ rowIndex: number; email: string | null; searched: boolean; error?: string }> = [];
+      
+      for (const { rowIndex, website } of rowsToProcess) {
         try {
+          console.log(`[EmailCrawl] Crawling row ${rowIndex}: ${website}`);
           const crawlResult = await crawlWebsiteForEmail(website);
           
-          // Only mark as searched if we actually attempted (not skipped for safety)
+          // Skip if URL was blocked for safety reasons
           if (crawlResult.skipped) {
+            console.log(`[EmailCrawl] Skipped ${website}: ${crawlResult.error}`);
             results.push({
-              id: client.id,
+              rowIndex,
               email: null,
               searched: false,
               error: crawlResult.error
@@ -8960,36 +8996,34 @@ IMPORTANT:
             continue;
           }
 
-          // Update client data with result
-          const updatedData = { ...data };
-          if (crawlResult.email) {
-            updatedData.email = crawlResult.email;
-          }
-          if (crawlResult.searched) {
-            updatedData.emailSearched = true;
-            updatedData.emailSearchedAt = new Date().toISOString();
-          }
-          if (crawlResult.error) {
-            updatedData.emailSearchError = crawlResult.error;
+          // Write found email to Google Sheet
+          if (crawlResult.email && emailColIndex !== -1) {
+            const emailColumnLetter = String.fromCharCode(65 + emailColIndex);
+            const emailCellRange = `${storeSheet.sheetName}!${emailColumnLetter}${rowIndex}`;
+            await googleSheets.writeSheetData(storeSheet.spreadsheetId, emailCellRange, [[crawlResult.email]]);
+            console.log(`[EmailCrawl] Found and wrote email for row ${rowIndex}: ${crawlResult.email}`);
           }
           
-          await db.update(clients)
-            .set({ data: updatedData, updatedAt: new Date() })
-            .where(eq(clients.id, client.id));
+          // Mark as searched (if column exists)
+          if (crawlResult.searched && emailSearchedColIndex !== -1) {
+            const searchedColumnLetter = String.fromCharCode(65 + emailSearchedColIndex);
+            const searchedCellRange = `${storeSheet.sheetName}!${searchedColumnLetter}${rowIndex}`;
+            await googleSheets.writeSheetData(storeSheet.spreadsheetId, searchedCellRange, [['Yes']]);
+          }
           
           results.push({
-            id: client.id,
+            rowIndex,
             email: crawlResult.email,
             searched: crawlResult.searched,
             error: crawlResult.error
           });
           
-          // Small delay between requests
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Small delay between requests to be respectful
+          await new Promise(resolve => setTimeout(resolve, 300));
         } catch (error: any) {
-          console.error(`Error crawling ${website}:`, error.message);
+          console.error(`[EmailCrawl] Error crawling ${website}:`, error.message);
           results.push({
-            id: client.id,
+            rowIndex,
             email: null,
             searched: false,
             error: error.message
@@ -8999,18 +9033,25 @@ IMPORTANT:
 
       const foundCount = results.filter(r => r.email).length;
       const searchedCount = results.filter(r => r.searched).length;
+      const remaining = allNeedingCrawl.length - results.length;
+      
+      console.log(`[EmailCrawl] Batch complete: processed ${results.length}, found ${foundCount} emails, ${remaining} remaining`);
+      
+      // Invalidate cache so CRM refreshes with new emails
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      clearUserCache(userId);
       
       res.json({ 
-        message: `Processed ${results.length} clients, found ${foundCount} emails`,
+        message: `Processed ${results.length} listings, found ${foundCount} emails`,
         results,
         totalProcessed: results.length,
         emailsFound: foundCount,
         searchedCount,
-        remainingToProcess: totalRemaining - results.length,
-        hasMore: totalRemaining > MAX_PER_BATCH
+        remainingToProcess: remaining,
+        hasMore: remaining > 0
       });
     } catch (error: any) {
-      console.error("Error batch crawling emails:", error);
+      console.error("[EmailCrawl] Error batch crawling emails:", error);
       res.status(500).json({ message: error.message || "Failed to crawl emails" });
     }
   });
