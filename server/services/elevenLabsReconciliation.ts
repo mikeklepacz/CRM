@@ -27,21 +27,50 @@ interface ReconciliationResult {
 
 async function fetchElevenLabsConversations(
   apiKey: string,
-  agentId?: string,
-  limit: number = 100
+  agentId: string,
+  startTimeUnix?: number,
+  endTimeUnix?: number
 ): Promise<ElevenLabsConversation[]> {
   try {
-    const params: Record<string, any> = { limit };
-    if (agentId) {
-      params.agent_id = agentId;
-    }
+    const allConversations: ElevenLabsConversation[] = [];
+    let cursor: string | undefined;
+    const pageSize = 100;
+    let pages = 0;
+    const maxPages = 10;
     
-    const response = await axios.get('https://api.elevenlabs.io/v1/convai/conversations', {
-      headers: { 'xi-api-key': apiKey },
-      params,
-    });
+    do {
+      const params: Record<string, any> = { 
+        limit: pageSize,
+        agent_id: agentId,
+      };
+      if (cursor) params.cursor = cursor;
+      
+      const response = await axios.get('https://api.elevenlabs.io/v1/convai/conversations', {
+        headers: { 'xi-api-key': apiKey },
+        params,
+      });
+      
+      const conversations: ElevenLabsConversation[] = response.data?.conversations || [];
+      
+      for (const conv of conversations) {
+        if (startTimeUnix && conv.start_time < startTimeUnix) continue;
+        if (endTimeUnix && conv.start_time > endTimeUnix) continue;
+        allConversations.push(conv);
+      }
+      
+      cursor = response.data?.next_cursor;
+      pages++;
+      
+      if (conversations.length > 0) {
+        const oldestInPage = Math.min(...conversations.map(c => c.start_time));
+        if (startTimeUnix && oldestInPage < startTimeUnix) {
+          break;
+        }
+      }
+      
+    } while (cursor && pages < maxPages);
     
-    return response.data?.conversations || [];
+    return allConversations;
   } catch (error: any) {
     console.error('[Reconciliation] Error fetching ElevenLabs conversations:', error.message);
     return [];
@@ -92,16 +121,31 @@ export async function reconcileOrphanedCallSessions(tenantId: string): Promise<R
       return result;
     }
     
-    const agentIds = [...new Set(orphanedSessions.map(s => s.agentId).filter(Boolean))];
+    const timestamps = orphanedSessions
+      .filter(s => s.startedAt)
+      .map(s => new Date(s.startedAt!).getTime());
+    
+    const earliestSession = Math.min(...timestamps);
+    const latestSession = Math.max(...timestamps);
+    
+    const startTimeUnix = Math.floor((earliestSession - 5 * 60 * 1000) / 1000);
+    const endTimeUnix = Math.floor((latestSession + 5 * 60 * 1000) / 1000);
+    
+    const agentIds = [...new Set(orphanedSessions.map(s => s.agentId).filter(Boolean))] as string[];
     console.log(`[Reconciliation] Unique agent IDs:`, agentIds);
+    console.log(`[Reconciliation] Time range: ${new Date(startTimeUnix * 1000).toISOString()} - ${new Date(endTimeUnix * 1000).toISOString()}`);
     
-    const allConversations: ElevenLabsConversation[] = [];
+    const conversationsByAgent = new Map<string, ElevenLabsConversation[]>();
     for (const agentId of agentIds) {
-      const conversations = await fetchElevenLabsConversations(config.apiKey, agentId, 100);
-      allConversations.push(...conversations);
+      const conversations = await fetchElevenLabsConversations(
+        config.apiKey, 
+        agentId, 
+        startTimeUnix, 
+        endTimeUnix
+      );
+      conversationsByAgent.set(agentId, conversations);
+      console.log(`[Reconciliation] Agent ${agentId}: fetched ${conversations.length} conversations`);
     }
-    
-    console.log(`[Reconciliation] Fetched ${allConversations.length} conversations from ElevenLabs`);
     
     const matchedConversationIds = new Set<string>();
     
@@ -112,11 +156,11 @@ export async function reconcileOrphanedCallSessions(tenantId: string): Promise<R
         continue;
       }
       
+      const agentConversations = conversationsByAgent.get(session.agentId) || [];
       const sessionStartTime = new Date(session.startedAt).getTime();
       const TWO_MINUTES_MS = 2 * 60 * 1000;
       
-      const matchingConversations = allConversations.filter(conv => {
-        if (conv.agent_id !== session.agentId) return false;
+      const matchingConversations = agentConversations.filter(conv => {
         if (matchedConversationIds.has(conv.conversation_id)) return false;
         
         const convStartTime = conv.start_time * 1000;
@@ -125,8 +169,8 @@ export async function reconcileOrphanedCallSessions(tenantId: string): Promise<R
       });
       
       matchingConversations.sort((a, b) => {
-        const diffA = Math.abs(new Date(session.startedAt!).getTime() - a.start_time * 1000);
-        const diffB = Math.abs(new Date(session.startedAt!).getTime() - b.start_time * 1000);
+        const diffA = Math.abs(sessionStartTime - a.start_time * 1000);
+        const diffB = Math.abs(sessionStartTime - b.start_time * 1000);
         return diffA - diffB;
       });
       
@@ -142,17 +186,23 @@ export async function reconcileOrphanedCallSessions(tenantId: string): Promise<R
             conversationId: match.conversation_id,
           });
           
-          const details = await fetchConversationDetails(config.apiKey, match.conversation_id);
-          if (details?.transcript && details.transcript.length > 0) {
-            for (const turn of details.transcript) {
-              await storage.createCallTranscript({
+          const existingTranscripts = await storage.getCallTranscripts(match.conversation_id);
+          
+          if (existingTranscripts.length === 0) {
+            const details = await fetchConversationDetails(config.apiKey, match.conversation_id);
+            if (details?.transcript && details.transcript.length > 0) {
+              const transcriptsToInsert = details.transcript.map(turn => ({
                 conversationId: match.conversation_id,
-                role: turn.role,
+                role: turn.role as 'agent' | 'user',
                 message: turn.message,
                 timeInCallSecs: turn.time_in_call_secs || 0,
-              });
+              }));
+              
+              await storage.bulkCreateCallTranscripts(transcriptsToInsert);
+              console.log(`[Reconciliation] Stored ${transcriptsToInsert.length} transcript turns (bulk)`);
             }
-            console.log(`[Reconciliation] Stored ${details.transcript.length} transcript turns`);
+          } else {
+            console.log(`[Reconciliation] Transcripts already exist for ${match.conversation_id}, skipping`);
           }
           
           analyzeCallTranscript(match.conversation_id, tenantId).catch(err => {
