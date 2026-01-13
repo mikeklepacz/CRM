@@ -519,6 +519,7 @@ export interface IStorage {
   getCallSessionByConversationId(conversationId: string, tenantId: string): Promise<CallSession | undefined>;
   getCallSessionByCallSid(callSid: string, tenantId: string): Promise<CallSession | undefined>;
   getCallSessionByCallSidOnly(callSid: string): Promise<CallSession | undefined>; // For external webhooks without tenant context
+  getOrphanedCallSessions(tenantId: string): Promise<CallSession[]>; // Sessions completed but missing conversation_id or analysis
   getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]>;
   updateCallSession(id: string, tenantId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
   updateCallSessionByConversationId(conversationId: string, tenantId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
@@ -3356,6 +3357,26 @@ export class DatabaseStorage implements IStorage {
   async getCallSessionByCallSidOnly(callSid: string): Promise<CallSession | undefined> {
     const [session] = await db.select().from(callSessions).where(eq(callSessions.callSid, callSid));
     return session;
+  }
+
+  // Find orphaned call sessions - completed/in-progress but missing conversation_id or ai_analysis
+  // Used by reconciliation service to match with ElevenLabs conversations
+  async getOrphanedCallSessions(tenantId: string): Promise<CallSession[]> {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    return await db.select().from(callSessions)
+      .where(and(
+        eq(callSessions.tenantId, tenantId),
+        or(
+          eq(callSessions.status, 'completed'),
+          eq(callSessions.status, 'in-progress')
+        ),
+        or(
+          isNull(callSessions.conversationId),
+          isNull(callSessions.aiAnalysis)
+        ),
+        gt(callSessions.startedAt, twoHoursAgo) // Only look at recent sessions to avoid processing old data
+      ))
+      .orderBy(desc(callSessions.startedAt));
   }
 
   async getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]> {

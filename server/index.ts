@@ -10,6 +10,7 @@ import { renewCalendarWatchOnStartup } from "./calendarSync";
 import { startEmailQueueProcessor } from "./services/emailQueue";
 import { startSlotMaintenance } from "./services/slotMaintenance";
 import { gmailWatchManager } from "./services/gmailWatchManager";
+import { startReconciliationWorker } from "./services/elevenLabsReconciliation";
 
 const app = express();
 
@@ -113,6 +114,10 @@ app.use((req, res, next) => {
     }, 30000);
 
     log('[CallDispatcher] Background worker started (runs every 30s)');
+
+    // Start ElevenLabs call reconciliation worker (matches orphaned sessions to conversations)
+    startReconciliationWorker(10 * 60 * 1000); // Every 10 minutes
+    log('[Reconciliation] ElevenLabs reconciliation worker started (runs every 10 min)');
 
     // Start Gmail Push Notification watch (for E-Hub reply detection)
     setTimeout(async () => {

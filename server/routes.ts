@@ -58,6 +58,7 @@ import { generateProjectSpecsPdf, type TextElement, type ColorSwatch } from "./s
 import JSZip from "jszip";
 import { callDispatcher } from "./call_dispatcher";
 import { analyzeTranscript } from "./services/aiTranscriptAnalysis";
+import { reconcileOrphanedCallSessions, startReconciliationWorker } from "./services/elevenLabsReconciliation";
 
 const FLY_VOICE_PROXY_HEALTH_URL = process.env.FLY_VOICE_PROXY_HEALTH_URL || 'https://hemp-voice-proxy.fly.dev/health';
 
@@ -4044,6 +4045,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error.message || 'Failed to sync calls',
         details: error.response?.data,
+      });
+    }
+  });
+
+  // Reconcile orphaned call sessions with ElevenLabs conversations
+  // Matches sessions missing conversation_id or AI analysis with ElevenLabs data
+  app.post('/api/elevenlabs/reconcile-sessions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = (req.user as any).tenantId;
+      
+      console.log(`[Reconciliation] Manual trigger by admin for tenant ${tenantId}`);
+      
+      const result = await reconcileOrphanedCallSessions(tenantId);
+      
+      res.json({
+        success: true,
+        processed: result.processed,
+        matched: result.matched,
+        analysisTriggered: result.analysisTriggered,
+        errors: result.errors.slice(0, 5),
+      });
+    } catch (error: any) {
+      console.error('[Reconciliation] Manual reconciliation error:', error);
+      res.status(500).json({ 
+        error: error.message || 'Failed to reconcile sessions',
       });
     }
   });
