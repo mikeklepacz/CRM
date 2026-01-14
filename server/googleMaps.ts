@@ -56,6 +56,11 @@ export interface PlaceDetails {
   };
   business_status?: string;
   types: string[];
+  address_components?: Array<{
+    long_name: string;
+    short_name: string;
+    types: string[];
+  }>;
 }
 
 export interface PlaceSearchResponse {
@@ -146,7 +151,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,googleMapsUri,location,currentOpeningHours,businessStatus,types'
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,googleMapsUri,location,currentOpeningHours,businessStatus,types,addressComponents.longText,addressComponents.shortText,addressComponents.types'
       }
     });
 
@@ -158,6 +163,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       }
       throw new Error(`Google Places API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
     }
+
+    // Transform v1 addressComponents to legacy format
+    const addressComponents = data.addressComponents?.map((comp: any) => ({
+      long_name: comp.longText || '',
+      short_name: comp.shortText || '',
+      types: comp.types || []
+    })) || [];
 
     return {
       place_id: data.id?.replace('places/', '') || placeId,
@@ -178,7 +190,8 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
         weekday_text: data.currentOpeningHours.weekdayDescriptions
       } : undefined,
       business_status: data.businessStatus || 'OPERATIONAL',
-      types: data.types || []
+      types: data.types || [],
+      address_components: addressComponents.length > 0 ? addressComponents : undefined
     };
   } catch (error: any) {
     console.error('Error fetching place details:', error);
