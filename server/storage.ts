@@ -2802,7 +2802,10 @@ export class DatabaseStorage implements IStorage {
 
     const [newExclusion] = await db
       .insert(savedExclusions)
-      .values(exclusion)
+      .values({
+        ...exclusion,
+        tenantId: exclusion.tenantId || (global as any).currentTenantId // Fallback for safety if somehow missing
+      })
       .returning();
     return newExclusion;
   }
