@@ -8,9 +8,79 @@ const dnsLookupAll = promisify(dns.lookup) as (hostname: string, options: { all:
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
-const CONTACT_PATHS = ['/contact', '/contact-us', '/about'];
+const CONTACT_PATHS = [
+  // English
+  '/contact', '/contact-us', '/about', '/about-us',
+  // German
+  '/kontakt', '/impressum', '/uber-uns', '/ueber-uns', '/about',
+  // French
+  '/contact', '/contactez-nous', '/a-propos', '/nous-contacter',
+  // Italian
+  '/contatti', '/chi-siamo', '/contattaci',
+  // Spanish
+  '/contacto', '/contactenos', '/sobre-nosotros', '/quienes-somos',
+  // Portuguese
+  '/contacto', '/contato', '/sobre', '/sobre-nos', '/fale-conosco',
+  // Dutch
+  '/contact', '/over-ons', '/neem-contact-op',
+  // Polish
+  '/kontakt', '/o-nas',
+  // Russian (transliterated)
+  '/kontakty', '/o-nas', '/svyaz',
+  // Ukrainian (transliterated)
+  '/kontakty', '/pro-nas',
+  // Romanian
+  '/contact', '/despre-noi',
+  // Greek (transliterated)
+  '/epikoinonia', '/contact',
+  // Hungarian
+  '/kapcsolat', '/rolunk',
+  // Czech
+  '/kontakt', '/o-nas',
+  // Swedish
+  '/kontakt', '/kontakta-oss', '/om-oss',
+  // Serbian/Croatian
+  '/kontakt', '/o-nama',
+  // Bulgarian (transliterated)
+  '/kontakti', '/za-nas',
+  // Danish
+  '/kontakt', '/om-os',
+  // Finnish
+  '/yhteystiedot', '/ota-yhteytta', '/meista',
+  // Norwegian
+  '/kontakt', '/om-oss', '/kontakt-oss',
+];
 
-const PRIORITY_PREFIXES = ['contact', 'info', 'hello', 'sales', 'support', 'admin', 'office'];
+const PRIORITY_PREFIXES = [
+  // English
+  'contact', 'info', 'hello', 'sales', 'support', 'admin', 'office', 'enquiry', 'inquiry', 'team', 'hq', 'business',
+  // German
+  'kontakt', 'anfrage', 'buero', 'zentrale',
+  // French
+  'contact', 'accueil', 'bureau',
+  // Italian
+  'contatti', 'ufficio', 'segreteria',
+  // Spanish
+  'contacto', 'oficina', 'atencion',
+  // Portuguese
+  'contato', 'atendimento', 'escritorio',
+  // Dutch
+  'contact', 'kantoor',
+  // Polish
+  'kontakt', 'biuro',
+  // Russian
+  'info', 'office', 'priemnaya',
+  // Swedish/Danish/Norwegian
+  'kontakt', 'kontor',
+  // Finnish
+  'asiakaspalvelu', 'toimisto',
+  // Hungarian
+  'iroda',
+  // Czech
+  'kancelar',
+  // Romanian
+  'birou',
+];
 
 const EXCLUDED_DOMAINS = [
   'example.com', 'sentry.io', 'wixpress.com', 'w3.org', 'schema.org',
@@ -66,7 +136,7 @@ async function isUrlSafe(urlString: string): Promise<{ safe: boolean; error?: st
 
 function extractEmails(html: string): string[] {
   const matches = html.match(EMAIL_REGEX) || [];
-  return [...new Set(matches)]
+  return Array.from(new Set(matches))
     .filter(email => {
       const domain = email.split('@')[1]?.toLowerCase();
       if (!domain || EXCLUDED_DOMAINS.some(ex => domain.includes(ex))) return false;
@@ -75,6 +145,39 @@ function extractEmails(html: string): string[] {
              !lower.includes('noreply') && !lower.includes('no-reply') &&
              !lower.endsWith('.png') && !lower.endsWith('.jpg');
     });
+}
+
+function extractMailtoEmails(html: string): string[] {
+  const mailtoRegex = /href=["']mailto:([^"'?]+)/gi;
+  const emails: string[] = [];
+  let match;
+  while ((match = mailtoRegex.exec(html)) !== null) {
+    const email = match[1].toLowerCase().trim();
+    if (email && email.includes('@')) {
+      const domain = email.split('@')[1];
+      if (domain && !EXCLUDED_DOMAINS.some(ex => domain.includes(ex))) {
+        emails.push(email);
+      }
+    }
+  }
+  return Array.from(new Set(emails));
+}
+
+function extractFooterContent(html: string): string {
+  const footerPatterns = [
+    /<footer[^>]*>([\s\S]*?)<\/footer>/gi,
+    /<div[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
+    /<section[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi,
+  ];
+  
+  let footerContent = '';
+  for (const pattern of footerPatterns) {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      footerContent += ' ' + match[1];
+    }
+  }
+  return footerContent;
 }
 
 function prioritizeEmails(emails: string[]): string | null {
@@ -137,22 +240,42 @@ export async function crawlWebsiteForEmail(websiteUrl: string): Promise<CrawlRes
     
     const mainHtml = await fetchPage(baseUrl);
     if (mainHtml) {
+      // Priority 1: mailto links (most reliable)
+      allEmails.push(...extractMailtoEmails(mainHtml));
+      // Priority 2: Footer content (common location for contact info)
+      const footerContent = extractFooterContent(mainHtml);
+      if (footerContent) {
+        allEmails.push(...extractMailtoEmails(footerContent));
+        allEmails.push(...extractEmails(footerContent));
+      }
+      // Priority 3: General page scraping
       allEmails.push(...extractEmails(mainHtml));
     }
     
-    // Only check contact pages if main page had no emails
+    // Check contact pages if main page had no emails (deduplicated paths)
     if (allEmails.length === 0) {
-      for (const path of CONTACT_PATHS) {
+      const uniquePaths = Array.from(new Set(CONTACT_PATHS));
+      for (const path of uniquePaths) {
         const html = await fetchPage(baseUrl + path);
         if (html) {
+          // Try mailto links first
+          const mailtoEmails = extractMailtoEmails(html);
+          allEmails.push(...mailtoEmails);
+          // Then footer
+          const footerContent = extractFooterContent(html);
+          if (footerContent) {
+            allEmails.push(...extractMailtoEmails(footerContent));
+            allEmails.push(...extractEmails(footerContent));
+          }
+          // Then general scraping
           const emails = extractEmails(html);
           allEmails.push(...emails);
-          if (emails.length > 0) break;
+          if (allEmails.length > 0) break;
         }
       }
     }
     
-    const unique = [...new Set(allEmails)];
+    const unique = Array.from(new Set(allEmails));
     return { email: prioritizeEmails(unique), allEmails: unique, searched: true };
   } catch (error: any) {
     return { email: null, allEmails: [], searched: false, error: error.message };
