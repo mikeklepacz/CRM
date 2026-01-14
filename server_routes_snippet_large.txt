@@ -1,0 +1,1001 @@
+      // Find user by webhook channel ID
+      const users = await storage.getAllUserIntegrations();
+      const userIntegration = users.find((u: any) => 
+        u.googleCalendarWebhookChannelId === channelId
+      );
+
+      if (!userIntegration) {
+        console.log('[Webhook] No user found for channel ID:', channelId);
+        return;
+      }
+
+      const userId = userIntegration.userId;
+      console.log('[Webhook] Processing calendar changes for user:', userId);
+
+      // Get user's tenantId for multi-tenant operations
+      const webhookUser = await storage.getUserById(userId);
+      const tenantId = webhookUser?.tenantId || '';
+      if (!tenantId) {
+        console.log('[Webhook] No tenantId found for user:', userId);
+        return;
+      }
+
+      // Get system OAuth credentials for token refresh
+      const systemIntegration = await storage.getSystemIntegration('google_sheets');
+      if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+        console.error('[Webhook] System OAuth not configured');
+        return;
+      }
+
+      // Check if token needs refresh
+      let accessToken = userIntegration.googleCalendarAccessToken;
+      if (userIntegration.googleCalendarTokenExpiry && 
+          userIntegration.googleCalendarTokenExpiry < Date.now()) {
+        if (userIntegration.googleCalendarRefreshToken) {
+          const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: systemIntegration.googleClientId,
+              client_secret: systemIntegration.googleClientSecret,
+              refresh_token: userIntegration.googleCalendarRefreshToken,
+              grant_type: 'refresh_token'
+            })
+          });
+
+          if (tokenResponse.ok) {
+            const tokens = await tokenResponse.json();
+            accessToken = tokens.access_token;
+            await storage.updateUserIntegration(userId, {
+              googleCalendarAccessToken: tokens.access_token,
+              googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
+            });
+          }
+        }
+      }
+
+      // Fetch recent calendar events to detect changes
+      const oauth2Client = new google.auth.OAuth2(
+        systemIntegration.googleClientId,
+        systemIntegration.googleClientSecret
+      );
+
+      oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: userIntegration.googleCalendarRefreshToken || undefined
+      });
+
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+      // Get all reminders for this user
+      const reminders = await storage.getRemindersByUser(userId, tenantId);
+
+      // Fetch each event to check for updates/deletions
+      for (const reminder of reminders) {
+        const calendarEventId = reminder.googleCalendarEventId;
+        if (!calendarEventId) continue;
+
+        try {
+          // Try to fetch the event
+          const eventResponse = await calendar.events.get({
+            calendarId: 'primary',
+            eventId: calendarEventId,
+          });
+
+          const event = eventResponse.data;
+
+          // Check if event was modified
+          if (event.status === 'cancelled') {
+            // Event was deleted, delete the reminder
+            console.log(`[Webhook] Calendar event ${calendarEventId} deleted, deleting reminder ${reminder.id}`);
+            await storage.deleteReminder(reminder.id, tenantId);
+          } else if (event.updated) {
+            // Event was updated, sync the changes from Google Calendar
+            // Google returns ISO datetime with timezone, parse it in the event's timezone
+            const eventStartDateTime = event.start?.dateTime;
+            const eventTimeZone = event.start?.timeZone || reminder.timezone;
+
+            if (eventStartDateTime && eventTimeZone) {
+              // Parse Google's datetime to extract local date and time components
+              // eventStartDateTime format: "2025-10-24T23:00:00+02:00" or "2025-10-24T23:00:00"
+              const dateTimeParts = eventStartDateTime.split('T');
+              const newScheduledDate = dateTimeParts[0]; // YYYY-MM-DD
+              const timePart = dateTimeParts[1].split('+')[0].split('-')[0].split('Z')[0]; // Remove timezone suffix
+              const newScheduledTime = timePart.substring(0, 5); // HH:MM
+
+              // Check if date or time changed
+              if (newScheduledDate !== reminder.scheduledDate || newScheduledTime !== reminder.scheduledTime) {
+                console.log(`[Webhook] Calendar event ${calendarEventId} time changed, updating reminder ${reminder.id}`);
+                console.log(`[Webhook] Old: ${reminder.scheduledDate} ${reminder.scheduledTime}, New: ${newScheduledDate} ${newScheduledTime}`);
+                await storage.updateReminder(reminder.id, tenantId, {
+                  scheduledDate: newScheduledDate,
+                  scheduledTime: newScheduledTime,
+                  timezone: eventTimeZone
+                });
+              }
+            }
+
+            // Update title if changed
+            if (event.summary && event.summary !== reminder.title) {
+              await storage.updateReminder(reminder.id, tenantId, {
+                title: event.summary
+              });
+            }
+          }
+        } catch (eventError: any) {
+          // Event not found (404) means it was deleted
+          if (eventError.code === 404 || eventError.status === 404) {
+            await storage.deleteReminder(reminder.id, tenantId);
+          }
+        }
+      }
+    } catch (error: any) {
+      // Don't send error response since we already responded with 200
+    }
+  });
+
+  // Automatic webhook renewal system - runs daily
+  async function renewWebhooksIfNeeded() {
+    try {
+      const allIntegrations = await storage.getAllUserIntegrations();
+      const threeDaysFromNow = Date.now() + (3 * 24 * 60 * 60 * 1000);
+
+      for (const integration of allIntegrations) {
+        // Skip if no webhook registered or no calendar access
+        if (!integration.googleCalendarWebhookChannelId || 
+            !integration.googleCalendarAccessToken ||
+            !integration.googleCalendarWebhookExpiry) {
+          continue;
+        }
+
+        // Skip inactive users - don't renew webhooks for deactivated accounts
+        const user = await storage.getUser(integration.userId);
+        if (!user || user.isActive === false) {
+          continue;
+        }
+
+        // Check if webhook expires in less than 3 days
+        if (integration.googleCalendarWebhookExpiry < threeDaysFromNow) {
+
+          try {
+            // Check if token needs refresh
+            let accessToken = integration.googleCalendarAccessToken;
+            if (integration.googleCalendarTokenExpiry && 
+                integration.googleCalendarTokenExpiry < Date.now()) {
+              if (integration.googleCalendarRefreshToken && 
+                  integration.googleClientId && 
+                  integration.googleClientSecret) {
+                const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: new URLSearchParams({
+                    client_id: integration.googleClientId,
+                    client_secret: integration.googleClientSecret,
+                    refresh_token: integration.googleCalendarRefreshToken,
+                    grant_type: 'refresh_token'
+                  })
+                });
+
+                if (tokenResponse.ok) {
+                  const tokens = await tokenResponse.json();
+                  accessToken = tokens.access_token;
+                  await storage.updateUserIntegration(integration.userId, {
+                    googleCalendarAccessToken: tokens.access_token,
+                    googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
+                  });
+                }
+              }
+            }
+
+            // Stop old webhook
+            if (integration.googleCalendarWebhookChannelId && 
+                integration.googleCalendarWebhookResourceId) {
+              try {
+                const oauth2Client = new google.auth.OAuth2(
+                  integration.googleClientId,
+                  integration.googleClientSecret
+                );
+
+                oauth2Client.setCredentials({
+                  access_token: accessToken,
+                  refresh_token: integration.googleCalendarRefreshToken || undefined
+                });
+
+                const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+                await calendar.channels.stop({
+                  requestBody: {
+                    id: integration.googleCalendarWebhookChannelId,
+                    resourceId: integration.googleCalendarWebhookResourceId,
+                  },
+                });
+              } catch (stopError: any) {
+                // Old webhook may already be expired - continue with renewal
+              }
+            }
+
+            // Register new webhook - always use HTTPS for production/Replit
+            const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`
+              : `https://localhost:5000/api/webhooks/google-calendar`; // Use HTTPS even for local (Google requires it)
+            const channelId = `calendar-${integration.userId}-${Date.now()}`;
+            const expiration = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+
+            const oauth2Client = new google.auth.OAuth2(
+              integration.googleClientId,
+              integration.googleClientSecret
+            );
+
+            oauth2Client.setCredentials({
+              access_token: accessToken,
+              refresh_token: integration.googleCalendarRefreshToken || undefined
+            });
+
+            const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+            const watchResponse = await calendar.events.watch({
+              calendarId: 'primary',
+              requestBody: {
+                id: channelId,
+                type: 'web_hook',
+                address: webhookUrl,
+                expiration: expiration.toString(),
+              },
+            });
+
+            // Update webhook details
+            await storage.updateUserIntegration(integration.userId, {
+              googleCalendarWebhookChannelId: channelId,
+              googleCalendarWebhookResourceId: watchResponse.data.resourceId || undefined,
+              googleCalendarWebhookExpiry: expiration,
+            });
+          } catch (renewError: any) {
+            // Webhook renewal failed - bidirectional sync will stop working for this user
+          }
+        }
+      }
+    } catch (error: any) {
+      // Renewal check failed
+    }
+  }
+
+  // Run webhook renewal check every 24 hours
+  setInterval(renewWebhooksIfNeeded, 24 * 60 * 60 * 1000);
+
+  // Run initial check 1 minute after startup
+  setTimeout(renewWebhooksIfNeeded, 60 * 1000);
+
+  // ============================================================================
+  // CATEGORY MANAGEMENT ROUTES
+  // ============================================================================
+
+  // Get all categories (admin only)
+  app.get('/api/categories', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const projectId = req.query.projectId as string | undefined;
+      const tenantId = req.user.tenantId;
+      const categories = await storage.getAllCategories(tenantId, projectId);
+      res.json({ categories });
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch categories' });
+    }
+  });
+
+  // Get active categories (all authenticated users)
+  app.get('/api/categories/active', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const projectId = req.query.projectId as string | undefined;
+      const categories = await storage.getActiveCategories(tenantId, projectId);
+      res.json({ categories });
+    } catch (error: any) {
+      console.error('Error fetching active categories:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch categories' });
+    }
+  });
+
+  // Create category (admin only)
+  app.post('/api/categories', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const validation = insertCategorySchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const category = await storage.createCategory(validation.data);
+      res.json({ category });
+    } catch (error: any) {
+      console.error('Error creating category:', error);
+      res.status(500).json({ message: error.message || 'Failed to create category' });
+    }
+  });
+
+  // Update category (admin only)
+  app.put('/api/categories/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validation = insertCategorySchema.partial().safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const category = await storage.updateCategory(id, validation.data);
+      res.json({ category });
+    } catch (error: any) {
+      console.error('Error updating category:', error);
+      res.status(500).json({ message: error.message || 'Failed to update category' });
+    }
+  });
+
+  // Delete category (admin only)
+  app.delete('/api/categories/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteCategory(id);
+      res.json({ message: 'Category deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting category:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete category' });
+    }
+  });
+
+  // ============================================================================
+  // STATUS MANAGEMENT ROUTES
+  // ============================================================================
+
+  // Get all statuses (all authenticated users)
+  app.get('/api/statuses', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const statuses = await storage.getAllStatuses(tenantId);
+      res.json({ statuses });
+    } catch (error: any) {
+      console.error('Error fetching statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch statuses' });
+    }
+  });
+
+  // Get active statuses (all authenticated users)
+  app.get('/api/statuses/active', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const statuses = await storage.getActiveStatuses(tenantId);
+      res.json({ statuses });
+    } catch (error: any) {
+      console.error('Error fetching active statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch statuses' });
+    }
+  });
+
+  // Create status (admin only)
+  app.post('/api/statuses', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const validation = insertStatusSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: 'Validation failed',
+          errors: validation.error.errors 
+        });
+      }
+
+      const status = await storage.createStatus(validation.data);
+      res.json({ status });
+    } catch (error: any) {
+      console.error('Error creating status:', error);
+      res.status(500).json({ message: error.message || 'Failed to create status' });
+    }
+  });
+
+  // Update status (admin only)
+  app.put('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      // Require all fields when updating - all 4 color fields must be provided
+      const validation = insertStatusSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: 'Validation failed',
+          errors: validation.error.errors 
+        });
+      }
+
+      const status = await storage.updateStatus(id, validation.data);
+      res.json({ status });
+    } catch (error: any) {
+      console.error('Error updating status:', error);
+      res.status(500).json({ message: error.message || 'Failed to update status' });
+    }
+  });
+
+  // Delete status (admin only)
+  app.delete('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteStatus(id);
+      res.json({ message: 'Status deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting status:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete status' });
+    }
+  });
+
+  // Reorder statuses (admin only)
+  app.post('/api/statuses/reorder', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { updates } = req.body;
+      
+      if (!Array.isArray(updates)) {
+        return res.status(400).json({ message: 'Updates must be an array' });
+      }
+
+      // Validate each update has id and displayOrder
+      for (const update of updates) {
+        if (!update.id || typeof update.displayOrder !== 'number') {
+          return res.status(400).json({ message: 'Each update must have id and displayOrder' });
+        }
+      }
+
+      await storage.reorderStatuses(updates);
+      res.json({ message: 'Statuses reordered successfully' });
+    } catch (error: any) {
+      console.error('Error reordering statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to reorder statuses' });
+    }
+  });
+
+  // Seed default statuses (admin only) - one-time setup
+  app.post('/api/statuses/seed', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const existingStatuses = await storage.getAllStatuses(tenantId);
+      if (existingStatuses.length > 0) {
+        return res.status(400).json({ message: 'Statuses already exist. Clear the database first if you want to re-seed.' });
+      }
+
+      const defaultStatuses = [
+        {
+          name: '1 – Contacted',
+          displayOrder: 1,
+          lightBgColor: '#dbeafe',
+          lightTextColor: '#1e40af',
+          darkBgColor: '#1e3a8a',
+          darkTextColor: '#bfdbfe',
+          isActive: true,
+        },
+        {
+          name: '2 – Interested',
+          displayOrder: 2,
+          lightBgColor: '#fef3c7',
+          lightTextColor: '#92400e',
+          darkBgColor: '#78350f',
+          darkTextColor: '#fef3c7',
+          isActive: true,
+        },
+        {
+          name: '3 – Sample Sent',
+          displayOrder: 3,
+          lightBgColor: '#e0e7ff',
+          lightTextColor: '#3730a3',
+          darkBgColor: '#312e81',
+          darkTextColor: '#c7d2fe',
+          isActive: true,
+        },
+        {
+          name: '4 – Follow-Up',
+          displayOrder: 4,
+          lightBgColor: '#fed7aa',
+          lightTextColor: '#9a3412',
+          darkBgColor: '#7c2d12',
+          darkTextColor: '#fed7aa',
+          isActive: true,
+        },
+        {
+          name: '5 – Closed Won',
+          displayOrder: 5,
+          lightBgColor: '#d1fae5',
+          lightTextColor: '#065f46',
+          darkBgColor: '#064e3b',
+          darkTextColor: '#a7f3d0',
+          isActive: true,
+        },
+        {
+          name: '6 – Closed Lost',
+          displayOrder: 6,
+          lightBgColor: '#fee2e2',
+          lightTextColor: '#991b1b',
+          darkBgColor: '#7f1d1d',
+          darkTextColor: '#fecaca',
+          isActive: true,
+        },
+        {
+          name: '7 – Warm',
+          displayOrder: 7,
+          lightBgColor: '#fef9c3',
+          lightTextColor: '#854d0e',
+          darkBgColor: '#78350f',
+          darkTextColor: '#fef9c3',
+          isActive: true,
+        },
+      ];
+
+      const createdStatuses = [];
+      for (const statusData of defaultStatuses) {
+        const status = await storage.createStatus(statusData);
+        createdStatuses.push(status);
+      }
+
+      res.json({ 
+        message: 'Default statuses seeded successfully',
+        statuses: createdStatuses 
+      });
+    } catch (error: any) {
+      console.error('Error seeding statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to seed statuses' });
+    }
+  });
+
+  // ============================================================================
+  // SAVED EXCLUSIONS ROUTES
+  // ============================================================================
+
+  // Get all saved exclusions
+  app.get('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const exclusions = await storage.getAllSavedExclusions();
+      res.json({ exclusions });
+    } catch (error: any) {
+      console.error('Error fetching exclusions:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
+    }
+  });
+
+  // Get exclusions by type
+  app.get('/api/exclusions/:type', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { type } = req.params;
+      if (type !== 'keyword' && type !== 'place_type') {
+        return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
+      }
+      const exclusions = await storage.getSavedExclusionsByType(type);
+      res.json({ exclusions });
+    } catch (error: any) {
+      console.error('Error fetching exclusions by type:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
+    }
+  });
+
+  // Create new exclusion
+  app.post('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { type, value } = req.body;
+      if (!type || !value) {
+        return res.status(400).json({ message: 'Type and value are required' });
+      }
+      if (type !== 'keyword' && type !== 'place_type') {
+        return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
+      }
+      const exclusion = await storage.createSavedExclusion({ type, value: value.toLowerCase().trim() });
+      res.json({ exclusion });
+    } catch (error: any) {
+      console.error('Error creating exclusion:', error);
+      res.status(500).json({ message: error.message || 'Failed to create exclusion' });
+    }
+  });
+
+  // Delete exclusion
+  app.delete('/api/exclusions/:id', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSavedExclusion(id);
+      res.json({ message: 'Exclusion deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting exclusion:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete exclusion' });
+    }
+  });
+
+  // Update user's active exclusions
+  app.put('/api/user/active-exclusions', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { activeKeywords = [], activeTypes = [] } = req.body;
+      const prefs = await storage.updateUserActiveExclusions(userId, activeKeywords, activeTypes);
+      res.json({ preferences: prefs });
+    } catch (error: any) {
+      console.error('Error updating active exclusions:', error);
+      res.status(500).json({ message: error.message || 'Failed to update active exclusions' });
+    }
+  });
+
+  // ============================================================================
+  // GOOGLE MAPS SEARCH ROUTES
+  // ============================================================================
+
+  // Get all search history (global, newest first)
+  app.get('/api/maps/search-history', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const history = await storage.getAllSearchHistory();
+      res.json({ history });
+    } catch (error: any) {
+      console.error('Error fetching search history:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch search history' });
+    }
+  });
+
+  // Delete search history entry
+  app.delete('/api/maps/search-history/:id', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSearchHistory(id);
+      res.json({ message: 'Search history entry deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting search history:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete search history' });
+    }
+  });
+
+  // Get last selected category for Map Search
+  app.get('/api/maps/last-category', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
+      const lastCategory = await storage.getLastCategory(userId, tenantId);
+      res.json({ category: lastCategory || 'Pets' }); // Default to 'Pets'
+    } catch (error: any) {
+      console.error('Error fetching last category:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch last category' });
+    }
+  });
+
+  // Set last selected category for Map Search
+  app.post('/api/maps/last-category', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
+      const { category } = req.body;
+
+      if (!category) {
+        return res.status(400).json({ message: 'Category is required' });
+      }
+
+      await storage.setLastCategory(userId, tenantId, category);
+      res.json({ message: 'Last category saved successfully', category });
+    } catch (error: any) {
+      console.error('Error saving last category:', error);
+      res.status(500).json({ message: error.message || 'Failed to save last category' });
+    }
+  });
+
+  // Get selected category for CRM filtering
+  app.get('/api/user/selected-category', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
+      const selectedCategory = await storage.getSelectedCategory(userId, tenantId);
+      res.json({ category: selectedCategory });
+    } catch (error: any) {
+      console.error('Error fetching selected category:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch selected category' });
+    }
+  });
+
+  // Set selected category for CRM filtering
+  app.post('/api/user/selected-category', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = (req.user as any).tenantId;
+      const { category } = req.body;
+
+      if (!category) {
+        return res.status(400).json({ message: 'Category is required' });
+      }
+
+      await storage.setSelectedCategory(userId, tenantId, category);
+      res.json({ message: 'Selected category saved successfully', category });
+    } catch (error: any) {
+      console.error('Error saving selected category:', error);
+      res.status(500).json({ message: error.message || 'Failed to save selected category' });
+    }
+  });
+
+  // Search for places using Google Maps API
+  app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { query, location, excludedKeywords, excludedTypes, category, pageToken } = req.body;
+      const tenantId = (req.user as any).tenantId;
+
+      if (!query) {
+        return res.status(400).json({ message: 'Search query is required' });
+      }
+
+      // Parse location into city, state, country
+      const locationParts = location.split(',').map((s: string) => s.trim());
+      const city = locationParts[0] || '';
+      const state = locationParts[1] || '';
+      const country = locationParts[2] || '';
+
+      // Parse excluded keywords from comma-separated string or array
+      let excludedKeywordsArray: string[] = [];
+      if (typeof excludedKeywords === 'string' && excludedKeywords.trim()) {
+        excludedKeywordsArray = excludedKeywords
+          .split(',')
+          .map((k: string) => k.trim().toLowerCase())
+          .filter((k: string) => k.length > 0);
+      } else if (Array.isArray(excludedKeywords)) {
+        excludedKeywordsArray = excludedKeywords
+          .map((k: string) => k.trim().toLowerCase())
+          .filter((k: string) => k.length > 0);
+      }
+
+      // Parse excluded types from comma-separated string or array
+      let excludedTypesArray: string[] = [];
+      if (typeof excludedTypes === 'string' && excludedTypes.trim()) {
+        excludedTypesArray = excludedTypes
+          .split(',')
+          .map((k: string) => k.trim().toLowerCase().replace(/\s+/g, '_'))
+          .filter((k: string) => k.length > 0);
+      } else if (Array.isArray(excludedTypes)) {
+        excludedTypesArray = excludedTypes
+          .map((k: string) => k.trim().toLowerCase().replace(/\s+/g, '_'))
+          .filter((k: string) => k.length > 0);
+      }
+
+      // Record this search in history only for new searches (not pagination)
+      if (!pageToken) {
+        if (tenantId) {
+          await storage.recordSearch(tenantId, query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
+        } else {
+          console.warn('[Map Search] Skipping search history recording - no tenant ID found in session');
+        }
+      }
+
+      // Get search results from Google Maps with API-level type filtering and pagination
+      const searchResponse = await googleMaps.searchPlaces(query, location, excludedTypesArray, pageToken);
+
+      // Check which place_ids are already imported
+      const placeIds = searchResponse.results.map(r => r.place_id);
+      const importedPlaceIds = await storage.checkImportedPlaces(placeIds);
+
+      // Filter out already imported places
+      let filteredResults = searchResponse.results.filter(r => !importedPlaceIds.has(r.place_id));
+      const duplicateCount = searchResponse.results.length - filteredResults.length;
+
+      // Filter out results containing excluded keywords (backend filtering)
+      let excludedCount = 0;
+      if (excludedKeywordsArray.length > 0) {
+        const beforeExclusionCount = filteredResults.length;
+        filteredResults = filteredResults.filter(place => {
+          const placeName = place.name?.toLowerCase() || '';
+          // Check if place name contains any excluded keyword
+          return !excludedKeywordsArray.some(keyword => placeName.includes(keyword));
+        });
+        excludedCount = beforeExclusionCount - filteredResults.length;
+      }
+
+      res.json({ 
+        results: filteredResults,
+        totalResults: searchResponse.results.length,
+        duplicateCount,
+        excludedCount,
+        nextPageToken: searchResponse.nextPageToken
+      });
+    } catch (error: any) {
+      console.error('Error searching places:', error);
+      res.status(500).json({ message: error.message || 'Failed to search places' });
+    }
+  });
+
+  // Get place details
+  app.get('/api/maps/place/:placeId', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { placeId } = req.params;
+
+      if (!placeId) {
+        return res.status(400).json({ message: 'Place ID is required' });
+      }
+
+      const details = await googleMaps.getPlaceDetails(placeId);
+
+      if (!details) {
+        return res.status(404).json({ message: 'Place not found' });
+      }
+
+      res.json({ place: details });
+    } catch (error: any) {
+      console.error('Error fetching place details:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch place details' });
+    }
+  });
+
+  // Save place to Store Database Google Sheet
+  // Reverse geocode coordinates to get location details
+  app.post('/api/maps/reverse-geocode', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { lat, lng } = req.body;
+
+      if (lat === undefined || lng === undefined) {
+        return res.status(400).json({ message: 'Latitude and longitude are required' });
+      }
+
+      const result = await googleMaps.reverseGeocode(lat, lng);
+
+      if (!result) {
+        return res.status(404).json({ message: 'Location not found' });
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error reverse geocoding:', error);
+      res.status(500).json({ message: error.message || 'Failed to reverse geocode location' });
+    }
+  });
+
+  app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { placeId, category, projectId } = req.body;
+
+      if (!placeId || !category) {
+        return res.status(400).json({ message: 'Place ID and category are required' });
+      }
+
+      // Get place details from Google Maps
+      const placeDetails = await googleMaps.getPlaceDetails(placeId);
+
+      if (!placeDetails) {
+        return res.status(404).json({ message: 'Place not found' });
+      }
+
+      // Parse address into street, city, state, zip components for separate CRM columns
+      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
+
+      // Auto-create category if it doesn't exist (frictionless category creation)
+      const tenantId = (req.user as any).tenantId;
+      if (category && category.trim() && tenantId) {
+        await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
+      }
+
+      // Find Store Database sheet for this category
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store Database sheet not found. Please connect a Google Sheet first.' });
+      }
+
+      // Format hours more concisely - just show if open and basic hours
+      const formatHours = (weekdayText?: string[]): string => {
+        if (!weekdayText || weekdayText.length === 0) return '';
+        // Just take the first entry as a sample
+        return weekdayText[0] || '';
+      };
+
+      // Read Store Database headers to get column positions (header-based writing)
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      
+      if (!storeRows || storeRows.length === 0) {
+        return res.status(500).json({ message: 'Store Database sheet is empty or has no headers' });
+      }
+
+      // CRITICAL: Filter out empty headers to prevent sheet pollution
+      const allHeaders = storeRows[0];
+      const headers = allHeaders.filter(h => h && h.trim() !== '');
+      
+      // Find column indices by header name (case-insensitive)
+      const findColumnIndex = (columnName: string) => 
+        headers.findIndex((h: string) => h.toLowerCase() === columnName.toLowerCase());
+
+      const nameIndex = findColumnIndex('name');
+      const typeIndex = findColumnIndex('type');
+      const linkIndex = findColumnIndex('link');
+      const memberSinceIndex = findColumnIndex('member since');
+      const addressIndex = findColumnIndex('address');
+      const cityIndex = findColumnIndex('city');
+      const stateIndex = findColumnIndex('state');
+      const zipIndex = findColumnIndex('zip');
+      const phoneIndex = findColumnIndex('phone');
+      const websiteIndex = findColumnIndex('website');
+      const emailIndex = findColumnIndex('email');
+      const followersIndex = findColumnIndex('followers');
+      const tagsIndex = findColumnIndex('tags');
+      const hoursIndex = findColumnIndex('hours');
+      const dbaIndex = findColumnIndex('dba');
+      const vibeScoreIndex = findColumnIndex('vibe score');
+      const salesReadyIndex = findColumnIndex('sales-ready summary');
+      const agentNameIndex = findColumnIndex('agent name');
+      const openIndex = findColumnIndex('open');
+      const categoryIndex = findColumnIndex('category');
+
+      // Build row dynamically based on actual header positions
+      const row = new Array(headers.length).fill('');
+      
+      if (nameIndex !== -1) row[nameIndex] = placeDetails.name || '';
+      if (typeIndex !== -1) row[typeIndex] = placeDetails.types?.[0] || '';
+      if (linkIndex !== -1) row[linkIndex] = placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeDetails.place_id}`;
+      if (addressIndex !== -1) row[addressIndex] = street;
+      if (cityIndex !== -1) row[cityIndex] = city;
+      if (stateIndex !== -1) row[stateIndex] = state;
+      if (zipIndex !== -1) row[zipIndex] = zip;
+      if (phoneIndex !== -1) row[phoneIndex] = placeDetails.formatted_phone_number || placeDetails.international_phone_number || '';
+      if (websiteIndex !== -1) row[websiteIndex] = placeDetails.website || '';
+      if (hoursIndex !== -1) row[hoursIndex] = formatHours(placeDetails.opening_hours?.weekday_text);
+      if (openIndex !== -1) row[openIndex] = placeDetails.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE';
+      if (categoryIndex !== -1) row[categoryIndex] = category;
+
+      // Append to Google Sheet (header-based, works regardless of column order/additions)
+      const range = `${storeSheet.sheetName}!A:ZZ`;
+      await googleSheets.appendSheetData(storeSheet.spreadsheetId, range, [row]);
+
+      // Record this place_id to prevent duplicates in future searches
+      await storage.recordImportedPlace(placeId, req.user.tenantId);
+
+      res.json({ 
+        message: 'Place saved successfully to Store Database',
+        place: {
+          name: placeDetails.name,
+          address: placeDetails.formatted_address,
+          category
+        }
+      });
+    } catch (error: any) {
+      console.error('Error saving place to sheet:', error);
+      res.status(500).json({ message: error.message || 'Failed to save place to sheet' });
+    }
+  });
+
+  // Save place to Qualification Leads database table
+  app.post('/api/maps/save-to-qualification', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { placeId, category, projectId } = req.body;
+
+      if (!placeId) {
+        return res.status(400).json({ message: 'Place ID is required' });
+      }
+
+      if (!tenantId) {
+        return res.status(400).json({ message: 'Tenant context required' });
+      }
+
+      // Get place details from Google Maps
+      const placeDetails = await googleMaps.getPlaceDetails(placeId);
+
+      if (!placeDetails) {
+        return res.status(404).json({ message: 'Place not found' });
+      }
+
+      // Parse address into components
+      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
+
+      // Extract country from address_components if available
+      let country = 'United States';
+      let countryCode = 'US';
+      if (placeDetails.address_components) {
+        const countryComponent = placeDetails.address_components.find(
+          (c: any) => c.types?.includes('country')
+        );
+        if (countryComponent) {
+          country = countryComponent.long_name || country;
+          countryCode = countryComponent.short_name || countryCode;
+        }
+      }
+
+      // Auto-create category if it doesn't exist (frictionless category creation)
+      if (category && category.trim()) {
+        await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
+      }
+
+      // Create qualification lead from place data
+      const leadData = {
+        tenantId,
+        company: placeDetails.name || 'Unknown Business',
+        website: placeDetails.website || null,
+        category: category || null,
+        pocPhone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || null,
+        address: street || null,
+        city: city || null,
+        state: state || null,
+        postalCode: zip || null,
+        country,

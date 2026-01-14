@@ -1,0 +1,26 @@
+      res.json({ exclusions });
+    } catch (error: any) {
+      console.error('Error fetching exclusions by type:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
+    }
+  });
+
+  // Create new exclusion
+  app.post('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { type, value } = req.body;
+      if (!type || !value) {
+        return res.status(400).json({ message: 'Type and value are required' });
+      }
+      if (type !== 'keyword' && type !== 'place_type') {
+        return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
+      }
+      const exclusion = await storage.createSavedExclusion({ type, value: value.toLowerCase().trim() });
+      res.json({ exclusion });
+    } catch (error: any) {
+      console.error('Error creating exclusion:', error);
+      res.status(500).json({ message: error.message || 'Failed to create exclusion' });
+    }
+  });
+
+  // Delete exclusion
