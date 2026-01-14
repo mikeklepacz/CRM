@@ -8926,8 +8926,8 @@ IMPORTANT:
       if (websiteIdx === -1) return res.status(400).json({ message: "No Website column found" });
       let targetProjectName = null;
       if (projectId) {
-        const p = await storage.getProject(projectId);
-        if (p) targetProjectName = p.projectName;
+        const p = await storage.getTenantProjectById(projectId, tenantId);
+        if (p) targetProjectName = p.name;
       }
       const allNeedingCrawl = [];
       for (let i = 1; i < rows.length; i++) {
