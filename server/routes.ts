@@ -15131,7 +15131,7 @@ ${rawText}`;
             if (!details) return null;
 
             // Parse address components to get full state name (not abbreviation)
-            const addressComponents = googleMaps.parseAddressComponents(details.formatted_address);
+            const addressComponents = googleMaps.extractAddressFromComponents(details.address_components, details.formatted_address);
 
             return {
               place_id: details.place_id,
@@ -19939,18 +19939,8 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Parse address into street, city, state, zip components for separate CRM columns
-      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
+      const { street, city, state, zip, country } = googleMaps.extractAddressFromComponents(placeDetails.address_components, placeDetails.formatted_address);
 
-      // Extract country from address_components (English name)
-      let country = '';
-      if (placeDetails.address_components) {
-        const countryComponent = placeDetails.address_components.find(
-          (c: any) => c.types?.includes('country')
-        );
-        if (countryComponent) {
-          country = countryComponent.long_name || '';
-        }
-      }
 
       // Use project name as category if projectId is provided
       const tenantId = (req.user as any).tenantId;
@@ -20084,17 +20074,17 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Parse address into components
-      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
+      const { street, city, state, zip, country: extractedCountry } = googleMaps.extractAddressFromComponents(placeDetails.address_components, placeDetails.formatted_address);
 
-      // Extract country from address_components if available
-      let country = 'United States';
+      const country = extractedCountry || 'United States';
+      
+      // Extract country code for timezone lookup
       let countryCode = 'US';
       if (placeDetails.address_components) {
         const countryComponent = placeDetails.address_components.find(
           (c: any) => c.types?.includes('country')
         );
         if (countryComponent) {
-          country = countryComponent.long_name || country;
           countryCode = countryComponent.short_name || countryCode;
         }
       }

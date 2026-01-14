@@ -218,6 +218,7 @@ export function parseCityStateFromAddress(formattedAddress: string): { city: str
 }
 
 // Parse full address into street, city, state, zip components for CRM columns
+// DEPRECATED: Use extractAddressFromComponents for international support
 export function parseAddressComponents(formattedAddress: string): { 
   street: string; 
   city: string; 
@@ -246,6 +247,81 @@ export function parseAddressComponents(formattedAddress: string): {
   }
   
   return { street: '', city: '', state: '', zip: '' };
+}
+
+// Extract address components from Google's structured address_components array
+// Works globally for all countries - no parsing needed
+export function extractAddressFromComponents(
+  addressComponents: Array<{ long_name: string; short_name: string; types: string[] }> | undefined,
+  formattedAddress: string
+): { 
+  street: string; 
+  city: string; 
+  state: string;
+  zip: string;
+  country: string;
+} {
+  if (!addressComponents || addressComponents.length === 0) {
+    // Fallback to legacy parsing if no components available
+    const legacy = parseAddressComponents(formattedAddress);
+    return { ...legacy, country: '' };
+  }
+
+  let streetNumber = '';
+  let route = '';
+  let city = '';
+  let state = '';
+  let zip = '';
+  let country = '';
+
+  for (const component of addressComponents) {
+    const types = component.types || [];
+    
+    if (types.includes('street_number')) {
+      streetNumber = component.long_name;
+    } else if (types.includes('route')) {
+      route = component.long_name;
+    } else if (types.includes('locality') || types.includes('postal_town')) {
+      city = component.long_name;
+    } else if (types.includes('administrative_area_level_1')) {
+      // Use full state name for US, otherwise use what's provided
+      const stateAbbr = component.short_name;
+      state = STATE_ABBREVIATIONS[stateAbbr.toUpperCase()] || component.long_name;
+    } else if (types.includes('postal_code')) {
+      zip = component.long_name;
+    } else if (types.includes('country')) {
+      country = component.long_name;
+    }
+  }
+
+  // If no city found, try sublocality or neighborhood
+  if (!city) {
+    for (const component of addressComponents) {
+      const types = component.types || [];
+      if (types.includes('sublocality') || types.includes('sublocality_level_1') || types.includes('neighborhood')) {
+        city = component.long_name;
+        break;
+      }
+    }
+  }
+
+  // Build street address - handle both US (number first) and European (number last) formats
+  let street = '';
+  if (streetNumber && route) {
+    // Check if this might be a European address by looking at the country
+    const euroCountries = ['Germany', 'France', 'Netherlands', 'Belgium', 'Austria', 'Switzerland', 'Poland', 'Czech Republic', 'Spain', 'Italy'];
+    if (euroCountries.includes(country)) {
+      street = `${route} ${streetNumber}`;
+    } else {
+      street = `${streetNumber} ${route}`;
+    }
+  } else if (route) {
+    street = route;
+  } else if (streetNumber) {
+    street = streetNumber;
+  }
+
+  return { street, city, state, zip, country };
 }
 
 export interface ReverseGeocodeResult {
