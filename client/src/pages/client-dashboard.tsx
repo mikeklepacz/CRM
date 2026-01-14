@@ -98,11 +98,25 @@ const isCanadianProvince = (state: string): boolean => {
   return CANADIAN_PROVINCES.has(state);
 };
 
-// Helper function to check if a state value is valid (no numbers - filters out postal codes and garbage data)
+// Pre-compute normalized set of full state/province names for efficient lookup
+const KNOWN_STATE_NAMES_NORMALIZED = new Set(
+  Object.values(REGIONS).map(name => name.toLowerCase())
+);
+
+// Helper function to check if a state value is a recognized US state or Canadian province
+// This ensures international entries (Sweden, Netherlands) with non-standard state data
+// are controlled by the Country filter instead of the State filter
 const isValidStateName = (state: string): boolean => {
   if (!state) return false;
   // Reject any state name that contains numeric digits
-  return !/\d/.test(state);
+  if (/\d/.test(state)) return false;
+  // Only accept recognized US states and Canadian provinces
+  const trimmed = state.trim();
+  const upperState = trimmed.toUpperCase();
+  // Check if it's a known abbreviation (key in REGIONS)
+  if (REGIONS[upperState]) return true;
+  // Check if it's a known full state/province name (case-insensitive)
+  return KNOWN_STATE_NAMES_NORMALIZED.has(trimmed.toLowerCase());
 };
 
 // Helper function: Case-insensitive lookup for link value
@@ -1889,9 +1903,49 @@ export default function ClientDashboard() {
 
     // My Stores Only filter - apply ALL same filters as regular mode
     if (showMyStoresOnly) {
-      // CRITICAL: If any filter has 0 selections, show NOTHING (not everything)
-      if (allStates.length > 0 && selectedStates.size === 0) {
-        return []; // Show 0 rows when nothing is selected
+      // Helper to check if a row has a valid state (no numbers, recognized state name)
+      const stateColumnsMyStores = headers.filter((h: string) => {
+        const lower = h.toLowerCase();
+        return lower === 'state' || lower.includes(', state');
+      });
+      const countryColumnsMyStores = headers.filter((h: string) => h.toLowerCase() === 'country');
+      
+      const getRowStateNameMyStores = (row: any): string | null => {
+        for (const col of stateColumnsMyStores) {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            const valueStr = String(value).trim();
+            let stateAbbrev = valueStr;
+            if (valueStr.includes(',')) {
+              const parts = valueStr.split(',');
+              if (parts.length >= 2) {
+                stateAbbrev = parts[parts.length - 1].trim();
+              }
+            }
+            const stateName = getStateName(stateAbbrev);
+            if (stateName && isValidStateName(stateName)) {
+              return stateName;
+            }
+          }
+        }
+        return null;
+      };
+      
+      const getRowCountryMyStores = (row: any): string | null => {
+        for (const col of countryColumnsMyStores) {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            return String(value).trim();
+          }
+        }
+        return null;
+      };
+
+      // CRITICAL: If BOTH states and countries have 0 selections, show NOTHING
+      const hasNoStateSelectionsMyStores = allStates.length > 0 && selectedStates.size === 0;
+      const hasNoCountrySelectionsMyStores = allCountries.length > 0 && selectedCountries.size === 0;
+      if (hasNoStateSelectionsMyStores && hasNoCountrySelectionsMyStores) {
+        return []; // Show 0 rows when nothing is selected in either filter
       }
 
       // First filter by search
@@ -1924,47 +1978,48 @@ export default function ClientDashboard() {
         });
       }
 
-      // Then filter by states
-      if (selectedStates.size > 0 && selectedStates.size < allStates.length) {
-        const stateColumns = headers.filter((h: string) => {
-          const lower = h.toLowerCase();
-          return lower === 'state' || lower.includes(', state');
-        });
-        filtered = filtered.filter((row: any) => {
-          // Check if row's state is in selected states
-          return stateColumns.some((col: string) => {
-            const value = row[col];
-            if (value && String(value).trim()) {
-              const valueStr = String(value).trim();
-              let stateAbbrev = valueStr;
-
-              // If format is "City, ST", extract just the state abbreviation
-              if (valueStr.includes(',')) {
-                const parts = valueStr.split(',');
-                if (parts.length >= 2) {
-                  stateAbbrev = parts[parts.length - 1].trim();
-                }
-              }
-
-              const stateName = getStateName(stateAbbrev);
-              return stateName && selectedStates.has(stateName);
-            }
+      // NEW LOGIC: Rows with valid states use State filter, rows without valid states use Country filter
+      filtered = filtered.filter((row: any) => {
+        const rowStateName = getRowStateNameMyStores(row);
+        const rowCountry = getRowCountryMyStores(row);
+        
+        if (rowStateName) {
+          // Row has a valid state - apply State filter
+          if (selectedStates.size === 0) {
             return false;
-          });
-        });
-      }
+          }
+          if (selectedStates.size === allStates.length) {
+            return true;
+          }
+          return selectedStates.has(rowStateName);
+        } else {
+          // Row has NO valid state - apply Country filter only
+          if (selectedCountries.size === 0) {
+            return false;
+          }
+          if (selectedCountries.size === allCountries.length) {
+            return true;
+          }
+          return rowCountry ? selectedCountries.has(rowCountry) : false;
+        }
+      });
 
       // Filter by cities if we have cities available in selected states
-      // CRITICAL: If 0 cities are selected, show NOTHING. If some but not all are selected, filter.
       if (selectedStates.size > 0 && citiesInSelectedStates.length > 0) {
         if (selectedCities.size === 0) {
-          // NO cities selected = show NOTHING
-          return [];
-        } else if (selectedCities.size < citiesInSelectedStates.length) {
-          // Some cities selected but not all = filter to show only selected cities
-          const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
+          // NO cities selected = show NOTHING for rows with valid states
           filtered = filtered.filter((row: any) => {
-            return cityColumns.some((col: string) => {
+            const rowStateName = getRowStateNameMyStores(row);
+            return !rowStateName;
+          });
+        } else if (selectedCities.size < citiesInSelectedStates.length) {
+          const cityColumnsForFilterMyStores = headers.filter((h: string) => h.toLowerCase() === 'city');
+          filtered = filtered.filter((row: any) => {
+            const rowStateName = getRowStateNameMyStores(row);
+            if (!rowStateName) {
+              return true;
+            }
+            return cityColumnsForFilterMyStores.some((col: string) => {
               const value = row[col];
               if (value && String(value).trim()) {
                 return selectedCities.has(String(value).trim());
@@ -1973,21 +2028,6 @@ export default function ClientDashboard() {
             });
           });
         }
-        // If all cities are selected, don't filter (show everything)
-      }
-
-      // Filter by countries if we have countries available
-      if (allCountries.length > 0 && selectedCountries.size > 0 && selectedCountries.size < allCountries.length) {
-        const countryColumns = headers.filter((h: string) => h.toLowerCase() === 'country');
-        filtered = filtered.filter((row: any) => {
-          return countryColumns.some((col: string) => {
-            const value = row[col];
-            if (value && String(value).trim()) {
-              return selectedCountries.has(String(value).trim());
-            }
-            return false;
-          });
-        });
       }
 
       // Filter by status if any statuses are selected
@@ -2028,9 +2068,50 @@ export default function ClientDashboard() {
     }
 
     // Regular filtering (all stores mode and Show Unclaimed Shops mode)
-    // CRITICAL: If any filter has 0 selections, show NOTHING (not everything)
-    if (allStates.length > 0 && selectedStates.size === 0) {
-      return []; // Show 0 rows when nothing is selected
+    
+    // Helper to check if a row has a valid state (no numbers, recognized state name)
+    const stateColumns = headers.filter((h: string) => {
+      const lower = h.toLowerCase();
+      return lower === 'state' || lower.includes(', state');
+    });
+    const countryColumns = headers.filter((h: string) => h.toLowerCase() === 'country');
+    
+    const getRowStateName = (row: any): string | null => {
+      for (const col of stateColumns) {
+        const value = row[col];
+        if (value && String(value).trim()) {
+          const valueStr = String(value).trim();
+          let stateAbbrev = valueStr;
+          if (valueStr.includes(',')) {
+            const parts = valueStr.split(',');
+            if (parts.length >= 2) {
+              stateAbbrev = parts[parts.length - 1].trim();
+            }
+          }
+          const stateName = getStateName(stateAbbrev);
+          if (stateName && isValidStateName(stateName)) {
+            return stateName;
+          }
+        }
+      }
+      return null;
+    };
+    
+    const getRowCountry = (row: any): string | null => {
+      for (const col of countryColumns) {
+        const value = row[col];
+        if (value && String(value).trim()) {
+          return String(value).trim();
+        }
+      }
+      return null;
+    };
+
+    // CRITICAL: If BOTH states and countries have 0 selections, show NOTHING
+    const hasNoStateSelections = allStates.length > 0 && selectedStates.size === 0;
+    const hasNoCountrySelections = allCountries.length > 0 && selectedCountries.size === 0;
+    if (hasNoStateSelections && hasNoCountrySelections) {
+      return []; // Show 0 rows when nothing is selected in either filter
     }
 
     // First filter by search
@@ -2070,47 +2151,59 @@ export default function ClientDashboard() {
       });
     }
 
-    // Then filter by states
-    if (selectedStates.size > 0 && selectedStates.size < allStates.length) {
-      const stateColumns = headers.filter((h: string) => {
-        const lower = h.toLowerCase();
-        return lower === 'state' || lower.includes(', state');
-      });
-      filtered = filtered.filter((row: any) => {
-        // Check if row's state is in selected states
-        return stateColumns.some((col: string) => {
-          const value = row[col];
-          if (value && String(value).trim()) {
-            const valueStr = String(value).trim();
-            let stateAbbrev = valueStr;
-
-            // If format is "City, ST", extract just the state abbreviation
-            if (valueStr.includes(',')) {
-              const parts = valueStr.split(',');
-              if (parts.length >= 2) {
-                stateAbbrev = parts[parts.length - 1].trim();
-              }
-            }
-
-            const stateName = getStateName(stateAbbrev);
-            return stateName && selectedStates.has(stateName);
-          }
+    // NEW LOGIC: Rows with valid states use State filter, rows without valid states use Country filter
+    // This ensures Swedish/Dutch shops (with garbage state data) are controlled by Country filter
+    filtered = filtered.filter((row: any) => {
+      const rowStateName = getRowStateName(row);
+      const rowCountry = getRowCountry(row);
+      
+      if (rowStateName) {
+        // Row has a valid state - apply State filter
+        // If no states are selected, this row is excluded
+        if (selectedStates.size === 0) {
           return false;
-        });
-      });
-    }
+        }
+        // If all states are selected, include this row
+        if (selectedStates.size === allStates.length) {
+          return true;
+        }
+        // Otherwise, check if this state is selected
+        return selectedStates.has(rowStateName);
+      } else {
+        // Row has NO valid state - apply Country filter only
+        // If no countries are selected, this row is excluded
+        if (selectedCountries.size === 0) {
+          return false;
+        }
+        // If all countries are selected, include this row
+        if (selectedCountries.size === allCountries.length) {
+          return true;
+        }
+        // Otherwise, check if this country is selected
+        return rowCountry ? selectedCountries.has(rowCountry) : false;
+      }
+    });
 
     // Filter by cities if we have cities available in selected states
     // CRITICAL: If 0 cities are selected, show NOTHING. If some but not all are selected, filter.
     if (selectedStates.size > 0 && citiesInSelectedStates.length > 0) {
       if (selectedCities.size === 0) {
-        // NO cities selected = show NOTHING
-        return [];
-      } else if (selectedCities.size < citiesInSelectedStates.length) {
-        // Some cities selected but not all = filter to show only selected cities
-        const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
+        // NO cities selected = show NOTHING for rows with valid states
         filtered = filtered.filter((row: any) => {
-          return cityColumns.some((col: string) => {
+          const rowStateName = getRowStateName(row);
+          // Only exclude rows that have valid states (international rows without states are kept)
+          return !rowStateName;
+        });
+      } else if (selectedCities.size < citiesInSelectedStates.length) {
+        // Some cities selected but not all = filter to show only selected cities (for rows with valid states)
+        const cityColumnsForFilter = headers.filter((h: string) => h.toLowerCase() === 'city');
+        filtered = filtered.filter((row: any) => {
+          const rowStateName = getRowStateName(row);
+          // International rows without valid states are not affected by city filter
+          if (!rowStateName) {
+            return true;
+          }
+          return cityColumnsForFilter.some((col: string) => {
             const value = row[col];
             if (value && String(value).trim()) {
               return selectedCities.has(String(value).trim());
@@ -2120,20 +2213,6 @@ export default function ClientDashboard() {
         });
       }
       // If all cities are selected, don't filter (show everything)
-    }
-
-    // Filter by countries if we have countries available
-    if (allCountries.length > 0 && selectedCountries.size > 0 && selectedCountries.size < allCountries.length) {
-      const countryColumns = headers.filter((h: string) => h.toLowerCase() === 'country');
-      filtered = filtered.filter((row: any) => {
-        return countryColumns.some((col: string) => {
-          const value = row[col];
-          if (value && String(value).trim()) {
-            return selectedCountries.has(String(value).trim());
-          }
-          return false;
-        });
-      });
     }
 
     // Filter by status if any statuses are selected
