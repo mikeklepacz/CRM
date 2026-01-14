@@ -211,7 +211,16 @@ export default function MapSearch() {
   const { isModuleEnabled } = useModuleAccess();
   const projectContext = useOptionalProject();
   const currentProject = projectContext?.currentProject;
-  
+
+  // Sync category with project name
+  useEffect(() => {
+    if (currentProject?.name) {
+      setCategory(currentProject.name);
+      setCustomCategory(currentProject.name);
+      setCategoryLoaded(true); // Prevent lastCategory from overriding
+    }
+  }, [currentProject?.name]);
+
   // Parse mode from URL query params
   const isQualificationModeFromUrl = useMemo(() => {
     const params = new URLSearchParams(searchString);
@@ -317,15 +326,15 @@ export default function MapSearch() {
     queryKey: ["/api/maps/last-category"],
   });
 
-  // Initialize category from last selection (only once on load)
+  // Initialize category from last selection (only when no project is selected)
   useEffect(() => {
-    if (!categoryLoaded && lastCategoryData !== undefined) {
+    if (!categoryLoaded && lastCategoryData !== undefined && !currentProject?.name) {
       const savedCategory = lastCategoryData?.category || "";
       setCategory(savedCategory);
       setCustomCategory(savedCategory);
       setCategoryLoaded(true);
     }
-  }, [lastCategoryData, categoryLoaded]);
+  }, [lastCategoryData, categoryLoaded, currentProject?.name]);
 
   // Initialize active exclusions from user preferences
   useEffect(() => {
@@ -1058,8 +1067,8 @@ export default function MapSearch() {
           </CardHeader>
           <CardContent className="overflow-y-auto flex-1 p-4 pt-2">
             <form onSubmit={handleSearch} className="space-y-3">
-              {/* Row 1: Business Type, Category */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Row 1: Business Type, and Category if no project selected */}
+              <div className={`grid gap-3 ${currentProject ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
                 <div className="space-y-2">
                   <Label>Business Type *</Label>
                   <Popover open={businessTypeOpen} onOpenChange={setBusinessTypeOpen}>
@@ -1128,7 +1137,8 @@ export default function MapSearch() {
                   </Popover>
                 </div>
 
-                <div className="space-y-2">
+                {/* Category is hidden when project is selected (uses project name) */}
+                <div className={currentProject ? "hidden" : "space-y-2"}>
                   <Label htmlFor="category">
                     {isQualificationMode ? 'Category/Tag' : 'Category'}
                   </Label>
