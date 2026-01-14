@@ -19790,6 +19790,93 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Grid search for comprehensive metro area coverage
+  app.post('/api/maps/grid-search', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { query, location, excludedKeywords, excludedTypes, category } = req.body;
+      const tenantId = (req.user as any).tenantId;
+
+      if (!query) {
+        return res.status(400).json({ message: 'Search query is required' });
+      }
+
+      if (!location) {
+        return res.status(400).json({ message: 'Location is required for grid search' });
+      }
+
+      // Parse location into city, state, country
+      const locationParts = location.split(',').map((s: string) => s.trim());
+      const city = locationParts[0] || '';
+      const state = locationParts[1] || '';
+      const country = locationParts[2] || '';
+
+      // Parse excluded keywords from comma-separated string or array
+      let excludedKeywordsArray: string[] = [];
+      if (typeof excludedKeywords === 'string' && excludedKeywords.trim()) {
+        excludedKeywordsArray = excludedKeywords
+          .split(',').
+          map((k: string) => k.trim().toLowerCase())
+          .filter((k: string) => k.length > 0);
+      } else if (Array.isArray(excludedKeywords)) {
+        excludedKeywordsArray = excludedKeywords
+          .map((k: string) => k.trim().toLowerCase())
+          .filter((k: string) => k.length > 0);
+      }
+
+      // Parse excluded types from comma-separated string or array
+      let excludedTypesArray: string[] = [];
+      if (typeof excludedTypes === 'string' && excludedTypes.trim()) {
+        excludedTypesArray = excludedTypes
+          .split(',').
+          map((k: string) => k.trim().toLowerCase().replace(/\s+/g, '_'))
+          .filter((k: string) => k.length > 0);
+      } else if (Array.isArray(excludedTypes)) {
+        excludedTypesArray = excludedTypes
+          .map((k: string) => k.trim().toLowerCase().replace(/\s+/g, '_'))
+          .filter((k: string) => k.length > 0);
+      }
+
+      // Record this search in history
+      if (tenantId) {
+        await storage.recordSearch(tenantId, query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
+      }
+
+      // Perform grid search for comprehensive coverage
+      const gridResponse = await googleMaps.gridSearch(query, location, excludedTypesArray);
+
+      // Check which place_ids are already imported
+      const placeIds = gridResponse.results.map(r => r.place_id);
+      const importedPlaceIds = await storage.checkImportedPlaces(placeIds);
+
+      // Filter out already imported places
+      let filteredResults = gridResponse.results.filter(r => !importedPlaceIds.has(r.place_id));
+      const duplicateCount = gridResponse.results.length - filteredResults.length;
+
+      // Filter out results containing excluded keywords
+      let excludedCount = 0;
+      if (excludedKeywordsArray.length > 0) {
+        const beforeExclusionCount = filteredResults.length;
+        filteredResults = filteredResults.filter(place => {
+          const placeName = place.name?.toLowerCase() || '';
+          return !excludedKeywordsArray.some(keyword => placeName.includes(keyword));
+        });
+        excludedCount = beforeExclusionCount - filteredResults.length;
+      }
+
+      res.json({ 
+        results: filteredResults,
+        totalResults: gridResponse.results.length,
+        duplicateCount,
+        excludedCount,
+        totalZones: gridResponse.totalZones,
+        gridDuplicatesRemoved: gridResponse.duplicatesRemoved
+      });
+    } catch (error: any) {
+      console.error('Error in grid search:', error);
+      res.status(500).json({ message: error.message || 'Failed to perform grid search' });
+    }
+  });
+
   // Get place details
   app.get('/api/maps/place/:placeId', isAuthenticatedCustom, async (req, res) => {
     try {

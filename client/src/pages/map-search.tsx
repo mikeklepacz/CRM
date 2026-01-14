@@ -270,6 +270,12 @@ export default function MapSearch() {
   const [selectedPlaces, setSelectedPlaces] = useState<Set<string>>(new Set());
   const [lastSearchParams, setLastSearchParams] = useState<LastSearchParams | null>(null);
   
+  // Grid search state
+  const [gridSearchInfo, setGridSearchInfo] = useState<{
+    totalZones: number;
+    gridDuplicatesRemoved: number;
+  } | null>(null);
+  
   // Ref for scroll container
   const resultsContainerRef = useRef<HTMLDivElement>(null);
   
@@ -571,14 +577,23 @@ export default function MapSearch() {
       setSearchResults([]);
       setNextPageToken(null);
       setSelectedPlaces(new Set());
+      setGridSearchInfo(null);
       
-      return await apiRequest("POST", "/api/maps/search", params);
+      // Use grid search for comprehensive metro area coverage
+      return await apiRequest("POST", "/api/maps/grid-search", params);
     },
     onSuccess: async (data) => {
       setSearchResults(data.results || []);
-      setNextPageToken(data.nextPageToken || null);
+      // Grid search doesn't use pagination - it returns all results
+      setNextPageToken(null);
       setDuplicateCount(data.duplicateCount || 0);
       const excludedCount = data.excludedCount || 0;
+      
+      // Store grid search info for display (even for single zone)
+      setGridSearchInfo({
+        totalZones: data.totalZones || 1,
+        gridDuplicatesRemoved: data.gridDuplicatesRemoved || 0,
+      });
       
       // Save the selected category as the last used category
       const effectiveCategory = isQualificationMode ? customCategory.trim() : category;
@@ -600,19 +615,25 @@ export default function MapSearch() {
       } else {
         let description = '';
         const parts = [];
+        if (data.totalZones && data.totalZones > 1) {
+          parts.push(`searched ${data.totalZones} zones`);
+        }
         if (data.duplicateCount > 0) {
-          parts.push(`${data.duplicateCount} duplicate${data.duplicateCount > 1 ? 's' : ''}`);
+          parts.push(`${data.duplicateCount} already imported`);
         }
         if (excludedCount > 0) {
           parts.push(`${excludedCount} excluded`);
         }
-        if (parts.length > 0) {
-          description = `${parts.join(', ')} filtered out`;
-          toast({
-            title: `${data.results.length} new results`,
-            description,
-          });
+        if (data.gridDuplicatesRemoved > 0) {
+          parts.push(`${data.gridDuplicatesRemoved} zone overlaps removed`);
         }
+        if (parts.length > 0) {
+          description = parts.join(', ');
+        }
+        toast({
+          title: `Found ${data.results.length} new results`,
+          description: description || undefined,
+        });
       }
     },
     onError: (error: Error) => {
@@ -1595,7 +1616,7 @@ export default function MapSearch() {
                 {searchMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Searching...
+                    Searching area... (this may take a moment)
                   </>
                 ) : (
                   <>
@@ -1632,10 +1653,18 @@ export default function MapSearch() {
                     )}
                     {duplicateCount > 0 && (
                       <span className="text-sm font-normal text-muted-foreground ml-2">
-                        ({duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''} filtered)
+                        ({duplicateCount} already imported)
                       </span>
                     )}
                   </h2>
+                  {gridSearchInfo && gridSearchInfo.totalZones > 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      Comprehensive search: {gridSearchInfo.totalZones} zones searched
+                      {gridSearchInfo.gridDuplicatesRemoved > 0 && (
+                        <span>, {gridSearchInfo.gridDuplicatesRemoved} overlapping results merged</span>
+                      )}
+                    </p>
+                  )}
                   <p className="text-muted-foreground text-sm">
                     {showCheckboxes 
                       ? "Select businesses and use the export bar to save to your database" 
