@@ -19854,6 +19854,17 @@ Use this store information to provide context-aware responses. When helping draf
       // Parse address into street, city, state, zip components for separate CRM columns
       const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
 
+      // Extract country from address_components (English name)
+      let country = '';
+      if (placeDetails.address_components) {
+        const countryComponent = placeDetails.address_components.find(
+          (c: any) => c.types?.includes('country')
+        );
+        if (countryComponent) {
+          country = countryComponent.long_name || '';
+        }
+      }
+
       // Use project name as category if projectId is provided
       const tenantId = (req.user as any).tenantId;
       let effectiveCategory = category;
@@ -19924,6 +19935,7 @@ Use this store information to provide context-aware responses. When helping draf
       const agentNameIndex = findColumnIndex('agent name');
       const openIndex = findColumnIndex('open');
       const categoryIndex = findColumnIndex('category');
+      const countryIndex = findColumnIndex('country');
 
       // Build row dynamically based on actual header positions
       const row = new Array(headers.length).fill('');
@@ -19940,6 +19952,7 @@ Use this store information to provide context-aware responses. When helping draf
       if (hoursIndex !== -1) row[hoursIndex] = formatHours(placeDetails.opening_hours?.weekday_text);
       if (openIndex !== -1) row[openIndex] = placeDetails.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE';
       if (categoryIndex !== -1) row[categoryIndex] = effectiveCategory;
+      if (countryIndex !== -1) row[countryIndex] = country;
 
       // Append to Google Sheet (header-based, works regardless of column order/additions)
       const range = `${storeSheet.sheetName}!A:ZZ`;
