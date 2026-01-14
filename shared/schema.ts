@@ -95,7 +95,8 @@ export const clients = pgTable("clients", {
   claimDate: timestamp("claim_date"),
   lastContactDate: timestamp("last_contact_date"), // Last time agent made contact (call, email, etc.)
   status: varchar("status", { length: 50 }).default('unassigned'), // unassigned, claimed, active, inactive
-  category: varchar("category", { length: 100 }), // Category filter (e.g., "Pets", "Cannabis") for team segregation
+  category: varchar("category", { length: 100 }), // Category filter (now synced from Project name)
+  country: varchar("country", { length: 100 }), // Country for international operations (e.g., "US", "EU")
   tags: text("tags").array().default(sql`ARRAY[]::text[]`),
   // Order tracking
   firstOrderDate: timestamp("first_order_date"),
@@ -342,10 +343,11 @@ export const userPreferences = pgTable("user_preferences", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Saved exclusions for Map Search - global keywords and place types
+// Saved exclusions for Map Search - project-specific keywords and place types
 export const savedExclusions = pgTable("saved_exclusions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: 'cascade' }), // Project-specific exclusions
   type: varchar("type", { length: 20 }).notNull(), // 'keyword' or 'place_type'
   value: varchar("value").notNull(),
   createdAt: timestamp("created_at").defaultNow(),

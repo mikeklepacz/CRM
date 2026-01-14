@@ -5,19 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Trash2, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { useOptionalProject } from "@/contexts/project-context";
 import type { SearchHistory, SavedExclusion } from "@shared/schema";
 
 export default function MapSearchSettings() {
   const { toast } = useToast();
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
 
   // Fetch search history
   const { data: historyData, isLoading: historyLoading } = useQuery<{ history: SearchHistory[] }>({
     queryKey: ['/api/maps/search-history'],
   });
 
-  // Fetch saved exclusions
+  // Fetch saved exclusions (project-specific)
+  const exclusionsUrl = currentProject?.id 
+    ? `/api/exclusions?projectId=${currentProject.id}` 
+    : "/api/exclusions";
   const { data: exclusionsData, isLoading: exclusionsLoading } = useQuery<{ exclusions: SavedExclusion[] }>({
-    queryKey: ['/api/exclusions'],
+    queryKey: [exclusionsUrl],
   });
 
   // Delete search history mutation
@@ -47,7 +53,7 @@ export default function MapSearchSettings() {
       return apiRequest('DELETE', `/api/exclusions/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/exclusions'] });
+      queryClient.invalidateQueries({ queryKey: [exclusionsUrl] });
       toast({
         title: "Deleted",
         description: "Exclusion removed successfully",

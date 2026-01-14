@@ -19541,7 +19541,9 @@ Use this store information to provide context-aware responses. When helping draf
   // Get all saved exclusions
   app.get('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
     try {
-      const exclusions = await storage.getAllSavedExclusions();
+      const tenantId = req.user.tenantId;
+      const projectId = req.query.projectId as string | undefined;
+      const exclusions = await storage.getAllSavedExclusions(tenantId, projectId);
       res.json({ exclusions });
     } catch (error: any) {
       console.error('Error fetching exclusions:', error);
@@ -19556,7 +19558,9 @@ Use this store information to provide context-aware responses. When helping draf
       if (type !== 'keyword' && type !== 'place_type') {
         return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
       }
-      const exclusions = await storage.getSavedExclusionsByType(type);
+      const tenantId = req.user.tenantId;
+      const projectId = req.query.projectId as string | undefined;
+      const exclusions = await storage.getSavedExclusionsByType(tenantId, projectId, type);
       res.json({ exclusions });
     } catch (error: any) {
       console.error('Error fetching exclusions by type:', error);
@@ -19567,14 +19571,15 @@ Use this store information to provide context-aware responses. When helping draf
   // Create new exclusion
   app.post('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { type, value } = req.body;
+      const { type, value, projectId } = req.body;
       if (!type || !value) {
         return res.status(400).json({ message: 'Type and value are required' });
       }
       if (type !== 'keyword' && type !== 'place_type') {
         return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
       }
-      const exclusion = await storage.createSavedExclusion({ type, value: value.toLowerCase().trim() });
+      const tenantId = req.user.tenantId;
+      const exclusion = await storage.createSavedExclusion({ tenantId, projectId, type, value: value.toLowerCase().trim() });
       res.json({ exclusion });
     } catch (error: any) {
       console.error('Error creating exclusion:', error);
@@ -19835,8 +19840,8 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { placeId, category, projectId } = req.body;
 
-      if (!placeId || !category) {
-        return res.status(400).json({ message: 'Place ID and category are required' });
+      if (!placeId) {
+        return res.status(400).json({ message: 'Place ID is required' });
       }
 
       // Get place details from Google Maps
@@ -19849,10 +19854,23 @@ Use this store information to provide context-aware responses. When helping draf
       // Parse address into street, city, state, zip components for separate CRM columns
       const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
 
-      // Auto-create category if it doesn't exist (frictionless category creation)
+      // Use project name as category if projectId is provided
       const tenantId = (req.user as any).tenantId;
-      if (category && category.trim() && tenantId) {
-        await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
+      let effectiveCategory = category;
+      if (projectId) {
+        const project = await storage.getTenantProjectById(projectId, tenantId);
+        if (project) {
+          effectiveCategory = project.name;
+        }
+      }
+
+      if (!effectiveCategory) {
+        return res.status(400).json({ message: 'Category or valid projectId is required' });
+      }
+
+      // Auto-create category if it doesn't exist (frictionless category creation)
+      if (effectiveCategory && effectiveCategory.trim() && tenantId) {
+        await storage.getOrCreateCategoryByName(tenantId, effectiveCategory.trim(), projectId);
       }
 
       // Find Store Database sheet for this category
@@ -19921,7 +19939,7 @@ Use this store information to provide context-aware responses. When helping draf
       if (websiteIndex !== -1) row[websiteIndex] = placeDetails.website || '';
       if (hoursIndex !== -1) row[hoursIndex] = formatHours(placeDetails.opening_hours?.weekday_text);
       if (openIndex !== -1) row[openIndex] = placeDetails.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE';
-      if (categoryIndex !== -1) row[categoryIndex] = category;
+      if (categoryIndex !== -1) row[categoryIndex] = effectiveCategory;
 
       // Append to Google Sheet (header-based, works regardless of column order/additions)
       const range = `${storeSheet.sheetName}!A:ZZ`;
@@ -19935,7 +19953,7 @@ Use this store information to provide context-aware responses. When helping draf
         place: {
           name: placeDetails.name,
           address: placeDetails.formatted_address,
-          category
+          category: effectiveCategory
         }
       });
     } catch (error: any) {
@@ -19981,9 +19999,22 @@ Use this store information to provide context-aware responses. When helping draf
         }
       }
 
+      // Use project name as category if projectId is provided
+      let effectiveCategory = category;
+      if (projectId) {
+        const project = await storage.getTenantProjectById(projectId, tenantId);
+        if (project) {
+          effectiveCategory = project.name;
+        }
+      }
+
+      if (!effectiveCategory) {
+        return res.status(400).json({ message: 'Category or valid projectId is required' });
+      }
+
       // Auto-create category if it doesn't exist (frictionless category creation)
-      if (category && category.trim()) {
-        await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
+      if (effectiveCategory && effectiveCategory.trim()) {
+        await storage.getOrCreateCategoryByName(tenantId, effectiveCategory.trim(), projectId);
       }
 
       // Create qualification lead from place data
@@ -19991,7 +20022,7 @@ Use this store information to provide context-aware responses. When helping draf
         tenantId,
         company: placeDetails.name || 'Unknown Business',
         website: placeDetails.website || null,
-        category: category || null,
+        category: effectiveCategory || null,
         pocPhone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || null,
         address: street || null,
         city: city || null,
@@ -25665,6 +25696,60 @@ ${conversationContext}`;
       if (accentColor !== undefined) updates.accentColor = accentColor;
 
       const project = await storage.updateTenantProject(projectId, tenantId, updates);
+
+      // Sync category changes to Google Sheet if name was changed
+      if (name && name.trim() !== existing.name) {
+        const oldName = existing.name;
+        const newName = name.trim();
+        
+        try {
+          const sheets = await storage.getAllActiveGoogleSheets(tenantId);
+          const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+          
+          if (storeSheet && storeSheet.spreadsheetId && storeSheet.sheetName) {
+            // Read headers to find Category column index
+            const headerRange = `${storeSheet.sheetName}!1:1`;
+            const headerRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, headerRange);
+            
+            if (headerRows.length > 0) {
+              const headers = headerRows[0].map((h) => h?.toString().toLowerCase().trim());
+              const categoryIndex = headers.findIndex((h) => h === 'category');
+              
+              if (categoryIndex !== -1) {
+                // Read all data to find rows with matching category
+                const dataRange = `${storeSheet.sheetName}!A:${String.fromCharCode(65 + Math.min(headers.length - 1, 25))}`;
+                const allRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, dataRange);
+                
+                // Find rows where Category matches old project name
+                const categoryUpdates = [];
+                const categoryCol = String.fromCharCode(65 + categoryIndex);
+                
+                for (let i = 1; i < allRows.length; i++) {
+                  const row = allRows[i];
+                  const categoryValue = row[categoryIndex]?.toString().trim();
+                  
+                  if (categoryValue === oldName) {
+                    categoryUpdates.push({
+                      range: `${storeSheet.sheetName}!${categoryCol}${i + 1}`,
+                      values: [[newName]]
+                    });
+                  }
+                }
+                
+                // Batch update all matching rows
+                if (categoryUpdates.length > 0) {
+                  await googleSheets.batchUpdateSheetData(storeSheet.spreadsheetId, categoryUpdates);
+                  console.log(`Synced category rename from "${oldName}" to "${newName}" for ${categoryUpdates.length} rows in Google Sheet`);
+                }
+              }
+            }
+          }
+        } catch (syncError) {
+          console.error('Failed to sync category to Google Sheet:', syncError);
+          // Don't fail the project update if sync fails
+        }
+      }
+
       res.json({ project });
     } catch (error: any) {
       console.error('Error updating project:', error);

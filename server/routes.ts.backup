@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq, sql, inArray, and, desc, isNotNull, isNull, ne } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants } from "@shared/schema";
+import { eq, sql, inArray, and, or, desc, isNotNull, isNull, ne } from "drizzle-orm";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants, categories } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -17,6 +17,7 @@ import * as googleMaps from "./googleMaps";
 import * as commissionService from "./commission-service";
 import * as googleDrive from "./googleDrive";
 import { analyzeCallTranscript } from "./openai-reflection";
+import { analyzeTranscript as analyzeTranscriptQualification } from "./services/aiTranscriptAnalysis";
 import { validateElevenLabsSignature } from "./webhook-validation";
 import { handleTwilioCallStatus } from "./twilio-webhook";
 import { validateTwilioSignature } from "./twilio-signature-validation";
@@ -56,6 +57,9 @@ import { eventGateway } from "./services/events/gateway";
 import { generateProjectSpecsPdf, type TextElement, type ColorSwatch } from "./services/pdfBuilder";
 import JSZip from "jszip";
 import { callDispatcher } from "./call_dispatcher";
+import { analyzeTranscript } from "./services/aiTranscriptAnalysis";
+import { reconcileOrphanedCallSessions, startReconciliationWorker } from "./services/elevenLabsReconciliation";
+import { crawlWebsiteForEmail } from "./emailCrawler";
 
 const FLY_VOICE_PROXY_HEALTH_URL = process.env.FLY_VOICE_PROXY_HEALTH_URL || 'https://hemp-voice-proxy.fly.dev/health';
 
@@ -142,8 +146,8 @@ const sheetsCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 30000; // 30 seconds
 
 // Generate cache key from request parameters
-function generateCacheKey(userId: string, storeSheetId: string, trackerSheetId: string, category: string | null): string {
-  return `${userId}:${storeSheetId}:${trackerSheetId}:${category || 'all'}`;
+function generateCacheKey(userId: string, storeSheetId: string, trackerSheetId: string, category: string | null, projectId?: string): string {
+  return `${userId}:${storeSheetId}:${trackerSheetId}:${category || 'all'}:${projectId || 'all-projects'}`;
 }
 
 // Get cached data if still valid
@@ -1182,6 +1186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     agentId: z.string().min(1, "Agent ID is required"),
     description: z.string().optional(),
     isDefault: z.boolean().optional(),
+    projectId: z.string().optional().transform(val => val === "" ? null : val),
   });
 
   // Config endpoints (API key + Twilio number)
@@ -1297,7 +1302,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const agent = await storage.createElevenLabsAgent({ ...validation.data, tenantId: req.user.tenantId });
+      const agentData = {
+        ...validation.data,
+        tenantId: req.user.tenantId,
+        projectId: validation.data.projectId || null,
+      };
+      const agent = await storage.createElevenLabsAgent(agentData);
       res.json(agent);
     } catch (error: any) {
       console.error("Error creating ElevenLabs agent:", error);
@@ -1430,6 +1440,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sync agent audio settings from ElevenLabs API
+  app.post('/api/elevenlabs/agents/:id/sync-settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const tenantId = req.user.tenantId;
+      
+      // Get the local agent record
+      const localAgent = await storage.getElevenLabsAgent(id, tenantId);
+      if (!localAgent) {
+        return res.status(404).json({ error: 'Agent not found' });
+      }
+      
+      const config = await storage.getElevenLabsConfig(tenantId);
+      if (!config?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+      
+      // Fetch agent details from ElevenLabs
+      console.log(`[Agent Sync] Fetching settings for agent ${localAgent.agentId} from ElevenLabs...`);
+      const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${localAgent.agentId}`, {
+        headers: {
+          'xi-api-key': config.apiKey,
+        },
+      });
+      
+      const elData = response.data;
+      
+      // Extract audio settings from ElevenLabs response
+      const conversationConfig = elData.conversation_config || {};
+      const ttsConfig = conversationConfig.tts || {};
+      const sttConfig = conversationConfig.stt || {};
+      
+      // Map ElevenLabs response to our schema
+      const audioSettings = {
+        sttEncoding: sttConfig.encoding || sttConfig.input_format || 'pcm_s16le',
+        sttSampleRate: sttConfig.sample_rate || 16000,
+        ttsOutputFormat: ttsConfig.output_format || 'pcm_16000',
+        voiceId: ttsConfig.voice_id || elData.voice?.voice_id || null,
+        language: conversationConfig.agent?.language || elData.language || null,
+        lastSyncedAt: new Date(),
+      };
+      
+      console.log(`[Agent Sync] Extracted settings for ${localAgent.name}:`, audioSettings);
+      
+      // Update local database with synced settings
+      const updatedAgent = await storage.updateElevenLabsAgent(id, tenantId, audioSettings);
+      
+      res.json({
+        message: 'Settings synced successfully',
+        agent: updatedAgent,
+        syncedSettings: audioSettings,
+      });
+    } catch (error: any) {
+      console.error('[Agent Sync] Error syncing agent settings:', error.response?.data || error.message);
+      res.status(500).json({ error: error.response?.data?.detail?.message || error.message || 'Failed to sync agent settings' });
+    }
+  });
+
+  // Sync all agents' settings from ElevenLabs
+  app.post('/api/elevenlabs/sync-all-agent-settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      
+      const config = await storage.getElevenLabsConfig(tenantId);
+      if (!config?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+      
+      // Get all local agents
+      const agents = await storage.getAllElevenLabsAgents(tenantId);
+      const results = { synced: 0, failed: 0, errors: [] as string[] };
+      
+      for (const agent of agents) {
+        try {
+          console.log(`[Agent Sync] Syncing ${agent.name} (${agent.agentId})...`);
+          
+          const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${agent.agentId}`, {
+            headers: {
+              'xi-api-key': config.apiKey,
+            },
+          });
+          
+          const elData = response.data;
+          const conversationConfig = elData.conversation_config || {};
+          const ttsConfig = conversationConfig.tts || {};
+          const sttConfig = conversationConfig.stt || {};
+          
+          const audioSettings = {
+            sttEncoding: sttConfig.encoding || sttConfig.input_format || 'pcm_s16le',
+            sttSampleRate: sttConfig.sample_rate || 16000,
+            ttsOutputFormat: ttsConfig.output_format || 'pcm_16000',
+            voiceId: ttsConfig.voice_id || elData.voice?.voice_id || null,
+            language: conversationConfig.agent?.language || elData.language || null,
+            lastSyncedAt: new Date(),
+          };
+          
+          await storage.updateElevenLabsAgent(agent.id, tenantId, audioSettings);
+          results.synced++;
+          console.log(`[Agent Sync] ✓ Synced ${agent.name}`);
+        } catch (err: any) {
+          results.failed++;
+          results.errors.push(`${agent.name}: ${err.message}`);
+          console.error(`[Agent Sync] ✗ Failed to sync ${agent.name}:`, err.message);
+        }
+      }
+      
+      res.json({
+        message: `Synced ${results.synced}/${agents.length} agents`,
+        ...results,
+      });
+    } catch (error: any) {
+      console.error('[Agent Sync] Error syncing all agents:', error);
+      res.status(500).json({ error: error.message || 'Failed to sync agents' });
+    }
+  });
+
   // Sync phone numbers from ElevenLabs API
   app.post('/api/elevenlabs/sync-phone-numbers', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -1452,7 +1578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ message: 'No phone numbers found in ElevenLabs account', phoneNumbers: [] });
       }
 
-      // Store phone numbers in database
+      // Store phone numbers in database with their agent assignments from ElevenLabs
       let storedCount = 0;
       for (const phone of phoneNumbers) {
         try {
@@ -1460,6 +1586,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             phoneNumberId: phone.phone_number_id,
             phoneNumber: phone.number || phone.phone_number || '',
             label: phone.label || phone.name || null,
+            agentId: phone.agent_id || null,
             tenantId: req.user.tenantId,
           });
           storedCount++;
@@ -1468,29 +1595,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Assign first phone number to agents that don't have one yet
-      const agents = await storage.getAllElevenLabsAgents(req.user.tenantId);
-      let updatedCount = 0;
-
-      for (const agent of agents) {
-        if (!agent.phoneNumberId && phoneNumbers.length > 0) {
-          // Use the first phone number for agents without assigned numbers
-          await storage.updateElevenLabsAgent(agent.id, req.user.tenantId, {
-            phoneNumberId: phoneNumbers[0].phone_number_id,
-          });
-          updatedCount++;
+      // Update agents with their assigned phone number IDs from ElevenLabs
+      const allAgents = await storage.getAllElevenLabsAgents(req.user.tenantId);
+      const agentIdToDbId = new Map(allAgents.map(a => [a.agentId, a.id]));
+      
+      let agentUpdates = 0;
+      for (const phone of phoneNumbers) {
+        // ElevenLabs nests agent info in assigned_agent object
+        const assignedAgentId = phone.assigned_agent?.agent_id || phone.agent_id;
+        if (assignedAgentId && phone.phone_number_id) {
+          const dbAgentId = agentIdToDbId.get(assignedAgentId);
+          if (dbAgentId) {
+            try {
+              await storage.updateElevenLabsAgent(dbAgentId, req.user.tenantId, {
+                phoneNumberId: phone.phone_number_id,
+              });
+              agentUpdates++;
+              console.log(`[PhoneSync] Updated agent ${assignedAgentId} with phone number ${phone.phone_number_id}`);
+            } catch (err: any) {
+              console.error(`[PhoneSync] Failed to update agent ${assignedAgentId}:`, err.message);
+            }
+          } else {
+            console.log(`[PhoneSync] Agent ${assignedAgentId} not found in database for tenant`);
+          }
         }
       }
 
       res.json({
-        message: `Successfully synced ${phoneNumbers.length} phone number(s) and updated ${updatedCount} agent(s)`,
+        message: `Successfully synced ${phoneNumbers.length} phone number(s) from ElevenLabs (${agentUpdates} agent(s) updated)`,
         phoneNumbers: phoneNumbers.map((pn: any) => ({
-          phone_number: pn.phone_number,
+          phone_number: pn.phone_number || pn.number,
           phone_number_id: pn.phone_number_id,
           provider: pn.provider,
-          label: pn.label,
+          label: pn.label || pn.name,
+          agent_id: pn.agent_id,
         })),
-        updatedAgents: updatedCount,
       });
     } catch (error: any) {
       console.error('[PhoneSync] Error syncing phone numbers:', error.response?.data || error.message);
@@ -1528,7 +1667,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[ElevenLabs Webhook][DEBUG] =====================');
 
       // SECURITY: Validate webhook signature
-      const config = await storage.getElevenLabsConfig();
+      // Get tenantId from webhook metadata for config lookup
+      const webhookTenantId = payload.data?.metadata?.tenantId as string | undefined;
+      const config = webhookTenantId ? await storage.getElevenLabsConfig(webhookTenantId) : null;
       if (config?.webhookSecret) {
         const signature = req.headers['elevenlabs-signature'] as string | undefined;
         const rawBody = (req as any).rawBody;
@@ -1705,6 +1846,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.incrementCampaignCalls(target.campaignId, clientData.tenantId, callSuccessful ? 'successful' : 'failed');
             
             console.log(`Updated campaign target ${targetId} status to ${newStatus}`);
+            
+            // Update qualification lead if this was a lead call
+            if (target?.clientId) {
+              const client = await storage.getClient(target.clientId, clientData.tenantId);
+              if (client?.uniqueIdentifier?.startsWith('lead:')) {
+                const leadId = client.uniqueIdentifier.replace('lead:', '');
+                const leadData = client.data as any;
+                const leadStatus = callSuccessful ? 'completed' : 'failed';
+                await storage.updateQualificationLead(leadId, clientData.tenantId, {
+                  callStatus: leadStatus,
+                  callSessionId: conversationId,
+                  lastCallAt: new Date(),
+                  status: callSuccessful ? 'contacted' : 'new',
+                });
+                console.log(`Updated qualification lead ${leadId} call status to ${leadStatus}`);
+              }
+            }
           }
         }
       }
@@ -2024,6 +2182,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('Async error in OpenAI reflection:', err);
         });
         
+        // AUTO-TRIGGER QUALIFICATION ANALYSIS: Run campaign-specific transcript analysis
+        if (session?.id) {
+          analyzeTranscriptQualification(session.id, session.tenantId).catch(err => {
+            console.error('[Auto-Trigger] Error in qualification transcript analysis:', err.message);
+          });
+        }
+        
         // AUTO-TRIGGER KB ANALYSIS: Check if threshold is met for this agent
         (async () => {
           try {
@@ -2111,7 +2276,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get ElevenLabs configuration
-      const config = await storage.getElevenLabsConfig();
+      const tenantId = (req.user as any).tenantId;
+      const config = await storage.getElevenLabsConfig(tenantId);
       if (!config?.apiKey) {
         return res.status(500).json({ error: 'ElevenLabs API key not configured' });
       }
@@ -2213,6 +2379,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       
+      console.log('[DEBUG] GET /api/elevenlabs/agents - tenantId:', req.user.tenantId, 'userId:', userId);
+      
       // Check voice access (admin or explicit voice access)
       const isAdmin = await checkAdminAccess(user, req.user.tenantId);
       if (!isAdmin && !user?.hasVoiceAccess) {
@@ -2223,12 +2391,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const agents = await storage.getAllElevenLabsAgents(req.user.tenantId, projectId as string | undefined);
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(req.user.tenantId);
       
-      // Create a map of phone number IDs to phone numbers for quick lookup
-      const phoneMap = new Map(phoneNumbers.map(p => [p.phoneNumberId, p]));
+      // Create a map of phone number IDs to phone numbers for lookup
+      const phoneByIdMap = new Map(
+        phoneNumbers.map(p => [p.phoneNumberId, p])
+      );
       
       // Transform to snake_case for frontend compatibility and include phone number
       const transformedAgents = agents.map(agent => {
-        const phone = agent.phoneNumberId ? phoneMap.get(agent.phoneNumberId) : null;
+        // Look up phone by agent's stored phoneNumberId
+        const phone = agent.phoneNumberId ? phoneByIdMap.get(agent.phoneNumberId) : null;
         return {
           id: agent.id,
           name: agent.name,
@@ -2240,7 +2411,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           is_default: agent.isDefault,
         };
       });
-      
       res.json(transformedAgents);
     } catch (error: any) {
       console.error('Error fetching agents:', error);
@@ -2249,6 +2419,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get call sessions (history) with optional filtering
+  // Check if today is a blocked day for the current tenant (holidays/custom dates)
+  app.get('/api/voice/today-blocked', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = (req.user as any).tenantId;
+      const { isNoSendDay } = await import('./services/holidayCalendar');
+      const result = await isNoSendDay(new Date(), undefined, tenantId);
+      res.json({ blocked: result.blocked, reason: result.reason || null });
+    } catch (error: any) {
+      console.error('Error checking blocked day:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   app.get('/api/call-sessions', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
@@ -2647,48 +2830,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { scenario } = req.params;
       
       // Get BOTH sheets - Commission Tracker for status/agent, Store Database for business details
+      // Note: Sheets are now OPTIONAL - we can return just qualification leads if sheets not configured
       const commissionSheet = await storage.getGoogleSheetByPurpose('commissions', (req.user as any).tenantId);
       const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', (req.user as any).tenantId);
       
-      if (!commissionSheet || !storeSheet) {
-        return res.status(404).json({ error: 'Required Google Sheets not configured' });
-      }
-
-      // Read Commission Tracker data (has: Link, Status, Agent Name, Follow-Up Date, etc.)
-      const commissionRange = `${commissionSheet.sheetName}!A:ZZ`;
-      const commissionRows = await googleSheets.readSheetData(commissionSheet.spreadsheetId, commissionRange);
+      const hasSheetsConfigured = commissionSheet && storeSheet;
       
-      if (commissionRows.length === 0) {
-        return res.json([]);
-      }
-
-      // Parse Commission Tracker
-      const commissionHeaders = commissionRows[0];
-      const commissionData = commissionRows.slice(1).map((row: any[]) => {
-        const obj: any = {};
-        commissionHeaders.forEach((header: string, i: number) => {
-          obj[header] = row[i] || '';
-        });
-        return obj;
-      });
-
-      // Read Store Database (has: Name, Phone, Hours, State, Address, etc.)
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      // Read sheets data only if configured
+      let commissionData: any[] = [];
+      let storeData: any[] = [];
       
-      if (storeRows.length === 0) {
-        return res.json([]);
-      }
+      if (hasSheetsConfigured) {
+        // Read Commission Tracker data (has: Link, Status, Agent Name, Follow-Up Date, etc.)
+        const commissionRange = `${commissionSheet!.sheetName}!A:ZZ`;
+        const commissionRows = await googleSheets.readSheetData(commissionSheet!.spreadsheetId, commissionRange);
+        
+        if (commissionRows.length > 0) {
+          // Parse Commission Tracker
+          const commissionHeaders = commissionRows[0];
+          commissionData = commissionRows.slice(1).map((row: any[]) => {
+            const obj: any = {};
+            commissionHeaders.forEach((header: string, i: number) => {
+              obj[header] = row[i] || '';
+            });
+            return obj;
+          });
+        }
 
-      // Parse Store Database
-      const storeHeaders = storeRows[0];
-      const storeData = storeRows.slice(1).map((row: any[]) => {
-        const obj: any = {};
-        storeHeaders.forEach((header: string, i: number) => {
-          obj[header] = row[i] || '';
-        });
-        return obj;
-      });
+        // Read Store Database (has: Name, Phone, Hours, State, Address, etc.)
+        const storeRange = `${storeSheet!.sheetName}!A:ZZ`;
+        const storeRows = await googleSheets.readSheetData(storeSheet!.spreadsheetId, storeRange);
+        
+        if (storeRows.length > 0) {
+          // Parse Store Database
+          const storeHeaders = storeRows[0];
+          storeData = storeRows.slice(1).map((row: any[]) => {
+            const obj: any = {};
+            storeHeaders.forEach((header: string, i: number) => {
+              obj[header] = row[i] || '';
+            });
+            return obj;
+          });
+        }
+      }
 
       // Create lookup map: Link -> Store Details
       const storeMap = new Map();
@@ -2710,13 +2894,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Link: link,
         };
       }).filter((store: any) => store.Link);
+
+      // Apply project-based filtering through category linkage
+      const projectId = req.query.projectId as string | undefined;
+      let projectFilteredStores = stores;
+
+      if (projectId) {
+        const tenantId = (req.user as any).tenantId;
+        const projectCategories = await storage.getAllCategories(tenantId, projectId);
+        const projectCategoryNames = new Set(projectCategories.map((c: any) => c.name.toLowerCase()));
+
+        if (projectCategoryNames.size > 0) {
+          projectFilteredStores = stores.filter((store: any) => {
+            const storeCategory = (store['Category'] || store['category'] || '').toLowerCase().trim();
+            return storeCategory && projectCategoryNames.has(storeCategory);
+          });
+        } else {
+          // Project has no categories - return empty list
+          projectFilteredStores = [];
+        }
+      }
       
       // Apply scenario-based filtering
-      let eligibleStores = stores;
+      let eligibleStores = projectFilteredStores;
       
       if (scenario === 'cold_calls') {
         // Cold Calls: Simply show all stores with Status = 'Claimed'
-        eligibleStores = stores.filter((store: any) => {
+        eligibleStores = projectFilteredStores.filter((store: any) => {
           const status = store['Status'] || store['status'] || '';
           return status.toLowerCase() === 'claimed';
         });
@@ -2725,7 +2929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        eligibleStores = stores.filter((store: any) => {
+        eligibleStores = projectFilteredStores.filter((store: any) => {
           const status = store['Status'] || store['status'] || '';
           const followUpDate = store['Follow-up Date'] || store['follow_up_date'] || store['followUpDate'] || '';
           
@@ -2746,7 +2950,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
-        eligibleStores = stores.filter((store: any) => {
+        eligibleStores = projectFilteredStores.filter((store: any) => {
           const agentName = store['Agent Name'] || store['agent_name'] || store['agentName'] || '';
           const lastContact = store['Last Contact'] || store['last_contact_date'] || store['lastContactDate'] || '';
           
@@ -2796,13 +3000,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isOpen,
           agentName,
           status,
+          source: 'sheets' as const,
         };
       }).filter((store: any) => {
         // Exclude DBA children - they have no businessName
         return store.businessName && store.businessName.trim().length > 0;
       });
+
+      // ============================================================================
+      // Unified Contact Feed: Add Qualification Leads from Database
+      // ============================================================================
+      let qualificationLeadsContacts: any[] = [];
       
-      res.json(storesWithHours);
+      // Fetch leads for cold_calls (pending calls) OR follow_ups (scheduled follow-ups)
+      if (scenario === 'cold_calls' || scenario === 'qualification' || scenario === 'follow_ups') {
+        const tenantId = (req.user as any).tenantId;
+        const { leads } = await storage.listQualificationLeads(tenantId, { limit: 1000 });
+        
+        // Filter leads based on scenario
+        let callableLeads: any[] = [];
+        
+        if (scenario === 'follow_ups') {
+          // Follow-ups: leads with follow_up_needed=true AND follow_up_date is due (now or earlier)
+          const now = new Date();
+          
+          callableLeads = leads.filter((lead: any) => {
+            const hasPhone = lead.pocPhone && lead.pocPhone.trim().length > 0;
+            const needsFollowUp = lead.followUpNeeded === true;
+            const followUpDate = lead.followUpDate;
+            
+            if (!hasPhone || !needsFollowUp || !followUpDate) {
+              return false;
+            }
+            
+            try {
+              // Compare full timestamps (not just dates) so 5pm callbacks show at 5pm, not midnight
+              const followUpDateTime = new Date(followUpDate);
+              return followUpDateTime <= now;
+            } catch {
+              return false;
+            }
+          });
+        } else {
+          // Cold calls: all leads with phone numbers (all call statuses eligible)
+          callableLeads = leads.filter((lead: any) => {
+            const hasPhone = lead.pocPhone && lead.pocPhone.trim().length > 0;
+            // All call statuses eligible (scheduled = prioritized)
+            return hasPhone;
+          });
+        }
+        
+        // Project filtering for leads (if projectId specified)
+        let filteredLeads = callableLeads;
+        if (projectId) {
+          const projectCategories = await storage.getAllCategories(tenantId, projectId);
+          const projectCategoryNames = new Set(projectCategories.map((c: any) => c.name.toLowerCase()));
+          
+          if (projectCategoryNames.size > 0) {
+            filteredLeads = callableLeads.filter((lead: any) => {
+              const leadCategory = (lead.category || '').toLowerCase().trim();
+              // Include leads with matching category OR leads without category (unassigned)
+              return !leadCategory || projectCategoryNames.has(leadCategory);
+            });
+          }
+        }
+        
+        // Map leads to EligibleStore format
+        qualificationLeadsContacts = filteredLeads.map((lead: any) => ({
+          link: `lead:${lead.id}`,  // Prefix to distinguish from sheet links
+          leadId: lead.id,
+          businessName: lead.company || 'Unknown Company',
+          state: lead.state || lead.country || '',
+          country: lead.country || '',
+          phone: lead.pocPhone || '',
+          hours: '',  // Leads don't have hours data
+          hoursSchedule: [],
+          isOpen: true,  // Assume leads are always callable
+          agentName: '',  // Not assigned yet
+          status: scenario === 'follow_ups' ? 'follow_up' : (lead.callStatus || 'pending'),
+          pocName: lead.pocName || '',
+          website: lead.website || '',
+          source: 'leads' as const,
+          callbackNote: lead.callbackNote || '',  // Include callback note for follow-ups
+          followUpDate: lead.followUpDate || null,
+        }));
+      }
+
+      // Combine both sources into unified contact feed
+      const unifiedContacts = [...storesWithHours, ...qualificationLeadsContacts];
+      
+      res.json(unifiedContacts);
     } catch (error: any) {
       console.error('Error fetching eligible stores:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
@@ -2850,8 +3137,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Agent configuration incomplete - missing agentId or phoneNumberId' });
       }
       
-      // Validate phone_number_id - use from request if provided, otherwise use agent's configured value
-      const effectivePhoneNumberId = phone_number_id || agent.phoneNumberId;
+      // Validate phone_number_id - must be explicitly provided, no fallback
+      // No fallback - use only explicitly provided phone_number_id
+      const effectivePhoneNumberId = phone_number_id;
       if (!effectivePhoneNumberId) {
         return res.status(400).json({ error: 'Phone number ID required for outbound calling' });
       }
@@ -2866,6 +3154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: name || `${scenario || 'Batch'} Campaign - ${new Date().toLocaleDateString()}`,
         scenario: scenario || 'custom',
         agentId: agent_record_id,
+        phoneNumberId: effectivePhoneNumberId,
         createdByUserId: userId,
         storeFilter: { scenario },
         totalStores: stores.length,
@@ -2890,39 +3179,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let skippedStores = 0;
       
       for (const storeLink of stores) {
-        // Find existing client by unique identifier
-        let client = await storage.getClientByUniqueIdentifier(storeLink);
+        // Check if this is a qualification lead (prefixed with "lead:")
+        const isQualificationLead = storeLink.startsWith('lead:');
+        let client: any = null;
+        let leadId: string | null = null;
+        let phoneNumber: string | null = null;
         
-        // If client doesn't exist and we have store data, create it
-        if (!client && storeDataMap.has(storeLink)) {
-          const storeInfo = storeDataMap.get(storeLink);
-          const phone = storeInfo.phone || storeInfo.Phone;
+        if (isQualificationLead) {
+          // Handle qualification lead - create a client record for call tracking
+          leadId = storeLink.replace('lead:', '');
+          const lead = await storage.getQualificationLead(leadId, tenantId);
           
-          if (!phone) {
+          if (!lead || !lead.pocPhone) {
             skippedStores++;
             continue;
           }
           
-          client = await storage.createClient({
-            uniqueIdentifier: storeLink,
-            googleSheetId: storeInfo.sheetId || 'unknown',
-            data: storeInfo,
-            status: storeInfo.status || 'unassigned',
-            tenantId: (req.user as any).tenantId,
-        projectId,
+          phoneNumber = lead.pocPhone;
+          
+          // Update lead call status to 'scheduled'
+          await storage.updateQualificationLead(leadId, tenantId, { 
+            callStatus: 'scheduled',
+            callAttempts: (lead.callAttempts || 0) + 1
           });
+          
+          // Check if client already exists for this lead
+          client = await storage.getClientByUniqueIdentifier(storeLink);
+          
+          if (!client) {
+            // Create a client record for this lead (uses existing call tracking system)
+            client = await storage.createClient({
+              uniqueIdentifier: storeLink, // "lead:xxx" pattern
+              googleSheetId: 'qualification-leads',
+              data: {
+                Phone: lead.pocPhone,
+                Name: lead.company,
+                businessName: lead.company,
+                state: lead.state || lead.country || '',
+                pocName: lead.pocName || '',
+                website: lead.website || '',
+                source: 'qualification_lead',
+                leadId: leadId,
+              },
+              status: 'lead',
+              tenantId: tenantId,
+              projectId: lead.projectId || null,
+            });
+          }
+        } else {
+          // Handle Google Sheets client (original logic)
+          // Find existing client by unique identifier
+          client = await storage.getClientByUniqueIdentifier(storeLink);
+          
+          // If client doesn't exist and we have store data, create it
+          if (!client && storeDataMap.has(storeLink)) {
+            const storeInfo = storeDataMap.get(storeLink);
+            const phone = storeInfo.phone || storeInfo.Phone;
+            
+            if (!phone) {
+              skippedStores++;
+              continue;
+            }
+            
+            client = await storage.createClient({
+              uniqueIdentifier: storeLink,
+              googleSheetId: storeInfo.sheetId || 'unknown',
+              data: storeInfo,
+              status: storeInfo.status || 'unassigned',
+              tenantId: (req.user as any).tenantId,
+              projectId,
+            });
+          }
+          
+          if (client) {
+            const clientData = client.data as any;
+            phoneNumber = clientData?.Phone || clientData?.phone;
+          }
         }
         
-        // Create campaign target if we have a client
-        if (client) {
-          const clientData = client.data as any;
-          const phoneNumber = clientData?.Phone || clientData?.phone;
-          
-          if (!phoneNumber) {
-            skippedStores++;
-            continue;
-          }
-          
+        // Create campaign target if we have a client/lead with phone
+        if (client && phoneNumber) {
           const targetData: any = {
             campaignId: campaign.id,
             clientId: client.id,
@@ -3159,7 +3495,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Parse query filters
-      const { agentId, startDate, endDate, outcome, limit = 50 } = req.query;
+      const { agentId, startDate, endDate, outcome, projectId, limit = 50 } = req.query;
+      const tenantId = req.user.tenantId;
+
+      // Translate local agent UUID to ElevenLabs agent_id if provided
+      let elevenLabsAgentId: string | undefined;
+      if (agentId) {
+        const localAgent = await storage.getElevenLabsAgent(agentId as string, tenantId);
+        if (localAgent) {
+          elevenLabsAgentId = localAgent.agentId;
+        }
+      }
 
       // Build SQL query for completed calls with transcripts
       let query = db
@@ -3200,11 +3546,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .from(callSessions)
         .leftJoin(clients, eq(clients.id, callSessions.clientId))
-        .where(sql`${callSessions.status} IN ('completed', 'failed')`);
+        .where(sql`${callSessions.status} IN ('completed', 'failed') AND ${callSessions.tenantId} = ${tenantId}`);
 
-      // Apply filters
-      if (agentId) {
-        query = query.where(eq(callSessions.agentId, agentId as string));
+      // Apply filters - use translated ElevenLabs agent_id
+      if (elevenLabsAgentId) {
+        query = query.where(eq(callSessions.agentId, elevenLabsAgentId));
       }
       if (startDate) {
         query = query.where(sql`${callSessions.startedAt} >= ${new Date(startDate as string)}`);
@@ -3216,6 +3562,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         query = query.where(eq(callSessions.callSuccessful, true));
       } else if (outcome === 'failed') {
         query = query.where(sql`${callSessions.callSuccessful} = false OR ${callSessions.status} = 'failed'`);
+      }
+      
+      // Project filtering: filter calls by client's category matching project categories
+      if (projectId) {
+        const projectCategories = await db
+          .select({ name: categories.name })
+          .from(categories)
+          .where(and(
+            eq(categories.tenantId, tenantId),
+            or(eq(categories.projectId, projectId as string), isNull(categories.projectId))
+          ));
+        const categoryNames = projectCategories.map(c => c.name.toLowerCase());
+        
+        if (categoryNames.length > 0) {
+          // Include calls where client category matches project categories OR client has no category assigned
+          query = query.where(
+            or(
+              inArray(sql`LOWER(${clients.category})`, categoryNames),
+              isNull(clients.category),
+              eq(clients.category, '')
+            )
+          );
+        } else {
+          // No categories for project = no calls should match
+          query = query.where(sql`1 = 0`);
+        }
       }
 
       // Order by most recent first and apply limit
@@ -3355,7 +3727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Delete from ElevenLabs if conversation ID exists
       if (conversationId) {
-        const elevenLabsConfig = await storage.getElevenLabsConfig();
+        const elevenLabsConfig = await storage.getElevenLabsConfig(req.user.tenantId);
         if (!elevenLabsConfig?.apiKey) {
           if (!forceDelete) {
             // API key missing - abort to prevent orphaned conversations (unless forced)
@@ -3458,10 +3830,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/calls/:id/analyze - Trigger AI analysis for a call session
+  app.post('/api/calls/:id/analyze', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = (req.user as any).tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'Tenant ID not found' });
+      }
+
+      const callSessionId = req.params.id;
+      const result = await analyzeTranscript(callSessionId, tenantId);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.error || 'Analysis failed' });
+      }
+      
+      return res.json(result);
+    } catch (error: any) {
+      console.error('[API] Call analysis error:', error);
+      return res.status(500).json({ message: error.message || 'Internal server error' });
+    }
+  });
+
   // Sync calls from ElevenLabs (import historical conversations)
   app.post('/api/elevenlabs/sync-calls', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const config = await storage.getElevenLabsConfig();
+      const tenantId = (req.user as any).tenantId;
+      const projectId = req.body?.projectId as string | undefined;
+      const config = await storage.getElevenLabsConfig(tenantId, projectId);
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
@@ -3472,8 +3868,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const errors: string[] = [];
 
       // Get all configured agents to validate against
-      const tenantId = (req.user as any).tenantId;
-      const configuredAgents = await storage.getAllElevenLabsAgents(tenantId);
+      
+      const configuredAgents = await storage.getAllElevenLabsAgents(tenantId, projectId);
       const validAgentIds = new Set(configuredAgents.map(a => a.agentId));
       console.log(`[Sync] Configured agents:`, Array.from(validAgentIds));
 
@@ -3580,7 +3976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.deleteCallTranscripts(conversationId);
             
             // Update call session
-            await storage.updateCallSession(existing.id, {
+            await storage.updateCallSession(existing.id, tenantId, {
               agentId: details.agent_id,
               status: details.status === 'done' ? 'completed' : details.status,
               callDurationSecs: durationSecs,
@@ -3594,6 +3990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             // Create new call session
             await storage.createCallSession({
+              tenantId,
               conversationId,
               agentId: details.agent_id,
               clientId: client.id,
@@ -3617,6 +4014,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             for (let i = 0; i < details.transcript.length; i++) {
               const msg = details.transcript[i];
               await storage.createCallTranscript({
+                tenantId,
                 conversationId,
                 sequenceNumber: i,
                 role: msg.role,
@@ -3648,6 +4046,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error.message || 'Failed to sync calls',
         details: error.response?.data,
+      });
+    }
+  });
+
+  // Reconcile orphaned call sessions with ElevenLabs conversations
+  // Matches sessions missing conversation_id or AI analysis with ElevenLabs data
+  app.post('/api/elevenlabs/reconcile-sessions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = (req.user as any).tenantId;
+      
+      console.log(`[Reconciliation] Manual trigger by admin for tenant ${tenantId}`);
+      
+      const result = await reconcileOrphanedCallSessions(tenantId);
+      
+      res.json({
+        success: true,
+        processed: result.processed,
+        matched: result.matched,
+        analysisTriggered: result.analysisTriggered,
+        errors: result.errors.slice(0, 5),
+      });
+    } catch (error: any) {
+      console.error('[Reconciliation] Manual reconciliation error:', error);
+      res.status(500).json({ 
+        error: error.message || 'Failed to reconcile sessions',
       });
     }
   });
@@ -4091,7 +4514,8 @@ Ready to receive calls?`;
       console.log('[NUKE CALL DATA] Clearing all call test data...');
       
       // Get ElevenLabs config for API calls
-      const config = await storage.getElevenLabsConfig();
+      const tenantId = (req.user as any).tenantId;
+      const config = await storage.getElevenLabsConfig(tenantId);
       
       // 1. Get all call sessions to delete from ElevenLabs
       let elevenLabsDeletedCount = 0;
@@ -4099,7 +4523,7 @@ Ready to receive calls?`;
       
       if (config?.apiKey) {
         // Get all unique conversation IDs from call history (admin route - use requesting user's tenant)
-        const tenantId = (req.user as any).tenantId;
+        
         const callHistory = await storage.getAllCallHistory(tenantId);
         const conversationIds = [...new Set(callHistory.map(c => c.conversationId).filter(Boolean))];
         
@@ -8479,7 +8903,65 @@ IMPORTANT:
     }
   });
 
-  // Get agents (admin only)
+
+
+  // Batch crawl websites for emails from Google Sheets (limited per request for performance)
+
+  // Batch crawl websites for emails from Google Sheets (limited per request for performance)
+  app.post("/api/clients/crawl-emails", isAuthenticatedCustom, async (req, res) => {
+    try {
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant ID required" });
+      const { projectId } = req.body;
+      const sheets = await storage.getAllActiveGoogleSheets(tenantId);
+      const storeSheet = sheets.find(s => s.sheetPurpose === "Store Database");
+      if (!storeSheet) return res.status(400).json({ message: "No Store Database sheet configured" });
+      const rows = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+      if (rows.length <= 1) return res.json({ message: "No data", totalProcessed: 0, emailsFound: 0, remainingToProcess: 0, hasMore: false });
+      const headers = rows[0].map(h => (h || "").toString());
+      const websiteIdx = headers.findIndex(h => ["website", "site", "url", "web", "link"].some(k => h.toLowerCase().includes(k)));
+      const emailIdx = headers.findIndex(h => ["poc email", "email"].some(k => h.toLowerCase().includes(k)));
+      const searchedIdx = headers.findIndex(h => h.toLowerCase().includes("email searched"));
+      const projectIdx = headers.findIndex(h => h.toLowerCase().includes("project"));
+      if (websiteIdx === -1) return res.status(400).json({ message: "No Website column found" });
+      let targetProjectName = null;
+      if (projectId) {
+        const p = await storage.getProject(projectId);
+        if (p) targetProjectName = p.projectName;
+      }
+      const allNeedingCrawl = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const website = row[websiteIdx]?.toString().trim();
+        const email = emailIdx !== -1 ? row[emailIdx]?.toString().trim() : "";
+        const searched = searchedIdx !== -1 ? row[searchedIdx]?.toString().trim().toLowerCase() : "";
+        const rowProj = projectIdx !== -1 ? row[projectIdx]?.toString().trim() : "";
+        if ((!targetProjectName || rowProj.toLowerCase() === targetProjectName.toLowerCase()) && website && !email && searched !== "yes" && searched !== "true") {
+          allNeedingCrawl.push({ rowIndex: i + 1, website });
+        }
+      }
+      const toProcess = allNeedingCrawl.slice(0, 10);
+      const results = [];
+      for (const { rowIndex, website } of toProcess) {
+        try {
+          const crawl = await crawlWebsiteForEmail(website);
+          if (!crawl.skipped) {
+            if (crawl.email && emailIdx !== -1) {
+              await googleSheets.writeSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!${String.fromCharCode(65 + emailIdx)}${rowIndex}`, [[crawl.email]]);
+            }
+            if (crawl.searched && searchedIdx !== -1) {
+              await googleSheets.writeSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!${String.fromCharCode(65 + searchedIdx)}${rowIndex}`, [["Yes"]]);
+            }
+          }
+          results.push({ rowIndex, email: crawl.email, searched: crawl.searched });
+          await new Promise(r => setTimeout(r, 300));
+        } catch (e) { results.push({ rowIndex, email: null, searched: false }); }
+      }
+      clearUserCache(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      res.json({ totalProcessed: results.length, emailsFound: results.filter(r => r.email).length, remainingToProcess: allNeedingCrawl.length - results.length, hasMore: allNeedingCrawl.length > 10 });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+  });
+
   app.get('/api/users/agents', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const agents = await storage.getAgents();
@@ -11268,7 +11750,7 @@ IMPORTANT:
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      const { storeSheetId, trackerSheetId, joinColumn } = req.body;
+      const { storeSheetId, trackerSheetId, joinColumn, projectId } = req.body;
 
       if (!storeSheetId || !trackerSheetId || !joinColumn) {
         return res.status(400).json({ message: "Store sheet ID, tracker sheet ID, and join column are required" });
@@ -11279,7 +11761,7 @@ IMPORTANT:
       const selectedCategory = await storage.getSelectedCategory(userId, tenantId);
 
       // Check cache first (30-second TTL)
-      const cacheKey = generateCacheKey(userId, storeSheetId, trackerSheetId, selectedCategory);
+      const cacheKey = generateCacheKey(userId, storeSheetId, trackerSheetId, selectedCategory, projectId);
       const cachedData = getCachedData(cacheKey);
 
       if (cachedData) {
@@ -11455,7 +11937,7 @@ IMPORTANT:
         h.toLowerCase().trim() === 'category'
       );
 
-      if (selectedCategory && storeCategoryColumnName) {
+      if (selectedCategory && storeCategoryColumnName && !projectId) {
         const beforeFilterCount = filteredStoreData.length;
         filteredStoreData = filteredStoreData.filter(row => {
           const rowCategory = row[storeCategoryColumnName];
@@ -11467,6 +11949,87 @@ IMPORTANT:
       } else if (selectedCategory && !storeCategoryColumnName) {
         console.log(`WARNING: User has selectedCategory "${selectedCategory}" but "Category" column not found in sheet`);
       }
+
+      // ============================================================================
+      // CRITICAL: Filter by Project Categories
+      // ============================================================================
+      // Purpose:
+      // Filter stores by categories that belong to the selected project
+      // This ensures data isolation between projects (e.g., Pet Sales vs Hemp Wick Sales)
+      //
+      // Filter Logic:
+      // - If projectId is provided, get all category names belonging to that project
+      // - Filter stores to only those whose category is in the allowed list
+      // - If project has no categories, return empty result (not all data)
+      // ============================================================================
+      // Build Link → Category lookup map for Parent Link inheritance (used by project filter)
+      const storeLinkColumn = storeHeaders.find(h => h.toLowerCase() === 'link');
+      const storeParentLinkColumn = storeHeaders.find(h => h.toLowerCase() === 'parent link');
+      const linkToCategoryMap = new Map<string, string>();
+      
+      if (storeLinkColumn && storeCategoryColumnName) {
+        filteredStoreData.forEach(row => {
+          const link = row[storeLinkColumn]?.toString().trim().toLowerCase();
+          const category = row[storeCategoryColumnName]?.toString().trim().toLowerCase();
+          if (link && category) {
+            linkToCategoryMap.set(link, category);
+          }
+        });
+      }
+      
+      // Store allowed category names for use in orphaned tracker filtering later
+      let allowedCategoryNames: string[] = [];
+      
+      if (projectId && storeCategoryColumnName) {
+        // Get categories belonging to this project (or shared categories with null projectId)
+        const projectCategories = await db
+          .select({ name: categories.name })
+          .from(categories)
+          .where(
+            and(
+              eq(categories.tenantId, tenantId),
+              or(
+                eq(categories.projectId, projectId),
+                isNull(categories.projectId)
+              )
+            )
+          );
+        
+        allowedCategoryNames = projectCategories.map(c => c.name.toLowerCase().trim());
+        
+        if (allowedCategoryNames.length === 0) {
+          // Project has no categories - return empty to prevent showing all data
+          console.log(`Project ${projectId} has no categories - returning empty result`);
+          filteredStoreData = [];
+        } else {
+          const beforeFilterCount = filteredStoreData.length;
+          filteredStoreData = filteredStoreData.filter(row => {
+            // First, check the row's own category
+            const rowCategory = row[storeCategoryColumnName]?.toString().trim().toLowerCase();
+            if (rowCategory && allowedCategoryNames.includes(rowCategory)) {
+              return true;
+            }
+            
+            // If no direct category, check Parent Link for inherited category
+            if (storeParentLinkColumn) {
+              const parentLink = row[storeParentLinkColumn]?.toString().trim().toLowerCase();
+              if (parentLink) {
+                const parentCategory = linkToCategoryMap.get(parentLink);
+                if (parentCategory && allowedCategoryNames.includes(parentCategory)) {
+                  return true;
+                }
+              }
+            }
+            
+            return false;
+          });
+          const afterFilterCount = filteredStoreData.length;
+          console.log(`Project filter applied: ${allowedCategoryNames.join(', ')} - ${afterFilterCount} stores shown (${beforeFilterCount - afterFilterCount} filtered out)`);
+        }
+      } else if (projectId && !storeCategoryColumnName) {
+        console.log(`WARNING: projectId "${projectId}" provided but "Category" column not found in sheet`);
+      }
+
 
       // ============================================================================
       // CRITICAL: Filter Out Closed Listings (Open = FALSE)
@@ -11541,12 +12104,49 @@ IMPORTANT:
       });
 
       // Then, add tracker rows that don't exist in FILTERED store (deleted orders)
+      // CRITICAL: Only include orphaned tracker rows if their Link resolves to a project-valid category
       filteredTrackerData.forEach(trackerRow => {
         const joinValue = trackerRow[actualTrackerJoinColumn];
         const normalizedJoinValue = normalizeLink(joinValue);
         // Check if this tracker row already matched a FILTERED store row
         const alreadyMerged = filteredStoreData.some(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedJoinValue && normalizedJoinValue);
         if (!alreadyMerged) {
+          // Project filtering for orphaned tracker rows
+          // Only include if Link resolves to a category that belongs to the project
+          if (projectId && allowedCategoryNames.length > 0) {
+            const trackerLinkColumn = trackerHeaders.find(h => h.toLowerCase() === 'link');
+            const trackerParentLinkColumn = trackerHeaders.find(h => h.toLowerCase() === 'parent link');
+            
+            let hasValidCategory = false;
+            
+            // Check if tracker row's Link maps to a valid category
+            if (trackerLinkColumn) {
+              const trackerLink = trackerRow[trackerLinkColumn]?.toString().trim().toLowerCase();
+              if (trackerLink && linkToCategoryMap.has(trackerLink)) {
+                const category = linkToCategoryMap.get(trackerLink);
+                if (category && allowedCategoryNames.includes(category)) {
+                  hasValidCategory = true;
+                }
+              }
+            }
+            
+            // If no direct category, check Parent Link
+            if (!hasValidCategory && trackerParentLinkColumn) {
+              const parentLink = trackerRow[trackerParentLinkColumn]?.toString().trim().toLowerCase();
+              if (parentLink && linkToCategoryMap.has(parentLink)) {
+                const parentCategory = linkToCategoryMap.get(parentLink);
+                if (parentCategory && allowedCategoryNames.includes(parentCategory)) {
+                  hasValidCategory = true;
+                }
+              }
+            }
+            
+            // Skip this orphaned row if it doesn't belong to the project
+            if (!hasValidCategory) {
+              return;
+            }
+          }
+          
           // This row only exists in tracker - it was deleted from store
           mergedDataMap.set(`tracker-${trackerRow._trackerRowIndex}`, {
             ...trackerRow,
@@ -18941,7 +19541,9 @@ Use this store information to provide context-aware responses. When helping draf
   // Get all saved exclusions
   app.get('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
     try {
-      const exclusions = await storage.getAllSavedExclusions();
+      const tenantId = req.user.tenantId;
+      const projectId = req.query.projectId as string | undefined;
+      const exclusions = await storage.getAllSavedExclusions(tenantId, projectId);
       res.json({ exclusions });
     } catch (error: any) {
       console.error('Error fetching exclusions:', error);
@@ -18956,7 +19558,9 @@ Use this store information to provide context-aware responses. When helping draf
       if (type !== 'keyword' && type !== 'place_type') {
         return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
       }
-      const exclusions = await storage.getSavedExclusionsByType(type);
+      const tenantId = req.user.tenantId;
+      const projectId = req.query.projectId as string | undefined;
+      const exclusions = await storage.getSavedExclusionsByType(tenantId, projectId, type);
       res.json({ exclusions });
     } catch (error: any) {
       console.error('Error fetching exclusions by type:', error);
@@ -18967,14 +19571,15 @@ Use this store information to provide context-aware responses. When helping draf
   // Create new exclusion
   app.post('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { type, value } = req.body;
+      const { type, value, projectId } = req.body;
       if (!type || !value) {
         return res.status(400).json({ message: 'Type and value are required' });
       }
       if (type !== 'keyword' && type !== 'place_type') {
         return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
       }
-      const exclusion = await storage.createSavedExclusion({ type, value: value.toLowerCase().trim() });
+      const tenantId = req.user.tenantId;
+      const exclusion = await storage.createSavedExclusion({ tenantId, projectId, type, value: value.toLowerCase().trim() });
       res.json({ exclusion });
     } catch (error: any) {
       console.error('Error creating exclusion:', error);
@@ -19233,7 +19838,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { placeId, category } = req.body;
+      const { placeId, category, projectId } = req.body;
 
       if (!placeId || !category) {
         return res.status(400).json({ message: 'Place ID and category are required' });
@@ -19252,7 +19857,7 @@ Use this store information to provide context-aware responses. When helping draf
       // Auto-create category if it doesn't exist (frictionless category creation)
       const tenantId = (req.user as any).tenantId;
       if (category && category.trim() && tenantId) {
-        await storage.getOrCreateCategoryByName(tenantId, category.trim());
+        await storage.getOrCreateCategoryByName(tenantId, category.trim(), projectId);
       }
 
       // Find Store Database sheet for this category
@@ -20854,7 +21459,7 @@ Use this store information to provide context-aware responses. When helping draf
       const endDate = new Date(now);
       endDate.setDate(endDate.getDate() + timeWindowDays);
       
-      // Query daily_send_slots and JOIN with recipient/sequence data
+      // Query daily_send_slots and JOIN with recipient/sequence/email_account data
       const result = await db.execute(sql`
         SELECT 
           dss.id,
@@ -20862,13 +21467,16 @@ Use this store information to provide context-aware responses. When helping draf
           dss.filled,
           dss.sent,
           dss.recipient_id,
+          dss.email_account_id,
           sr.email as recipient_email,
           sr.current_step,
           sr.sequence_id,
-          s.name as sequence_name
+          s.name as sequence_name,
+          ea.email as sender_email
         FROM daily_send_slots dss
         LEFT JOIN sequence_recipients sr ON sr.id = dss.recipient_id::varchar
         LEFT JOIN sequences s ON sr.sequence_id = s.id
+        LEFT JOIN email_accounts ea ON dss.email_account_id = ea.id
         WHERE dss.slot_time_utc >= ${now.toISOString()}
           AND dss.slot_time_utc < ${endDate.toISOString()}
         ORDER BY dss.slot_time_utc ASC
@@ -20890,6 +21498,8 @@ Use this store information to provide context-aware responses. When helping draf
         sentAt: row.sent ? row.slot_time_utc : null,
         status: row.sent ? 'sent' : (row.filled ? 'scheduled' : 'open'),
         subject: null,
+        senderEmail: row.sender_email || '',
+        emailAccountId: row.email_account_id || '',
       }));
       
       res.json(queue);
@@ -22202,6 +22812,56 @@ ${conversationContext}`;
     }
   });
 
+  // Get sequence steps (admin only)
+  app.get('/api/sequences/:id/steps', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      const sequence = await storage.getSequence(id, req.user.tenantId);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      const steps = await storage.getSequenceSteps(id);
+      res.json(steps);
+    } catch (error: any) {
+      console.error('Error fetching sequence steps:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch sequence steps' });
+    }
+  });
+
+  // Update individual sequence step (admin only)
+  app.patch('/api/sequences/:sequenceId/steps/:stepId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { sequenceId, stepId } = req.params;
+      
+      const sequence = await storage.getSequence(sequenceId, req.user.tenantId);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      const { subjectTemplate, bodyTemplate, aiGuidance } = z.object({
+        subjectTemplate: z.string().nullable().optional(),
+        bodyTemplate: z.string().nullable().optional(),
+        aiGuidance: z.string().nullable().optional(),
+      }).parse(req.body);
+
+      const updatedStep = await storage.updateSequenceStep(stepId, {
+        subjectTemplate: subjectTemplate ?? undefined,
+        bodyTemplate: bodyTemplate ?? undefined,
+        aiGuidance: aiGuidance ?? undefined,
+      });
+
+      res.json(updatedStep);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid step data', errors: error.errors });
+      }
+      console.error('Error updating sequence step:', error);
+      res.status(500).json({ message: error.message || 'Failed to update sequence step' });
+    }
+  });
+
   // Update sequence keywords (admin only)
   app.put('/api/sequences/:id/keywords', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -22376,7 +23036,12 @@ ${conversationContext}`;
       }
 
       if (recipients.length === 0) {
-        return res.json({ message: 'No new recipients to import', count: 0 });
+        return res.json({ 
+          message: 'No new recipients to import', 
+          count: 0,
+          skipped: skippedRows.length,
+          skippedReasons: skippedRows.slice(0, 10) // Show first 10 reasons
+        });
       }
 
       // MATRIX2: Just create recipients with metadata - Matrix2 slot assigner handles scheduling
@@ -22408,7 +23073,12 @@ ${conversationContext}`;
       const { invalidateCache } = await import('./services/ehubContactsService');
       invalidateCache();
 
-      res.json({ message: 'Recipients imported successfully', count: created.length });
+      res.json({ 
+        message: 'Recipients imported successfully', 
+        count: created.length,
+        skipped: skippedRows.length,
+        skippedReasons: skippedRows.slice(0, 10) // Show first 10 reasons if any
+      });
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
@@ -22425,11 +23095,15 @@ ${conversationContext}`;
       const { id } = req.params;
       const { contacts, selectAll, search, statusFilter } = req.body;
 
-      // Check sequence exists
+      // Check sequence exists and get tenantId/projectId from it
       const sequence = await storage.getSequence(id, req.user.tenantId);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
+      
+      // Get tenantId and projectId from the sequence for proper multi-tenant/project support
+      const tenantId = req.user.tenantId;
+      const projectId = sequence.projectId;
 
       // Get contacts data - either from provided array or via getAllContacts
       let contactsToAdd: any[] = [];
@@ -22442,8 +23116,8 @@ ${conversationContext}`;
           pageSize: 99999, // Get all
           search: search || '',
           statusFilter: statusFilter || 'all',
-          tenantId: (req.user as any).tenantId,
-        projectId,
+          tenantId,
+          projectId,
         });
         contactsToAdd = allContacts;
       } else {
@@ -22532,6 +23206,7 @@ ${conversationContext}`;
         // Validate using Zod schema before adding to batch
         try {
           insertSequenceRecipientSchema.parse({
+            tenantId,
             sequenceId: id,
             email,
             name,
@@ -22545,6 +23220,7 @@ ${conversationContext}`;
 
           seenEmails.add(email);
           recipients.push({
+            tenantId,
             sequenceId: id,
             email,
             name,
@@ -22555,8 +23231,9 @@ ${conversationContext}`;
             timezone,
             status: 'pending',
           });
-        } catch (validationError) {
-          skippedRows.push(`Validation failed for ${email}: ${name}`);
+        } catch (validationError: any) {
+          const errorMsg = validationError?.errors?.[0]?.message || 'Unknown validation error';
+          skippedRows.push(`Validation failed for ${email}: ${errorMsg}`);
           continue;
         }
       }
@@ -23641,6 +24318,18 @@ ${conversationContext}`;
     }
   });
 
+  // GET /api/super-admin/tenants/:tenantId/projects - Get projects for a specific tenant
+  app.get('/api/super-admin/tenants/:tenantId/projects', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const projects = await storage.listTenantProjects(tenantId);
+      res.json(projects);
+    } catch (error: any) {
+      console.error("Error fetching tenant projects:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch projects" });
+    }
+  });
+
   // ============================================================================
   // SUPER ADMIN ELEVENLABS ROUTES - Per-tenant voice configuration
   // ============================================================================
@@ -23674,16 +24363,54 @@ ${conversationContext}`;
     }
   });
 
+  // GET /api/super-admin/tenants/:tenantId/elevenlabs-config - Get useDirectElevenLabs setting
+  app.get('/api/super-admin/tenants/:tenantId/elevenlabs-config', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const config = await storage.getElevenLabsConfig(tenantId);
+      res.json({ useDirectElevenLabs: config?.useDirectElevenLabs ?? false });
+    } catch (error: any) {
+      console.error("Error fetching Direct ElevenLabs setting:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch setting" });
+    }
+  });
+
+  // PATCH /api/super-admin/tenants/:tenantId/elevenlabs-config - Update useDirectElevenLabs setting
+  app.patch('/api/super-admin/tenants/:tenantId/elevenlabs-config', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const { useDirectElevenLabs } = req.body;
+      
+      if (typeof useDirectElevenLabs !== 'boolean') {
+        return res.status(400).json({ message: "useDirectElevenLabs must be a boolean" });
+      }
+
+      await storage.updateElevenLabsConfigDirectMode(tenantId, useDirectElevenLabs);
+      console.log(`[VoiceConfig] Tenant ${tenantId} set useDirectElevenLabs=${useDirectElevenLabs}`);
+      res.json({ message: "Direct ElevenLabs setting updated successfully", useDirectElevenLabs });
+    } catch (error: any) {
+      console.error("Error updating Direct ElevenLabs setting:", error);
+      res.status(500).json({ message: error.message || "Failed to update setting" });
+    }
+  });
+
   // GET /api/super-admin/tenants/:tenantId/elevenlabs/agents - Get tenant's agents
   app.get('/api/super-admin/tenants/:tenantId/elevenlabs/agents', requireSuperAdmin, async (req: any, res) => {
     try {
       const { tenantId } = req.params;
       const agents = await storage.getAllElevenLabsAgents(tenantId);
       const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(tenantId);
+      const projects = await storage.listTenantProjects(tenantId);
       
-      const phoneNumberMap = new Map(phoneNumbers.map(pn => [pn.phoneNumberId, pn]));
+      // Create maps for lookups
+      const phoneByIdMap = new Map(
+        phoneNumbers.map(pn => [pn.phoneNumberId, pn])
+      );
+      const projectMap = new Map(projects.map(p => [p.id, p.name]));
+      
       const enrichedAgents = agents.map(agent => {
-        const phone = agent.phoneNumberId ? phoneNumberMap.get(agent.phoneNumberId) : null;
+        // Look up phone by agent's stored phoneNumberId
+        const phone = agent.phoneNumberId ? phoneByIdMap.get(agent.phoneNumberId) : null;
         return {
           id: agent.id,
           name: agent.name,
@@ -23693,6 +24420,8 @@ ${conversationContext}`;
           phone_label: phone?.label || null,
           description: agent.description,
           is_default: agent.isDefault,
+          projectId: agent.projectId || null,
+          projectName: agent.projectId ? projectMap.get(agent.projectId) || null : null,
         };
       });
       
@@ -23712,7 +24441,12 @@ ${conversationContext}`;
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const agent = await storage.createElevenLabsAgent({ ...validation.data, tenantId });
+      const agentData = {
+        ...validation.data,
+        tenantId,
+        projectId: validation.data.projectId || null,
+      };
+      const agent = await storage.createElevenLabsAgent(agentData);
       res.json(agent);
     } catch (error: any) {
       console.error("Error creating ElevenLabs agent:", error);
@@ -23761,6 +24495,96 @@ ${conversationContext}`;
     }
   });
 
+  // POST /api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/sync-settings - Sync single agent settings
+  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/agents/:id/sync-settings', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId, id } = req.params;
+      
+      const dbAgent = await storage.getElevenLabsAgentById(id, tenantId);
+      if (!dbAgent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      const config = await storage.getElevenLabsConfig(tenantId);
+      if (!config?.apiKey) {
+        return res.status(400).json({ message: "ElevenLabs API key not configured" });
+      }
+      
+      const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${dbAgent.agentId}`, {
+        headers: { "xi-api-key": config.apiKey },
+      });
+      
+      const agentData = response.data;
+      const conversationConfig = agentData.conversation_config || {};
+      const ttsConfig = conversationConfig.tts || {};
+      const sttConfig = conversationConfig.stt || {};
+      
+      await storage.updateElevenLabsAgent(id, {
+        sttEncoding: sttConfig.encoding || null,
+        sttSampleRate: sttConfig.sample_rate || null,
+        ttsOutputFormat: ttsConfig.agent_output_audio_format || null,
+        voiceId: ttsConfig.voice_id || null,
+        language: conversationConfig.language || null,
+        lastSyncedAt: new Date(),
+      }, tenantId);
+      
+      const updatedAgent = await storage.getElevenLabsAgentById(id, tenantId);
+      console.log(`[ElevenLabs] Super-admin synced settings for agent ${dbAgent.agentId}`);
+      res.json(updatedAgent);
+    } catch (error: any) {
+      console.error("Error syncing agent settings:", error);
+      res.status(500).json({ message: error.message || "Failed to sync agent settings" });
+    }
+  });
+
+  // POST /api/super-admin/tenants/:tenantId/elevenlabs/sync-all-agent-settings - Sync all agents' settings
+  app.post('/api/super-admin/tenants/:tenantId/elevenlabs/sync-all-agent-settings', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      
+      const config = await storage.getElevenLabsConfig(tenantId);
+      if (!config?.apiKey) {
+        return res.status(400).json({ message: "ElevenLabs API key not configured" });
+      }
+      
+      const agents = await storage.getAllElevenLabsAgents(tenantId);
+      const results = { success: 0, failed: 0, errors: [] as string[] };
+      
+      for (const dbAgent of agents) {
+        try {
+          const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${dbAgent.agentId}`, {
+            headers: { "xi-api-key": config.apiKey },
+          });
+          
+          const agentData = response.data;
+          const conversationConfig = agentData.conversation_config || {};
+          const ttsConfig = conversationConfig.tts || {};
+          const sttConfig = conversationConfig.stt || {};
+          
+          await storage.updateElevenLabsAgent(dbAgent.id, {
+            sttEncoding: sttConfig.encoding || null,
+            sttSampleRate: sttConfig.sample_rate || null,
+            ttsOutputFormat: ttsConfig.agent_output_audio_format || null,
+            voiceId: ttsConfig.voice_id || null,
+            language: conversationConfig.language || null,
+            lastSyncedAt: new Date(),
+          }, tenantId);
+          
+          results.success++;
+        } catch (err: any) {
+          results.failed++;
+          results.errors.push(`${dbAgent.name || dbAgent.agentId}: ${err.message}`);
+        }
+      }
+      
+      console.log(`[ElevenLabs] Super-admin synced ${results.success}/${agents.length} agents for tenant ${tenantId}`);
+      res.json(results);
+    } catch (error: any) {
+      console.error("Error syncing all agent settings:", error);
+      res.status(500).json({ message: error.message || "Failed to sync agent settings" });
+    }
+  });
+
   // POST /api/super-admin/tenants/:tenantId/elevenlabs/sync-phone-numbers - Sync phone numbers from ElevenLabs
   app.post('/api/super-admin/tenants/:tenantId/elevenlabs/sync-phone-numbers', requireSuperAdmin, async (req: any, res) => {
     try {
@@ -23775,18 +24599,44 @@ ${conversationContext}`;
         headers: { "xi-api-key": config.apiKey },
       });
 
-      const phoneNumbers = response.data.phone_numbers || [];
+      const phoneNumbers = response.data.phone_numbers || (Array.isArray(response.data) ? response.data : []);
+      
       for (const pn of phoneNumbers) {
         await storage.upsertElevenLabsPhoneNumber({
           phoneNumberId: pn.phone_number_id,
-          phoneNumber: pn.phone_number,
-          label: pn.label || null,
-          agentId: pn.agent_id || null,
+          phoneNumber: pn.phone_number || pn.number || '',
+          label: pn.label || pn.name || null,
           tenantId,
         });
       }
 
-      res.json({ message: "Phone numbers synced successfully", count: phoneNumbers.length });
+      // Update agents with their assigned phone number IDs from ElevenLabs
+      const allAgents = await storage.getAllElevenLabsAgents(tenantId);
+      const agentIdToDbId = new Map(allAgents.map(a => [a.agentId, a.id]));
+      
+      let agentUpdates = 0;
+      for (const pn of phoneNumbers) {
+        // ElevenLabs nests agent info in assigned_agent object
+        const assignedAgentId = pn.assigned_agent?.agent_id || pn.agent_id;
+        if (assignedAgentId && pn.phone_number_id) {
+          const dbAgentId = agentIdToDbId.get(assignedAgentId);
+          if (dbAgentId) {
+            try {
+              await storage.updateElevenLabsAgent(dbAgentId, tenantId, {
+                phoneNumberId: pn.phone_number_id,
+              });
+              agentUpdates++;
+              console.log(`[PhoneSync] Updated agent ${assignedAgentId} with phone number ${pn.phone_number_id}`);
+            } catch (err: any) {
+              console.error(`[PhoneSync] Failed to update agent ${assignedAgentId}:`, err.message);
+            }
+          } else {
+            console.log(`[PhoneSync] Agent ${assignedAgentId} not found in database for tenant`);
+          }
+        }
+      }
+
+      res.json({ message: `Phone numbers synced successfully (${agentUpdates} agent(s) updated)`, count: phoneNumbers.length });
     } catch (error: any) {
       console.error("Error syncing phone numbers:", error);
       res.status(500).json({ message: error.message || "Failed to sync phone numbers" });
@@ -25213,12 +26063,13 @@ ${conversationContext}`;
       if (!await checkQualificationModuleAccess(req, res)) return;
       
       const tenantId = req.user.tenantId;
-      const { campaignId, status, callStatus, limit, offset } = req.query;
+      const { campaignId, status, callStatus, projectId, limit, offset } = req.query;
 
       const result = await storage.listQualificationLeads(tenantId, {
         campaignId: campaignId as string | undefined,
         status: status as string | undefined,
         callStatus: callStatus as string | undefined,
+        projectId: projectId as string | undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
         offset: offset ? parseInt(offset as string, 10) : undefined,
       });
@@ -25235,8 +26086,8 @@ ${conversationContext}`;
       if (!await checkQualificationModuleAccess(req, res)) return;
       
       const tenantId = req.user.tenantId;
-      const { campaignId } = req.query;
-      const stats = await storage.getQualificationLeadStats(tenantId, campaignId as string | undefined);
+      const { campaignId, projectId } = req.query;
+      const stats = await storage.getQualificationLeadStats(tenantId, campaignId as string | undefined, projectId as string | undefined);
       res.json({ stats });
     } catch (error: any) {
       console.error('Error getting qualification lead stats:', error);

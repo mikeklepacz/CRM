@@ -390,6 +390,7 @@ export default function ClientDashboard() {
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
   const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
+  const [selectedCountries, setSelectedCountries] = useState<Set<string>>(new Set());
   const [citySearchTerm, setCitySearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [showMyStoresOnly, setShowMyStoresOnly] = useState<boolean>(false);
@@ -1473,6 +1474,38 @@ export default function ClientDashboard() {
     };
   }, [headers, data]);
 
+  // Get all unique countries from the data with their counts
+  const { allCountries, countryCounts } = useMemo(() => {
+    const countries = new Set<string>();
+    const counts: Record<string, number> = {};
+
+    // Look for columns named "country" (case-insensitive)
+    const countryColumns = headers.filter((h: string) => h.toLowerCase() === 'country');
+
+    data.forEach((row: any) => {
+      countryColumns.forEach((col: string) => {
+        const value = row[col];
+        if (value && String(value).trim()) {
+          const countryName = String(value).trim();
+          countries.add(countryName);
+          counts[countryName] = (counts[countryName] || 0) + 1;
+        }
+      });
+    });
+
+    return {
+      allCountries: Array.from(countries).sort(),
+      countryCounts: counts
+    };
+  }, [headers, data]);
+
+  // Initialize selectedCountries when allCountries changes
+  useEffect(() => {
+    if (allCountries.length > 0 && selectedCountries.size === 0) {
+      setSelectedCountries(new Set(allCountries));
+    }
+  }, [allCountries]);
+
   // Get cities for selected states with their counts
   const { citiesInSelectedStates, cityCounts } = useMemo(() => {
     if (selectedStates.size === 0) {
@@ -1933,6 +1966,20 @@ export default function ClientDashboard() {
         // If all cities are selected, don't filter (show everything)
       }
 
+      // Filter by countries if we have countries available
+      if (allCountries.length > 0 && selectedCountries.size > 0 && selectedCountries.size < allCountries.length) {
+        const countryColumns = headers.filter((h: string) => h.toLowerCase() === 'country');
+        filtered = filtered.filter((row: any) => {
+          return countryColumns.some((col: string) => {
+            const value = row[col];
+            if (value && String(value).trim()) {
+              return selectedCountries.has(String(value).trim());
+            }
+            return false;
+          });
+        });
+      }
+
       // Filter by status if any statuses are selected
       if (selectedStatuses.size > 0) {
         const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
@@ -2065,6 +2112,20 @@ export default function ClientDashboard() {
       // If all cities are selected, don't filter (show everything)
     }
 
+    // Filter by countries if we have countries available
+    if (allCountries.length > 0 && selectedCountries.size > 0 && selectedCountries.size < allCountries.length) {
+      const countryColumns = headers.filter((h: string) => h.toLowerCase() === 'country');
+      filtered = filtered.filter((row: any) => {
+        return countryColumns.some((col: string) => {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            return selectedCountries.has(String(value).trim());
+          }
+          return false;
+        });
+      });
+    }
+
     // Filter by status if any statuses are selected
     if (selectedStatuses.size > 0) {
       const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
@@ -2109,6 +2170,8 @@ export default function ClientDashboard() {
     selectedCities,
     citiesInSelectedStates.length,
     allStates.length,
+    selectedCountries,
+    allCountries.length,
     headers,
     sortColumn,
     sortDirection,
@@ -2728,6 +2791,78 @@ export default function ClientDashboard() {
                                 </Label>
                                 <span className="text-xs text-muted-foreground">
                                   ({cityCounts[city] || 0})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+
+                {/* Country Filter - Only shown when countries exist in data */}
+                {allCountries.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" data-testid="button-countries-filter">
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        Countries ({selectedCountries.size}/{allCountries.length})
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">Filter by Country</h4>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedCountries(new Set(allCountries))}
+                              data-testid="button-select-all-countries"
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedCountries(new Set())}
+                              data-testid="button-clear-all-countries"
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Uncheck countries to hide rows from those countries
+                        </p>
+
+                        <ScrollArea className="h-64">
+                          <div className="space-y-2">
+                            {allCountries.map((country: string) => (
+                              <div key={country} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`country-${country}`}
+                                  checked={selectedCountries.has(country)}
+                                  onCheckedChange={() => {
+                                    const newSelected = new Set(selectedCountries);
+                                    if (newSelected.has(country)) {
+                                      newSelected.delete(country);
+                                    } else {
+                                      newSelected.add(country);
+                                    }
+                                    setSelectedCountries(newSelected);
+                                  }}
+                                  data-testid={`checkbox-country-${country}`}
+                                />
+                                <Label
+                                  htmlFor={`country-${country}`}
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  {country}
+                                </Label>
+                                <span className="text-xs text-muted-foreground">
+                                  ({countryCounts[country] || 0})
                                 </span>
                               </div>
                             ))}

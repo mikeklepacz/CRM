@@ -288,9 +288,13 @@ export default function MapSearch() {
     enabled: !isProjectContextLoading,
   });
 
-  // Fetch saved exclusions
+  // Fetch saved exclusions (project-specific)
+  const exclusionsUrl = currentProject?.id 
+    ? `/api/exclusions?projectId=${currentProject.id}` 
+    : "/api/exclusions";
   const { data: exclusionsData } = useQuery<{ exclusions: SavedExclusion[] }>({
-    queryKey: ["/api/exclusions"],
+    queryKey: [exclusionsUrl],
+    enabled: !isProjectContextLoading,
   });
 
   // Fetch user preferences to get active exclusions, default country, and map view
@@ -479,13 +483,16 @@ export default function MapSearch() {
     }
   };
 
-  // Mutation to add new exclusion
+  // Mutation to add new exclusion (project-specific)
   const addExclusionMutation = useMutation({
     mutationFn: async (params: { type: 'keyword' | 'place_type', value: string }) => {
-      return await apiRequest("POST", "/api/exclusions", params);
+      return await apiRequest("POST", "/api/exclusions", {
+        ...params,
+        projectId: currentProject?.id,
+      });
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/exclusions"] });
+      queryClient.invalidateQueries({ queryKey: [exclusionsUrl] });
       // Automatically check the newly added exclusion
       if (variables.type === 'keyword') {
         setActiveKeywords(prev => [...prev, data.exclusion.value]);

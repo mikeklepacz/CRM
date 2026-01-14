@@ -444,8 +444,8 @@ export interface IStorage {
   deleteSearchHistory(id: string): Promise<void>;
 
   // Saved Exclusions operations
-  getAllSavedExclusions(): Promise<SavedExclusion[]>;
-  getSavedExclusionsByType(type: 'keyword' | 'place_type'): Promise<SavedExclusion[]>;
+  getAllSavedExclusions(tenantId: string, projectId?: string): Promise<SavedExclusion[]>;
+  getSavedExclusionsByType(tenantId: string, projectId: string | undefined, type: 'keyword' | 'place_type'): Promise<SavedExclusion[]>;
   createSavedExclusion(exclusion: InsertSavedExclusion): Promise<SavedExclusion>;
   deleteSavedExclusion(id: string): Promise<void>;
   updateUserActiveExclusions(userId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences>;
@@ -2767,34 +2767,67 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Saved Exclusions operations
-  async getAllSavedExclusions(): Promise<SavedExclusion[]> {
+  // When projectId is provided: return project-specific exclusions AND global (null projectId) exclusions
+  // When projectId is not provided: return all tenant exclusions
+  async getAllSavedExclusions(tenantId: string, projectId?: string): Promise<SavedExclusion[]> {
+    let whereClause;
+    if (projectId) {
+      // Include both project-specific and global (null projectId) exclusions
+      whereClause = and(
+        eq(savedExclusions.tenantId, tenantId),
+        or(eq(savedExclusions.projectId, projectId), isNull(savedExclusions.projectId))
+      );
+    } else {
+      // No project filter - return all tenant exclusions
+      whereClause = eq(savedExclusions.tenantId, tenantId);
+    }
     const exclusions = await db
       .select()
       .from(savedExclusions)
+      .where(whereClause)
       .orderBy(savedExclusions.type, savedExclusions.value);
     return exclusions;
   }
 
-  async getSavedExclusionsByType(type: 'keyword' | 'place_type'): Promise<SavedExclusion[]> {
+  async getSavedExclusionsByType(tenantId: string, projectId: string | undefined, type: 'keyword' | 'place_type'): Promise<SavedExclusion[]> {
+    let whereClause;
+    if (projectId) {
+      // Include both project-specific and global (null projectId) exclusions
+      whereClause = and(
+        eq(savedExclusions.tenantId, tenantId),
+        eq(savedExclusions.type, type),
+        or(eq(savedExclusions.projectId, projectId), isNull(savedExclusions.projectId))
+      );
+    } else {
+      // No project filter - return all tenant exclusions of this type
+      whereClause = and(
+        eq(savedExclusions.tenantId, tenantId),
+        eq(savedExclusions.type, type)
+      );
+    }
     const exclusions = await db
       .select()
       .from(savedExclusions)
-      .where(eq(savedExclusions.type, type))
+      .where(whereClause)
       .orderBy(savedExclusions.value);
     return exclusions;
   }
 
   async createSavedExclusion(exclusion: InsertSavedExclusion): Promise<SavedExclusion> {
-    // Check if this exclusion already exists
+    // Check if this exclusion already exists for the same tenant + project
+    const conditions = [
+      eq(savedExclusions.type, exclusion.type),
+      eq(savedExclusions.value, exclusion.value),
+      eq(savedExclusions.tenantId, exclusion.tenantId)
+    ];
+    if (exclusion.projectId) {
+      conditions.push(eq(savedExclusions.projectId, exclusion.projectId));
+    }
+    
     const [existing] = await db
       .select()
       .from(savedExclusions)
-      .where(
-        and(
-          eq(savedExclusions.type, exclusion.type),
-          eq(savedExclusions.value, exclusion.value)
-        )
-      );
+      .where(and(...conditions));
 
     if (existing) {
       return existing;
@@ -2802,10 +2835,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newExclusion] = await db
       .insert(savedExclusions)
-      .values({
-        ...exclusion,
-        tenantId: exclusion.tenantId || (global as any).currentTenantId // Fallback for safety if somehow missing
-      })
+      .values(exclusion)
       .returning();
     return newExclusion;
   }
