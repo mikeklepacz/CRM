@@ -98,6 +98,13 @@ const isCanadianProvince = (state: string): boolean => {
   return CANADIAN_PROVINCES.has(state);
 };
 
+// Helper function to check if a state value is valid (no numbers - filters out postal codes and garbage data)
+const isValidStateName = (state: string): boolean => {
+  if (!state) return false;
+  // Reject any state name that contains numeric digits
+  return !/\d/.test(state);
+};
+
 // Helper function: Case-insensitive lookup for link value
 const getLinkValue = (row: any): string | undefined => {
   if (!row) return undefined;
@@ -1462,8 +1469,11 @@ export default function ClientDashboard() {
             }
           }
 
-          states.add(stateName);
-          counts[stateName] = (counts[stateName] || 0) + 1;
+          // Only add valid state names (filter out postal codes and garbage data with numbers)
+          if (isValidStateName(stateName)) {
+            states.add(stateName);
+            counts[stateName] = (counts[stateName] || 0) + 1;
+          }
         }
       });
     });
