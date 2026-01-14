@@ -8906,186 +8906,62 @@ IMPORTANT:
 
 
   // Batch crawl websites for emails from Google Sheets (limited per request for performance)
-  app.post('/api/clients/crawl-emails', isAuthenticatedCustom, async (req: any, res) => {
+
+  // Batch crawl websites for emails from Google Sheets (limited per request for performance)
+  app.post("/api/clients/crawl-emails", isAuthenticatedCustom, async (req, res) => {
     try {
       const tenantId = req.user?.tenantId;
-      if (!tenantId) {
-        return res.status(400).json({ message: "Tenant ID required" });
-      }
-
-      const MAX_PER_BATCH = 10;
+      if (!tenantId) return res.status(400).json({ message: "Tenant ID required" });
       const { projectId } = req.body;
-
-      // Get the Store Database sheet for this tenant
       const sheets = await storage.getAllActiveGoogleSheets(tenantId);
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
-      
-      if (!storeSheet) {
-        return res.status(400).json({ message: "No Store Database sheet configured for this tenant" });
-      }
-
-      // Read all data from the sheet
-      const range = `${storeSheet.sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(storeSheet.spreadsheetId, range);
-      
-      if (rows.length <= 1) {
-        return res.json({ 
-          message: "No data in sheet",
-          totalProcessed: 0,
-          emailsFound: 0,
-          remainingToProcess: 0,
-          hasMore: false
-        });
-      }
-
-      const headers = rows[0].map((h: string) => (h || '').toString());
-      
-      // Find column indices
-      const websiteColIndex = headers.findIndex((h: string) => {
-        const lower = (h || '').toString().toLowerCase().trim();
-        return lower === 'website' || lower === 'site' || lower === 'url' || 
-               lower === 'web' || lower.includes('website') || lower.includes('site url') || 
-               lower.includes('link') || lower.includes('url');
-      });
-      const emailColIndex = headers.findIndex((h: string) => {
-        const lower = h.toLowerCase();
-        return lower === 'poc email' || lower === 'email' || lower === 'contact email' ||
-               lower === 'e-mail' || lower.includes('poc email') || lower.includes('contact email');
-      });
-      const emailSearchedColIndex = headers.findIndex((h: string) => {
-        const lower = h.toLowerCase();
-        return lower === 'email searched' || lower.includes('email searched');
-      });
-      const projectColIndex = headers.findIndex((h: string) => {
-        const lower = h.toLowerCase();
-        return lower === 'project' || lower.includes('project');
-      });
-      
-      if (websiteColIndex === -1) {
-        return res.status(400).json({ message: "No 'Website' column found in Store Database." });
-      }
-
-      // Get project name if projectId provided
+      const storeSheet = sheets.find(s => s.sheetPurpose === "Store Database");
+      if (!storeSheet) return res.status(400).json({ message: "No Store Database sheet configured" });
+      const rows = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+      if (rows.length <= 1) return res.json({ message: "No data", totalProcessed: 0, emailsFound: 0, remainingToProcess: 0, hasMore: false });
+      const headers = rows[0].map(h => (h || "").toString());
+      const websiteIdx = headers.findIndex(h => ["website", "site", "url", "web", "link"].some(k => h.toLowerCase().includes(k)));
+      const emailIdx = headers.findIndex(h => ["poc email", "email"].some(k => h.toLowerCase().includes(k)));
+      const searchedIdx = headers.findIndex(h => h.toLowerCase().includes("email searched"));
+      const projectIdx = headers.findIndex(h => h.toLowerCase().includes("project"));
+      if (websiteIdx === -1) return res.status(400).json({ message: "No Website column found" });
       let targetProjectName = null;
       if (projectId) {
-        const project = await storage.getProject(projectId);
-        if (project) {
-          targetProjectName = project.projectName;
-        }
+        const p = await storage.getProject(projectId);
+        if (p) targetProjectName = p.projectName;
       }
-
-      const rowsToProcess: Array<{ rowIndex: number; website: string }> = [];
-      const allNeedingCrawl: number[] = [];
-      
+      const allNeedingCrawl = [];
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        const website = row[websiteColIndex]?.toString().trim();
-        const email = emailColIndex !== -1 ? row[emailColIndex]?.toString().trim() : '';
-        const emailSearched = emailSearchedColIndex !== -1 ? row[emailSearchedColIndex]?.toString().trim().toLowerCase() : '';
-        const rowProject = projectColIndex !== -1 ? row[projectColIndex]?.toString().trim() : '';
-        
-        let projectMatch = true;
-        if (targetProjectName) {
-            projectMatch = rowProject.toLowerCase() === targetProjectName.toLowerCase();
-        }
-
-        if (projectMatch && website && !email && emailSearched !== 'yes' && emailSearched !== 'true') {
-          allNeedingCrawl.push(i + 1); 
-          if (rowsToProcess.length < MAX_PER_BATCH) {
-            rowsToProcess.push({ rowIndex: i + 1, website });
-          }
+        const website = row[websiteIdx]?.toString().trim();
+        const email = emailIdx !== -1 ? row[emailIdx]?.toString().trim() : "";
+        const searched = searchedIdx !== -1 ? row[searchedIdx]?.toString().trim().toLowerCase() : "";
+        const rowProj = projectIdx !== -1 ? row[projectIdx]?.toString().trim() : "";
+        if ((!targetProjectName || rowProj.toLowerCase() === targetProjectName.toLowerCase()) && website && !email && searched !== "yes" && searched !== "true") {
+          allNeedingCrawl.push({ rowIndex: i + 1, website });
         }
       }
-
-      
-      if (websiteColIndex === -1) {
-        return res.status(400).json({ message: "No 'Website' column found in Store Database." });
-      }
-
-      // Get project name if projectId provided
-      let targetProjectName = null;
-      if (projectId) {
-        const project = await storage.getProject(projectId);
-        if (project) {
-          targetProjectName = project.projectName;
-          console.log(`[EmailCrawl] Filtering by project: ${targetProjectName}`);
-        }
-      }
-
-      const rowsToProcess: Array<{ rowIndex: number; website: string }> = [];
-      const allNeedingCrawl: number[] = [];
-      
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        const website = row[websiteColIndex]?.toString().trim();
-        const email = emailColIndex !== -1 ? row[emailColIndex]?.toString().trim() : '';
-        const emailSearched = emailSearchedColIndex !== -1 ? row[emailSearchedColIndex]?.toString().trim().toLowerCase() : '';
-        const rowProject = projectColIndex !== -1 ? row[projectColIndex]?.toString().trim() : '';
-        
-        let projectMatch = true;
-        if (targetProjectName) {
-            // Case-insensitive match for project name
-            projectMatch = rowProject.toLowerCase() === targetProjectName.toLowerCase();
-        }
-
-        if (projectMatch && website && !email && emailSearched !== 'yes' && emailSearched !== 'true') {
-          allNeedingCrawl.push(i + 1); 
-          if (rowsToProcess.length < MAX_PER_BATCH) {
-            rowsToProcess.push({ rowIndex: i + 1, website });
-          }
-        }
-      }
-
-      const results: Array<{ rowIndex: number; email: string | null; searched: boolean; error?: string }> = [];
-      
-      for (const { rowIndex, website } of rowsToProcess) {
+      const toProcess = allNeedingCrawl.slice(0, 10);
+      const results = [];
+      for (const { rowIndex, website } of toProcess) {
         try {
-          const crawlResult = await crawlWebsiteForEmail(website);
-          if (crawlResult.skipped) {
-            results.push({ rowIndex, email: null, searched: false, error: crawlResult.error });
-            continue;
+          const crawl = await crawlWebsiteForEmail(website);
+          if (!crawl.skipped) {
+            if (crawl.email && emailIdx !== -1) {
+              await googleSheets.writeSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!${String.fromCharCode(65 + emailIdx)}${rowIndex}`, [[crawl.email]]);
+            }
+            if (crawl.searched && searchedIdx !== -1) {
+              await googleSheets.writeSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!${String.fromCharCode(65 + searchedIdx)}${rowIndex}`, [["Yes"]]);
+            }
           }
-
-          if (crawlResult.email && emailColIndex !== -1) {
-            const emailColumnLetter = String.fromCharCode(65 + emailColIndex);
-            const emailCellRange = `${storeSheet.sheetName}!${emailColumnLetter}${rowIndex}`;
-            await googleSheets.writeSheetData(storeSheet.spreadsheetId, emailCellRange, [[crawlResult.email]]);
-          }
-          
-          if (crawlResult.searched && emailSearchedColIndex !== -1) {
-            const searchedColumnLetter = String.fromCharCode(65 + emailSearchedColIndex);
-            const searchedCellRange = `${storeSheet.sheetName}!${searchedColumnLetter}${rowIndex}`;
-            await googleSheets.writeSheetData(storeSheet.spreadsheetId, searchedCellRange, [['Yes']]);
-          }
-          
-          results.push({ rowIndex, email: crawlResult.email, searched: crawlResult.searched, error: crawlResult.error });
-          await new Promise(resolve => setTimeout(resolve, 300));
-        } catch (error: any) {
-          results.push({ rowIndex, email: null, searched: false, error: error.message });
-        }
+          results.push({ rowIndex, email: crawl.email, searched: crawl.searched });
+          await new Promise(r => setTimeout(r, 300));
+        } catch (e) { results.push({ rowIndex, email: null, searched: false }); }
       }
+      clearUserCache(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      res.json({ totalProcessed: results.length, emailsFound: results.filter(r => r.email).length, remainingToProcess: allNeedingCrawl.length - results.length, hasMore: allNeedingCrawl.length > 10 });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+  });
 
-      const foundCount = results.filter(r => r.email).length;
-      const remaining = allNeedingCrawl.length - results.length;
-      
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      clearUserCache(userId);
-      
-      res.json({ 
-        message: `Processed ${results.length} listings, found ${foundCount} emails`,
-        results,
-        totalProcessed: results.length,
-        emailsFound: foundCount,
-        remainingToProcess: remaining,
-        hasMore: remaining > 0
-      });
-    } catch (error: any) {
-      console.error("[EmailCrawl] Error:", error);
-      res.status(500).json({ message: error.message || "Failed to crawl emails" });
-    }
-  })
-
-  // Get agents (admin only)
   app.get('/api/users/agents', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const agents = await storage.getAgents();
