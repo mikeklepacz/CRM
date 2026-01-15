@@ -818,7 +818,7 @@ export default function Apollo() {
           setReviewSelectedPeople(new Set());
         }
       }}>
-        <DialogContent className="max-w-2xl max-h-[85vh]">
+        <DialogContent className="max-w-3xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Lead Review Queue</DialogTitle>
             <DialogDescription>
@@ -1485,6 +1485,12 @@ function LeadReviewQueue({
                 <div className="text-sm text-muted-foreground">{company.primary_domain}</div>
               </div>
             </div>
+
+            {company.short_description && (
+              <p className="text-sm text-muted-foreground line-clamp-2">
+                {company.short_description}
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-3 text-sm">
               {company.estimated_num_employees && (

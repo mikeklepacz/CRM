@@ -115,6 +115,65 @@ async function makeApolloRequest<T>(endpoint: string, body: Record<string, any>)
   return result as T;
 }
 
+async function makeApolloGetRequest<T>(endpoint: string, params: Record<string, string>): Promise<T> {
+  const apiKey = getApiKey();
+  
+  const queryString = new URLSearchParams(params).toString();
+  const url = `${APOLLO_API_BASE}${endpoint}?${queryString}`;
+  
+  console.log(`[Apollo API] GET Request to ${endpoint}`);
+  console.log(`[Apollo API] Query params:`, JSON.stringify(params, null, 2));
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      'x-api-key': apiKey,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.log(`[Apollo API] Error response (${response.status}):`, errorText);
+    throw new Error(`Apollo API error (${response.status}): ${errorText}`);
+  }
+
+  const result = await response.json();
+  console.log(`[Apollo API] Response from ${endpoint}:`, JSON.stringify(result, null, 2).substring(0, 2000));
+  return result as T;
+}
+
+interface OrganizationEnrichResult {
+  organization: ApolloOrganization | null;
+}
+
+export async function enrichOrganization(options: {
+  domain?: string;
+  organizationId?: string;
+}): Promise<ApolloOrganization | null> {
+  const params: Record<string, string> = {};
+  
+  if (options.domain) {
+    params.domain = options.domain;
+  }
+  if (options.organizationId) {
+    params.organization_id = options.organizationId;
+  }
+  
+  if (Object.keys(params).length === 0) {
+    throw new Error('Either domain or organizationId is required for organization enrichment');
+  }
+  
+  try {
+    const result = await makeApolloGetRequest<OrganizationEnrichResult>('/organizations/enrich', params);
+    return result.organization || null;
+  } catch (error) {
+    console.error('[Apollo API] Organization enrichment failed:', error);
+    return null;
+  }
+}
+
 export async function searchOrganizations(options: {
   domains?: string[];
   name?: string;
@@ -230,13 +289,19 @@ export async function previewContactsForCompany(options: {
   console.log(`[Apollo Preview] Settings:`, JSON.stringify({ targetSeniorities: settings.targetSeniorities, targetTitles: settings.targetTitles, maxContactsPerCompany: settings.maxContactsPerCompany }, null, 2));
   
   if (options.domain) {
-    console.log(`[Apollo Preview] Searching by domain: ${options.domain}`);
-    const orgResult = await searchOrganizations({
-      domains: [options.domain],
-      perPage: 1,
-    });
-    console.log(`[Apollo Preview] Organization search by domain found ${orgResult.organizations?.length || 0} orgs`);
-    company = orgResult.organizations[0] || null;
+    console.log(`[Apollo Preview] Enriching by domain: ${options.domain}`);
+    company = await enrichOrganization({ domain: options.domain });
+    console.log(`[Apollo Preview] Organization enrichment by domain found: ${company?.name || 'none'}`);
+    
+    if (!company) {
+      console.log(`[Apollo Preview] Enrichment failed, falling back to search by domain: ${options.domain}`);
+      const orgResult = await searchOrganizations({
+        domains: [options.domain],
+        perPage: 1,
+      });
+      console.log(`[Apollo Preview] Organization search by domain found ${orgResult.organizations?.length || 0} orgs`);
+      company = orgResult.organizations[0] || null;
+    }
   } else if (options.companyName) {
     console.log(`[Apollo Preview] Searching by company name: ${options.companyName}`);
     const orgResult = await searchOrganizations({
@@ -244,7 +309,19 @@ export async function previewContactsForCompany(options: {
       perPage: 1,
     });
     console.log(`[Apollo Preview] Organization search by name found ${orgResult.organizations?.length || 0} orgs`);
-    company = orgResult.organizations[0] || null;
+    const searchedCompany = orgResult.organizations[0] || null;
+    
+    if (searchedCompany?.primary_domain) {
+      console.log(`[Apollo Preview] Enriching found company by domain: ${searchedCompany.primary_domain}`);
+      company = await enrichOrganization({ domain: searchedCompany.primary_domain });
+    } else if (searchedCompany?.id) {
+      console.log(`[Apollo Preview] Enriching found company by id: ${searchedCompany.id}`);
+      company = await enrichOrganization({ organizationId: searchedCompany.id });
+    }
+    
+    if (!company) {
+      company = searchedCompany;
+    }
   } else {
     console.log(`[Apollo Preview] No domain or companyName provided!`);
   }
@@ -255,6 +332,7 @@ export async function previewContactsForCompany(options: {
   }
 
   console.log(`[Apollo Preview] Found company: ${company.name} (id: ${company.id}, domain: ${company.primary_domain})`);
+  console.log(`[Apollo Preview] Company details - employees: ${company.estimated_num_employees}, industry: ${company.industry}, keywords: ${company.keywords?.length || 0}`);
 
   const peopleResult = await searchPeople({
     organizationDomains: company.primary_domain ? [company.primary_domain] : undefined,
