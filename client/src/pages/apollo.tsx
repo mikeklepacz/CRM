@@ -32,7 +32,17 @@ import {
   Eye,
   Download,
   Linkedin,
-  Globe
+  Globe,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  SkipForward,
+  Ban,
+  Tag,
+  MapPin,
+  Factory,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 interface ApolloSettings {
@@ -100,11 +110,15 @@ interface PreviewResult {
     website_url?: string;
     estimated_num_employees?: number;
     industry?: string;
+    industries?: string[];
+    keywords?: string[];
+    short_description?: string;
     city?: string;
     state?: string;
     country?: string;
     linkedin_url?: string;
     logo_url?: string;
+    raw_address?: string;
   } | null;
   contacts: Array<{
     id: string;
@@ -171,6 +185,16 @@ export default function Apollo() {
   }>>([]);
   const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
   const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
+  const [reviewQueueOpen, setReviewQueueOpen] = useState(false);
+  const [reviewQueueIndex, setReviewQueueIndex] = useState(0);
+  const [reviewQueueData, setReviewQueueData] = useState<Array<{
+    contact: StoreContact;
+    preview: PreviewResult | null;
+    error?: string;
+  }>>([]);
+  const [reviewQueueLoading, setReviewQueueLoading] = useState(false);
+  const [reviewSelectedPeople, setReviewSelectedPeople] = useState<Set<string>>(new Set());
+  const [keywordsExpanded, setKeywordsExpanded] = useState(false);
 
   const { data: settings, isLoading: settingsLoading } = useQuery<ApolloSettings>({
     queryKey: ["/api/apollo/settings"],
@@ -358,6 +382,142 @@ export default function Apollo() {
     });
   };
 
+  const handleStartReviewQueue = async () => {
+    if (selectedLinks.size === 0) return;
+    
+    const contacts = storeContacts?.contacts?.filter(c => selectedLinks.has(c.link)) || [];
+    
+    setReviewQueueOpen(true);
+    setReviewQueueLoading(true);
+    setReviewQueueData([]);
+    setReviewQueueIndex(0);
+    setReviewSelectedPeople(new Set());
+    setKeywordsExpanded(false);
+    
+    const results: Array<{ contact: StoreContact; preview: PreviewResult | null; error?: string }> = [];
+    
+    for (const contact of contacts) {
+      try {
+        const domain = extractDomain(contact.website);
+        const response = await apiRequest("POST", "/api/apollo/preview", {
+          domain: domain || undefined,
+          companyName: !domain ? contact.name : undefined,
+        }) as PreviewResult;
+        results.push({ contact, preview: response });
+      } catch (error: any) {
+        results.push({ contact, preview: null, error: error.message || "Failed to preview" });
+      }
+      setReviewQueueData([...results]);
+    }
+    
+    setReviewQueueLoading(false);
+  };
+
+  const handleReviewTogglePerson = (key: string) => {
+    const newSet = new Set(reviewSelectedPeople);
+    if (newSet.has(key)) {
+      newSet.delete(key);
+    } else {
+      newSet.add(key);
+    }
+    setReviewSelectedPeople(newSet);
+  };
+
+  const handleReviewSelectAll = () => {
+    const currentItem = reviewQueueData[reviewQueueIndex];
+    if (!currentItem?.preview?.contacts) return;
+    
+    const newSet = new Set(reviewSelectedPeople);
+    currentItem.preview.contacts.forEach(person => {
+      newSet.add(`${currentItem.contact.link}::${person.id}`);
+    });
+    setReviewSelectedPeople(newSet);
+  };
+
+  const handleReviewDeselectAll = () => {
+    const currentItem = reviewQueueData[reviewQueueIndex];
+    if (!currentItem?.preview?.contacts) return;
+    
+    const newSet = new Set(reviewSelectedPeople);
+    currentItem.preview.contacts.forEach(person => {
+      newSet.delete(`${currentItem.contact.link}::${person.id}`);
+    });
+    setReviewSelectedPeople(newSet);
+  };
+
+  const handleReviewSkip = () => {
+    if (reviewQueueIndex < reviewQueueData.length - 1) {
+      setReviewQueueIndex(reviewQueueIndex + 1);
+      setKeywordsExpanded(false);
+    }
+  };
+
+  const handleReviewReject = async () => {
+    const currentItem = reviewQueueData[reviewQueueIndex];
+    if (!currentItem) return;
+    
+    toast({
+      title: "Company rejected",
+      description: `"${currentItem.contact.name}" has been marked as ignored.`,
+    });
+    
+    if (reviewQueueIndex < reviewQueueData.length - 1) {
+      setReviewQueueIndex(reviewQueueIndex + 1);
+      setKeywordsExpanded(false);
+    } else {
+      setReviewQueueOpen(false);
+    }
+  };
+
+  const handleReviewEnrich = async () => {
+    const currentItem = reviewQueueData[reviewQueueIndex];
+    if (!currentItem) return;
+    
+    const currentPeopleKeys = (currentItem.preview?.contacts || [])
+      .map(person => `${currentItem.contact.link}::${person.id}`)
+      .filter(key => reviewSelectedPeople.has(key));
+    
+    if (currentPeopleKeys.length === 0) {
+      toast({ title: "No people selected", variant: "destructive" });
+      return;
+    }
+    
+    setIsEnriching(true);
+    
+    try {
+      const domain = extractDomain(currentItem.contact.website);
+      await apiRequest("POST", "/api/apollo/enrich", {
+        googleSheetLink: currentItem.contact.link,
+        domain: domain || undefined,
+        companyName: !domain ? currentItem.contact.name : undefined,
+      });
+      
+      toast({
+        title: "Enrichment complete",
+        description: `Successfully enriched contacts for "${currentItem.contact.name}"`,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/check-enrichment"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/settings"] });
+      
+      if (reviewQueueIndex < reviewQueueData.length - 1) {
+        setReviewQueueIndex(reviewQueueIndex + 1);
+        setKeywordsExpanded(false);
+      } else {
+        setReviewQueueOpen(false);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Enrichment failed",
+        description: error.message || "Failed to enrich contacts",
+        variant: "destructive",
+      });
+    }
+    
+    setIsEnriching(false);
+  };
+
   const filteredContacts = storeContacts?.contacts?.filter(contact => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -462,18 +622,29 @@ export default function Apollo() {
                     data-testid="input-search"
                   />
                   {selectedLinks.size > 0 && (
-                    <Button 
-                      onClick={handleBulkEnrich}
-                      disabled={isEnriching}
-                      data-testid="button-bulk-enrich"
-                    >
-                      {isEnriching ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 mr-2" />
-                      )}
-                      Enrich {selectedLinks.size} Selected
-                    </Button>
+                    <>
+                      <Button 
+                        variant="outline"
+                        onClick={handleStartReviewQueue}
+                        disabled={isEnriching || reviewQueueLoading}
+                        data-testid="button-review-queue"
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Review {selectedLinks.size}
+                      </Button>
+                      <Button 
+                        onClick={handleBulkEnrich}
+                        disabled={isEnriching}
+                        data-testid="button-bulk-enrich"
+                      >
+                        {isEnriching ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4 mr-2" />
+                        )}
+                        Enrich {selectedLinks.size} Selected
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -636,6 +807,40 @@ export default function Apollo() {
             onDeselectAll={() => setSelectedPeople(new Set())}
             onEnrich={handleBulkEnrichSelected}
             isEnriching={isEnriching}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reviewQueueOpen} onOpenChange={(open) => {
+        if (!open && !isEnriching) {
+          setReviewQueueOpen(false);
+          setReviewQueueData([]);
+          setReviewSelectedPeople(new Set());
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle>Lead Review Queue</DialogTitle>
+            <DialogDescription>
+              Review companies one at a time, enrich the right ones, reject the wrong ones
+            </DialogDescription>
+          </DialogHeader>
+          <LeadReviewQueue
+            data={reviewQueueData}
+            currentIndex={reviewQueueIndex}
+            onIndexChange={setReviewQueueIndex}
+            isLoading={reviewQueueLoading}
+            totalCompanies={selectedLinks.size}
+            selectedPeople={reviewSelectedPeople}
+            onTogglePerson={handleReviewTogglePerson}
+            onSelectAll={handleReviewSelectAll}
+            onDeselectAll={handleReviewDeselectAll}
+            onEnrich={handleReviewEnrich}
+            onSkip={handleReviewSkip}
+            onReject={handleReviewReject}
+            isEnriching={isEnriching}
+            keywordsExpanded={keywordsExpanded}
+            onToggleKeywords={() => setKeywordsExpanded(!keywordsExpanded)}
           />
         </DialogContent>
       </Dialog>
@@ -1118,6 +1323,341 @@ function BulkPreviewDialog({
           )}
           Enrich {selectedPeople.size} Selected People
         </Button>
+      </div>
+    </div>
+  );
+}
+
+interface LeadReviewQueueProps {
+  data: Array<{
+    contact: StoreContact;
+    preview: PreviewResult | null;
+    error?: string;
+  }>;
+  currentIndex: number;
+  onIndexChange: (index: number) => void;
+  isLoading: boolean;
+  totalCompanies: number;
+  selectedPeople: Set<string>;
+  onTogglePerson: (key: string) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+  onEnrich: () => void;
+  onSkip: () => void;
+  onReject: () => void;
+  isEnriching: boolean;
+  keywordsExpanded: boolean;
+  onToggleKeywords: () => void;
+}
+
+function LeadReviewQueue({
+  data,
+  currentIndex,
+  onIndexChange,
+  isLoading,
+  totalCompanies,
+  selectedPeople,
+  onTogglePerson,
+  onSelectAll,
+  onDeselectAll,
+  onEnrich,
+  onSkip,
+  onReject,
+  isEnriching,
+  keywordsExpanded,
+  onToggleKeywords,
+}: LeadReviewQueueProps) {
+  const currentItem = data[currentIndex];
+  const preview = currentItem?.preview;
+  const company = preview?.company;
+  const contacts = preview?.contacts || [];
+
+  const currentPeopleKeys = contacts.map(person => 
+    `${currentItem?.contact.link}::${person.id}`
+  );
+  const selectedCount = currentPeopleKeys.filter(key => selectedPeople.has(key)).length;
+
+  if (isLoading && data.length < totalCompanies) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <div className="text-center">
+          <p className="font-medium">Loading company data...</p>
+          <p className="text-sm text-muted-foreground">
+            {data.length} of {totalCompanies} complete
+          </p>
+        </div>
+        <div className="w-full max-w-md bg-muted rounded-full h-2 overflow-hidden">
+          <div 
+            className="bg-primary h-full transition-all duration-300"
+            style={{ width: `${(data.length / totalCompanies) * 100}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentItem) {
+    return (
+      <div className="py-8 text-center">
+        <CheckCircle2 className="h-12 w-12 mx-auto text-green-600 mb-4" />
+        <h3 className="font-medium mb-2">Review Complete</h3>
+        <p className="text-sm text-muted-foreground">
+          You've reviewed all companies in the queue.
+        </p>
+      </div>
+    );
+  }
+
+  const displayedKeywords = keywordsExpanded 
+    ? (company?.keywords || [])
+    : (company?.keywords || []).slice(0, 8);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between border-b pb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            Company {currentIndex + 1} of {data.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="icon"
+            disabled={currentIndex === 0}
+            onClick={() => onIndexChange(currentIndex - 1)}
+            data-testid="button-prev-company"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="icon"
+            disabled={currentIndex >= data.length - 1}
+            onClick={() => onIndexChange(currentIndex + 1)}
+            data-testid="button-next-company"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {currentItem.error ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Error loading {currentItem.contact.name}: {currentItem.error}
+          </AlertDescription>
+        </Alert>
+      ) : !company ? (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            "{currentItem.contact.name}" was not found in Apollo.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              {company.logo_url && (
+                <img 
+                  src={company.logo_url} 
+                  alt={company.name}
+                  className="w-12 h-12 rounded-lg object-contain bg-muted"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-semibold text-lg">{company.name}</h3>
+                  {company.linkedin_url && (
+                    <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer">
+                      <Linkedin className="h-4 w-4 text-blue-600" />
+                    </a>
+                  )}
+                  {company.website_url && (
+                    <a href={company.website_url} target="_blank" rel="noopener noreferrer">
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                    </a>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">{company.primary_domain}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {company.estimated_num_employees && (
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span>{company.estimated_num_employees} employees</span>
+                </div>
+              )}
+              {(company.industry || (company.industries && company.industries.length > 0)) && (
+                <div className="flex items-center gap-2">
+                  <Factory className="h-4 w-4 text-muted-foreground" />
+                  <span>{company.industry || company.industries?.join(", ")}</span>
+                </div>
+              )}
+              {(company.city || company.state || company.country) && (
+                <div className="flex items-center gap-2 col-span-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {[company.city, company.state, company.country]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {company.keywords && company.keywords.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Keywords</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {displayedKeywords.map((keyword, idx) => (
+                    <Badge key={idx} variant="secondary" className="text-xs">
+                      {keyword}
+                    </Badge>
+                  ))}
+                  {company.keywords.length > 8 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={onToggleKeywords}
+                    >
+                      {keywordsExpanded ? (
+                        <>
+                          <ChevronUp className="h-3 w-3 mr-1" />
+                          Show less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3 w-3 mr-1" />
+                          +{company.keywords.length - 8} more
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Contacts ({contacts.length})
+              </h4>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={onSelectAll} data-testid="button-select-all-review">
+                  Select All
+                </Button>
+                <Button variant="outline" size="sm" onClick={onDeselectAll} data-testid="button-deselect-all-review">
+                  Deselect All
+                </Button>
+              </div>
+            </div>
+
+            {contacts.length > 0 ? (
+              <ScrollArea className="h-[200px] border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10"></TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Seniority</TableHead>
+                      <TableHead className="w-16">Email</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {contacts.map((person) => {
+                      const personKey = `${currentItem.contact.link}::${person.id}`;
+                      return (
+                        <TableRow key={person.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedPeople.has(personKey)}
+                              onCheckedChange={() => onTogglePerson(personKey)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium">
+                              {person.first_name} {person.last_name?.replace(/\*+/g, "***")}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm">{person.title || "-"}</span>
+                          </TableCell>
+                          <TableCell>
+                            {person.seniority ? (
+                              <Badge variant="outline" className="text-xs">
+                                {person.seniority}
+                              </Badge>
+                            ) : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {person.has_email ? (
+                              <Mail className="h-4 w-4 text-green-600" />
+                            ) : "-"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            ) : (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  No contacts found matching your target criteria.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        </>
+      )}
+
+      <div className="flex justify-between gap-2 pt-4 border-t">
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={onReject}
+            data-testid="button-reject-company"
+          >
+            <Ban className="h-4 w-4 mr-2" />
+            Reject
+          </Button>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={onSkip}
+            data-testid="button-skip-company"
+          >
+            <SkipForward className="h-4 w-4 mr-2" />
+            Skip
+          </Button>
+          <Button 
+            onClick={onEnrich} 
+            disabled={isEnriching || selectedCount === 0}
+            data-testid="button-enrich-review"
+          >
+            {isEnriching ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 mr-2" />
+            )}
+            Enrich {selectedCount} Selected
+          </Button>
+        </div>
       </div>
     </div>
   );

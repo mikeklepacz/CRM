@@ -18,10 +18,14 @@ interface ApolloOrganization {
   logo_url?: string;
   primary_domain?: string;
   industry?: string;
+  industries?: string[];
+  keywords?: string[];
+  short_description?: string;
   estimated_num_employees?: number;
   city?: string;
   state?: string;
   country?: string;
+  raw_address?: string;
 }
 
 interface ApolloPerson {
