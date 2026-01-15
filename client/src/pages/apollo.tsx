@@ -1560,7 +1560,7 @@ function LeadReviewQueue({
                       <TableHead>Name</TableHead>
                       <TableHead>Title</TableHead>
                       <TableHead>Seniority</TableHead>
-                      <TableHead className="w-16">LinkedIn</TableHead>
+                      <TableHead className="w-16" title="Available after enrichment">LinkedIn</TableHead>
                       <TableHead className="w-16">Email</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1595,7 +1595,9 @@ function LeadReviewQueue({
                               <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" data-testid={`link-linkedin-${person.id}`}>
                                 <Linkedin className="h-4 w-4 text-blue-600" />
                               </a>
-                            ) : "-"}
+                            ) : (
+                              <span className="text-xs text-muted-foreground" title="LinkedIn URL available after enrichment">-</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {person.has_email ? (
