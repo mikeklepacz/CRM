@@ -3202,10 +3202,25 @@ export default function ClientDashboard() {
                     setIsEmailCrawling(true);
                     setEmailCrawlResults(null);
                     try {
+                      // Normalize URL helper for consistent matching
+                      const normalizeUrl = (url: string) => {
+                        if (!url) return '';
+                        return url.toLowerCase().trim()
+                          .replace(/^https?:\/\//, '')
+                          .replace(/^www\./, '')
+                          .replace(/\/$/, '');
+                      };
+                      
+                      // Build list of visible websites with their email status
+                      const visibleWebsites = filteredData.map((row: any) => ({
+                        website: normalizeUrl(row.Website || row.website || ''),
+                        hasEmail: !!(row.Email || row.email)
+                      })).filter((v: any) => v.website);
+                      
                       const response = await fetch('/api/clients/crawl-emails', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ projectId: currentProject?.id }),
+                        body: JSON.stringify({ visibleWebsites, projectId: currentProject?.id }),
                         credentials: 'include'
                       });
                       const data = await response.json();

@@ -8905,14 +8905,27 @@ IMPORTANT:
 
 
 
-  // Batch crawl websites for emails from Google Sheets (only visible/filtered rows)
+  // Batch crawl websites for emails from Google Sheets (respects visible filter + project authorization)
   app.post("/api/clients/crawl-emails", isAuthenticatedCustom, async (req, res) => {
     try {
       const tenantId = req.user?.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant ID required" });
       
-      // Accept visible websites from frontend (already filtered by tenant/project)
-      const { visibleWebsites } = req.body as { visibleWebsites?: Array<{ website: string; hasEmail: boolean }> };
+      // Accept visible websites from frontend + projectId for authorization
+      const { visibleWebsites, projectId } = req.body as { 
+        visibleWebsites?: Array<{ website: string; hasEmail: boolean }>;
+        projectId?: string;
+      };
+      
+      // Server-side authorization: look up project to get trusted category name
+      let authorizedCategoryName: string | null = null;
+      if (projectId) {
+        const project = await storage.getTenantProjectById(projectId, tenantId);
+        if (!project) {
+          return res.status(403).json({ message: "Invalid or unauthorized project" });
+        }
+        authorizedCategoryName = project.name;
+      }
       
       if (!visibleWebsites || visibleWebsites.length === 0) {
         return res.json({ message: "No websites to check", totalProcessed: 0, emailsFound: 0, remainingToProcess: 0, hasMore: false });
@@ -8929,27 +8942,54 @@ IMPORTANT:
       const websiteIdx = headers.findIndex(h => h.toLowerCase().trim() === 'website');
       const emailIdx = headers.findIndex(h => h.toLowerCase().trim() === 'email');
       const searchedIdx = headers.findIndex(h => h.toLowerCase().trim() === 'email searched');
+      const categoryIdx = headers.findIndex(h => h.toLowerCase().trim() === 'category');
       
       if (websiteIdx === -1) return res.status(400).json({ message: "No Website column found" });
       if (emailIdx === -1) return res.status(400).json({ message: "No Email column found" });
       
-      // Build a map of website URL to row index for quick lookup
-      const websiteToRow = new Map<string, number>();
+      // Normalize URL for consistent matching (remove protocol, www, trailing slash)
+      const normalizeUrl = (url: string): string => {
+        if (!url) return '';
+        return url.toLowerCase().trim()
+          .replace(/^https?:\/\//, '')
+          .replace(/^www\./, '')
+          .replace(/\/$/, '');
+      };
+      
+      // Build map of authorized websites -> row index (validated against category)
+      const authorizedWebsiteToRow = new Map<string, { rowIndex: number; originalUrl: string }>();
       for (let i = 1; i < rows.length; i++) {
-        const website = rows[i][websiteIdx]?.toString().trim().toLowerCase();
-        if (website) {
-          websiteToRow.set(website, i + 1); // Sheet rows are 1-indexed
+        const website = rows[i][websiteIdx]?.toString().trim() || '';
+        const email = rows[i][emailIdx]?.toString().trim() || '';
+        const rowCategory = categoryIdx !== -1 ? rows[i][categoryIdx]?.toString().trim().toLowerCase() : '';
+        
+        // Skip if no website or already has email
+        if (!website || email) continue;
+        
+        // Skip if category doesn't match authorized category (when project filter is active)
+        if (authorizedCategoryName && rowCategory && rowCategory !== authorizedCategoryName.toLowerCase()) {
+          continue;
         }
+        
+        const normalized = normalizeUrl(website);
+        authorizedWebsiteToRow.set(normalized, { rowIndex: i + 1, originalUrl: website });
       }
       
-      // Filter to only websites that need crawling (no email yet) and exist in sheet
-      const needsCrawling = visibleWebsites
-        .filter(v => v.website && !v.hasEmail)
-        .map(v => ({
-          website: v.website,
-          rowIndex: websiteToRow.get(v.website.toLowerCase().trim())
-        }))
-        .filter(v => v.rowIndex !== undefined);
+      // Intersect client's visible list with server's authorized set (security + user control)
+      const needsCrawling: Array<{ website: string; rowIndex: number }> = [];
+      for (const v of visibleWebsites) {
+        if (!v.website || v.hasEmail) continue;
+        const normalized = normalizeUrl(v.website);
+        const match = authorizedWebsiteToRow.get(normalized);
+        if (match) {
+          needsCrawling.push({ website: match.originalUrl, rowIndex: match.rowIndex });
+        }
+        // If no match, website is either not in tenant's sheet or not in authorized category - silently skip
+      }
+      
+      if (needsCrawling.length === 0) {
+        return res.json({ message: "No authorized websites need crawling", totalProcessed: 0, emailsFound: 0, remainingToProcess: 0, hasMore: false });
+      }
       
       const toProcess = needsCrawling.slice(0, 10);
       const results = [];
