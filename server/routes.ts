@@ -118,7 +118,7 @@ async function addCallsToThreadInMicroBatches(
           .join('\n');
         const storeInfo = call.client?.data?.Name ? ` (Store: ${call.client.data.Name})` : '';
         const overallIdx = i * callsPerBatch + idx + 1;
-        return `\n#### Call ${overallIdx}${storeInfo}\n- Duration: ${call.session?.callDurationSecs || 'N/A'}s\n- Outcome: ${call.session?.status}\n- Interest Level: ${call.session?.interestLevel || 'N/A'}\n- Transcript:\n```\n${fullTranscript}\n````;
+        return `\n#### Call ${overallIdx}${storeInfo}\n- Duration: ${call.session?.callDurationSecs || 'N/A'}s\n- Outcome: ${call.session?.status}\n- Interest Level: ${call.session?.interestLevel || 'N/A'}\n- Transcript:\n\`\`\`\n${fullTranscript}\n\`\`\``;
       })
       .join('\n');
 
@@ -4652,7 +4652,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
    - Respond with a JSON object containing targeted edits
    - Use this exact format:
 
-```json
+\`\`\`json
 {
   "edits": [
     {
@@ -4666,7 +4666,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
     }
   ]
 }
-```
+\`\`\`
 
 **IMPORTANT RULES:**
 - Use the file_search tool to access all KB files - they're already uploaded to OpenAI
@@ -4810,13 +4810,13 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       const contextualInstructions = `You are the Aligner, an AI assistant that helps improve knowledge base files based on call analysis.
 
 **AVAILABLE KB FILES:**
-```
+\`\`\`
 ${kbFilesList}
-```
+\`\`\`
 
 The user has agreed to create proposals. Please output your recommended changes in this EXACT JSON format:
 
-```json
+\`\`\`json
 {
   "edits": [
     {
@@ -4830,7 +4830,7 @@ The user has agreed to create proposals. Please output your recommended changes 
     }
   ]
 }
-```
+\`\`\`
 
 **IMPORTANT:**
 - ONLY reference files from the KB file list above
@@ -6345,7 +6345,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       // Build context for Aligner
       const kbContext = kbFiles
-        .map(file => `\n### ${file.filename}\n```\n${file.currentContent || '(empty)'}\n````)
+        .map(file => `\n### ${file.filename}\n\`\`\`\n${file.currentContent || '(empty)'}\n\`\`\``)
         .join('\n');
 
       // Build Wick Coach analysis section (optional)
@@ -17318,10 +17318,10 @@ ${rawText}`;
         icsLines.push(`UID:${reminder.id}@hempwickcrm.app`);
         icsLines.push(`DTSTAMP:${formatICalDate(now)}`);
         icsLines.push(`DTSTART:${formatICalDate(triggerDate)}`);
-        icsLines.push(`SUMMARY:${reminder.title.replace(/[,;\\]/g, '\$&')}`);
+        icsLines.push(`SUMMARY:${reminder.title.replace(/[,;\\]/g, '\\$&')}`);
 
         if (reminder.description) {
-          const cleanDesc = reminder.description.replace(/[,;\\]/g, '\$&').replace(/\n/g, '\\n');
+          const cleanDesc = reminder.description.replace(/[,;\\]/g, '\\$&').replace(/\n/g, '\\n');
           icsLines.push(`DESCRIPTION:${cleanDesc}`);
         }
 
