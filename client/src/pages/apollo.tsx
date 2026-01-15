@@ -1592,7 +1592,7 @@ function LeadReviewQueue({
                           </TableCell>
                           <TableCell>
                             {person.linkedin_url ? (
-                              <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer">
+                              <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" data-testid={`link-linkedin-${person.id}`}>
                                 <Linkedin className="h-4 w-4 text-blue-600" />
                               </a>
                             ) : "-"}

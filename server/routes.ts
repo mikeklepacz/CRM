@@ -26965,12 +26965,12 @@ ${conversationContext}`;
         return res.json({ contacts: [] });
       }
       
-      // Get all links that are already in apollo_companies (enriched or not_found)
-      const alreadyProcessedLinks = await db
+      // Get links that are already enriched (not_found can be retried)
+      const alreadyEnrichedLinks = await db
         .select({ link: apolloCompanies.googleSheetLink })
         .from(apolloCompanies)
-        .where(eq(apolloCompanies.tenantId, tenantId));
-      const processedLinkSet = new Set(alreadyProcessedLinks.map(r => r.link));
+        .where(and(eq(apolloCompanies.tenantId, tenantId), eq(apolloCompanies.enrichmentStatus, 'enriched')));
+      const enrichedLinkSet = new Set(alreadyEnrichedLinks.map(r => r.link));
       
       const storeData = await googleSheets.readSheetData(
         storeSheet.spreadsheetId,
@@ -27007,7 +27007,7 @@ ${conversationContext}`;
           }
           
           // Skip if already processed in Apollo
-          if (processedLinkSet.has(link)) {
+          if (enrichedLinkSet.has(link)) {
             return false;
           }
           
