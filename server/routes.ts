@@ -118,7 +118,7 @@ async function addCallsToThreadInMicroBatches(
           .join('\n');
         const storeInfo = call.client?.data?.Name ? ` (Store: ${call.client.data.Name})` : '';
         const overallIdx = i * callsPerBatch + idx + 1;
-        return `\n#### Call ${overallIdx}${storeInfo}\n- Duration: ${call.session?.callDurationSecs || 'N/A'}s\n- Outcome: ${call.session?.status}\n- Interest Level: ${call.session?.interestLevel || 'N/A'}\n- Transcript:\n\`\`\`\n${fullTranscript}\n\`\`\``;
+        return `\n#### Call ${overallIdx}${storeInfo}\n- Duration: ${call.session?.callDurationSecs || 'N/A'}s\n- Outcome: ${call.session?.status}\n- Interest Level: ${call.session?.interestLevel || 'N/A'}\n- Transcript:\n```\n${fullTranscript}\n````;
       })
       .join('\n');
 
@@ -4652,7 +4652,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
    - Respond with a JSON object containing targeted edits
    - Use this exact format:
 
-\`\`\`json
+```json
 {
   "edits": [
     {
@@ -4666,7 +4666,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
     }
   ]
 }
-\`\`\`
+```
 
 **IMPORTANT RULES:**
 - Use the file_search tool to access all KB files - they're already uploaded to OpenAI
@@ -4810,13 +4810,13 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       const contextualInstructions = `You are the Aligner, an AI assistant that helps improve knowledge base files based on call analysis.
 
 **AVAILABLE KB FILES:**
-\`\`\`
+```
 ${kbFilesList}
-\`\`\`
+```
 
 The user has agreed to create proposals. Please output your recommended changes in this EXACT JSON format:
 
-\`\`\`json
+```json
 {
   "edits": [
     {
@@ -4830,7 +4830,7 @@ The user has agreed to create proposals. Please output your recommended changes 
     }
   ]
 }
-\`\`\`
+```
 
 **IMPORTANT:**
 - ONLY reference files from the KB file list above
@@ -6345,7 +6345,7 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       // Build context for Aligner
       const kbContext = kbFiles
-        .map(file => `\n### ${file.filename}\n\`\`\`\n${file.currentContent || '(empty)'}\n\`\`\``)
+        .map(file => `\n### ${file.filename}\n```\n${file.currentContent || '(empty)'}\n````)
         .join('\n');
 
       // Build Wick Coach analysis section (optional)
@@ -17318,10 +17318,10 @@ ${rawText}`;
         icsLines.push(`UID:${reminder.id}@hempwickcrm.app`);
         icsLines.push(`DTSTAMP:${formatICalDate(now)}`);
         icsLines.push(`DTSTART:${formatICalDate(triggerDate)}`);
-        icsLines.push(`SUMMARY:${reminder.title.replace(/[,;\\]/g, '\\$&')}`);
+        icsLines.push(`SUMMARY:${reminder.title.replace(/[,;\\]/g, '\$&')}`);
 
         if (reminder.description) {
-          const cleanDesc = reminder.description.replace(/[,;\\]/g, '\\$&').replace(/\n/g, '\\n');
+          const cleanDesc = reminder.description.replace(/[,;\\]/g, '\$&').replace(/\n/g, '\\n');
           icsLines.push(`DESCRIPTION:${cleanDesc}`);
         }
 
@@ -26930,6 +26930,96 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error getting contacts by link:', error);
       res.status(500).json({ message: error.message || 'Failed to get contacts by link' });
+    }
+  });
+
+  // GET /api/apollo/leads-without-emails - Get Store Database leads that are missing emails (for Apollo enrichment)
+  app.get('/api/apollo/leads-without-emails', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      
+      const projectId = req.query.projectId as string | undefined;
+      
+      // Get project name for category filtering if projectId is provided
+      let allowedCategoryName: string | null = null;
+      if (projectId) {
+        const project = await db
+          .select({ name: tenantProjects.name })
+          .from(tenantProjects)
+          .where(eq(tenantProjects.id, projectId))
+          .limit(1);
+        
+        if (project.length === 0) {
+          return res.json({ contacts: [] });
+        }
+        allowedCategoryName = project[0].name.toLowerCase().trim();
+      }
+      
+      // Get Store Database Google Sheet
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
+      if (!storeSheet) {
+        return res.json({ contacts: [] });
+      }
+      
+      const storeData = await googleSheets.readSheetData(
+        storeSheet.spreadsheetId,
+        `${storeSheet.sheetName}!A:ZZ`
+      );
+      
+      if (!storeData || storeData.length === 0) {
+        return res.json({ contacts: [] });
+      }
+      
+      const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
+      const rows = storeData.slice(1);
+      
+      const nameIndex = headers.indexOf('name');
+      const emailIndex = headers.indexOf('email');
+      const stateIndex = headers.indexOf('state');
+      const linkIndex = headers.indexOf('link');
+      const websiteIndex = headers.indexOf('website');
+      const categoryIndex = headers.indexOf('category');
+      
+      // Filter for rows WITHOUT emails (or with invalid emails)
+      const leadsWithoutEmails = rows
+        .filter((row: any[]) => {
+          // Must NOT have a valid email
+          const email = emailIndex !== -1 ? (row[emailIndex] || '').trim() : '';
+          if (email && email.includes('@')) {
+            return false; // Has valid email, skip
+          }
+          
+          // Must have a link (required for Apollo enrichment)
+          const link = linkIndex !== -1 ? (row[linkIndex] || '').trim() : '';
+          if (!link) {
+            return false;
+          }
+          
+          // If project filtering is active, check category
+          if (allowedCategoryName !== null && categoryIndex !== -1) {
+            const rowCategory = (row[categoryIndex] || '').toLowerCase().trim();
+            if (!rowCategory || rowCategory !== allowedCategoryName) {
+              return false;
+            }
+          }
+          
+          return true;
+        })
+        .map((row: any[]) => ({
+          name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
+          email: emailIndex !== -1 ? (row[emailIndex] || '').trim() : '',
+          state: stateIndex !== -1 ? (row[stateIndex] || '') : '',
+          link: linkIndex !== -1 ? row[linkIndex] : '',
+          website: websiteIndex !== -1 ? (row[websiteIndex] || '') : '',
+        }));
+      
+      res.json({ contacts: leadsWithoutEmails });
+    } catch (error: any) {
+      console.error('Error fetching leads without emails:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch leads' });
     }
   });
 

@@ -173,16 +173,16 @@ export default function Apollo() {
   });
 
   const { data: storeContacts, isLoading: storeLoading } = useQuery<{ contacts: StoreContact[] }>({
-    queryKey: ["/api/ehub/all-contacts", currentProject?.id],
+    queryKey: ["/api/apollo/leads-without-emails", currentProject?.id],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (currentProject?.id) {
         params.set("projectId", currentProject.id);
       }
-      const response = await fetch(`/api/ehub/all-contacts?${params.toString()}`, {
+      const response = await fetch(`/api/apollo/leads-without-emails?${params.toString()}`, {
         credentials: "include",
       });
-      if (!response.ok) throw new Error("Failed to fetch contacts");
+      if (!response.ok) throw new Error("Failed to fetch leads");
       return response.json();
     },
     enabled: !!currentProject,
