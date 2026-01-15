@@ -486,10 +486,13 @@ export default function Apollo() {
     
     try {
       const domain = extractDomain(currentItem.contact.website);
+      const selectedPersonIds = currentPeopleKeys.map(key => key.split('::')[1]);
+      
       await apiRequest("POST", "/api/apollo/enrich", {
         googleSheetLink: currentItem.contact.link,
         domain: domain || undefined,
         companyName: !domain ? currentItem.contact.name : undefined,
+        selectedPersonIds,
       });
       
       toast({

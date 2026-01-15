@@ -26867,7 +26867,7 @@ ${conversationContext}`;
       if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
-      const { googleSheetLink, domain, companyName } = req.body;
+      const { googleSheetLink, domain, companyName, selectedPersonIds } = req.body;
       if (!googleSheetLink) {
         return res.status(400).json({ message: 'googleSheetLink is required' });
       }
@@ -26879,6 +26879,7 @@ ${conversationContext}`;
         googleSheetLink,
         domain,
         companyName,
+        selectedPersonIds,
       });
       res.json(result);
     } catch (error: any) {

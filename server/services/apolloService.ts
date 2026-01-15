@@ -356,6 +356,7 @@ export async function enrichAndStoreCompany(options: {
   googleSheetLink: string;
   domain?: string;
   companyName?: string;
+  selectedPersonIds?: string[];
 }): Promise<{
   company: ApolloCompany | null;
   contacts: ApolloContact[];
@@ -418,7 +419,10 @@ export async function enrichAndStoreCompany(options: {
     creditsUsed: 1,
   }).returning();
 
-  const contactsToEnrich = preview.contacts.filter(p => p.first_name && p.last_name);
+  let contactsToEnrich = preview.contacts.filter(p => p.first_name && p.last_name);
+  if (options.selectedPersonIds && options.selectedPersonIds.length > 0) {
+    contactsToEnrich = contactsToEnrich.filter(p => options.selectedPersonIds!.includes(p.id));
+  }
   let storedContacts: ApolloContact[] = [];
   let totalCreditsUsed = 1;
 
