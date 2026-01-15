@@ -1409,12 +1409,10 @@ function LeadReviewQueue({
     );
   }
 
-  const displayedKeywords = keywordsExpanded 
-    ? (company?.keywords || [])
-    : (company?.keywords || []).slice(0, 8);
-
   return (
     <div className="space-y-4">
+      <ScrollArea className="max-h-[60vh]">
+        <div className="pr-4 space-y-4">
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
@@ -1487,7 +1485,7 @@ function LeadReviewQueue({
             </div>
 
             {company.short_description && (
-              <p className="text-sm text-muted-foreground line-clamp-2">
+              <p className="text-sm text-muted-foreground">
                 {company.short_description}
               </p>
             )}
@@ -1521,34 +1519,14 @@ function LeadReviewQueue({
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Tag className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Keywords</span>
+                  <span className="text-sm font-medium">Keywords ({company.keywords.length})</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {displayedKeywords.map((keyword, idx) => (
+                  {company.keywords.map((keyword, idx) => (
                     <Badge key={idx} variant="secondary" className="text-xs">
                       {keyword}
                     </Badge>
                   ))}
-                  {company.keywords.length > 8 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-xs"
-                      onClick={onToggleKeywords}
-                    >
-                      {keywordsExpanded ? (
-                        <>
-                          <ChevronUp className="h-3 w-3 mr-1" />
-                          Show less
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="h-3 w-3 mr-1" />
-                          +{company.keywords.length - 8} more
-                        </>
-                      )}
-                    </Button>
-                  )}
                 </div>
               </div>
             )}
@@ -1629,7 +1607,9 @@ function LeadReviewQueue({
             )}
           </div>
         </>
-      )}
+        )}
+        </div>
+      </ScrollArea>
 
       <div className="flex justify-between gap-2 pt-4 border-t">
         <div className="flex gap-2">
