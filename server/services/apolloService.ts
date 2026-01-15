@@ -62,6 +62,7 @@ interface OrganizationSearchResult {
 
 interface PeopleSearchResult {
   people: ApolloPerson[];
+  contacts?: ApolloPerson[];
   total_entries: number;
   pagination?: {
     page: number;
@@ -245,7 +246,26 @@ export async function searchPeople(options: {
     body.contact_email_status = options.emailStatus;
   }
 
-  return makeApolloRequest<PeopleSearchResult>('/mixed_people/api_search', body);
+  const result = await makeApolloRequest<PeopleSearchResult>('/mixed_people/api_search', body);
+  
+  // Apollo returns both 'contacts' (with full data including linkedin_url) and 'people' (limited data)
+  // Merge them, preferring contacts data when available since it includes LinkedIn URLs
+  if (result.contacts && result.contacts.length > 0) {
+    console.log(`[Apollo API] Found ${result.contacts.length} contacts with full data (including linkedin_url)`);
+    
+    // Create a map of contact IDs for quick lookup
+    const contactIds = new Set(result.contacts.map(c => c.id));
+    
+    // Add any people entries that don't exist in contacts
+    const additionalPeople = (result.people || []).filter(p => !contactIds.has(p.id));
+    
+    // Merge: contacts first (they have linkedin_url), then additional people
+    result.people = [...result.contacts, ...additionalPeople];
+    
+    console.log(`[Apollo API] Merged result: ${result.people.length} total people`);
+  }
+  
+  return result;
 }
 
 export async function enrichPeople(details: Array<{
