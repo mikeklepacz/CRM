@@ -8905,47 +8905,59 @@ IMPORTANT:
 
 
 
-  // Batch crawl websites for emails from Google Sheets (limited per request for performance)
-
-  // Batch crawl websites for emails from Google Sheets (limited per request for performance)
+  // Batch crawl websites for emails from Google Sheets (only visible/filtered rows)
   app.post("/api/clients/crawl-emails", isAuthenticatedCustom, async (req, res) => {
     try {
       const tenantId = req.user?.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant ID required" });
-      const { projectId } = req.body;
+      
+      // Accept visible websites from frontend (already filtered by tenant/project)
+      const { visibleWebsites } = req.body as { visibleWebsites?: Array<{ website: string; hasEmail: boolean }> };
+      
+      if (!visibleWebsites || visibleWebsites.length === 0) {
+        return res.json({ message: "No websites to check", totalProcessed: 0, emailsFound: 0, remainingToProcess: 0, hasMore: false });
+      }
+      
       const sheets = await storage.getAllActiveGoogleSheets(tenantId);
       const storeSheet = sheets.find(s => s.sheetPurpose === "Store Database");
       if (!storeSheet) return res.status(400).json({ message: "No Store Database sheet configured" });
+      
       const rows = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
       if (rows.length <= 1) return res.json({ message: "No data", totalProcessed: 0, emailsFound: 0, remainingToProcess: 0, hasMore: false });
+      
       const headers = rows[0].map(h => (h || "").toString());
-      const websiteIdx = headers.findIndex(h => ["website", "site", "url", "web", "link"].some(k => h.toLowerCase().includes(k)));
-      const emailIdx = headers.findIndex(h => ["poc email", "email"].some(k => h.toLowerCase().includes(k)));
-      const searchedIdx = headers.findIndex(h => h.toLowerCase().includes("email searched"));
-      const projectIdx = headers.findIndex(h => h.toLowerCase().includes("project"));
+      const websiteIdx = headers.findIndex(h => h.toLowerCase().trim() === 'website');
+      const emailIdx = headers.findIndex(h => h.toLowerCase().trim() === 'email');
+      const searchedIdx = headers.findIndex(h => h.toLowerCase().trim() === 'email searched');
+      
       if (websiteIdx === -1) return res.status(400).json({ message: "No Website column found" });
-      let targetProjectName = null;
-      if (projectId) {
-        const p = await storage.getTenantProjectById(projectId, tenantId);
-        if (p) targetProjectName = p.name;
-      }
-      const allNeedingCrawl = [];
+      if (emailIdx === -1) return res.status(400).json({ message: "No Email column found" });
+      
+      // Build a map of website URL to row index for quick lookup
+      const websiteToRow = new Map<string, number>();
       for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        const website = row[websiteIdx]?.toString().trim();
-        const email = emailIdx !== -1 ? row[emailIdx]?.toString().trim() : "";
-        const searched = searchedIdx !== -1 ? row[searchedIdx]?.toString().trim().toLowerCase() : "";
-        const rowProj = projectIdx !== -1 ? row[projectIdx]?.toString().trim() : "";
-        if ((!targetProjectName || rowProj.toLowerCase() === targetProjectName.toLowerCase()) && website && !email && searched !== "yes" && searched !== "true") {
-          allNeedingCrawl.push({ rowIndex: i + 1, website });
+        const website = rows[i][websiteIdx]?.toString().trim().toLowerCase();
+        if (website) {
+          websiteToRow.set(website, i + 1); // Sheet rows are 1-indexed
         }
       }
-      const toProcess = allNeedingCrawl.slice(0, 10);
+      
+      // Filter to only websites that need crawling (no email yet) and exist in sheet
+      const needsCrawling = visibleWebsites
+        .filter(v => v.website && !v.hasEmail)
+        .map(v => ({
+          website: v.website,
+          rowIndex: websiteToRow.get(v.website.toLowerCase().trim())
+        }))
+        .filter(v => v.rowIndex !== undefined);
+      
+      const toProcess = needsCrawling.slice(0, 10);
       const results = [];
+      
       for (const { rowIndex, website } of toProcess) {
         try {
           const crawl = await crawlWebsiteForEmail(website);
-          if (!crawl.skipped) {
+          if (!crawl.skipped && rowIndex) {
             if (crawl.email && emailIdx !== -1) {
               await googleSheets.writeSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!${String.fromCharCode(65 + emailIdx)}${rowIndex}`, [[crawl.email]]);
             }
@@ -8955,11 +8967,21 @@ IMPORTANT:
           }
           results.push({ rowIndex, email: crawl.email, searched: crawl.searched });
           await new Promise(r => setTimeout(r, 300));
-        } catch (e) { results.push({ rowIndex, email: null, searched: false }); }
+        } catch (e) { 
+          results.push({ rowIndex, email: null, searched: false }); 
+        }
       }
+      
       clearUserCache(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
-      res.json({ totalProcessed: results.length, emailsFound: results.filter(r => r.email).length, remainingToProcess: allNeedingCrawl.length - results.length, hasMore: allNeedingCrawl.length > 10 });
-    } catch (e) { res.status(500).json({ message: e.message }); }
+      res.json({ 
+        totalProcessed: results.length, 
+        emailsFound: results.filter(r => r.email).length, 
+        remainingToProcess: needsCrawling.length - results.length, 
+        hasMore: needsCrawling.length > 10 
+      });
+    } catch (e: any) { 
+      res.status(500).json({ message: e.message }); 
+    }
   });
 
   app.get('/api/users/agents', isAuthenticatedCustom, isAdmin, async (req, res) => {
