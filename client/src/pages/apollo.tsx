@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useOptionalProject } from "@/contexts/project-context";
 import { 
   Loader2, 
   Search, 
@@ -152,6 +153,8 @@ function extractDomain(url: string | undefined): string | null {
 
 export default function Apollo() {
   const { toast } = useToast();
+  const projectContext = useOptionalProject();
+  const currentProject = projectContext?.currentProject;
   const [activeTab, setActiveTab] = useState("enrich");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -170,7 +173,19 @@ export default function Apollo() {
   });
 
   const { data: storeContacts, isLoading: storeLoading } = useQuery<{ contacts: StoreContact[] }>({
-    queryKey: ["/api/ehub/all-contacts"],
+    queryKey: ["/api/ehub/all-contacts", currentProject?.id],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (currentProject?.id) {
+        params.set("projectId", currentProject.id);
+      }
+      const response = await fetch(`/api/ehub/all-contacts?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch contacts");
+      return response.json();
+    },
+    enabled: !!currentProject,
   });
 
   const updateSettingsMutation = useMutation({
@@ -342,6 +357,7 @@ export default function Apollo() {
           </h1>
           <p className="text-muted-foreground">
             Enrich your leads with contact data from Apollo.io
+            {currentProject && <span className="text-primary"> - {currentProject.name}</span>}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -422,7 +438,14 @@ export default function Apollo() {
               </div>
             </CardHeader>
             <CardContent>
-              {storeLoading ? (
+              {!currentProject ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Please select a project from the top bar to view contacts for enrichment.
+                  </AlertDescription>
+                </Alert>
+              ) : storeLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
@@ -430,7 +453,7 @@ export default function Apollo() {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    No contacts found. Make sure your Store Database Google Sheet is connected.
+                    No contacts found for project "{currentProject.name}". Make sure your Store Database has entries with matching Category.
                   </AlertDescription>
                 </Alert>
               ) : (
