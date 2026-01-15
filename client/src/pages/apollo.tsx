@@ -1411,7 +1411,7 @@ function LeadReviewQueue({
 
   return (
     <div className="space-y-4">
-      <ScrollArea className="max-h-[60vh]">
+      <ScrollArea className="h-[55vh]">
         <div className="pr-4 space-y-4">
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
