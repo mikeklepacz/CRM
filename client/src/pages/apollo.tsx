@@ -1560,6 +1560,7 @@ function LeadReviewQueue({
                       <TableHead>Name</TableHead>
                       <TableHead>Title</TableHead>
                       <TableHead>Seniority</TableHead>
+                      <TableHead className="w-16">LinkedIn</TableHead>
                       <TableHead className="w-16">Email</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1587,6 +1588,13 @@ function LeadReviewQueue({
                               <Badge variant="outline" className="text-xs">
                                 {person.seniority}
                               </Badge>
+                            ) : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {person.linkedin_url ? (
+                              <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer">
+                                <Linkedin className="h-4 w-4 text-blue-600" />
+                              </a>
                             ) : "-"}
                           </TableCell>
                           <TableCell>
