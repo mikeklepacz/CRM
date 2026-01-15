@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray, and, or, desc, isNotNull, isNull, ne } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants, categories, tenantProjects } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants, categories, tenantProjects, apolloCompanies } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -26965,6 +26965,13 @@ ${conversationContext}`;
         return res.json({ contacts: [] });
       }
       
+      // Get all links that are already in apollo_companies (enriched or not_found)
+      const alreadyProcessedLinks = await db
+        .select({ link: apolloCompanies.googleSheetLink })
+        .from(apolloCompanies)
+        .where(eq(apolloCompanies.tenantId, tenantId));
+      const processedLinkSet = new Set(alreadyProcessedLinks.map(r => r.link));
+      
       const storeData = await googleSheets.readSheetData(
         storeSheet.spreadsheetId,
         `${storeSheet.sheetName}!A:ZZ`
@@ -26999,6 +27006,11 @@ ${conversationContext}`;
             return false;
           }
           
+          // Skip if already processed in Apollo
+          if (processedLinkSet.has(link)) {
+            return false;
+          }
+          
           // If project filtering is active, check category
           if (allowedCategoryName !== null && categoryIndex !== -1) {
             const rowCategory = (row[categoryIndex] || '').toLowerCase().trim();
@@ -27017,7 +27029,35 @@ ${conversationContext}`;
           website: websiteIndex !== -1 ? (row[websiteIndex] || '') : '',
         }));
       
-      res.json({ contacts: leadsWithoutEmails });
+      // Extract domain from website and deduplicate by domain
+      function extractDomain(url) {
+        if (!url) return null;
+        try {
+          const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+          return parsed.hostname.replace(/^www\./, '').toLowerCase();
+        } catch {
+          return null;
+        }
+      }
+
+      // Group by domain to deduplicate (keep first occurrence of each domain)
+      const seenDomains = new Map();
+      const deduplicatedLeads = [];
+      for (const lead of leadsWithoutEmails) {
+        const domain = extractDomain(lead.website);
+        if (domain && seenDomains.has(domain)) {
+          // Add this link to the existing entry's links array
+          const existing = seenDomains.get(domain);
+          if (!existing.allLinks) existing.allLinks = [existing.link];
+          existing.allLinks.push(lead.link);
+        } else {
+          const entry = { ...lead, domain, allLinks: [lead.link] };
+          if (domain) seenDomains.set(domain, entry);
+          deduplicatedLeads.push(entry);
+        }
+      }
+
+      res.json({ contacts: deduplicatedLeads });
     } catch (error: any) {
       console.error('Error fetching leads without emails:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch leads' });

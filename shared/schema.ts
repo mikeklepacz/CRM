@@ -2574,6 +2574,7 @@ export const apolloCompanies = pgTable("apollo_companies", {
   state: varchar("state", { length: 100 }),
   country: varchar("country", { length: 100 }),
   logoUrl: varchar("logo_url", { length: 500 }), // Company logo
+  enrichmentStatus: varchar("enrichment_status", { length: 20 }).default('enriched'), // 'enriched', 'not_found', 'skipped'
   enrichedAt: timestamp("enriched_at").defaultNow(), // When we enriched it
   creditsUsed: integer("credits_used").default(0), // Apollo credits consumed
   createdAt: timestamp("created_at").defaultNow(),

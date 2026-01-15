@@ -393,6 +393,13 @@ export async function enrichAndStoreCompany(options: {
   });
 
   if (!preview.company) {
+    // Mark as not found so we don't try again
+    await db.insert(apolloCompanies).values({
+      tenantId: options.tenantId,
+      googleSheetLink: options.googleSheetLink,
+      enrichmentStatus: 'not_found',
+      creditsUsed: 0,
+    }).onConflictDoNothing();
     return { company: null, contacts: [], creditsUsed: 0 };
   }
 
@@ -416,6 +423,7 @@ export async function enrichAndStoreCompany(options: {
     state: apolloCompany.state,
     country: apolloCompany.country,
     logoUrl: apolloCompany.logo_url,
+    enrichmentStatus: 'enriched',
     creditsUsed: 1,
   }).returning();
 
