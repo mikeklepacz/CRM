@@ -2,7 +2,7 @@ import { eq, sql, and, or, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import * as googleSheets from '../googleSheets';
 import { storage } from '../storage';
-import { sequenceRecipients, sequences, categories, apolloContacts, apolloCompanies } from '../../shared/schema';
+import { sequenceRecipients, sequences, categories, apolloContacts, apolloCompanies, tenantProjects } from '../../shared/schema';
 import type { EhubContact, AllContactsResponse } from '../../shared/schema';
 import { detectTimezone } from './timezoneHours';
 
@@ -150,31 +150,23 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
     salesSummary?: string;
   }> = [];
 
-  // If projectId is provided, get allowed category names for filtering Google Sheet data
+  // If projectId is provided, use the project name directly for filtering Google Sheet Category column
   let allowedCategoryNames: Set<string> | null = null;
   if (projectId) {
-    // Get category names for this project (or shared categories with null projectId)
-    const projectCategories = await db
-      .select({ name: categories.name })
-      .from(categories)
-      .where(
-        and(
-          eq(categories.tenantId, tenantId),
-          or(
-            eq(categories.projectId, projectId),
-            isNull(categories.projectId)
-          )
-        )
-      );
+    // Look up the project to get its name
+    const project = await db
+      .select({ name: tenantProjects.name })
+      .from(tenantProjects)
+      .where(eq(tenantProjects.id, projectId))
+      .limit(1);
     
-    // Create set of allowed category names (lowercase for comparison)
-    allowedCategoryNames = new Set(projectCategories.map(c => c.name.toLowerCase().trim()));
-    
-    // If project has no categories, return empty (not all contacts)
-    if (allowedCategoryNames.size === 0) {
-      console.log(`[E-Hub] Project ${projectId} has no categories - returning empty contacts`);
+    if (project.length === 0) {
+      console.log(`[E-Hub] Project ${projectId} not found - returning empty contacts`);
       return [];
     }
+    
+    // Use the project name as the allowed category (Maps Search writes project name to Category column)
+    allowedCategoryNames = new Set([project[0].name.toLowerCase().trim()]);
     
     console.log(`[E-Hub] Project filter: allowed categories = ${Array.from(allowedCategoryNames).join(', ')}`);
   }
