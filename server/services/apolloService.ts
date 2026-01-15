@@ -592,11 +592,11 @@ export async function isCompanyEnriched(tenantId: string, googleSheetLink: strin
   return (result[0]?.count || 0) > 0;
 }
 
-export async function bulkCheckEnrichmentStatus(tenantId: string, links: string[]): Promise<Record<string, boolean>> {
+export async function bulkCheckEnrichmentStatus(tenantId: string, links: string[]): Promise<Record<string, string | null>> {
   if (links.length === 0) return {};
 
-  const enriched = await db
-    .select({ link: apolloCompanies.googleSheetLink })
+  const companies = await db
+    .select({ link: apolloCompanies.googleSheetLink, status: apolloCompanies.enrichmentStatus })
     .from(apolloCompanies)
     .where(
       and(
@@ -605,10 +605,75 @@ export async function bulkCheckEnrichmentStatus(tenantId: string, links: string[
       )
     );
 
-  const enrichedSet = new Set(enriched.map(r => r.link));
+  const statusMap = new Map(companies.map(r => [r.link, r.status]));
   
   return links.reduce((acc, link) => {
-    acc[link] = enrichedSet.has(link);
+    acc[link] = statusMap.get(link) || null;
     return acc;
-  }, {} as Record<string, boolean>);
+  }, {} as Record<string, string | null>);
+}
+
+export async function getNotFoundCompanies(tenantId: string): Promise<ApolloCompany[]> {
+  return db
+    .select()
+    .from(apolloCompanies)
+    .where(
+      and(
+        eq(apolloCompanies.tenantId, tenantId),
+        eq(apolloCompanies.enrichmentStatus, 'not_found')
+      )
+    )
+    .orderBy(apolloCompanies.enrichedAt);
+}
+
+export async function markCompanyNotFound(
+  tenantId: string,
+  googleSheetLink: string,
+  domain?: string,
+  name?: string
+): Promise<ApolloCompany> {
+  const [company] = await db.insert(apolloCompanies).values({
+    tenantId,
+    googleSheetLink,
+    domain: domain || null,
+    name: name || null,
+    enrichmentStatus: 'not_found',
+    creditsUsed: 0,
+  }).onConflictDoNothing().returning();
+
+  return company;
+}
+
+export async function markCompanyPrescreened(
+  tenantId: string,
+  googleSheetLink: string,
+  apolloOrgId: string,
+  domain?: string,
+  name?: string,
+  contactCount?: number
+): Promise<ApolloCompany> {
+  const [company] = await db.insert(apolloCompanies).values({
+    tenantId,
+    googleSheetLink,
+    apolloOrgId,
+    domain: domain || null,
+    name: name || null,
+    enrichmentStatus: 'prescreened',
+    creditsUsed: 0,
+  }).onConflictDoNothing().returning();
+
+  return company;
+}
+
+export async function getPrescreenedCompanies(tenantId: string): Promise<ApolloCompany[]> {
+  return db
+    .select()
+    .from(apolloCompanies)
+    .where(
+      and(
+        eq(apolloCompanies.tenantId, tenantId),
+        eq(apolloCompanies.enrichmentStatus, 'prescreened')
+      )
+    )
+    .orderBy(apolloCompanies.enrichedAt);
 }

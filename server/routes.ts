@@ -27083,6 +27083,116 @@ ${conversationContext}`;
     }
   });
 
+
+  // GET /api/apollo/companies/not-found - Get companies that were not found in Apollo
+  app.get('/api/apollo/companies/not-found', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const companies = await apolloService.getNotFoundCompanies(tenantId);
+      res.json(companies);
+    } catch (error: any) {
+      console.error('Error getting not-found companies:', error);
+      res.status(500).json({ message: error.message || 'Failed to get not-found companies' });
+    }
+  });
+
+  // GET /api/apollo/companies/prescreened - Get companies that were found in Apollo (ready to review)
+  app.get('/api/apollo/companies/prescreened', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const companies = await apolloService.getPrescreenedCompanies(tenantId);
+      res.json(companies);
+    } catch (error: any) {
+      console.error('Error getting prescreened companies:', error);
+      res.status(500).json({ message: error.message || 'Failed to get prescreened companies' });
+    }
+  });
+
+  // POST /api/apollo/bulk-prescreen - Bulk pre-screen contacts to check Apollo availability
+  app.post('/api/apollo/bulk-prescreen', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      
+      const { contacts } = req.body;
+      if (!Array.isArray(contacts)) {
+        return res.status(400).json({ message: 'contacts must be an array' });
+      }
+
+      // Get already-processed companies to skip them
+      const links = contacts.map((c: any) => c.link).filter(Boolean);
+      const existingStatus = await apolloService.bulkCheckEnrichmentStatus(tenantId, links);
+
+      let checked = 0;
+      let found = 0;
+      let notFound = 0;
+      let skipped = 0;
+
+      for (const contact of contacts) {
+        if (!contact.link) continue;
+        
+        // Skip already-processed companies
+        if (existingStatus[contact.link]) {
+          skipped++;
+          continue;
+        }
+        
+        checked++;
+        
+        try {
+          // Extract domain from website
+          let domain: string | undefined;
+          if (contact.website) {
+            try {
+              const parsed = new URL(contact.website.startsWith('http') ? contact.website : `https://${contact.website}`);
+              domain = parsed.hostname.replace(/^www\./, '');
+            } catch {
+              domain = contact.website.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+            }
+          }
+
+          const preview = await apolloService.previewContactsForCompany({
+            domain,
+            companyName: !domain ? contact.name : undefined,
+            tenantId,
+          });
+
+          if (preview.company) {
+            found++;
+            // Save prescreened status
+            await apolloService.markCompanyPrescreened(
+              tenantId, 
+              contact.link, 
+              preview.company.id,
+              preview.company.primary_domain || domain,
+              preview.company.name || contact.name,
+              preview.totalContacts
+            );
+          } else {
+            notFound++;
+            await apolloService.markCompanyNotFound(tenantId, contact.link, domain, contact.name);
+          }
+        } catch (error) {
+          console.error(`Error prescreening contact ${contact.link}:`, error);
+          notFound++;
+          await apolloService.markCompanyNotFound(tenantId, contact.link, undefined, contact.name);
+        }
+      }
+
+      res.json({ checked, found, notFound, skipped });
+    } catch (error: any) {
+      console.error('Error bulk prescreening:', error);
+      res.status(500).json({ message: error.message || 'Failed to bulk prescreen' });
+    }
+  });
   const httpServer = createServer(app);
   return httpServer;
 }
