@@ -87,6 +87,9 @@ function getApiKey(): string {
 async function makeApolloRequest<T>(endpoint: string, body: Record<string, any>): Promise<T> {
   const apiKey = getApiKey();
   
+  console.log(`[Apollo API] Request to ${endpoint}`);
+  console.log(`[Apollo API] Request body:`, JSON.stringify(body, null, 2));
+  
   const response = await fetch(`${APOLLO_API_BASE}${endpoint}`, {
     method: 'POST',
     headers: {
@@ -99,10 +102,13 @@ async function makeApolloRequest<T>(endpoint: string, body: Record<string, any>)
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.log(`[Apollo API] Error response (${response.status}):`, errorText);
     throw new Error(`Apollo API error (${response.status}): ${errorText}`);
   }
 
-  return response.json();
+  const result = await response.json();
+  console.log(`[Apollo API] Response from ${endpoint}:`, JSON.stringify(result, null, 2).substring(0, 2000));
+  return result as T;
 }
 
 export async function searchOrganizations(options: {
@@ -212,27 +218,39 @@ export async function previewContactsForCompany(options: {
   contacts: ApolloPerson[];
   totalContacts: number;
 }> {
+  console.log(`[Apollo Preview] Starting preview with options:`, JSON.stringify(options, null, 2));
+  
   let company: ApolloOrganization | null = null;
   
   const settings = await getOrCreateSettings(options.tenantId);
+  console.log(`[Apollo Preview] Settings:`, JSON.stringify({ targetSeniorities: settings.targetSeniorities, targetTitles: settings.targetTitles, maxContactsPerCompany: settings.maxContactsPerCompany }, null, 2));
   
   if (options.domain) {
+    console.log(`[Apollo Preview] Searching by domain: ${options.domain}`);
     const orgResult = await searchOrganizations({
       domains: [options.domain],
       perPage: 1,
     });
+    console.log(`[Apollo Preview] Organization search by domain found ${orgResult.organizations?.length || 0} orgs`);
     company = orgResult.organizations[0] || null;
   } else if (options.companyName) {
+    console.log(`[Apollo Preview] Searching by company name: ${options.companyName}`);
     const orgResult = await searchOrganizations({
       name: options.companyName,
       perPage: 1,
     });
+    console.log(`[Apollo Preview] Organization search by name found ${orgResult.organizations?.length || 0} orgs`);
     company = orgResult.organizations[0] || null;
+  } else {
+    console.log(`[Apollo Preview] No domain or companyName provided!`);
   }
 
   if (!company) {
+    console.log(`[Apollo Preview] No company found, returning empty result`);
     return { company: null, contacts: [], totalContacts: 0 };
   }
+
+  console.log(`[Apollo Preview] Found company: ${company.name} (id: ${company.id}, domain: ${company.primary_domain})`);
 
   const peopleResult = await searchPeople({
     organizationDomains: company.primary_domain ? [company.primary_domain] : undefined,
@@ -241,6 +259,8 @@ export async function previewContactsForCompany(options: {
     titles: settings.targetTitles || undefined,
     perPage: settings.maxContactsPerCompany || 3,
   });
+
+  console.log(`[Apollo Preview] People search found ${peopleResult.people?.length || 0} contacts (total: ${peopleResult.total_entries || 0})`);
 
   return {
     company,
