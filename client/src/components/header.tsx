@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check, PieChart, GitBranch, ClipboardList } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check, PieChart, GitBranch, ClipboardList, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -35,6 +35,7 @@ type VisibleModules = {
   labelDesigner?: boolean;
   callManager?: boolean;
   ehub?: boolean;
+  apollo?: boolean;
   analytics?: boolean;
   pipelines?: boolean;
   qualification?: boolean;
@@ -81,6 +82,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
       labelDesigner: true,
       callManager: true,
       ehub: true,
+      apollo: true,
       analytics: true,
       pipelines: true,
       qualification: true,
@@ -316,6 +318,14 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
+          {canAccessAdminFeatures(user) && shouldShowNavItem("apollo", "apollo") && (
+            <Link href="/apollo">
+              <Button variant="ghost" size="sm" data-testid="nav-apollo">
+                <Sparkles className="hidden xl:mr-2 xl:inline h-4 w-4" />
+                Apollo
+              </Button>
+            </Link>
+          )}
         </nav>
 
         {/* Utilities Section - Always right aligned */}
@@ -422,6 +432,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <DropdownMenuItem onClick={() => { setLocation('/ehub'); setMobileMenuOpen(false); }}>
                   <Mail className="mr-2 h-4 w-4" />
                   E-Hub
+                </DropdownMenuItem>
+              )}
+              {canAccessAdminFeatures(user) && shouldShowNavItem("apollo", "apollo") && (
+                <DropdownMenuItem onClick={() => { setLocation('/apollo'); setMobileMenuOpen(false); }}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Apollo
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
