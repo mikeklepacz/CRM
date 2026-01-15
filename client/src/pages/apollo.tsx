@@ -163,6 +163,14 @@ export default function Apollo() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLinks, setSelectedLinks] = useState<Set<string>>(new Set());
   const [isEnriching, setIsEnriching] = useState(false);
+  const [bulkPreviewOpen, setBulkPreviewOpen] = useState(false);
+  const [bulkPreviewData, setBulkPreviewData] = useState<Array<{
+    contact: StoreContact;
+    preview: PreviewResult | null;
+    error?: string;
+  }>>([]);
+  const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
+  const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
 
   const { data: settings, isLoading: settingsLoading } = useQuery<ApolloSettings>({
     queryKey: ["/api/apollo/settings"],
@@ -282,21 +290,69 @@ export default function Apollo() {
   const handleBulkEnrich = async () => {
     if (selectedLinks.size === 0) return;
     
-    setIsEnriching(true);
     const contacts = storeContacts?.contacts?.filter(c => selectedLinks.has(c.link)) || [];
     
-    let successCount = 0;
-    let errorCount = 0;
+    setBulkPreviewOpen(true);
+    setBulkPreviewLoading(true);
+    setBulkPreviewData([]);
+    setSelectedPeople(new Set());
+    
+    const results: Array<{ contact: StoreContact; preview: PreviewResult | null; error?: string }> = [];
     
     for (const contact of contacts) {
       try {
         const domain = extractDomain(contact.website);
+        const response = await apiRequest("/api/apollo/preview", {
+          method: "POST",
+          body: JSON.stringify({
+            domain: domain || undefined,
+            companyName: !domain ? contact.name : undefined,
+          }),
+        }) as PreviewResult;
+        results.push({ contact, preview: response });
+      } catch (error: any) {
+        results.push({ contact, preview: null, error: error.message || "Failed to preview" });
+      }
+      setBulkPreviewData([...results]);
+    }
+    
+    setBulkPreviewLoading(false);
+    
+    const allPeopleIds = results
+      .filter(r => r.preview?.contacts)
+      .flatMap(r => r.preview!.contacts.map(c => `${r.contact.link}::${c.id}`));
+    setSelectedPeople(new Set(allPeopleIds));
+  };
+
+  const handleBulkEnrichSelected = async () => {
+    if (selectedPeople.size === 0) {
+      toast({ title: "No people selected", variant: "destructive" });
+      return;
+    }
+    
+    setIsEnriching(true);
+    
+    const companyLinks = new Set<string>();
+    selectedPeople.forEach(key => {
+      const [link] = key.split("::");
+      companyLinks.add(link);
+    });
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const link of companyLinks) {
+      const contactData = storeContacts?.contacts?.find(c => c.link === link);
+      if (!contactData) continue;
+      
+      try {
+        const domain = extractDomain(contactData.website);
         await apiRequest("/api/apollo/enrich", {
           method: "POST",
           body: JSON.stringify({
-            googleSheetLink: contact.link,
+            googleSheetLink: contactData.link,
             domain: domain || undefined,
-            companyName: !domain ? contact.name : undefined,
+            companyName: !domain ? contactData.name : undefined,
           }),
         });
         successCount++;
@@ -306,7 +362,10 @@ export default function Apollo() {
     }
     
     setIsEnriching(false);
+    setBulkPreviewOpen(false);
     setSelectedLinks(new Set());
+    setSelectedPeople(new Set());
+    setBulkPreviewData([]);
     queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies"] });
     queryClient.invalidateQueries({ queryKey: ["/api/apollo/check-enrichment"] });
     queryClient.invalidateQueries({ queryKey: ["/api/apollo/settings"] });
@@ -554,6 +613,47 @@ export default function Apollo() {
             isLoading={previewMutation.isPending}
             onEnrich={handleEnrich}
             isEnriching={enrichMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkPreviewOpen} onOpenChange={(open) => {
+        if (!open && !isEnriching) {
+          setBulkPreviewOpen(false);
+          setBulkPreviewData([]);
+          setSelectedPeople(new Set());
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle>Preview Available Contacts</DialogTitle>
+            <DialogDescription>
+              Select which people you want to enrich from {selectedLinks.size} {selectedLinks.size === 1 ? 'company' : 'companies'}
+            </DialogDescription>
+          </DialogHeader>
+          <BulkPreviewDialog
+            data={bulkPreviewData}
+            isLoading={bulkPreviewLoading}
+            totalCompanies={selectedLinks.size}
+            selectedPeople={selectedPeople}
+            onTogglePerson={(key) => {
+              const newSet = new Set(selectedPeople);
+              if (newSet.has(key)) {
+                newSet.delete(key);
+              } else {
+                newSet.add(key);
+              }
+              setSelectedPeople(newSet);
+            }}
+            onSelectAll={() => {
+              const allPeopleIds = bulkPreviewData
+                .filter(r => r.preview?.contacts)
+                .flatMap(r => r.preview!.contacts.map(c => `${r.contact.link}::${c.id}`));
+              setSelectedPeople(new Set(allPeopleIds));
+            }}
+            onDeselectAll={() => setSelectedPeople(new Set())}
+            onEnrich={handleBulkEnrichSelected}
+            isEnriching={isEnriching}
           />
         </DialogContent>
       </Dialog>
@@ -833,6 +933,210 @@ function PreviewDialog({
           </AlertDescription>
         </Alert>
       )}
+    </div>
+  );
+}
+
+interface BulkPreviewItem {
+  contact: StoreContact;
+  preview: PreviewResult | null;
+  error?: string;
+}
+
+function BulkPreviewDialog({
+  data,
+  isLoading,
+  totalCompanies,
+  selectedPeople,
+  onTogglePerson,
+  onSelectAll,
+  onDeselectAll,
+  onEnrich,
+  isEnriching,
+}: {
+  data: BulkPreviewItem[];
+  isLoading: boolean;
+  totalCompanies: number;
+  selectedPeople: Set<string>;
+  onTogglePerson: (key: string) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+  onEnrich: () => void;
+  isEnriching: boolean;
+}) {
+  const allPeople = data.flatMap(item => 
+    item.preview?.contacts.map(person => ({
+      ...person,
+      companyName: item.preview?.company?.name || item.contact.name,
+      companyLink: item.contact.link,
+      key: `${item.contact.link}::${person.id}`,
+    })) || []
+  );
+
+  const totalFound = allPeople.length;
+  const companiesWithPeople = data.filter(d => d.preview?.contacts && d.preview.contacts.length > 0).length;
+  const companiesWithErrors = data.filter(d => d.error).length;
+  const companiesNotFound = data.filter(d => !d.preview?.company && !d.error).length;
+
+  if (isLoading && data.length < totalCompanies) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <div className="text-center">
+          <p className="font-medium">Previewing companies...</p>
+          <p className="text-sm text-muted-foreground">
+            {data.length} of {totalCompanies} complete
+          </p>
+        </div>
+        {data.length > 0 && (
+          <div className="w-full max-w-md bg-muted rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-primary h-full transition-all duration-300"
+              style={{ width: `${(data.length / totalCompanies) * 100}%` }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (totalFound === 0 && !isLoading) {
+    return (
+      <div className="py-8">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No contacts found across the selected companies. 
+            {companiesNotFound > 0 && ` ${companiesNotFound} companies were not found in Apollo.`}
+            {companiesWithErrors > 0 && ` ${companiesWithErrors} companies had errors.`}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-4 text-sm">
+          <Badge variant="outline">
+            <Building2 className="h-3 w-3 mr-1" />
+            {companiesWithPeople} companies with contacts
+          </Badge>
+          <Badge variant="outline">
+            <Users className="h-3 w-3 mr-1" />
+            {totalFound} people found
+          </Badge>
+          <Badge variant="secondary">
+            {selectedPeople.size} selected
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onSelectAll} data-testid="button-select-all-people">
+            Select All
+          </Button>
+          <Button variant="outline" size="sm" onClick={onDeselectAll} data-testid="button-deselect-all-people">
+            Deselect All
+          </Button>
+        </div>
+      </div>
+
+      <ScrollArea className="h-[400px] border rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10"></TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Seniority</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead className="w-16">Email</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {allPeople.map((person) => (
+              <TableRow key={person.key} data-testid={`row-bulk-person-${person.id}`}>
+                <TableCell>
+                  <Checkbox
+                    checked={selectedPeople.has(person.key)}
+                    onCheckedChange={() => onTogglePerson(person.key)}
+                    data-testid={`checkbox-person-${person.id}`}
+                  />
+                </TableCell>
+                <TableCell>
+                  <div className="font-medium">
+                    {person.first_name} {person.last_name?.replace(/\*+/g, "***")}
+                  </div>
+                  {person.linkedin_url && (
+                    <a 
+                      href={person.linkedin_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Linkedin className="h-3 w-3" />
+                      LinkedIn
+                    </a>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm">{person.title || "-"}</span>
+                </TableCell>
+                <TableCell>
+                  {person.seniority ? (
+                    <Badge variant="outline" className="text-xs">
+                      {person.seniority}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm text-muted-foreground">{person.companyName}</span>
+                </TableCell>
+                <TableCell>
+                  {person.has_email ? (
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Mail className="h-4 w-4 text-green-600" />
+                      </TooltipTrigger>
+                      <TooltipContent>Has email available</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </ScrollArea>
+
+      {(companiesWithErrors > 0 || companiesNotFound > 0) && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {companiesNotFound > 0 && `${companiesNotFound} companies not found in Apollo. `}
+            {companiesWithErrors > 0 && `${companiesWithErrors} companies had errors.`}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex justify-end gap-2 pt-4 border-t">
+        <Button 
+          onClick={onEnrich} 
+          disabled={isEnriching || selectedPeople.size === 0}
+          data-testid="button-enrich-selected"
+        >
+          {isEnriching ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4 mr-2" />
+          )}
+          Enrich {selectedPeople.size} Selected People
+        </Button>
+      </div>
     </div>
   );
 }
