@@ -198,10 +198,7 @@ export default function Apollo() {
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: Partial<ApolloSettings>) => {
-      return apiRequest("/api/apollo/settings", {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-      });
+      return apiRequest("PATCH", "/api/apollo/settings", updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/settings"] });
@@ -215,10 +212,7 @@ export default function Apollo() {
 
   const previewMutation = useMutation({
     mutationFn: async ({ domain, companyName }: { domain?: string; companyName?: string }) => {
-      return apiRequest("/api/apollo/preview", {
-        method: "POST",
-        body: JSON.stringify({ domain, companyName }),
-      });
+      return apiRequest("POST", "/api/apollo/preview", { domain, companyName });
     },
     onSuccess: (data) => {
       setPreviewResult(data as PreviewResult);
@@ -230,10 +224,7 @@ export default function Apollo() {
 
   const enrichMutation = useMutation({
     mutationFn: async ({ googleSheetLink, domain, companyName }: { googleSheetLink: string; domain?: string; companyName?: string }) => {
-      return apiRequest("/api/apollo/enrich", {
-        method: "POST",
-        body: JSON.stringify({ googleSheetLink, domain, companyName }),
-      });
+      return apiRequest("POST", "/api/apollo/enrich", { googleSheetLink, domain, companyName });
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies"] });
@@ -255,10 +246,7 @@ export default function Apollo() {
     queryFn: async () => {
       const links = storeContacts?.contacts?.map(c => c.link).filter(Boolean) || [];
       if (links.length === 0) return {};
-      const response = await apiRequest("/api/apollo/check-enrichment", {
-        method: "POST",
-        body: JSON.stringify({ links }),
-      });
+      const response = await apiRequest("POST", "/api/apollo/check-enrichment", { links });
       return response as Record<string, boolean>;
     },
     enabled: !!storeContacts?.contacts?.length,
@@ -302,12 +290,9 @@ export default function Apollo() {
     for (const contact of contacts) {
       try {
         const domain = extractDomain(contact.website);
-        const response = await apiRequest("/api/apollo/preview", {
-          method: "POST",
-          body: JSON.stringify({
-            domain: domain || undefined,
-            companyName: !domain ? contact.name : undefined,
-          }),
+        const response = await apiRequest("POST", "/api/apollo/preview", {
+          domain: domain || undefined,
+          companyName: !domain ? contact.name : undefined,
         }) as PreviewResult;
         results.push({ contact, preview: response });
       } catch (error: any) {
@@ -341,19 +326,16 @@ export default function Apollo() {
     let successCount = 0;
     let errorCount = 0;
     
-    for (const link of companyLinks) {
+    for (const link of Array.from(companyLinks)) {
       const contactData = storeContacts?.contacts?.find(c => c.link === link);
       if (!contactData) continue;
       
       try {
         const domain = extractDomain(contactData.website);
-        await apiRequest("/api/apollo/enrich", {
-          method: "POST",
-          body: JSON.stringify({
-            googleSheetLink: contactData.link,
-            domain: domain || undefined,
-            companyName: !domain ? contactData.name : undefined,
-          }),
+        await apiRequest("POST", "/api/apollo/enrich", {
+          googleSheetLink: contactData.link,
+          domain: domain || undefined,
+          companyName: !domain ? contactData.name : undefined,
         });
         successCount++;
       } catch {
