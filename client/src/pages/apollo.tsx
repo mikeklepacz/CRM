@@ -280,10 +280,6 @@ export default function Apollo() {
     queryKey: ["/api/apollo/companies/not-found"],
   });
 
-  const { data: prescreenedCompanies, isLoading: prescreenedLoading } = useQuery<ApolloCompany[]>({
-    queryKey: ["/api/apollo/companies/prescreened"],
-  });
-
   const [isPrescreening, setIsPrescreening] = useState(false);
   const [prescreenProgress, setPrescreenProgress] = useState({ current: 0, total: 0 });
   const [prescreenStats, setPrescreenStats] = useState<{ checked: number; found: number; notFound: number } | null>(null);
@@ -545,12 +541,18 @@ export default function Apollo() {
 
   const notEnrichedContacts = filteredContacts.filter(c => {
     const status = enrichmentStatus?.[c.link];
-    // Exclude enriched, not_found, and prescreened (already checked) from the queue
-    return !status || (status !== 'enriched' && status !== 'not_found' && status !== 'prescreened');
+    // Exclude enriched and not_found from the queue; keep prescreened so they can be reviewed
+    return !status || (status !== 'enriched' && status !== 'not_found');
+  });
+
+  // For pre-screening, only count contacts that haven't been prescreened yet
+  const contactsNeedingPrescreen = notEnrichedContacts.filter(c => {
+    const status = enrichmentStatus?.[c.link];
+    return !status || status !== 'prescreened';
   });
 
   const handlePrescreenAll = async () => {
-    const contactsToPrescreen = notEnrichedContacts;
+    const contactsToPrescreen = contactsNeedingPrescreen;
     if (contactsToPrescreen.length === 0) {
       toast({ title: "No contacts to pre-screen", variant: "destructive" });
       return;
@@ -573,7 +575,6 @@ export default function Apollo() {
       // Invalidate all relevant queries to refresh the UI
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/check-enrichment"] });
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies/not-found"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies/prescreened"] });
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/leads-without-emails", currentProject?.id] });
       
       const skippedText = response.skipped > 0 ? `, ${response.skipped} already processed` : '';
@@ -659,10 +660,6 @@ export default function Apollo() {
             <Users className="h-4 w-4 mr-2" />
             Enriched Contacts ({enrichedCompanies?.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="prescreened" data-testid="tab-prescreened">
-            <Eye className="h-4 w-4 mr-2" />
-            Ready to Review ({prescreenedCompanies?.length || 0})
-          </TabsTrigger>
           <TabsTrigger value="not-found" data-testid="tab-not-found">
             <AlertCircle className="h-4 w-4 mr-2" />
             Not Found ({notFoundCompanies?.length || 0})
@@ -690,7 +687,7 @@ export default function Apollo() {
                   <Button 
                     variant="outline"
                     onClick={handlePrescreenAll}
-                    disabled={isPrescreening || notEnrichedContacts.length === 0}
+                    disabled={isPrescreening || contactsNeedingPrescreen.length === 0}
                     data-testid="button-prescreen-all"
                   >
                     {isPrescreening ? (
@@ -698,7 +695,7 @@ export default function Apollo() {
                     ) : (
                       <RefreshCw className="h-4 w-4 mr-2" />
                     )}
-                    Pre-screen All ({notEnrichedContacts.length})
+                    Pre-screen All ({contactsNeedingPrescreen.length})
                   </Button>
                   {selectedLinks.size > 0 && (
                     <>
@@ -834,82 +831,6 @@ export default function Apollo() {
 
         <TabsContent value="enriched" className="space-y-4">
           <EnrichedCompaniesTab companies={enrichedCompanies || []} isLoading={companiesLoading} />
-        </TabsContent>
-
-        <TabsContent value="prescreened" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Eye className="h-5 w-5 text-blue-500" />
-                Companies Ready to Review
-              </CardTitle>
-              <CardDescription>
-                These companies were found in Apollo and have contacts available for enrichment
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {prescreenedLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : !prescreenedCompanies || prescreenedCompanies.length === 0 ? (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    No prescreened companies yet. Use "Pre-screen All" to check companies against Apollo.
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <ScrollArea className="h-[500px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Company</TableHead>
-                        <TableHead>Domain</TableHead>
-                        <TableHead>Checked Date</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {prescreenedCompanies.map((company) => (
-                        <TableRow key={company.id} data-testid={`row-prescreened-${company.id}`}>
-                          <TableCell>
-                            <div className="font-medium">{company.name || "Unknown"}</div>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground">
-                              {company.domain || "-"}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground">
-                              {company.enrichedAt ? new Date(company.enrichedAt).toLocaleDateString() : "-"}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => {
-                                const storeContact = storeContacts?.contacts?.find(c => c.link === company.googleSheetLink);
-                                if (storeContact) {
-                                  handlePreview(storeContact);
-                                }
-                              }}
-                              data-testid={`button-review-${company.id}`}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              Review
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="not-found" className="space-y-4">

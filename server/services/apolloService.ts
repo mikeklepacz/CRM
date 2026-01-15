@@ -518,7 +518,12 @@ export async function getEnrichedCompanies(tenantId: string): Promise<ApolloComp
   return db
     .select()
     .from(apolloCompanies)
-    .where(eq(apolloCompanies.tenantId, tenantId))
+    .where(
+      and(
+        eq(apolloCompanies.tenantId, tenantId),
+        eq(apolloCompanies.enrichmentStatus, 'enriched')
+      )
+    )
     .orderBy(apolloCompanies.enrichedAt);
 }
 
