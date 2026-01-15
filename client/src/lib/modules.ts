@@ -16,6 +16,7 @@ export const AVAILABLE_MODULES: ModuleDefinition[] = [
   { id: "followup", label: "Follow-up", description: "Manual follow-up tracking" },
   { id: "pipelines", label: "Pipelines", description: "Workflow automation" },
   { id: "qualification", label: "Qualification", description: "Lead qualification campaigns and scoring" },
+  { id: "apollo", label: "Apollo Enrichment", description: "Enrich leads with contact data from Apollo.io" },
 ];
 
 export function getModuleById(id: string): ModuleDefinition | undefined {

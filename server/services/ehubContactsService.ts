@@ -2,7 +2,7 @@ import { eq, sql, and, or, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import * as googleSheets from '../googleSheets';
 import { storage } from '../storage';
-import { sequenceRecipients, sequences, categories } from '../../shared/schema';
+import { sequenceRecipients, sequences, categories, apolloContacts, apolloCompanies } from '../../shared/schema';
 import type { EhubContact, AllContactsResponse } from '../../shared/schema';
 import { detectTimezone } from './timezoneHours';
 
@@ -240,6 +240,83 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
         allContacts.push(...storeContacts);
       }
     }
+  }
+
+  // Fetch Apollo-enriched contacts for this tenant
+  // These are contacts found via Apollo.io enrichment that have valid emails
+  // Include full metadata: phone, title, seniority for downstream sequencing
+  try {
+    const apolloContactsData = await db
+      .select({
+        firstName: apolloContacts.firstName,
+        lastName: apolloContacts.lastName,
+        email: apolloContacts.email,
+        title: apolloContacts.title,
+        seniority: apolloContacts.seniority,
+        phone: apolloContacts.phone,
+        googleSheetLink: apolloContacts.googleSheetLink,
+        companyId: apolloContacts.companyId,
+        city: apolloContacts.city,
+        state: apolloContacts.state,
+      })
+      .from(apolloContacts)
+      .where(eq(apolloContacts.tenantId, tenantId));
+    
+    // Get company info for Apollo contacts
+    const companyIds = [...new Set(apolloContactsData.filter(c => c.companyId).map(c => c.companyId!))];
+    const companiesData = companyIds.length > 0 
+      ? await db.select().from(apolloCompanies).where(
+          sql`${apolloCompanies.id} IN (${sql.join(companyIds.map(id => sql`${id}`), sql`, `)})`
+        )
+      : [];
+    const companyMap = new Map(companiesData.map(c => [c.id, c]));
+
+    // Add Apollo contacts to allContacts
+    // Only include contacts with valid emails that aren't already in the list
+    const existingEmails = new Set(allContacts.map(c => c.email.toLowerCase()));
+    let apolloContactsAdded = 0;
+    
+    for (const apolloContact of apolloContactsData) {
+      if (!apolloContact.email || !apolloContact.email.includes('@')) continue;
+      
+      const email = apolloContact.email.trim().toLowerCase();
+      if (existingEmails.has(email)) continue;
+      
+      const company = apolloContact.companyId ? companyMap.get(apolloContact.companyId) : null;
+      const name = [apolloContact.firstName, apolloContact.lastName].filter(Boolean).join(' ') || 'Unknown';
+      
+      // If project filtering is active, check if the linked store is in allowed categories
+      if (allowedCategoryNames !== null && apolloContact.googleSheetLink) {
+        const linkedCategory = linkToCategoryMap.get(apolloContact.googleSheetLink.toLowerCase());
+        if (!linkedCategory || !allowedCategoryNames.has(linkedCategory)) {
+          continue;
+        }
+      }
+      
+      // Build detailed sales summary with Apollo metadata
+      const details: string[] = [];
+      if (company?.name) details.push(`at ${company.name}`);
+      if (apolloContact.title) details.push(apolloContact.title);
+      if (apolloContact.seniority) details.push(`(${apolloContact.seniority})`);
+      if (apolloContact.phone) details.push(`Phone: ${apolloContact.phone}`);
+      
+      allContacts.push({
+        name: `${name}${apolloContact.title ? ` - ${apolloContact.title}` : ''}`,
+        email,
+        state: apolloContact.state || company?.state || undefined,
+        link: apolloContact.googleSheetLink || undefined,
+        salesSummary: details.length > 0 ? `Apollo: ${details.join(' | ')}` : 'Apollo-enriched contact',
+      });
+      existingEmails.add(email);
+      apolloContactsAdded++;
+    }
+    
+    if (apolloContactsAdded > 0) {
+      console.log(`[E-Hub] Added ${apolloContactsAdded} Apollo contacts for tenant ${tenantId}`);
+    }
+  } catch (err) {
+    console.error('[E-Hub] Error fetching Apollo contacts:', err);
+    // Continue without Apollo contacts if there's an error
   }
 
   // Track emails that have been contacted according to Commission Tracker

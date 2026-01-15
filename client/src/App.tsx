@@ -36,6 +36,7 @@ import OrgAdmin from "@/pages/org-admin";
 import Analytics from "@/pages/analytics";
 import Pipelines from "@/pages/pipelines";
 import Qualification from "@/pages/qualification";
+import Apollo from "@/pages/apollo";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -106,6 +107,9 @@ function Router() {
                 {canAccessAdminFeatures(user) ? <Pipelines /> : <NotFound />}
               </Route>
               <Route path="/qualification" component={Qualification} />
+              <Route path="/apollo">
+                {canAccessAdminFeatures(user) ? <Apollo /> : <NotFound />}
+              </Route>
               <Route path="/product-mockup" component={ProductMockup} />
               <Route path="/store/:storeId" component={StoreDetails} />
               <Route path="/" component={Dashboard} />

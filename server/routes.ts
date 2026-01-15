@@ -60,6 +60,7 @@ import { callDispatcher } from "./call_dispatcher";
 import { analyzeTranscript } from "./services/aiTranscriptAnalysis";
 import { reconcileOrphanedCallSessions, startReconciliationWorker } from "./services/elevenLabsReconciliation";
 import { crawlWebsiteForEmail } from "./emailCrawler";
+import * as apolloService from "./services/apolloService";
 
 const FLY_VOICE_PROXY_HEALTH_URL = process.env.FLY_VOICE_PROXY_HEALTH_URL || 'https://hemp-voice-proxy.fly.dev/health';
 
@@ -26755,6 +26756,202 @@ ${conversationContext}`;
       res.status(500).json({ message: error.message || 'Failed to update email account' });
     }
   });
+
+  // ========================================
+  // APOLLO ENRICHMENT ROUTES
+  // ========================================
+
+  // GET /api/apollo/settings - Get Apollo enrichment settings
+  app.get('/api/apollo/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const settings = await apolloService.getOrCreateSettings(tenantId);
+      res.json(settings);
+    } catch (error: any) {
+      console.error('Error getting Apollo settings:', error);
+      res.status(500).json({ message: error.message || 'Failed to get Apollo settings' });
+    }
+  });
+
+  // PATCH /api/apollo/settings - Update Apollo enrichment settings
+  app.patch('/api/apollo/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const { targetTitles, targetSeniorities, maxContactsPerCompany, autoEnrichOnAdd } = req.body;
+      const updated = await apolloService.updateSettings(tenantId, {
+        targetTitles,
+        targetSeniorities,
+        maxContactsPerCompany,
+        autoEnrichOnAdd,
+      });
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating Apollo settings:', error);
+      res.status(500).json({ message: error.message || 'Failed to update Apollo settings' });
+    }
+  });
+
+  // POST /api/apollo/search/organizations - Search for organizations in Apollo
+  app.post('/api/apollo/search/organizations', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { domains, name, locations, employeeRanges, page, perPage } = req.body;
+      const result = await apolloService.searchOrganizations({
+        domains,
+        name,
+        locations,
+        employeeRanges,
+        page,
+        perPage,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error searching Apollo organizations:', error);
+      res.status(500).json({ message: error.message || 'Failed to search organizations' });
+    }
+  });
+
+  // POST /api/apollo/search/people - Search for people in Apollo
+  app.post('/api/apollo/search/people', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { organizationDomains, organizationIds, titles, seniorities, locations, emailStatus, page, perPage } = req.body;
+      const result = await apolloService.searchPeople({
+        organizationDomains,
+        organizationIds,
+        titles,
+        seniorities,
+        locations,
+        emailStatus,
+        page,
+        perPage,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error searching Apollo people:', error);
+      res.status(500).json({ message: error.message || 'Failed to search people' });
+    }
+  });
+
+  // POST /api/apollo/preview - Preview contacts for a company without enriching
+  app.post('/api/apollo/preview', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const { domain, companyName } = req.body;
+      if (!domain && !companyName) {
+        return res.status(400).json({ message: 'Either domain or companyName is required' });
+      }
+      const result = await apolloService.previewContactsForCompany({
+        domain,
+        companyName,
+        tenantId,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error previewing Apollo contacts:', error);
+      res.status(500).json({ message: error.message || 'Failed to preview contacts' });
+    }
+  });
+
+  // POST /api/apollo/enrich - Enrich and store a company and its contacts
+  app.post('/api/apollo/enrich', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const { googleSheetLink, domain, companyName } = req.body;
+      if (!googleSheetLink) {
+        return res.status(400).json({ message: 'googleSheetLink is required' });
+      }
+      if (!domain && !companyName) {
+        return res.status(400).json({ message: 'Either domain or companyName is required' });
+      }
+      const result = await apolloService.enrichAndStoreCompany({
+        tenantId,
+        googleSheetLink,
+        domain,
+        companyName,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error enriching company:', error);
+      res.status(500).json({ message: error.message || 'Failed to enrich company' });
+    }
+  });
+
+  // GET /api/apollo/companies - Get all enriched companies
+  app.get('/api/apollo/companies', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const companies = await apolloService.getEnrichedCompanies(tenantId);
+      res.json(companies);
+    } catch (error: any) {
+      console.error('Error getting enriched companies:', error);
+      res.status(500).json({ message: error.message || 'Failed to get enriched companies' });
+    }
+  });
+
+  // GET /api/apollo/companies/:companyId/contacts - Get contacts for a company
+  app.get('/api/apollo/companies/:companyId/contacts', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { companyId } = req.params;
+      const contacts = await apolloService.getContactsForCompany(companyId);
+      res.json(contacts);
+    } catch (error: any) {
+      console.error('Error getting company contacts:', error);
+      res.status(500).json({ message: error.message || 'Failed to get company contacts' });
+    }
+  });
+
+  // GET /api/apollo/contacts/by-link - Get contacts by Google Sheet link
+  app.get('/api/apollo/contacts/by-link', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const { link } = req.query;
+      if (!link || typeof link !== 'string') {
+        return res.status(400).json({ message: 'link query parameter is required' });
+      }
+      const contacts = await apolloService.getContactsByLink(tenantId, link);
+      res.json(contacts);
+    } catch (error: any) {
+      console.error('Error getting contacts by link:', error);
+      res.status(500).json({ message: error.message || 'Failed to get contacts by link' });
+    }
+  });
+
+  // POST /api/apollo/check-enrichment - Check if companies are already enriched
+  app.post('/api/apollo/check-enrichment', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const { links } = req.body;
+      if (!Array.isArray(links)) {
+        return res.status(400).json({ message: 'links must be an array' });
+      }
+      const result = await apolloService.bulkCheckEnrichmentStatus(tenantId, links);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error checking enrichment status:', error);
+      res.status(500).json({ message: error.message || 'Failed to check enrichment status' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

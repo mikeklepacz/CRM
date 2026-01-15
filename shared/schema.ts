@@ -2553,3 +2553,111 @@ export const insertQualificationLeadSchema = createInsertSchema(qualificationLea
 
 export type InsertQualificationLead = z.infer<typeof insertQualificationLeadSchema>;
 export type QualificationLead = typeof qualificationLeads.$inferSelect;
+
+// Apollo Integration - Companies enriched from Apollo.io
+export const apolloCompanies = pgTable("apollo_companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  googleSheetLink: varchar("google_sheet_link").notNull(), // The Link column from Store Database - key connector
+  apolloOrgId: varchar("apollo_org_id"), // Apollo's internal organization ID
+  domain: varchar("domain", { length: 255 }), // Primary website domain
+  name: varchar("name", { length: 500 }), // Company name from Apollo
+  phone: varchar("phone", { length: 50 }), // Company phone
+  linkedinUrl: varchar("linkedin_url", { length: 500 }), // LinkedIn profile
+  twitterUrl: varchar("twitter_url", { length: 500 }), // Twitter profile
+  facebookUrl: varchar("facebook_url", { length: 500 }), // Facebook profile
+  websiteUrl: varchar("website_url", { length: 500 }), // Website URL
+  employeeCount: integer("employee_count"), // Headcount
+  industry: varchar("industry", { length: 255 }), // Industry classification
+  foundedYear: integer("founded_year"), // Year founded
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 100 }),
+  country: varchar("country", { length: 100 }),
+  logoUrl: varchar("logo_url", { length: 500 }), // Company logo
+  enrichedAt: timestamp("enriched_at").defaultNow(), // When we enriched it
+  creditsUsed: integer("credits_used").default(0), // Apollo credits consumed
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_apollo_companies_tenant").on(table.tenantId),
+  index("idx_apollo_companies_link").on(table.tenantId, table.googleSheetLink),
+  index("idx_apollo_companies_domain").on(table.tenantId, table.domain),
+  uniqueIndex("idx_apollo_companies_tenant_link").on(table.tenantId, table.googleSheetLink),
+]);
+
+export const insertApolloCompanySchema = createInsertSchema(apolloCompanies).omit({
+  id: true,
+  enrichedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertApolloCompany = z.infer<typeof insertApolloCompanySchema>;
+export type ApolloCompany = typeof apolloCompanies.$inferSelect;
+
+// Apollo Integration - Contacts enriched from Apollo.io
+export const apolloContacts = pgTable("apollo_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  companyId: varchar("company_id").references(() => apolloCompanies.id, { onDelete: 'cascade' }), // FK to apollo_companies
+  googleSheetLink: varchar("google_sheet_link").notNull(), // Also store Link for direct lookup
+  apolloPersonId: varchar("apollo_person_id"), // Apollo's person ID
+  firstName: varchar("first_name", { length: 100 }),
+  lastName: varchar("last_name", { length: 100 }),
+  email: varchar("email", { length: 255 }), // The gold - their email!
+  emailStatus: varchar("email_status", { length: 50 }), // verified, unverified, likely_to_engage, unavailable
+  title: varchar("title", { length: 255 }), // Job title
+  seniority: varchar("seniority", { length: 50 }), // owner, founder, c_suite, vp, director, manager, senior, entry
+  department: varchar("department", { length: 100 }), // Department
+  phone: varchar("phone", { length: 50 }), // Direct phone (if enriched)
+  linkedinUrl: varchar("linkedin_url", { length: 500 }), // LinkedIn profile
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 100 }),
+  country: varchar("country", { length: 100 }),
+  photoUrl: varchar("photo_url", { length: 500 }), // Profile photo
+  headline: varchar("headline", { length: 500 }), // LinkedIn headline
+  isLikelyToEngage: boolean("is_likely_to_engage").default(false), // Apollo's engagement score
+  enrichedAt: timestamp("enriched_at").defaultNow(), // When we pulled this contact
+  creditsUsed: integer("credits_used").default(0), // How many credits we spent
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_apollo_contacts_tenant").on(table.tenantId),
+  index("idx_apollo_contacts_company").on(table.companyId),
+  index("idx_apollo_contacts_link").on(table.tenantId, table.googleSheetLink),
+  index("idx_apollo_contacts_email").on(table.tenantId, table.email),
+  index("idx_apollo_contacts_seniority").on(table.tenantId, table.seniority),
+]);
+
+export const insertApolloContactSchema = createInsertSchema(apolloContacts).omit({
+  id: true,
+  enrichedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertApolloContact = z.infer<typeof insertApolloContactSchema>;
+export type ApolloContact = typeof apolloContacts.$inferSelect;
+
+// Apollo Enrichment Settings - Per-tenant configuration for Apollo enrichment
+export const apolloSettings = pgTable("apollo_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().unique().references(() => tenants.id, { onDelete: 'cascade' }),
+  targetTitles: text("target_titles").array().default(sql`ARRAY['Owner', 'Manager', 'Director', 'Buyer']::text[]`), // Preferred job titles
+  targetSeniorities: text("target_seniorities").array().default(sql`ARRAY['owner', 'founder', 'director', 'manager']::text[]`), // Preferred seniorities
+  maxContactsPerCompany: integer("max_contacts_per_company").default(3), // Max contacts to enrich per company
+  autoEnrichOnAdd: boolean("auto_enrich_on_add").default(false), // Auto-enrich when adding to CRM
+  creditsUsedThisMonth: integer("credits_used_this_month").default(0), // Track monthly usage
+  creditsResetDate: date("credits_reset_date"), // When to reset the monthly counter
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertApolloSettingsSchema = createInsertSchema(apolloSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertApolloSettings = z.infer<typeof insertApolloSettingsSchema>;
+export type ApolloSettings = typeof apolloSettings.$inferSelect;
