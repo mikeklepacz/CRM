@@ -580,7 +580,10 @@ export async function getEnrichedCompanies(tenantId: string): Promise<(ApolloCom
     )
     .orderBy(apolloCompanies.enrichedAt);
   
-  return result.map(r => ({ ...r.company, contactCount: Number(r.contactCount) || 0 }));
+  const companies = result.map(r => ({ ...r.company, contactCount: Number(r.contactCount) || 0 }));
+  console.log(`[Apollo Companies] Returning ${companies.length} enriched companies for tenant ${tenantId}`);
+  companies.forEach(c => console.log(`[Apollo Companies] ${c.name}: ${c.contactCount} contacts`));
+  return companies;
 }
 
 export async function getContactsForCompany(companyId: string): Promise<ApolloContact[]> {

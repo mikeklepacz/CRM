@@ -203,6 +203,8 @@ export default function Apollo() {
 
   const { data: enrichedCompanies, isLoading: companiesLoading } = useQuery<ApolloCompany[]>({
     queryKey: ["/api/apollo/companies"],
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: storeContacts, isLoading: storeLoading } = useQuery<{ contacts: StoreContact[] }>({
