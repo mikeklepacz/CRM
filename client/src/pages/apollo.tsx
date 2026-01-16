@@ -438,7 +438,7 @@ export default function Apollo() {
     if (!currentItem?.preview?.contacts) return;
     
     const newSet = new Set(reviewSelectedPeople);
-    currentItem.preview.contacts.forEach(person => {
+    currentItem.preview.contacts.filter(p => p.has_email).forEach(person => {
       newSet.add(`${currentItem.contact.link}::${person.id}`);
     });
     setReviewSelectedPeople(newSet);
@@ -449,7 +449,7 @@ export default function Apollo() {
     if (!currentItem?.preview?.contacts) return;
     
     const newSet = new Set(reviewSelectedPeople);
-    currentItem.preview.contacts.forEach(person => {
+    currentItem.preview.contacts.filter(p => p.has_email).forEach(person => {
       newSet.delete(`${currentItem.contact.link}::${person.id}`);
     });
     setReviewSelectedPeople(newSet);
@@ -484,6 +484,7 @@ export default function Apollo() {
     if (!currentItem) return;
     
     const currentPeopleKeys = (currentItem.preview?.contacts || [])
+      .filter(p => p.has_email)
       .map(person => `${currentItem.contact.link}::${person.id}`)
       .filter(key => reviewSelectedPeople.has(key));
     
@@ -542,9 +543,16 @@ export default function Apollo() {
     );
   }) || [];
 
+  const failedEnrichmentLinks = new Set(
+    (enrichedCompanies || [])
+      .filter(c => c.enrichmentStatus === 'enriched' && (c.contactCount || 0) === 0)
+      .map(c => c.googleSheetLink)
+  );
+
   const notEnrichedContacts = filteredContacts.filter(c => {
     const status = enrichmentStatus?.[c.link];
-    // Exclude enriched and not_found from the queue; keep prescreened so they can be reviewed
+    // Include: not enriched, prescreened, or enriched but with 0 contacts (retry)
+    if (failedEnrichmentLinks.has(c.link)) return true;
     return !status || (status !== 'enriched' && status !== 'not_found');
   });
 
@@ -793,7 +801,12 @@ export default function Apollo() {
                               <span className="text-sm">{contact.state || "-"}</span>
                             </TableCell>
                             <TableCell>
-                              {status === 'prescreened' ? (
+                              {failedEnrichmentLinks.has(contact.link) ? (
+                                <Badge variant="destructive">
+                                  <RefreshCw className="h-3 w-3 mr-1" />
+                                  Retry
+                                </Badge>
+                              ) : status === 'prescreened' ? (
                                 <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
                                   <Eye className="h-3 w-3 mr-1" />
                                   Ready
@@ -825,7 +838,7 @@ export default function Apollo() {
         </TabsContent>
 
         <TabsContent value="enriched" className="space-y-4">
-          <EnrichedCompaniesTab companies={enrichedCompanies || []} isLoading={companiesLoading} projectId={currentProject?.id} />
+          <EnrichedCompaniesTab companies={enrichedCompanies || []} isLoading={companiesLoading} />
         </TabsContent>
 
         <TabsContent value="not-found" className="space-y-4">
@@ -1506,7 +1519,8 @@ function LeadReviewQueue({
   const currentItem = data[currentIndex];
   const preview = currentItem?.preview;
   const company = preview?.company;
-  const contacts = preview?.contacts || [];
+  const allContacts = preview?.contacts || [];
+  const contacts = allContacts.filter(p => p.has_email);
 
   const currentPeopleKeys = contacts.map(person => 
     `${currentItem?.contact.link}::${person.id}`
@@ -1785,10 +1799,8 @@ function LeadReviewQueue({
   );
 }
 
-function EnrichedCompaniesTab({ companies, isLoading, projectId }: { companies: ApolloCompany[]; isLoading: boolean; projectId?: string }) {
+function EnrichedCompaniesTab({ companies, isLoading }: { companies: ApolloCompany[]; isLoading: boolean }) {
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
-  const [reEnrichingId, setReEnrichingId] = useState<string | null>(null);
-  const { toast } = useToast();
 
   const { data: contacts } = useQuery<ApolloContact[]>({
     queryKey: ["/api/apollo/companies", expandedCompany, "contacts"],
@@ -1801,20 +1813,6 @@ function EnrichedCompaniesTab({ companies, isLoading, projectId }: { companies: 
     },
     enabled: !!expandedCompany,
   });
-
-  const handleReEnrich = async (companyId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setReEnrichingId(companyId);
-    try {
-      await apiRequest("POST", "/api/apollo/re-enrich", { companyId, projectId });
-      queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/apollo/settings"] });
-      toast({ title: "Re-enrichment complete", description: "Contacts have been refreshed" });
-    } catch (error: any) {
-      toast({ title: "Re-enrichment failed", description: error.message, variant: "destructive" });
-    }
-    setReEnrichingId(null);
-  };
 
   if (isLoading) {
     return (
@@ -1877,22 +1875,6 @@ function EnrichedCompaniesTab({ companies, isLoading, projectId }: { companies: 
                 <Badge variant="secondary">
                   {new Date(company.enrichedAt).toLocaleDateString()}
                 </Badge>
-                {company.contactCount === 0 && (
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={(e) => handleReEnrich(company.id, e)}
-                    disabled={reEnrichingId === company.id}
-                    data-testid={`button-re-enrich-${company.id}`}
-                  >
-                    {reEnrichingId === company.id ? (
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3 mr-1" />
-                    )}
-                    Re-enrich
-                  </Button>
-                )}
               </div>
             </div>
           </CardHeader>

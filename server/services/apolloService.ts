@@ -454,8 +454,8 @@ export async function enrichAndStoreCompany(options: {
     creditsUsed: 1,
   }).returning();
 
-  let contactsToEnrich = preview.contacts.filter(p => p.first_name && p.last_name);
-  console.log(`[Apollo Enrich] Preview has ${preview.contacts.length} contacts, ${contactsToEnrich.length} have names`);
+  let contactsToEnrich = preview.contacts.filter(p => p.first_name);
+  console.log(`[Apollo Enrich] Preview has ${preview.contacts.length} contacts, ${contactsToEnrich.length} have first names`);
   
   if (options.selectedPersonIds && options.selectedPersonIds.length > 0) {
     contactsToEnrich = contactsToEnrich.filter(p => options.selectedPersonIds!.includes(p.id));
@@ -467,7 +467,7 @@ export async function enrichAndStoreCompany(options: {
   if (contactsToEnrich.length > 0) {
     const enrichDetails = contactsToEnrich.map(p => ({
       first_name: p.first_name,
-      last_name: p.last_name,
+      last_name: p.last_name || undefined,
       domain: apolloCompany.primary_domain,
       organization_name: apolloCompany.name,
     }));
@@ -706,94 +706,3 @@ export async function getPrescreenedCompanies(tenantId: string): Promise<ApolloC
     .orderBy(apolloCompanies.enrichedAt);
 }
 
-export async function reEnrichCompany(params: {
-  tenantId: string;
-  companyId: string;
-  projectId?: string;
-}): Promise<{ success: boolean; contacts: any[]; creditsUsed: number }> {
-  const { tenantId, companyId, projectId } = params;
-  
-  // Get the existing company to retrieve all data for backup
-  const [company] = await db.select().from(apolloCompanies).where(
-    and(
-      eq(apolloCompanies.id, companyId),
-      eq(apolloCompanies.tenantId, tenantId)
-    )
-  );
-  
-  if (!company) {
-    throw new Error('Company not found');
-  }
-  
-  // Store original data for recovery
-  const backupData = { ...company };
-  
-  // Helper function to restore original company
-  const restoreCompany = async () => {
-    // First delete any partial data that may have been created (scoped to tenant)
-    await db.delete(apolloCompanies).where(
-      and(
-        eq(apolloCompanies.googleSheetLink, backupData.googleSheetLink),
-        eq(apolloCompanies.tenantId, tenantId)
-      )
-    );
-    await db.insert(apolloCompanies).values({
-      id: backupData.id,
-      tenantId: backupData.tenantId,
-      googleSheetLink: backupData.googleSheetLink,
-      apolloOrgId: backupData.apolloOrgId,
-      domain: backupData.domain,
-      name: backupData.name,
-      phone: backupData.phone,
-      linkedinUrl: backupData.linkedinUrl,
-      websiteUrl: backupData.websiteUrl,
-      employeeCount: backupData.employeeCount,
-      industry: backupData.industry,
-      foundedYear: backupData.foundedYear,
-      city: backupData.city,
-      state: backupData.state,
-      country: backupData.country,
-      logoUrl: backupData.logoUrl,
-      enrichedAt: backupData.enrichedAt,
-      enrichmentStatus: 'enriched',
-      creditsUsed: backupData.creditsUsed,
-    });
-  };
-  
-  // Delete existing contacts (they're already problematic - 0 saved)
-  await db.delete(apolloContacts).where(eq(apolloContacts.companyId, companyId));
-  
-  // Delete the company to allow enrichAndStoreCompany to proceed
-  await db.delete(apolloCompanies).where(eq(apolloCompanies.id, companyId));
-  
-  try {
-    // Perform fresh enrichment
-    const result = await enrichAndStoreCompany({
-      tenantId,
-      googleSheetLink: backupData.googleSheetLink,
-      domain: backupData.domain || undefined,
-      companyName: backupData.name || undefined,
-      projectId,
-    });
-    
-    // Check if enrichment actually succeeded (company found and contacts saved)
-    if (!result.company) {
-      // Apollo couldn't find the company - restore original data
-      console.error('[ReEnrich] Company not found in Apollo, restoring original');
-      await restoreCompany();
-      throw new Error('Company not found in Apollo database. Original data has been restored.');
-    }
-    
-    if (result.contacts.length === 0) {
-      // Enrichment succeeded but no contacts found - this is a valid outcome
-      console.log('[ReEnrich] No contacts found for company, but enrichment completed');
-    }
-    
-    return result;
-  } catch (error) {
-    // If enrichment fails, restore the company record
-    console.error('[ReEnrich] Enrichment failed, restoring company record:', error);
-    await restoreCompany();
-    throw error;
-  }
-}
