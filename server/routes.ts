@@ -27240,7 +27240,8 @@ ${conversationContext}`;
       if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
-      const companies = await apolloService.getNotFoundCompanies(tenantId);
+      const projectId = req.query.projectId as string | undefined;
+      const companies = await apolloService.getNotFoundCompanies(tenantId, projectId);
       res.json(companies);
     } catch (error: any) {
       console.error('Error getting not-found companies:', error);
@@ -27255,7 +27256,8 @@ ${conversationContext}`;
       if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
-      const companies = await apolloService.getPrescreenedCompanies(tenantId);
+      const projectId = req.query.projectId as string | undefined;
+      const companies = await apolloService.getPrescreenedCompanies(tenantId, projectId);
       res.json(companies);
     } catch (error: any) {
       console.error('Error getting prescreened companies:', error);
@@ -27271,7 +27273,7 @@ ${conversationContext}`;
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
       
-      const { contacts } = req.body;
+      const { contacts, projectId } = req.body;
       if (!Array.isArray(contacts)) {
         return res.status(400).json({ message: 'contacts must be an array' });
       }
@@ -27323,16 +27325,17 @@ ${conversationContext}`;
               preview.company.id,
               preview.company.primary_domain || domain,
               preview.company.name || contact.name,
-              preview.totalContacts
+              preview.totalContacts,
+              projectId
             );
           } else {
             notFound++;
-            await apolloService.markCompanyNotFound(tenantId, contact.link, domain, contact.name);
+            await apolloService.markCompanyNotFound(tenantId, contact.link, domain, contact.name, projectId);
           }
         } catch (error) {
           console.error(`Error prescreening contact ${contact.link}:`, error);
           notFound++;
-          await apolloService.markCompanyNotFound(tenantId, contact.link, undefined, contact.name);
+          await apolloService.markCompanyNotFound(tenantId, contact.link, undefined, contact.name, projectId);
         }
       }
 

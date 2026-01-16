@@ -2558,6 +2558,7 @@ export type QualificationLead = typeof qualificationLeads.$inferSelect;
 export const apolloCompanies = pgTable("apollo_companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Link to project for organization
   googleSheetLink: varchar("google_sheet_link").notNull(), // The Link column from Store Database - key connector
   apolloOrgId: varchar("apollo_org_id"), // Apollo's internal organization ID
   domain: varchar("domain", { length: 255 }), // Primary website domain
@@ -2581,6 +2582,7 @@ export const apolloCompanies = pgTable("apollo_companies", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_apollo_companies_tenant").on(table.tenantId),
+  index("idx_apollo_companies_project").on(table.projectId),
   index("idx_apollo_companies_link").on(table.tenantId, table.googleSheetLink),
   index("idx_apollo_companies_domain").on(table.tenantId, table.domain),
   uniqueIndex("idx_apollo_companies_tenant_link").on(table.tenantId, table.googleSheetLink),

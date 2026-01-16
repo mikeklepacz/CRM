@@ -692,16 +692,20 @@ export async function bulkCheckEnrichmentStatus(tenantId: string, links: string[
   return result;
 }
 
-export async function getNotFoundCompanies(tenantId: string): Promise<ApolloCompany[]> {
+export async function getNotFoundCompanies(tenantId: string, projectId?: string): Promise<ApolloCompany[]> {
+  const conditions = [
+    eq(apolloCompanies.tenantId, tenantId),
+    eq(apolloCompanies.enrichmentStatus, 'not_found')
+  ];
+  
+  if (projectId) {
+    conditions.push(eq(apolloCompanies.projectId, projectId));
+  }
+  
   return db
     .select()
     .from(apolloCompanies)
-    .where(
-      and(
-        eq(apolloCompanies.tenantId, tenantId),
-        eq(apolloCompanies.enrichmentStatus, 'not_found')
-      )
-    )
+    .where(and(...conditions))
     .orderBy(apolloCompanies.enrichedAt);
 }
 
@@ -709,10 +713,12 @@ export async function markCompanyNotFound(
   tenantId: string,
   googleSheetLink: string,
   domain?: string,
-  name?: string
+  name?: string,
+  projectId?: string
 ): Promise<ApolloCompany> {
   const [company] = await db.insert(apolloCompanies).values({
     tenantId,
+    projectId: projectId || null,
     googleSheetLink,
     domain: domain || null,
     name: name || null,
@@ -729,10 +735,12 @@ export async function markCompanyPrescreened(
   apolloOrgId: string,
   domain?: string,
   name?: string,
-  contactCount?: number
+  contactCount?: number,
+  projectId?: string
 ): Promise<ApolloCompany> {
   const [company] = await db.insert(apolloCompanies).values({
     tenantId,
+    projectId: projectId || null,
     googleSheetLink,
     apolloOrgId,
     domain: domain || null,
@@ -744,16 +752,20 @@ export async function markCompanyPrescreened(
   return company;
 }
 
-export async function getPrescreenedCompanies(tenantId: string): Promise<ApolloCompany[]> {
+export async function getPrescreenedCompanies(tenantId: string, projectId?: string): Promise<ApolloCompany[]> {
+  const conditions = [
+    eq(apolloCompanies.tenantId, tenantId),
+    eq(apolloCompanies.enrichmentStatus, 'prescreened')
+  ];
+  
+  if (projectId) {
+    conditions.push(eq(apolloCompanies.projectId, projectId));
+  }
+  
   return db
     .select()
     .from(apolloCompanies)
-    .where(
-      and(
-        eq(apolloCompanies.tenantId, tenantId),
-        eq(apolloCompanies.enrichmentStatus, 'prescreened')
-      )
-    )
+    .where(and(...conditions))
     .orderBy(apolloCompanies.enrichedAt);
 }
 

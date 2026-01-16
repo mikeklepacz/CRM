@@ -280,7 +280,14 @@ export default function Apollo() {
   });
 
   const { data: notFoundCompanies, isLoading: notFoundLoading } = useQuery<ApolloCompany[]>({
-    queryKey: ["/api/apollo/companies/not-found"],
+    queryKey: ["/api/apollo/companies/not-found", currentProject?.id],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (currentProject?.id) params.set("projectId", currentProject.id);
+      const response = await fetch(`/api/apollo/companies/not-found?${params.toString()}`);
+      if (!response.ok) throw new Error("Failed to fetch not found companies");
+      return response.json();
+    },
   });
 
   const [isPrescreening, setIsPrescreening] = useState(false);
@@ -581,13 +588,14 @@ export default function Apollo() {
           link: c.link,
           website: c.website,
           name: c.name,
-        }))
+        })),
+        projectId: currentProject?.id,
       }) as { checked: number; found: number; notFound: number; skipped: number };
       
       setPrescreenStats(response);
       // Invalidate all relevant queries to refresh the UI
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/check-enrichment"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies/not-found"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies/not-found", currentProject?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/leads-without-emails", currentProject?.id] });
       
       const skippedText = response.skipped > 0 ? `, ${response.skipped} already processed` : '';
