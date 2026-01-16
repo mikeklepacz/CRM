@@ -656,6 +656,8 @@ export async function isCompanyEnriched(tenantId: string, googleSheetLink: strin
 export async function bulkCheckEnrichmentStatus(tenantId: string, links: string[]): Promise<Record<string, string | null>> {
   if (links.length === 0) return {};
 
+  console.log(`[Apollo Check] Checking ${links.length} links for tenant ${tenantId}`);
+  
   const companies = await db
     .select({ link: apolloCompanies.googleSheetLink, status: apolloCompanies.enrichmentStatus })
     .from(apolloCompanies)
@@ -666,12 +668,23 @@ export async function bulkCheckEnrichmentStatus(tenantId: string, links: string[
       )
     );
 
+  console.log(`[Apollo Check] Found ${companies.length} matching companies in DB`);
+  companies.forEach(c => console.log(`[Apollo Check] DB match: ${c.link?.substring(0, 60)}... -> ${c.status}`));
+
   const statusMap = new Map(companies.map(r => [r.link, r.status]));
   
-  return links.reduce((acc, link) => {
+  const result = links.reduce((acc, link) => {
     acc[link] = statusMap.get(link) || null;
     return acc;
   }, {} as Record<string, string | null>);
+  
+  const enrichedCount = Object.values(result).filter(s => s === 'enriched').length;
+  const prescreenedCount = Object.values(result).filter(s => s === 'prescreened').length;
+  const notFoundCount = Object.values(result).filter(s => s === 'not_found').length;
+  const nullCount = Object.values(result).filter(s => s === null).length;
+  console.log(`[Apollo Check] Results: ${enrichedCount} enriched, ${prescreenedCount} prescreened, ${notFoundCount} not_found, ${nullCount} pending`);
+  
+  return result;
 }
 
 export async function getNotFoundCompanies(tenantId: string): Promise<ApolloCompany[]> {
