@@ -245,12 +245,13 @@ export default function MapSearch() {
   
   // Determine if we should use SQL (qualification) mode:
   // - If URL says qualification mode, use SQL
-  // - If no Store Database Google Sheet is configured, use SQL (fallback)
+  // - If sheets are still loading, default to SQL (safe fallback - prevents 404 errors)
+  // - If no Store Database Google Sheet is configured, use SQL
   // - Otherwise use Google Sheets
   const useSqlMode = useMemo(() => {
     if (isQualificationModeFromUrl) return true;
-    // If sheets are still loading, don't make a decision yet (will default to false)
-    if (sheetsLoading) return false;
+    // Default to SQL while loading to prevent 404 errors on tenants without sheets
+    if (sheetsLoading) return true;
     // Use SQL mode if no Store Database sheet is configured
     return !hasStoreDatabase;
   }, [isQualificationModeFromUrl, sheetsLoading, hasStoreDatabase]);
@@ -1102,6 +1103,11 @@ export default function MapSearch() {
                 : 'Find local businesses using Google Maps and add them to your database'
               }
             </CardDescription>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant={hasStoreDatabase ? "default" : "secondary"} className="text-xs" data-testid="badge-save-destination">
+                {sheetsLoading ? 'Checking destination...' : (hasStoreDatabase ? 'Saving to: Google Sheet' : 'Saving to: SQL Database')}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="overflow-y-auto flex-1 p-4 pt-2">
             <form onSubmit={handleSearch} className="space-y-3">
@@ -1768,11 +1774,11 @@ export default function MapSearch() {
                             <Button
                               size="sm"
                               onClick={() => handleSavePlace(place.place_id)}
-                              disabled={saveToSheetMutation.isPending || saveToQualificationMutation.isPending}
+                              disabled={sheetsLoading || saveToSheetMutation.isPending || saveToQualificationMutation.isPending}
                               data-testid={`button-save-${place.place_id}`}
                             >
                               <Plus className="mr-1 h-3 w-3" />
-                              {isQualificationMode ? 'Add Lead' : 'Add to Database'}
+                              {sheetsLoading ? 'Loading...' : (isQualificationMode ? 'Add Lead' : 'Add to Database')}
                             </Button>
                           </TableCell>
                         )}
@@ -1816,13 +1822,18 @@ export default function MapSearch() {
                 
                 <Button
                   onClick={handleExportSelected}
-                  disabled={selectedPlaces.size === 0 || exportProgress !== null}
+                  disabled={sheetsLoading || selectedPlaces.size === 0 || exportProgress !== null}
                   data-testid="button-export-crm"
                 >
                   {exportProgress ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Exporting {exportProgress.current}/{exportProgress.total}...
+                    </>
+                  ) : sheetsLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Checking destination...
                     </>
                   ) : (
                     <>
