@@ -273,6 +273,9 @@ export default function MapSearch() {
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
   const [duplicateCount, setDuplicateCount] = useState(0);
+  const [duplicateWebsites, setDuplicateWebsites] = useState<Set<string>>(new Set());
+  const [hideDuplicates, setHideDuplicates] = useState(true);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   
   // Map state
   const [mapCenter, setMapCenter] = useState({ lat: 39.8283, lng: -98.5795 }); // Center of USA
@@ -601,7 +604,8 @@ export default function MapSearch() {
       return await apiRequest("POST", "/api/maps/grid-search", params);
     },
     onSuccess: async (data) => {
-      setSearchResults(data.results || []);
+      const results = data.results || [];
+      setSearchResults(results);
       // Grid search doesn't use pagination - it returns all results
       setNextPageToken(null);
       setDuplicateCount(data.duplicateCount || 0);
@@ -613,6 +617,31 @@ export default function MapSearch() {
         gridDuplicatesRemoved: data.gridDuplicatesRemoved || 0,
       });
       
+      // Check for duplicate websites in CRM
+      if (results.length > 0) {
+        setCheckingDuplicates(true);
+        try {
+          const websites = results
+            .map(r => r.website)
+            .filter((w): w is string => !!w);
+          
+          if (websites.length > 0) {
+            const dupResponse = await apiRequest("POST", "/api/maps/check-duplicates", { websites });
+            const duplicates = new Set<string>(dupResponse.duplicates || []);
+            setDuplicateWebsites(duplicates);
+          } else {
+            setDuplicateWebsites(new Set());
+          }
+        } catch (error) {
+          console.error("Failed to check duplicates:", error);
+          setDuplicateWebsites(new Set());
+        } finally {
+          setCheckingDuplicates(false);
+        }
+      } else {
+        setDuplicateWebsites(new Set());
+      }
+      
       // Save the selected category as the last used category
       const effectiveCategory = isQualificationMode ? customCategory.trim() : category;
       if (effectiveCategory) {
@@ -623,7 +652,7 @@ export default function MapSearch() {
         }
       }
       
-      if (!data.results || data.results.length === 0) {
+      if (!results || results.length === 0) {
         toast({
           title: "No results found",
           description: data.duplicateCount > 0 
@@ -649,7 +678,7 @@ export default function MapSearch() {
           description = parts.join(', ');
         }
         toast({
-          title: `Found ${data.results.length} new results`,
+          title: `Found ${results.length} new results`,
           description: description || undefined,
         });
       }
@@ -1028,17 +1057,41 @@ export default function MapSearch() {
     return `https://www.google.com/maps/place/?q=place_id:${place.place_id}`;
   };
 
-  // Compute filtered results with both closed business filter and active keywords
+  // Helper to normalize URLs for comparison
+  const normalizeUrl = (url: string): string => {
+    if (!url) return '';
+    let normalized = url.toLowerCase().trim();
+    normalized = normalized.replace(/^https?:\/\//, '');
+    normalized = normalized.replace(/^www\./, '');
+    normalized = normalized.replace(/\/$/, '');
+    return normalized;
+  };
+
+  // Check if a website is a duplicate (normalized comparison)
+  const isWebsiteDuplicate = (website?: string): boolean => {
+    if (!website || duplicateWebsites.size === 0) return false;
+    const normalized = normalizeUrl(website);
+    for (const dup of duplicateWebsites) {
+      if (normalizeUrl(dup) === normalized) return true;
+    }
+    return false;
+  };
+
+  // Compute filtered results with closed business filter, keywords, and duplicates
   const filteredResults = searchResults
     .filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL')
-    .filter(p => !activeKeywords.some(keyword => p.name.toLowerCase().includes(keyword)));
+    .filter(p => !activeKeywords.some(keyword => p.name.toLowerCase().includes(keyword)))
+    .filter(p => !hideDuplicates || !isWebsiteDuplicate(p.website));
+  
+  // Count duplicates in current results for display
+  const duplicatesInResults = searchResults.filter(p => isWebsiteDuplicate(p.website)).length;
   
   const showCheckboxes = searchResults.length >= 2;
   const allSelected = filteredResults.length > 0 && filteredResults.every(p => selectedPlaces.has(p.place_id));
   
   // Count of results hidden by keyword filters
   const resultsWithoutClosedFilter = searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL');
-  const hiddenByKeywordFilters = resultsWithoutClosedFilter.length - filteredResults.length;
+  const hiddenByKeywordFilters = resultsWithoutClosedFilter.length - filteredResults.length - (hideDuplicates ? duplicatesInResults : 0);
 
   return (
     <div className="relative w-full h-[90vh] overflow-hidden" data-testid="map-container">
@@ -1695,16 +1748,44 @@ export default function MapSearch() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="hide-closed"
-                  checked={hideClosedBusinesses}
-                  onCheckedChange={(checked) => setHideClosedBusinesses(checked as boolean)}
-                  data-testid="checkbox-hide-closed"
-                />
-                <Label htmlFor="hide-closed" className="cursor-pointer text-sm">
-                  Hide closed businesses
-                </Label>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="hide-closed"
+                    checked={hideClosedBusinesses}
+                    onCheckedChange={(checked) => setHideClosedBusinesses(checked as boolean)}
+                    data-testid="checkbox-hide-closed"
+                  />
+                  <Label htmlFor="hide-closed" className="cursor-pointer text-sm">
+                    Hide closed businesses
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="hide-duplicates"
+                    checked={hideDuplicates}
+                    onCheckedChange={(checked) => setHideDuplicates(checked as boolean)}
+                    disabled={checkingDuplicates}
+                    data-testid="checkbox-hide-duplicates"
+                  />
+                  <Label htmlFor="hide-duplicates" className="cursor-pointer text-sm flex items-center gap-1">
+                    {checkingDuplicates ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Checking duplicates...
+                      </>
+                    ) : (
+                      <>
+                        Hide duplicates
+                        {duplicatesInResults > 0 && (
+                          <Badge variant="secondary" className="ml-1">
+                            {duplicatesInResults}
+                          </Badge>
+                        )}
+                      </>
+                    )}
+                  </Label>
+                </div>
               </div>
             </div>
 
