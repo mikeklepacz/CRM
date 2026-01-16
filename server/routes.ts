@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray, and, or, desc, isNotNull, isNull, ne } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants, categories, tenantProjects, apolloCompanies } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants, categories, tenantProjects, apolloCompanies, qualificationLeads } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -27022,7 +27022,8 @@ ${conversationContext}`;
     }
   });
 
-  // GET /api/apollo/leads-without-emails - Get Store Database leads that are missing emails (for Apollo enrichment)
+  // GET /api/apollo/leads-without-emails - Get leads that are missing emails (for Apollo enrichment)
+  // Supports both Google Sheets (Store Database) and SQL (qualification_leads) depending on tenant configuration
   app.get('/api/apollo/leads-without-emails', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const tenantId = await getEffectiveTenantId(req);
@@ -27047,12 +27048,6 @@ ${conversationContext}`;
         allowedCategoryName = project[0].name.toLowerCase().trim();
       }
       
-      // Get Store Database Google Sheet
-      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
-      if (!storeSheet) {
-        return res.json({ contacts: [] });
-      }
-      
       // Get links that are already enriched (not_found can be retried)
       const alreadyEnrichedLinks = await db
         .select({ link: apolloCompanies.googleSheetLink })
@@ -27060,65 +27055,8 @@ ${conversationContext}`;
         .where(and(eq(apolloCompanies.tenantId, tenantId), eq(apolloCompanies.enrichmentStatus, 'enriched')));
       const enrichedLinkSet = new Set(alreadyEnrichedLinks.map(r => r.link));
       
-      const storeData = await googleSheets.readSheetData(
-        storeSheet.spreadsheetId,
-        `${storeSheet.sheetName}!A:ZZ`
-      );
-      
-      if (!storeData || storeData.length === 0) {
-        return res.json({ contacts: [] });
-      }
-      
-      const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
-      const rows = storeData.slice(1);
-      
-      const nameIndex = headers.indexOf('name');
-      const emailIndex = headers.indexOf('email');
-      const stateIndex = headers.indexOf('state');
-      const linkIndex = headers.indexOf('link');
-      const websiteIndex = headers.indexOf('website');
-      const categoryIndex = headers.indexOf('category');
-      
-      // Filter for rows WITHOUT emails (or with invalid emails)
-      const leadsWithoutEmails = rows
-        .filter((row: any[]) => {
-          // Must NOT have a valid email
-          const email = emailIndex !== -1 ? (row[emailIndex] || '').trim() : '';
-          if (email && email.includes('@')) {
-            return false; // Has valid email, skip
-          }
-          
-          // Must have a link (required for Apollo enrichment)
-          const link = linkIndex !== -1 ? (row[linkIndex] || '').trim() : '';
-          if (!link) {
-            return false;
-          }
-          
-          // Skip if already processed in Apollo
-          if (enrichedLinkSet.has(link)) {
-            return false;
-          }
-          
-          // If project filtering is active, check category
-          if (allowedCategoryName !== null && categoryIndex !== -1) {
-            const rowCategory = (row[categoryIndex] || '').toLowerCase().trim();
-            if (!rowCategory || rowCategory !== allowedCategoryName) {
-              return false;
-            }
-          }
-          
-          return true;
-        })
-        .map((row: any[]) => ({
-          name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
-          email: emailIndex !== -1 ? (row[emailIndex] || '').trim() : '',
-          state: stateIndex !== -1 ? (row[stateIndex] || '') : '',
-          link: linkIndex !== -1 ? row[linkIndex] : '',
-          website: websiteIndex !== -1 ? (row[websiteIndex] || '') : '',
-        }));
-      
-      // Extract domain from website and deduplicate by domain
-      function extractDomain(url) {
+      // Helper to extract domain from URL
+      function extractDomain(url: string | null | undefined): string | null {
         if (!url) return null;
         try {
           const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
@@ -27127,14 +27065,136 @@ ${conversationContext}`;
           return null;
         }
       }
+      
+      // Try Google Sheets first (Store Database)
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
+      
+      let leadsWithoutEmails: Array<{
+        name: string;
+        email: string;
+        state: string;
+        link: string;
+        website: string;
+      }> = [];
+      
+      if (storeSheet) {
+        // Use Google Sheets as the data source
+        const storeData = await googleSheets.readSheetData(
+          storeSheet.spreadsheetId,
+          `${storeSheet.sheetName}!A:ZZ`
+        );
+        
+        if (storeData && storeData.length > 0) {
+          const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
+          const rows = storeData.slice(1);
+          
+          const nameIndex = headers.indexOf('name');
+          const emailIndex = headers.indexOf('email');
+          const stateIndex = headers.indexOf('state');
+          const linkIndex = headers.indexOf('link');
+          const websiteIndex = headers.indexOf('website');
+          const categoryIndex = headers.indexOf('category');
+          
+          leadsWithoutEmails = rows
+            .filter((row: any[]) => {
+              const email = emailIndex !== -1 ? (row[emailIndex] || '').trim() : '';
+              if (email && email.includes('@')) {
+                return false;
+              }
+              
+              const link = linkIndex !== -1 ? (row[linkIndex] || '').trim() : '';
+              if (!link) {
+                return false;
+              }
+              
+              if (enrichedLinkSet.has(link)) {
+                return false;
+              }
+              
+              if (allowedCategoryName !== null && categoryIndex !== -1) {
+                const rowCategory = (row[categoryIndex] || '').toLowerCase().trim();
+                if (!rowCategory || rowCategory !== allowedCategoryName) {
+                  return false;
+                }
+              }
+              
+              return true;
+            })
+            .map((row: any[]) => ({
+              name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
+              email: emailIndex !== -1 ? (row[emailIndex] || '').trim() : '',
+              state: stateIndex !== -1 ? (row[stateIndex] || '') : '',
+              link: linkIndex !== -1 ? row[linkIndex] : '',
+              website: websiteIndex !== -1 ? (row[websiteIndex] || '') : '',
+            }));
+        }
+      } else {
+        // No Google Sheet - use qualification_leads SQL table
+        console.log('[Apollo] No Store Database sheet found, using qualification_leads table');
+        
+        // Build query conditions
+        const conditions = [eq(qualificationLeads.tenantId, tenantId)];
+        
+        // Filter by projectId if provided
+        if (projectId) {
+          conditions.push(eq(qualificationLeads.projectId, projectId));
+        }
+        
+        // Query qualification_leads
+        const sqlLeads = await db
+          .select({
+            id: qualificationLeads.id,
+            company: qualificationLeads.company,
+            website: qualificationLeads.website,
+            category: qualificationLeads.category,
+            pocEmail: qualificationLeads.pocEmail,
+            state: qualificationLeads.state,
+          })
+          .from(qualificationLeads)
+          .where(and(...conditions));
+        
+        // Filter and map to expected format
+        leadsWithoutEmails = sqlLeads
+          .filter((lead) => {
+            // Must NOT have a valid email
+            const email = (lead.pocEmail || '').trim();
+            if (email && email.includes('@')) {
+              return false;
+            }
+            
+            // Use lead ID as link for tracking - skip if already enriched
+            const link = `ql:${lead.id}`;
+            if (enrichedLinkSet.has(link)) {
+              return false;
+            }
+            
+            // If filtering by category name (fallback for non-projectId filtering)
+            if (allowedCategoryName !== null && !projectId) {
+              const leadCategory = (lead.category || '').toLowerCase().trim();
+              if (!leadCategory || leadCategory !== allowedCategoryName) {
+                return false;
+              }
+            }
+            
+            return true;
+          })
+          .map((lead) => ({
+            name: lead.company || 'Unknown',
+            email: (lead.pocEmail || '').trim(),
+            state: lead.state || '',
+            link: `ql:${lead.id}`, // Prefix with 'ql:' to identify as qualification_lead
+            website: lead.website || '',
+          }));
+        
+        console.log(`[Apollo] Found ${leadsWithoutEmails.length} leads from qualification_leads table`);
+      }
 
       // Group by domain to deduplicate (keep first occurrence of each domain)
       const seenDomains = new Map();
-      const deduplicatedLeads = [];
+      const deduplicatedLeads: any[] = [];
       for (const lead of leadsWithoutEmails) {
         const domain = extractDomain(lead.website);
         if (domain && seenDomains.has(domain)) {
-          // Add this link to the existing entry's links array
           const existing = seenDomains.get(domain);
           if (!existing.allLinks) existing.allLinks = [existing.link];
           existing.allLinks.push(lead.link);
