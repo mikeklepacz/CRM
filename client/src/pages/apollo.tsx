@@ -669,7 +669,7 @@ export default function Apollo() {
           </TabsTrigger>
           <TabsTrigger value="enriched" data-testid="tab-enriched">
             <Users className="h-4 w-4 mr-2" />
-            Enriched Contacts ({enrichedCompanies?.length || 0})
+            Enriched Contacts ({(enrichedCompanies || []).filter(c => (c.contactCount || 0) > 0).length})
           </TabsTrigger>
           <TabsTrigger value="not-found" data-testid="tab-not-found">
             <AlertCircle className="h-4 w-4 mr-2" />
@@ -838,7 +838,10 @@ export default function Apollo() {
         </TabsContent>
 
         <TabsContent value="enriched" className="space-y-4">
-          <EnrichedCompaniesTab companies={enrichedCompanies || []} isLoading={companiesLoading} />
+          <EnrichedCompaniesTab 
+            companies={(enrichedCompanies || []).filter(c => (c.contactCount || 0) > 0)} 
+            isLoading={companiesLoading} 
+          />
         </TabsContent>
 
         <TabsContent value="not-found" className="space-y-4">
