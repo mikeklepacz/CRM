@@ -248,7 +248,7 @@ export default function Apollo() {
 
   const enrichMutation = useMutation({
     mutationFn: async ({ googleSheetLink, domain, companyName }: { googleSheetLink: string; domain?: string; companyName?: string }) => {
-      return apiRequest("POST", "/api/apollo/enrich", { googleSheetLink, domain, companyName });
+      return apiRequest("POST", "/api/apollo/enrich", { googleSheetLink, domain, companyName, projectId: currentProject?.id });
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies"] });
@@ -368,6 +368,7 @@ export default function Apollo() {
           googleSheetLink: contactData.link,
           domain: domain || undefined,
           companyName: !domain ? contactData.name : undefined,
+          projectId: currentProject?.id,
         });
         successCount++;
       } catch {
@@ -501,6 +502,7 @@ export default function Apollo() {
         domain: domain || undefined,
         companyName: !domain ? currentItem.contact.name : undefined,
         selectedPersonIds,
+        projectId: currentProject?.id,
       });
       
       toast({

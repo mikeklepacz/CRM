@@ -48,6 +48,12 @@ interface ApolloPerson {
   organization?: ApolloOrganization;
   has_email?: boolean;
   has_direct_phone?: string;
+  phone_numbers?: Array<{
+    raw_number?: string;
+    sanitized_number?: string;
+    type?: string;
+    status?: string;
+  }>;
 }
 
 interface OrganizationSearchResult {
@@ -373,6 +379,7 @@ export async function previewContactsForCompany(options: {
 
 export async function enrichAndStoreCompany(options: {
   tenantId: string;
+  projectId?: string;
   googleSheetLink: string;
   domain?: string;
   companyName?: string;
@@ -448,8 +455,11 @@ export async function enrichAndStoreCompany(options: {
   }).returning();
 
   let contactsToEnrich = preview.contacts.filter(p => p.first_name && p.last_name);
+  console.log(`[Apollo Enrich] Preview has ${preview.contacts.length} contacts, ${contactsToEnrich.length} have names`);
+  
   if (options.selectedPersonIds && options.selectedPersonIds.length > 0) {
     contactsToEnrich = contactsToEnrich.filter(p => options.selectedPersonIds!.includes(p.id));
+    console.log(`[Apollo Enrich] After selectedPersonIds filter: ${contactsToEnrich.length}`);
   }
   let storedContacts: ApolloContact[] = [];
   let totalCreditsUsed = 1;
@@ -461,13 +471,16 @@ export async function enrichAndStoreCompany(options: {
       domain: apolloCompany.primary_domain,
       organization_name: apolloCompany.name,
     }));
+    console.log(`[Apollo Enrich] Enriching ${enrichDetails.length} people for ${apolloCompany.name}`);
 
     try {
       const enrichResult = await enrichPeople(enrichDetails);
+      console.log(`[Apollo Enrich] Enrich result: ${enrichResult.matches?.length || 0} matches, ${enrichResult.credits_consumed} credits`);
       totalCreditsUsed += enrichResult.credits_consumed;
 
-      const contactInserts: InsertApolloContact[] = enrichResult.matches.map(match => ({
+      const contactInserts: InsertApolloContact[] = (enrichResult.matches || []).map(match => ({
         tenantId: options.tenantId,
+        projectId: options.projectId,
         companyId: insertedCompany.id,
         googleSheetLink: options.googleSheetLink,
         apolloPersonId: match.id,
@@ -478,6 +491,7 @@ export async function enrichAndStoreCompany(options: {
         title: match.title,
         seniority: match.seniority,
         department: match.departments?.[0],
+        phone: match.phone_numbers?.[0]?.sanitized_number,
         linkedinUrl: match.linkedin_url,
         photoUrl: match.photo_url,
         headline: match.headline,
@@ -487,13 +501,17 @@ export async function enrichAndStoreCompany(options: {
         isLikelyToEngage: match.is_likely_to_engage,
         creditsUsed: 1,
       }));
+      console.log(`[Apollo Enrich] Prepared ${contactInserts.length} contacts for insert`);
 
       if (contactInserts.length > 0) {
         storedContacts = await db.insert(apolloContacts).values(contactInserts).returning();
+        console.log(`[Apollo Enrich] Successfully stored ${storedContacts.length} contacts`);
       }
     } catch (error) {
-      console.error('Failed to enrich people:', error);
+      console.error('[Apollo Enrich] Failed to enrich people:', error);
     }
+  } else {
+    console.log(`[Apollo Enrich] No contacts to enrich for ${apolloCompany.name}`);
   }
 
   await db.update(apolloCompanies)

@@ -26867,7 +26867,7 @@ ${conversationContext}`;
       if (!tenantId) {
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
-      const { googleSheetLink, domain, companyName, selectedPersonIds } = req.body;
+      const { googleSheetLink, domain, companyName, selectedPersonIds, projectId } = req.body;
       if (!googleSheetLink) {
         return res.status(400).json({ message: 'googleSheetLink is required' });
       }
@@ -26876,6 +26876,7 @@ ${conversationContext}`;
       }
       const result = await apolloService.enrichAndStoreCompany({
         tenantId,
+        projectId,
         googleSheetLink,
         domain,
         companyName,

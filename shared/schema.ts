@@ -2600,6 +2600,7 @@ export type ApolloCompany = typeof apolloCompanies.$inferSelect;
 export const apolloContacts = pgTable("apollo_contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: 'set null' }), // Link to project for organization
   companyId: varchar("company_id").references(() => apolloCompanies.id, { onDelete: 'cascade' }), // FK to apollo_companies
   googleSheetLink: varchar("google_sheet_link").notNull(), // Also store Link for direct lookup
   apolloPersonId: varchar("apollo_person_id"), // Apollo's person ID
@@ -2624,6 +2625,7 @@ export const apolloContacts = pgTable("apollo_contacts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_apollo_contacts_tenant").on(table.tenantId),
+  index("idx_apollo_contacts_project").on(table.projectId),
   index("idx_apollo_contacts_company").on(table.companyId),
   index("idx_apollo_contacts_link").on(table.tenantId, table.googleSheetLink),
   index("idx_apollo_contacts_email").on(table.tenantId, table.email),
