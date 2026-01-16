@@ -150,11 +150,12 @@ export default function Qualification() {
   const [editingLead, setEditingLead] = useState<QualificationLead | null>(null);
 
   const { data: leadsData, isLoading: leadsLoading, refetch: refetchLeads } = useQuery<{ leads: QualificationLead[]; total: number }>({
-    queryKey: ['/api/qualification/leads', statusFilter, callStatusFilter],
+    queryKey: ['/api/qualification/leads', statusFilter, callStatusFilter, currentProject?.id],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (callStatusFilter !== 'all') params.set('callStatus', callStatusFilter);
+      if (currentProject?.id) params.set('projectId', currentProject.id);
       params.set('limit', '500');
       const response = await fetch(`/api/qualification/leads?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch leads');
@@ -163,7 +164,14 @@ export default function Qualification() {
   });
 
   const { data: statsData } = useQuery<{ stats: { total: number; byStatus: Record<string, number>; byCallStatus: Record<string, number>; averageScore: number | null } }>({
-    queryKey: ['/api/qualification/leads/stats'],
+    queryKey: ['/api/qualification/leads/stats', currentProject?.id],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (currentProject?.id) params.set('projectId', currentProject.id);
+      const response = await fetch(`/api/qualification/leads/stats?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch stats');
+      return response.json();
+    },
   });
 
   const { data: campaignsData } = useQuery<{ campaigns: QualificationCampaign[] }>({
@@ -306,7 +314,7 @@ export default function Qualification() {
   const handleImport = () => {
     if (!csvData) return;
     const leads = csvData.rows.map(row => {
-      const lead: any = { source: 'csv_import' };
+      const lead: any = { source: 'csv_import', projectId: currentProject?.id || null };
       Object.entries(columnMapping).forEach(([index, field]) => {
         if (field && field !== 'skip') {
           lead[field] = row[parseInt(index)] || '';

@@ -20176,6 +20176,7 @@ Use this store information to provide context-aware responses. When helping draf
         company: placeDetails.name || 'Unknown Business',
         website: placeDetails.website || null,
         category: effectiveCategory || null,
+        projectId: projectId || null,
         pocPhone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || null,
         address: street || null,
         city: city || null,
