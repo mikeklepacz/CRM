@@ -26889,6 +26889,29 @@ ${conversationContext}`;
     }
   });
 
+  // POST /api/apollo/re-enrich - Re-enrich a company that has 0 contacts
+  app.post('/api/apollo/re-enrich', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const tenantId = await getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const { companyId, projectId } = req.body;
+      if (!companyId) {
+        return res.status(400).json({ message: 'companyId is required' });
+      }
+      const result = await apolloService.reEnrichCompany({
+        tenantId,
+        companyId,
+        projectId,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error re-enriching company:', error);
+      res.status(500).json({ message: error.message || 'Failed to re-enrich company' });
+    }
+  });
+
   // GET /api/apollo/companies - Get all enriched companies
   app.get('/api/apollo/companies', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

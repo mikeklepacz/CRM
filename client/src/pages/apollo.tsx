@@ -75,6 +75,7 @@ interface ApolloCompany {
   logoUrl: string | null;
   enrichedAt: string;
   creditsUsed: number | null;
+  contactCount?: number;
 }
 
 interface ApolloContact {
@@ -824,7 +825,7 @@ export default function Apollo() {
         </TabsContent>
 
         <TabsContent value="enriched" className="space-y-4">
-          <EnrichedCompaniesTab companies={enrichedCompanies || []} isLoading={companiesLoading} />
+          <EnrichedCompaniesTab companies={enrichedCompanies || []} isLoading={companiesLoading} projectId={currentProject?.id} />
         </TabsContent>
 
         <TabsContent value="not-found" className="space-y-4">
@@ -1784,8 +1785,10 @@ function LeadReviewQueue({
   );
 }
 
-function EnrichedCompaniesTab({ companies, isLoading }: { companies: ApolloCompany[]; isLoading: boolean }) {
+function EnrichedCompaniesTab({ companies, isLoading, projectId }: { companies: ApolloCompany[]; isLoading: boolean; projectId?: string }) {
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
+  const [reEnrichingId, setReEnrichingId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const { data: contacts } = useQuery<ApolloContact[]>({
     queryKey: ["/api/apollo/companies", expandedCompany, "contacts"],
@@ -1798,6 +1801,20 @@ function EnrichedCompaniesTab({ companies, isLoading }: { companies: ApolloCompa
     },
     enabled: !!expandedCompany,
   });
+
+  const handleReEnrich = async (companyId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setReEnrichingId(companyId);
+    try {
+      await apiRequest("POST", "/api/apollo/re-enrich", { companyId, projectId });
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/settings"] });
+      toast({ title: "Re-enrichment complete", description: "Contacts have been refreshed" });
+    } catch (error: any) {
+      toast({ title: "Re-enrichment failed", description: error.message, variant: "destructive" });
+    }
+    setReEnrichingId(null);
+  };
 
   if (isLoading) {
     return (
@@ -1853,10 +1870,29 @@ function EnrichedCompaniesTab({ companies, isLoading }: { companies: ApolloCompa
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Badge variant={company.contactCount === 0 ? "destructive" : "default"}>
+                  {company.contactCount || 0} contacts
+                </Badge>
                 <Badge variant="outline">{company.creditsUsed} credits</Badge>
                 <Badge variant="secondary">
                   {new Date(company.enrichedAt).toLocaleDateString()}
                 </Badge>
+                {company.contactCount === 0 && (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={(e) => handleReEnrich(company.id, e)}
+                    disabled={reEnrichingId === company.id}
+                    data-testid={`button-re-enrich-${company.id}`}
+                  >
+                    {reEnrichingId === company.id ? (
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                    )}
+                    Re-enrich
+                  </Button>
+                )}
               </div>
             </div>
           </CardHeader>

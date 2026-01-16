@@ -532,9 +532,12 @@ export async function enrichAndStoreCompany(options: {
   };
 }
 
-export async function getEnrichedCompanies(tenantId: string): Promise<ApolloCompany[]> {
-  return db
-    .select()
+export async function getEnrichedCompanies(tenantId: string): Promise<(ApolloCompany & { contactCount: number })[]> {
+  const result = await db
+    .select({
+      company: apolloCompanies,
+      contactCount: sql<number>`(SELECT COUNT(*) FROM ${apolloContacts} WHERE ${apolloContacts.companyId} = ${apolloCompanies.id})`.as('contact_count'),
+    })
     .from(apolloCompanies)
     .where(
       and(
@@ -543,6 +546,8 @@ export async function getEnrichedCompanies(tenantId: string): Promise<ApolloComp
       )
     )
     .orderBy(apolloCompanies.enrichedAt);
+  
+  return result.map(r => ({ ...r.company, contactCount: Number(r.contactCount) || 0 }));
 }
 
 export async function getContactsForCompany(companyId: string): Promise<ApolloContact[]> {
@@ -699,4 +704,96 @@ export async function getPrescreenedCompanies(tenantId: string): Promise<ApolloC
       )
     )
     .orderBy(apolloCompanies.enrichedAt);
+}
+
+export async function reEnrichCompany(params: {
+  tenantId: string;
+  companyId: string;
+  projectId?: string;
+}): Promise<{ success: boolean; contacts: any[]; creditsUsed: number }> {
+  const { tenantId, companyId, projectId } = params;
+  
+  // Get the existing company to retrieve all data for backup
+  const [company] = await db.select().from(apolloCompanies).where(
+    and(
+      eq(apolloCompanies.id, companyId),
+      eq(apolloCompanies.tenantId, tenantId)
+    )
+  );
+  
+  if (!company) {
+    throw new Error('Company not found');
+  }
+  
+  // Store original data for recovery
+  const backupData = { ...company };
+  
+  // Helper function to restore original company
+  const restoreCompany = async () => {
+    // First delete any partial data that may have been created (scoped to tenant)
+    await db.delete(apolloCompanies).where(
+      and(
+        eq(apolloCompanies.googleSheetLink, backupData.googleSheetLink),
+        eq(apolloCompanies.tenantId, tenantId)
+      )
+    );
+    await db.insert(apolloCompanies).values({
+      id: backupData.id,
+      tenantId: backupData.tenantId,
+      googleSheetLink: backupData.googleSheetLink,
+      apolloOrgId: backupData.apolloOrgId,
+      domain: backupData.domain,
+      name: backupData.name,
+      phone: backupData.phone,
+      linkedinUrl: backupData.linkedinUrl,
+      websiteUrl: backupData.websiteUrl,
+      employeeCount: backupData.employeeCount,
+      industry: backupData.industry,
+      foundedYear: backupData.foundedYear,
+      city: backupData.city,
+      state: backupData.state,
+      country: backupData.country,
+      logoUrl: backupData.logoUrl,
+      enrichedAt: backupData.enrichedAt,
+      enrichmentStatus: 'enriched',
+      creditsUsed: backupData.creditsUsed,
+    });
+  };
+  
+  // Delete existing contacts (they're already problematic - 0 saved)
+  await db.delete(apolloContacts).where(eq(apolloContacts.companyId, companyId));
+  
+  // Delete the company to allow enrichAndStoreCompany to proceed
+  await db.delete(apolloCompanies).where(eq(apolloCompanies.id, companyId));
+  
+  try {
+    // Perform fresh enrichment
+    const result = await enrichAndStoreCompany({
+      tenantId,
+      googleSheetLink: backupData.googleSheetLink,
+      domain: backupData.domain || undefined,
+      companyName: backupData.name || undefined,
+      projectId,
+    });
+    
+    // Check if enrichment actually succeeded (company found and contacts saved)
+    if (!result.company) {
+      // Apollo couldn't find the company - restore original data
+      console.error('[ReEnrich] Company not found in Apollo, restoring original');
+      await restoreCompany();
+      throw new Error('Company not found in Apollo database. Original data has been restored.');
+    }
+    
+    if (result.contacts.length === 0) {
+      // Enrichment succeeded but no contacts found - this is a valid outcome
+      console.log('[ReEnrich] No contacts found for company, but enrichment completed');
+    }
+    
+    return result;
+  } catch (error) {
+    // If enrichment fails, restore the company record
+    console.error('[ReEnrich] Enrichment failed, restoring company record:', error);
+    await restoreCompany();
+    throw error;
+  }
 }
