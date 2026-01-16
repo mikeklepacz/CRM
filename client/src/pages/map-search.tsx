@@ -226,17 +226,34 @@ export default function MapSearch() {
     const params = new URLSearchParams(searchString);
     return params.get('mode') === 'qualification';
   }, [searchString]);
+
+  // Fetch Google Sheets to check if Store Database is configured
+  interface GoogleSheet {
+    id: string;
+    sheetPurpose: string;
+    spreadsheetId: string;
+  }
+  const { data: sheetsData, isLoading: sheetsLoading } = useQuery<{ sheets: GoogleSheet[] }>({
+    queryKey: ["/api/sheets"],
+  });
+  
+  // Check if Store Database sheet exists for this tenant
+  const hasStoreDatabase = useMemo(() => {
+    if (!sheetsData?.sheets) return false;
+    return sheetsData.sheets.some(s => s.sheetPurpose === "Store Database");
+  }, [sheetsData]);
   
   // Determine if we should use SQL (qualification) mode:
   // - If URL says qualification mode, use SQL
-  // - If qualification module is active AND clients module is NOT active, use SQL
+  // - If no Store Database Google Sheet is configured, use SQL (fallback)
   // - Otherwise use Google Sheets
   const useSqlMode = useMemo(() => {
     if (isQualificationModeFromUrl) return true;
-    const qualificationEnabled = isModuleEnabled('qualification');
-    const clientsEnabled = isModuleEnabled('clients');
-    return qualificationEnabled && !clientsEnabled;
-  }, [isQualificationModeFromUrl, isModuleEnabled]);
+    // If sheets are still loading, don't make a decision yet (will default to false)
+    if (sheetsLoading) return false;
+    // Use SQL mode if no Store Database sheet is configured
+    return !hasStoreDatabase;
+  }, [isQualificationModeFromUrl, sheetsLoading, hasStoreDatabase]);
   
   // Keep isQualificationMode for backward compatibility in UI rendering
   const isQualificationMode = useSqlMode;
