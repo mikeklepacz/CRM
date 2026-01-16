@@ -80,7 +80,7 @@ interface PeopleSearchResult {
 
 interface PeopleEnrichmentResult {
   status: string;
-  matches: ApolloPerson[];
+  matches: (ApolloPerson | null)[];
   credits_consumed: number;
   total_requested_enrichments: number;
   unique_enriched_records: number;
@@ -275,6 +275,7 @@ export async function searchPeople(options: {
 }
 
 export async function enrichPeople(details: Array<{
+  id?: string;
   first_name?: string;
   last_name?: string;
   name?: string;
@@ -474,51 +475,74 @@ export async function enrichAndStoreCompany(options: {
   let totalCreditsUsed = 1;
 
   if (contactsToEnrich.length > 0) {
-    const enrichDetails = contactsToEnrich.map(p => ({
-      first_name: p.first_name,
-      last_name: p.last_name || undefined,
-      domain: apolloCompany.primary_domain,
-      organization_name: apolloCompany.name,
-    }));
-    console.log(`[Apollo Enrich] Enriching ${enrichDetails.length} people for ${apolloCompany.name}`);
-
-    try {
-      const enrichResult = await enrichPeople(enrichDetails);
-      console.log(`[Apollo Enrich] Enrich result: ${enrichResult.matches?.length || 0} matches, ${enrichResult.credits_consumed} credits`);
-      totalCreditsUsed += enrichResult.credits_consumed;
-
-      const contactInserts: InsertApolloContact[] = (enrichResult.matches || []).map(match => ({
-        tenantId: options.tenantId,
-        projectId: options.projectId,
-        companyId: insertedCompany.id,
-        googleSheetLink: options.googleSheetLink,
-        apolloPersonId: match.id,
-        firstName: match.first_name,
-        lastName: match.last_name,
-        email: match.email,
-        emailStatus: match.email_status,
-        title: match.title,
-        seniority: match.seniority,
-        department: match.departments?.[0],
-        phone: match.phone_numbers?.[0]?.sanitized_number,
-        linkedinUrl: match.linkedin_url,
-        photoUrl: match.photo_url,
-        headline: match.headline,
-        city: match.city,
-        state: match.state,
-        country: match.country,
-        isLikelyToEngage: match.is_likely_to_engage,
-        creditsUsed: 1,
-      }));
-      console.log(`[Apollo Enrich] Prepared ${contactInserts.length} contacts for insert`);
-
-      if (contactInserts.length > 0) {
-        storedContacts = await db.insert(apolloContacts).values(contactInserts).returning();
-        console.log(`[Apollo Enrich] Successfully stored ${storedContacts.length} contacts`);
-      }
-    } catch (error) {
-      console.error('[Apollo Enrich] Failed to enrich people:', error);
+    // Batch contacts into groups of 10 (Apollo API limit)
+    const BATCH_SIZE = 10;
+    const batches: typeof contactsToEnrich[] = [];
+    for (let i = 0; i < contactsToEnrich.length; i += BATCH_SIZE) {
+      batches.push(contactsToEnrich.slice(i, i + BATCH_SIZE));
     }
+    console.log(`[Apollo Enrich] Enriching ${contactsToEnrich.length} people in ${batches.length} batch(es) for ${apolloCompany.name}`);
+
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      const enrichDetails = batch.map(p => ({
+        id: p.id, // Pass Apollo person ID for reliable matching
+        first_name: p.first_name,
+        last_name: p.last_name || undefined,
+        domain: apolloCompany.primary_domain,
+        organization_name: apolloCompany.name,
+      }));
+      console.log(`[Apollo Enrich] Batch ${batchIndex + 1}/${batches.length}: enriching ${enrichDetails.length} people`);
+
+      try {
+        const enrichResult = await enrichPeople(enrichDetails);
+        console.log(`[Apollo Enrich] Batch ${batchIndex + 1} result: ${enrichResult.matches?.length || 0} matches, ${enrichResult.credits_consumed} credits`);
+        totalCreditsUsed += enrichResult.credits_consumed;
+
+        // Filter out null matches (Apollo returns null for unmatched people)
+        const rawMatches = enrichResult.matches || [];
+        const validMatches = rawMatches.filter((match): match is ApolloPerson => match !== null);
+        const nullCount = rawMatches.length - validMatches.length;
+        console.log(`[Apollo Enrich] Batch ${batchIndex + 1}: ${validMatches.length} valid matches, ${nullCount} null/unmatched`);
+        
+        if (validMatches.length === 0 && rawMatches.length > 0) {
+          console.warn(`[Apollo Enrich] Batch ${batchIndex + 1}: All ${rawMatches.length} matches were null - Apollo couldn't find these people`);
+        }
+
+        const contactInserts: InsertApolloContact[] = validMatches.map(match => ({
+          tenantId: options.tenantId,
+          projectId: options.projectId,
+          companyId: insertedCompany.id,
+          googleSheetLink: options.googleSheetLink,
+          apolloPersonId: match.id,
+          firstName: match.first_name,
+          lastName: match.last_name,
+          email: match.email,
+          emailStatus: match.email_status,
+          title: match.title,
+          seniority: match.seniority,
+          department: match.departments?.[0],
+          phone: match.phone_numbers?.[0]?.sanitized_number,
+          linkedinUrl: match.linkedin_url,
+          photoUrl: match.photo_url,
+          headline: match.headline,
+          city: match.city,
+          state: match.state,
+          country: match.country,
+          isLikelyToEngage: match.is_likely_to_engage,
+          creditsUsed: 1,
+        }));
+
+        if (contactInserts.length > 0) {
+          const batchStoredContacts = await db.insert(apolloContacts).values(contactInserts).returning();
+          storedContacts.push(...batchStoredContacts);
+          console.log(`[Apollo Enrich] Batch ${batchIndex + 1}: stored ${batchStoredContacts.length} contacts`);
+        }
+      } catch (error) {
+        console.error(`[Apollo Enrich] Batch ${batchIndex + 1} failed:`, error);
+      }
+    }
+    console.log(`[Apollo Enrich] Total stored: ${storedContacts.length} contacts`);
   } else {
     console.log(`[Apollo Enrich] No contacts to enrich for ${apolloCompany.name}`);
   }
