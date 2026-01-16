@@ -737,11 +737,11 @@ export default function Apollo() {
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-              ) : filteredContacts.length === 0 ? (
+              ) : notEnrichedContacts.length === 0 ? (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    No contacts found for project "{currentProject.name}". Make sure your Store Database has entries with matching Category.
+                    No contacts to enrich for project "{currentProject.name}". All contacts have been processed.
                   </AlertDescription>
                 </Alert>
               ) : (
@@ -764,16 +764,14 @@ export default function Apollo() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredContacts.map((contact) => {
+                      {notEnrichedContacts.map((contact) => {
                         const status = enrichmentStatus?.[contact.link];
-                        const isProcessed = status === 'enriched' || status === 'not_found';
                         return (
                           <TableRow key={contact.link} data-testid={`row-contact-${contact.link}`}>
                             <TableCell>
                               <Checkbox
                                 checked={selectedLinks.has(contact.link)}
                                 onCheckedChange={() => toggleSelect(contact.link)}
-                                disabled={isProcessed}
                                 data-testid={`checkbox-${contact.link}`}
                               />
                             </TableCell>
@@ -792,15 +790,10 @@ export default function Apollo() {
                               <span className="text-sm">{contact.state || "-"}</span>
                             </TableCell>
                             <TableCell>
-                              {status === 'enriched' ? (
-                                <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
-                                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  Enriched
-                                </Badge>
-                              ) : status === 'not_found' ? (
-                                <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100">
-                                  <AlertCircle className="h-3 w-3 mr-1" />
-                                  Not Found
+                              {status === 'prescreened' ? (
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Ready
                                 </Badge>
                               ) : (
                                 <Badge variant="outline">Pending</Badge>
@@ -811,7 +804,6 @@ export default function Apollo() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handlePreview(contact)}
-                                disabled={isProcessed}
                                 data-testid={`button-preview-${contact.link}`}
                               >
                                 <Eye className="h-4 w-4 mr-1" />
