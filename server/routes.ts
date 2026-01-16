@@ -20209,6 +20209,91 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Check for duplicate websites in CRM (Google Sheets or SQL based on tenant config)
+  app.post("/api/maps/check-duplicates", isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const { websites } = req.body as { websites: string[] };
+
+      if (!tenantId) {
+        return res.status(400).json({ message: "Tenant context required" });
+      }
+
+      if (!websites || !Array.isArray(websites) || websites.length === 0) {
+        return res.json({ duplicates: [] });
+      }
+
+      // Normalize URLs for comparison (lowercase, trim, remove trailing slashes)
+      const normalizeUrl = (url: string): string => {
+        if (!url) return "";
+        let normalized = url.toLowerCase().trim();
+        // Remove protocol
+        normalized = normalized.replace(/^https?:\/\//, "");
+        // Remove www.
+        normalized = normalized.replace(/^www\./, "");
+        // Remove trailing slash
+        normalized = normalized.replace(/\/$/, "");
+        return normalized;
+      };
+
+      const normalizedInputUrls = new Map<string, string>();
+      for (const url of websites) {
+        const normalized = normalizeUrl(url);
+        if (normalized) {
+          normalizedInputUrls.set(normalized, url);
+        }
+      }
+
+      const duplicates: string[] = [];
+
+      // Check if tenant has a Store Database sheet
+      const sheets = await storage.getAllActiveGoogleSheets(tenantId);
+      const storeSheet = sheets.find(s => s.sheetPurpose === "Store Database");
+
+      if (storeSheet) {
+        // Check Google Sheets for duplicates
+        const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+        const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+
+        if (storeRows && storeRows.length > 1) {
+          const headers = storeRows[0].map((h: string) => (h || "").toLowerCase().trim());
+          const websiteIndex = headers.indexOf("website");
+
+          if (websiteIndex !== -1) {
+            // Check each row's website against input URLs
+            for (let i = 1; i < storeRows.length; i++) {
+              const row = storeRows[i];
+              const websiteValue = row[websiteIndex]?.toString() || "";
+              const normalizedExisting = normalizeUrl(websiteValue);
+              
+              if (normalizedExisting && normalizedInputUrls.has(normalizedExisting)) {
+                duplicates.push(normalizedInputUrls.get(normalizedExisting)!);
+              }
+            }
+          }
+        }
+      } else {
+        // Check SQL qualification_leads for duplicates
+        const { leads } = await storage.listQualificationLeads(tenantId, { limit: 10000 });
+        
+        for (const lead of leads) {
+          if (lead.website) {
+            const normalizedExisting = normalizeUrl(lead.website);
+            if (normalizedExisting && normalizedInputUrls.has(normalizedExisting)) {
+              duplicates.push(normalizedInputUrls.get(normalizedExisting)!);
+            }
+          }
+        }
+      }
+
+      // Return unique duplicates
+      res.json({ duplicates: [...new Set(duplicates)] });
+    } catch (error: any) {
+      console.error("Error checking duplicates:", error);
+      res.status(500).json({ message: error.message || "Failed to check duplicates" });
+    }
+  });
+
   // Ticket Routes
 
   // Get unread ticket count (admin only - Super Admins see all tenants, tenant admins see their tenant)
