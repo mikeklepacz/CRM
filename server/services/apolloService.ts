@@ -569,15 +569,17 @@ export async function getEnrichedCompanies(tenantId: string): Promise<(ApolloCom
   const result = await db
     .select({
       company: apolloCompanies,
-      contactCount: sql<number>`(SELECT COUNT(*) FROM ${apolloContacts} WHERE ${apolloContacts.companyId} = ${apolloCompanies.id})`.as('contact_count'),
+      contactCount: sql<number>`COUNT(${apolloContacts.id})`.as('contact_count'),
     })
     .from(apolloCompanies)
+    .leftJoin(apolloContacts, eq(apolloContacts.companyId, apolloCompanies.id))
     .where(
       and(
         eq(apolloCompanies.tenantId, tenantId),
         eq(apolloCompanies.enrichmentStatus, 'enriched')
       )
     )
+    .groupBy(apolloCompanies.id)
     .orderBy(apolloCompanies.enrichedAt);
   
   const companies = result.map(r => ({ ...r.company, contactCount: Number(r.contactCount) || 0 }));
