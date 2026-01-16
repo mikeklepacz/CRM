@@ -26898,6 +26898,7 @@ ${conversationContext}`;
         return res.status(400).json({ message: 'No tenant associated with user' });
       }
       const companies = await apolloService.getEnrichedCompanies(tenantId);
+      res.set('Cache-Control', 'no-store');
       res.json(companies);
     } catch (error: any) {
       console.error('Error getting enriched companies:', error);
