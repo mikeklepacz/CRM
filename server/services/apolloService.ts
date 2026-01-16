@@ -406,9 +406,11 @@ export async function enrichAndStoreCompany(options: {
       .from(apolloContacts)
       .where(eq(apolloContacts.companyId, existingCompany[0].id));
     
-    // If company exists but has no contacts, delete it to allow retry
-    if (existingContacts.length === 0 && existingCompany[0].enrichmentStatus === 'enriched') {
-      console.log(`[Apollo Enrich] Company ${existingCompany[0].name} has 0 contacts, deleting for retry`);
+    // If company exists but has no contacts and was previously enriched/prescreened, delete it to allow retry
+    const canRetry = existingContacts.length === 0 && 
+      (existingCompany[0].enrichmentStatus === 'enriched' || existingCompany[0].enrichmentStatus === 'prescreened');
+    if (canRetry) {
+      console.log(`[Apollo Enrich] Company ${existingCompany[0].name} (status: ${existingCompany[0].enrichmentStatus}) has 0 contacts, deleting for retry`);
       await db.delete(apolloCompanies).where(eq(apolloCompanies.id, existingCompany[0].id));
       // Continue to re-enrich below
     } else {
