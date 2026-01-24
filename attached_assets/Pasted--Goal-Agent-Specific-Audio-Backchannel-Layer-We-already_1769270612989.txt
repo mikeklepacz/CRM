@@ -1,0 +1,102 @@
+### Goal: Agent-Specific Audio Backchannel Layer
+
+We already inject continuous low-volume “office noise” into outbound calls. We now want to extend this audio layer to support **agent-specific human backchannel cues** to improve perceived responsiveness and reduce interruptions.
+
+This layer must operate **independently of the LLM** and **independently of ElevenLabs**.
+
+The purpose is to provide real-time feedback to the human while they are speaking, without adding latency, tokens, or conversational logic.
+
+---
+
+### Required Behavior
+
+For each agent (voice), we will define a small library of pre-recorded short audio clips, using the **same voice as the agent**, for example:
+
+* “mm-hm”
+* “okay”
+* “right”
+* “I see”
+
+These clips must be:
+
+* 200–400 ms duration
+* Neutral tone
+* Low volume (subtle)
+* Non-blocking (do not interrupt agent speech)
+
+---
+
+### Trigger Logic
+
+At the audio orchestration layer (Twilio / CRM / middleware):
+
+1. Detect when the human is speaking continuously.
+2. If continuous speech exceeds **8–12 seconds** and:
+
+   * the agent is not currently speaking
+   * no backchannel has been played recently
+3. Then inject one backchannel audio clip.
+
+This should repeat at most once every **10–15 seconds** during long human speech.
+
+---
+
+### Mixing Rules
+
+We will have three audio channels:
+
+1. Ambient layer (office noise)
+2. Backchannel layer (short human cues)
+3. Agent speech layer (ElevenLabs TTS)
+
+Rules:
+
+* Backchannels should duck the ambient layer slightly.
+* Backchannels should never overlap with agent speech.
+* Backchannels should not be sent into ASR.
+* Backchannels should only be sent to the human.
+
+---
+
+### Agent-Specific Configuration
+
+Each agent voice must define:
+
+* Backchannel audio set
+* Volume level
+* Cooldown interval
+
+Example:
+
+Agent: Polish Male Voice
+Backchannels: ["mm-hm", "okay", "right"]
+Volume: -18 dB
+Cooldown: 12 seconds
+
+This allows different agents (male/female, Polish/English) to feel consistent with their own persona.
+
+---
+
+### Explicit Non-Goals
+
+This layer must NOT:
+
+* Trigger the LLM
+* Generate text
+* Affect conversation state
+* Be visible to ElevenLabs
+* Be interpreted as user speech
+
+It is purely a **perceptual UX layer** for human comfort.
+
+---
+
+### Success Criteria
+
+After implementation:
+
+* Humans no longer interrupt during long answers.
+* No “hello can you hear me?” events.
+* No increase in LLM latency.
+* No increase in token usage.
+* Call feels alive even during silence.
