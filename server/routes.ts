@@ -1188,6 +1188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     description: z.string().optional(),
     isDefault: z.boolean().optional(),
     projectId: z.string().optional().transform(val => val === "" ? null : val),
+    phoneNumberId: z.string().optional().transform(val => val === "" || val === "__none__" ? null : val),
   });
 
   // Config endpoints (API key + Twilio number)
@@ -24696,6 +24697,18 @@ ${conversationContext}`;
       res.status(500).json({ message: error.message || "Failed to fetch agents" });
     }
   });
+  // GET /api/super-admin/tenants/:tenantId/elevenlabs/phone-numbers - Get phone numbers for tenant
+  app.get('/api/super-admin/tenants/:tenantId/elevenlabs/phone-numbers', requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { tenantId } = req.params;
+      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers(tenantId);
+      res.json(phoneNumbers);
+    } catch (error: any) {
+      console.error('Error fetching phone numbers:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
 
   // POST /api/super-admin/tenants/:tenantId/elevenlabs/agents - Create agent for tenant
   app.post('/api/super-admin/tenants/:tenantId/elevenlabs/agents', requireSuperAdmin, async (req: any, res) => {

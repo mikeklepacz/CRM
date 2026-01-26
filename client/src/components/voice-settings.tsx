@@ -55,6 +55,7 @@ const agentSchema = z.object({
   agentId: z.string().min(1, "Agent ID is required"),
   description: z.string().optional(),
   projectId: z.string().optional(),
+  phoneNumberId: z.string().optional(),
 });
 
 type Agent = {
@@ -73,6 +74,13 @@ type Agent = {
 type Project = {
   id: string;
   name: string;
+};
+
+type PhoneNumber = {
+  id: string;
+  phoneNumberId: string;
+  phoneNumber: string;
+  label: string | null;
 };
 
 interface VoiceSettingsProps {
@@ -135,6 +143,16 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
     enabled: isSuperAdminMode,
   });
 
+  // Fetch phone numbers for the tenant
+  const { data: phoneNumbers = [] } = useQuery<PhoneNumber[]>({
+    queryKey: [apiBase, 'phone-numbers'],
+    queryFn: async () => {
+      const res = await fetch(`${apiBase}/phone-numbers`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch phone numbers');
+      return res.json();
+    },
+  });
+
   // Fetch background audio settings (global, not tenant-specific)
   const { data: backgroundAudioSettings } = useQuery<{
     fileName: string | null;
@@ -189,6 +207,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
       agentId: "",
       description: "",
       projectId: "__none__",
+      phoneNumberId: "__none__",
     },
   });
 
@@ -302,6 +321,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: [apiBase, 'agents'] });
+      queryClient.invalidateQueries({ queryKey: [apiBase, 'phone-numbers'] });
       toast({
         title: "Success",
         description: data.message || "Phone numbers synced successfully",
@@ -488,7 +508,8 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                     <Form {...agentForm}>
                       <form onSubmit={agentForm.handleSubmit((data) => createAgentMutation.mutate({
                           ...data,
-                          projectId: data.projectId === "__none__" ? "" : data.projectId
+                          projectId: data.projectId === "__none__" ? "" : data.projectId,
+                          phoneNumberId: data.phoneNumberId === "__none__" ? "" : data.phoneNumberId
                         }))} className="space-y-4">
                         <FormField
                           control={agentForm.control}
@@ -569,6 +590,35 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                           />
                         )}
 
+                        <FormField
+                          control={agentForm.control}
+                          name="phoneNumberId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phone Number</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || "__none__"}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-agent-phone">
+                                    <SelectValue placeholder="Select a phone number (optional)" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="__none__">Not assigned</SelectItem>
+                                  {phoneNumbers.map((phone) => (
+                                    <SelectItem key={phone.phoneNumberId} value={phone.phoneNumberId}>
+                                      {phone.phoneNumber}{phone.label ? ` (${phone.label})` : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Select a phone number for outbound calls
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
                         <Button
                           type="submit"
                           disabled={createAgentMutation.isPending}
@@ -628,7 +678,8 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                             id: editingAgent.id, 
                             data: {
                               ...data,
-                              projectId: data.projectId === "__none__" ? "" : data.projectId
+                              projectId: data.projectId === "__none__" ? "" : data.projectId,
+                              phoneNumberId: data.phoneNumberId === "__none__" ? "" : data.phoneNumberId
                             }
                           });
                         }
@@ -706,6 +757,35 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                           />
                         )}
 
+                        <FormField
+                          control={agentForm.control}
+                          name="phoneNumberId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phone Number</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || "__none__"}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-edit-agent-phone">
+                                    <SelectValue placeholder="Select a phone number (optional)" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="__none__">Not assigned</SelectItem>
+                                  {phoneNumbers.map((phone) => (
+                                    <SelectItem key={phone.phoneNumberId} value={phone.phoneNumberId}>
+                                      {phone.phoneNumber}{phone.label ? ` (${phone.label})` : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Select a phone number for outbound calls
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
                         <Button
                           type="submit"
                           disabled={updateAgentMutation.isPending}
@@ -773,6 +853,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                                 agentId: agent.agent_id,
                                 description: agent.description || "",
                                 projectId: agent.projectId || "__none__",
+                                phoneNumberId: agent.phone_number_id || "__none__",
                               });
                             }}
                             data-testid={`button-edit-agent-${agent.id}`}
