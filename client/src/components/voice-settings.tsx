@@ -810,12 +810,10 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {agents.map((agent) => {
-                    const isOutOfSync = !agent.lastSyncedAt || !agent.sttEncoding;
-                    return (
+                  {agents.map((agent) => (
                     <div
                       key={agent.id}
-                      className={`flex items-start justify-between p-4 border rounded-lg hover-elevate ${isOutOfSync ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900' : ''}`}
+                      className="flex items-start justify-between p-4 border rounded-lg hover-elevate"
                       data-testid={`agent-card-${agent.id}`}
                     >
                       <div className="flex-1">
@@ -825,12 +823,6 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                             <Badge variant="default" data-testid="badge-default-agent">
                               <Star className="h-3 w-3 mr-1" />
                               Default
-                            </Badge>
-                          )}
-                          {isOutOfSync && (
-                            <Badge variant="destructive" data-testid="badge-out-of-sync">
-                              <AlertCircle className="h-3 w-3 mr-1" />
-                              Not Synced
                             </Badge>
                           )}
                         </div>
@@ -893,7 +885,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
                         </Button>
                       </div>
                     </div>
-                  )})}
+                  ))}
                 </div>
               )}
             </div>
