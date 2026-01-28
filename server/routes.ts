@@ -1252,8 +1252,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
+      // Get existing config to check if API key changed
+      const existingConfig = await storage.getElevenLabsConfig(req.user.tenantId);
+      const apiKeyChanged = validation.data.apiKey && validation.data.apiKey !== existingConfig?.apiKey;
+
       await storage.updateElevenLabsConfig(req.user.tenantId, validation.data);
-      res.json({ message: "ElevenLabs configuration updated successfully" });
+
+      // Auto-register webhook if API key is set/changed
+      let webhookRegistered = false;
+      let webhookError: string | null = null;
+      if (validation.data.apiKey && (apiKeyChanged || !existingConfig?.webhookSecret)) {
+        try {
+          // Get webhook URL
+          let webhookUrl: string;
+          if (process.env.REPLIT_DOMAINS) {
+            const domains = process.env.REPLIT_DOMAINS.split(',');
+            webhookUrl = `https://${domains[0]}/api/elevenlabs/webhook`;
+          } else if (process.env.REPLIT_DEV_DOMAIN) {
+            webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/elevenlabs/webhook`;
+          } else {
+            webhookUrl = `https://${req.get('host')}/api/elevenlabs/webhook`;
+          }
+
+          // Check for existing webhook first
+          let existingWebhooks: any[] = [];
+          try {
+            const listResponse = await axios.get(
+              'https://api.elevenlabs.io/v1/workspace/webhooks',
+              { headers: { 'xi-api-key': validation.data.apiKey } }
+            );
+            existingWebhooks = listResponse.data?.webhooks || [];
+          } catch (listErr) {
+            console.log('[Webhook] Could not list existing webhooks');
+          }
+
+          const existingWebhook = existingWebhooks.find((w: any) => 
+            w.url === webhookUrl || w.settings?.url === webhookUrl || w.webhook_url === webhookUrl
+          );
+
+          if (existingWebhook) {
+            // Already registered - check if we have the secret
+            const webhookSecret = existingWebhook.webhook_secret || existingWebhook.signing_secret;
+            if (webhookSecret) {
+              await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret });
+              webhookRegistered = true;
+              console.log('[ElevenLabs] Webhook already registered for', req.user.tenantId);
+            } else {
+              // Webhook exists but we don't have secret - delete and recreate
+              console.log('[ElevenLabs] Existing webhook found but no secret - deleting and recreating');
+              let deleteSucceeded = false;
+              try {
+                await axios.delete(
+                  `https://api.elevenlabs.io/v1/workspace/webhooks/${existingWebhook.webhook_id}`,
+                  { headers: { 'xi-api-key': validation.data.apiKey } }
+                );
+                deleteSucceeded = true;
+                console.log('[ElevenLabs] Deleted existing webhook successfully');
+              } catch (delErr: any) {
+                console.log('[ElevenLabs] Could not delete existing webhook:', delErr.response?.data || delErr.message);
+                // If deletion failed, don't try to create - might cause duplicate error
+                webhookError = 'Existing webhook found but could not delete/recreate. Please delete manually in ElevenLabs dashboard.';
+              }
+              if (!deleteSucceeded) {
+                // Skip creation if delete failed
+                webhookRegistered = false;
+              }
+              // Fall through to create new one below only if delete succeeded
+            }
+          }
+          
+          if (!webhookRegistered) {
+            // Register new webhook
+            const response = await axios.post(
+              'https://api.elevenlabs.io/v1/workspace/webhooks',
+              {
+                url: webhookUrl,
+                auth_type: 'hmac',
+                name: 'CRM Auto-Registered Webhook',
+                events: ['post_call_transcription', 'call_initiation_failure']
+              },
+              {
+                headers: {
+                  'xi-api-key': validation.data.apiKey,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            const webhookSecret = response.data?.webhook_secret || response.data?.signing_secret;
+            if (webhookSecret) {
+              await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret });
+            }
+            webhookRegistered = true;
+            console.log('[ElevenLabs] Webhook auto-registered for', req.user.tenantId);
+          }
+        } catch (webhookErr: any) {
+          const errorDetail = webhookErr.response?.data?.detail;
+          webhookError = Array.isArray(errorDetail) 
+            ? errorDetail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(', ')
+            : (errorDetail?.message || errorDetail || webhookErr.message || "Webhook registration failed");
+          console.error('[ElevenLabs] Auto-webhook registration failed:', webhookError);
+        }
+      }
+
+      res.json({ 
+        message: "ElevenLabs configuration updated successfully",
+        webhookRegistered,
+        webhookError
+      });
     } catch (error: any) {
       console.error("Error updating ElevenLabs config:", error);
       res.status(500).json({ message: error.message || "Failed to update config" });
@@ -1396,7 +1502,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         issues.push({
           severity: 'critical',
           component: 'webhook',
-          message: 'ElevenLabs webhook is not registered. Call transcripts and analytics will not be captured. Go to Voice settings and click "Register Webhook".'
+          message: 'ElevenLabs webhook is not registered. Call transcripts and analytics will not be captured. Try saving your ElevenLabs API key again to auto-register the webhook.'
         });
       }
       
@@ -24829,8 +24935,114 @@ ${conversationContext}`;
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
+      // Get existing config to check if API key changed
+      const existingConfig = await storage.getElevenLabsConfig(tenantId);
+      const apiKeyChanged = validation.data.apiKey && validation.data.apiKey !== existingConfig?.apiKey;
+
       await storage.updateElevenLabsConfig(tenantId, validation.data);
-      res.json({ message: "ElevenLabs configuration updated successfully" });
+
+      // Auto-register webhook if API key is set/changed
+      let webhookRegistered = false;
+      let webhookError: string | null = null;
+      if (validation.data.apiKey && (apiKeyChanged || !existingConfig?.webhookSecret)) {
+        try {
+          // Get webhook URL
+          let webhookUrl: string;
+          if (process.env.REPLIT_DOMAINS) {
+            const domains = process.env.REPLIT_DOMAINS.split(',');
+            webhookUrl = `https://${domains[0]}/api/elevenlabs/webhook`;
+          } else if (process.env.REPLIT_DEV_DOMAIN) {
+            webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/elevenlabs/webhook`;
+          } else {
+            webhookUrl = `https://${req.get('host')}/api/elevenlabs/webhook`;
+          }
+
+          // Check for existing webhook first
+          let existingWebhooks: any[] = [];
+          try {
+            const listResponse = await axios.get(
+              'https://api.elevenlabs.io/v1/workspace/webhooks',
+              { headers: { 'xi-api-key': validation.data.apiKey } }
+            );
+            existingWebhooks = listResponse.data?.webhooks || [];
+          } catch (listErr) {
+            console.log('[Webhook] Could not list existing webhooks');
+          }
+
+          const existingWebhook = existingWebhooks.find((w: any) => 
+            w.url === webhookUrl || w.settings?.url === webhookUrl || w.webhook_url === webhookUrl
+          );
+
+          if (existingWebhook) {
+            // Already registered - check if we have the secret
+            const webhookSecret = existingWebhook.webhook_secret || existingWebhook.signing_secret;
+            if (webhookSecret) {
+              await storage.updateElevenLabsConfig(tenantId, { webhookSecret });
+              webhookRegistered = true;
+              console.log('[ElevenLabs] Webhook already registered for tenant', tenantId);
+            } else {
+              // Webhook exists but we don't have secret - delete and recreate
+              console.log('[ElevenLabs] Existing webhook found but no secret - deleting and recreating');
+              let deleteSucceeded = false;
+              try {
+                await axios.delete(
+                  `https://api.elevenlabs.io/v1/workspace/webhooks/${existingWebhook.webhook_id}`,
+                  { headers: { 'xi-api-key': validation.data.apiKey } }
+                );
+                deleteSucceeded = true;
+                console.log('[ElevenLabs] Deleted existing webhook successfully');
+              } catch (delErr: any) {
+                console.log('[ElevenLabs] Could not delete existing webhook:', delErr.response?.data || delErr.message);
+                // If deletion failed, don't try to create - might cause duplicate error
+                webhookError = 'Existing webhook found but could not delete/recreate. Please delete manually in ElevenLabs dashboard.';
+              }
+              if (!deleteSucceeded) {
+                // Skip creation if delete failed
+                webhookRegistered = false;
+              }
+              // Fall through to create new one below only if delete succeeded
+            }
+          }
+          
+          if (!webhookRegistered) {
+            // Register new webhook
+            const response = await axios.post(
+              'https://api.elevenlabs.io/v1/workspace/webhooks',
+              {
+                url: webhookUrl,
+                auth_type: 'hmac',
+                name: 'CRM Auto-Registered Webhook',
+                events: ['post_call_transcription', 'call_initiation_failure']
+              },
+              {
+                headers: {
+                  'xi-api-key': validation.data.apiKey,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            const webhookSecret = response.data?.webhook_secret || response.data?.signing_secret;
+            if (webhookSecret) {
+              await storage.updateElevenLabsConfig(tenantId, { webhookSecret });
+            }
+            webhookRegistered = true;
+            console.log('[ElevenLabs] Webhook auto-registered for tenant', tenantId);
+          }
+        } catch (webhookErr: any) {
+          const errorDetail = webhookErr.response?.data?.detail;
+          webhookError = Array.isArray(errorDetail) 
+            ? errorDetail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(', ')
+            : (errorDetail?.message || errorDetail || webhookErr.message || "Webhook registration failed");
+          console.error('[ElevenLabs] Auto-webhook registration failed:', webhookError);
+        }
+      }
+
+      res.json({ 
+        message: "ElevenLabs configuration updated successfully",
+        webhookRegistered,
+        webhookError
+      });
     } catch (error: any) {
       console.error("Error updating ElevenLabs config:", error);
       res.status(500).json({ message: error.message || "Failed to update config" });

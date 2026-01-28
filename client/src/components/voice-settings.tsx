@@ -217,14 +217,30 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
 
   const updateConfigMutation = useMutation({
     mutationFn: async (data: z.infer<typeof configSchema>) => {
-      return await apiRequest("PUT", `${apiBase}/config`, data);
+      const response = await apiRequest("PUT", `${apiBase}/config`, data);
+      return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { message: string; webhookRegistered?: boolean; webhookError?: string | null }) => {
       queryClient.invalidateQueries({ queryKey: [apiBase, 'config'] });
-      toast({
-        title: "Success",
-        description: "Configuration updated successfully",
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/system-health'] });
+      
+      if (data.webhookError) {
+        toast({
+          title: "Configuration Saved (Webhook Issue)",
+          description: `Config saved but webhook registration failed: ${data.webhookError}`,
+          variant: "destructive",
+        });
+      } else if (data.webhookRegistered) {
+        toast({
+          title: "Success",
+          description: "Configuration updated and webhook registered successfully",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Configuration updated successfully",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
