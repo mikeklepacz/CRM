@@ -1328,7 +1328,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               {
                 settings: {
                   auth_type: 'hmac',
-                  url: webhookUrl,
+                  webhook_url: webhookUrl,
+                  name: 'CRM Auto-Registered Webhook',
                   events: ['post_call_transcription', 'call_initiation_failure']
                 }
               },
@@ -1420,7 +1421,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         {
                 settings: {
                   auth_type: 'hmac',
-                  url: webhookUrl,
+                  webhook_url: webhookUrl,
+                  name: 'CRM Auto-Registered Webhook',
                   events: ['post_call_transcription', 'call_initiation_failure']
                 }
               },
@@ -25013,7 +25015,8 @@ ${conversationContext}`;
               {
                 settings: {
                   auth_type: 'hmac',
-                  url: webhookUrl,
+                  webhook_url: webhookUrl,
+                  name: 'CRM Auto-Registered Webhook',
                   events: ['post_call_transcription', 'call_initiation_failure']
                 }
               },
@@ -25426,7 +25429,8 @@ ${conversationContext}`;
         {
                 settings: {
                   auth_type: 'hmac',
-                  url: webhookUrl,
+                  webhook_url: webhookUrl,
+                  name: 'CRM Auto-Registered Webhook',
                   events: ['post_call_transcription', 'call_initiation_failure']
                 }
               },
