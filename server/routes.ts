@@ -1326,10 +1326,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const response = await axios.post(
               'https://api.elevenlabs.io/v1/workspace/webhooks',
               {
-                url: webhookUrl,
-                auth_type: 'hmac',
-                name: 'CRM Auto-Registered Webhook',
-                events: ['post_call_transcription', 'call_initiation_failure']
+                settings: {
+                  auth_type: 'hmac',
+                  url: webhookUrl,
+                  events: ['post_call_transcription', 'call_initiation_failure']
+                }
               },
               {
                 headers: {
@@ -1417,11 +1418,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const response = await axios.post(
         'https://api.elevenlabs.io/v1/workspace/webhooks',
         {
-          url: webhookUrl,
-          auth_type: 'hmac',
-          name: 'CRM Auto-Registered Webhook',
-          events: ['post_call_transcription', 'call_initiation_failure']
-        },
+                settings: {
+                  auth_type: 'hmac',
+                  url: webhookUrl,
+                  events: ['post_call_transcription', 'call_initiation_failure']
+                }
+              },
         {
           headers: {
             'xi-api-key': config.apiKey,
@@ -25009,10 +25011,11 @@ ${conversationContext}`;
             const response = await axios.post(
               'https://api.elevenlabs.io/v1/workspace/webhooks',
               {
-                url: webhookUrl,
-                auth_type: 'hmac',
-                name: 'CRM Auto-Registered Webhook',
-                events: ['post_call_transcription', 'call_initiation_failure']
+                settings: {
+                  auth_type: 'hmac',
+                  url: webhookUrl,
+                  events: ['post_call_transcription', 'call_initiation_failure']
+                }
               },
               {
                 headers: {
@@ -25421,11 +25424,12 @@ ${conversationContext}`;
       const response = await axios.post(
         'https://api.elevenlabs.io/v1/workspace/webhooks',
         {
-          url: webhookUrl,
-          auth_type: 'hmac',
-          name: 'CRM Auto-Registered Webhook',
-          events: ['post_call_transcription', 'call_initiation_failure']
-        },
+                settings: {
+                  auth_type: 'hmac',
+                  url: webhookUrl,
+                  events: ['post_call_transcription', 'call_initiation_failure']
+                }
+              },
         {
           headers: { 
             'xi-api-key': config.apiKey,
