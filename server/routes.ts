@@ -1279,32 +1279,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Unable to determine webhook URL. Deploy environment not configured." });
       }
 
-      // Call ElevenLabs API to register webhook
-      const response = await axios.post(
-        'https://api.elevenlabs.io/v1/convai/conversation/webhooks',
-        {
-          url: webhookUrl,
-          events: ['conversation_initiation_metadata', 'conversation_end', 'conversation_update']
-        },
-        {
-          headers: {
-            'xi-api-key': config.apiKey,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      // Store webhook secret if returned
-      if (response.data?.secret) {
-        await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret: response.data.secret });
-      }
-
-      res.json({
-        message: "Webhook registered successfully",
-        url: webhookUrl,
-        webhookId: response.data?.webhook_id,
-        events: response.data?.events || ['conversation_initiation_metadata', 'conversation_end', 'conversation_update']
-      });
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
+REPLACE_MARKER
     } catch (error: any) {
       console.error("Error registering webhook:", error.response?.data || error);
       res.status(500).json({ 
