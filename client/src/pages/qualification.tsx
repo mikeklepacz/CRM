@@ -15,12 +15,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Plus, Filter, Phone, Mail, Building2, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Trash2, Download, Upload, RefreshCw, MoreVertical, Eye, Edit, PhoneCall, FileSpreadsheet, AlertCircle, CheckCircle2, Map } from "lucide-react";
+import { Search, Plus, Filter, Phone, Mail, Building2, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Trash2, Download, Upload, RefreshCw, MoreVertical, Eye, Edit, PhoneCall, FileSpreadsheet, AlertCircle, CheckCircle2, Map, FileText, Clock, MessageSquare } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient as globalQueryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
-import type { QualificationLead, QualificationCampaign } from "@shared/schema";
+import type { QualificationLead, QualificationCampaign, CallSession, CallTranscript } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const LEAD_FIELD_OPTIONS = [
@@ -108,6 +108,241 @@ const getCallStatusBadgeVariant = (status?: string | null): "default" | "seconda
   }
 };
 
+function ParsedAnswersTab({ lead, onViewTranscript, isLoadingTranscript }: { 
+  lead: QualificationLead; 
+  onViewTranscript: (conversationId: string) => void;
+  isLoadingTranscript: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: callsData, isLoading: callsLoading, isError: callsError } = useQuery<CallSession[]>({
+    queryKey: ['/api/call-sessions', { qualificationLeadId: lead.id }],
+    queryFn: async () => {
+      const response = await fetch(`/api/call-sessions?qualificationLeadId=${lead.id}`);
+      if (!response.ok) throw new Error('Failed to fetch calls');
+      return response.json();
+    },
+  });
+
+  const calls = callsData || [];
+  const sortedCalls = [...calls].sort((a, b) => {
+    const aDate = a.startedAt ? new Date(a.startedAt).getTime() : 0;
+    const bDate = b.startedAt ? new Date(b.startedAt).getTime() : 0;
+    return bDate - aDate;
+  });
+  const latestCallWithAnalysis = sortedCalls.find(c => c.aiAnalysis && (c.aiAnalysis as any).extractedAnswers);
+  const extractedAnswers = latestCallWithAnalysis ? (latestCallWithAnalysis.aiAnalysis as any)?.extractedAnswers : null;
+  const campaignName = latestCallWithAnalysis ? (latestCallWithAnalysis.aiAnalysis as any)?.campaignName : null;
+  const analysisScore = latestCallWithAnalysis ? (latestCallWithAnalysis.aiAnalysis as any)?.score : null;
+  const qualificationResult = latestCallWithAnalysis ? (latestCallWithAnalysis.aiAnalysis as any)?.qualificationResult : null;
+
+  const displayAnswers = lead.answers && Object.keys(lead.answers).length > 0 
+    ? lead.answers 
+    : extractedAnswers;
+
+  const displayScore = lead.score ?? analysisScore;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant={displayScore !== null && displayScore !== undefined ? (displayScore >= 70 ? 'default' : displayScore >= 40 ? 'secondary' : 'destructive') : 'outline'}>
+            Score: {displayScore !== null && displayScore !== undefined ? `${displayScore}%` : 'Not calculated'}
+          </Badge>
+          {qualificationResult && (
+            <Badge variant={qualificationResult === 'qualified' ? 'default' : qualificationResult === 'not_qualified' ? 'destructive' : 'secondary'}>
+              {qualificationResult.replace('_', ' ')}
+            </Badge>
+          )}
+          {campaignName && (
+            <Badge variant="outline">{campaignName}</Badge>
+          )}
+        </div>
+        {latestCallWithAnalysis && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewTranscript(latestCallWithAnalysis.conversationId || '')}
+            disabled={isLoadingTranscript || !latestCallWithAnalysis.conversationId}
+            data-testid="button-view-transcript"
+          >
+            {isLoadingTranscript ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
+            View Transcript
+          </Button>
+        )}
+      </div>
+
+      {callsLoading ? (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : callsError ? (
+        <div className="text-center p-8 text-destructive">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-70" />
+          <p>Failed to load call data.</p>
+          <p className="text-sm mt-1 text-muted-foreground">Please try again later.</p>
+        </div>
+      ) : displayAnswers && Object.keys(displayAnswers).length > 0 ? (
+        <ScrollArea className="h-[300px]">
+          <div className="space-y-3 pr-4">
+            {Object.entries(displayAnswers).map(([key, value]) => {
+              const answerData = typeof value === 'object' && value !== null && 'value' in value ? value as { value: any; confidence?: string } : { value, confidence: undefined };
+              const displayValue = answerData.value;
+              const confidence = answerData.confidence;
+              
+              return (
+                <div key={key} className="border rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</Label>
+                    {confidence && (
+                      <Badge variant="outline" className="text-xs">
+                        {confidence}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="font-medium mt-1">
+                    {typeof displayValue === 'boolean' 
+                      ? (displayValue ? 'Yes' : 'No') 
+                      : Array.isArray(displayValue) 
+                        ? displayValue.join(', ') 
+                        : String(displayValue ?? '-')}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      ) : (
+        <div className="text-center p-8 text-muted-foreground">
+          <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>No parsed answers available.</p>
+          <p className="text-sm mt-1">Complete a qualification call to automatically extract answers using AI.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CallHistoryTab({ leadId, onViewTranscript, isLoadingTranscript }: { 
+  leadId: string; 
+  onViewTranscript: (conversationId: string) => void;
+  isLoadingTranscript: boolean;
+}) {
+  const { data: callsData, isLoading, isError } = useQuery<CallSession[]>({
+    queryKey: ['/api/call-sessions', { qualificationLeadId: leadId }],
+    queryFn: async () => {
+      const response = await fetch(`/api/call-sessions?qualificationLeadId=${leadId}`);
+      if (!response.ok) throw new Error('Failed to fetch calls');
+      return response.json();
+    },
+  });
+
+  const calls = callsData || [];
+  const sortedCalls = [...calls].sort((a, b) => {
+    const aDate = a.startedAt ? new Date(a.startedAt).getTime() : 0;
+    const bDate = b.startedAt ? new Date(b.startedAt).getTime() : 0;
+    return bDate - aDate;
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="text-center p-8 text-destructive">
+        <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-70" />
+        <p>Failed to load call history.</p>
+        <p className="text-sm mt-1 text-muted-foreground">Please try again later.</p>
+      </div>
+    );
+  }
+
+  if (sortedCalls.length === 0) {
+    return (
+      <div className="text-center p-8 text-muted-foreground">
+        <Phone className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <p>No calls have been made to this lead yet.</p>
+        <p className="text-sm mt-1">Calls will appear here after they are completed.</p>
+      </div>
+    );
+  }
+
+  return (
+    <ScrollArea className="h-[300px]">
+      <div className="space-y-3 pr-4">
+        {sortedCalls.map((call) => {
+          const aiAnalysis = call.aiAnalysis as any;
+          const hasAnalysis = aiAnalysis?.extractedAnswers;
+          
+          return (
+            <div key={call.id} className="border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">
+                    {call.startedAt ? format(new Date(call.startedAt), 'MMM d, yyyy h:mm a') : 'Unknown date'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={call.status === 'completed' ? 'default' : call.status === 'failed' ? 'destructive' : 'secondary'}>
+                    {call.status?.replace('-', ' ') || 'unknown'}
+                  </Badge>
+                  {call.callDurationSecs && (
+                    <span className="text-sm text-muted-foreground">
+                      {Math.floor(call.callDurationSecs / 60)}:{(call.callDurationSecs % 60).toString().padStart(2, '0')}
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              {aiAnalysis?.summary && (
+                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{aiAnalysis.summary}</p>
+              )}
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {hasAnalysis && (
+                    <Badge variant="outline" className="text-xs">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      AI Analyzed
+                    </Badge>
+                  )}
+                  {call.interestLevel && (
+                    <Badge 
+                      variant={call.interestLevel === 'hot' ? 'default' : call.interestLevel === 'warm' ? 'secondary' : 'outline'}
+                      className="text-xs"
+                    >
+                      {call.interestLevel}
+                    </Badge>
+                  )}
+                </div>
+                {call.conversationId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onViewTranscript(call.conversationId!)}
+                    disabled={isLoadingTranscript}
+                    data-testid={`button-view-transcript-${call.id}`}
+                  >
+                    {isLoadingTranscript ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4 mr-1" />}
+                    Transcript
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </ScrollArea>
+  );
+}
+
 export default function Qualification() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -148,6 +383,9 @@ export default function Qualification() {
   
   const [isEditLeadOpen, setIsEditLeadOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<QualificationLead | null>(null);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+  const [transcriptData, setTranscriptData] = useState<{ transcripts: CallTranscript[]; callSession: CallSession | null } | null>(null);
+  const [isLoadingTranscript, setIsLoadingTranscript] = useState(false);
 
   const { data: leadsData, isLoading: leadsLoading, refetch: refetchLeads } = useQuery<{ leads: QualificationLead[]; total: number }>({
     queryKey: ['/api/qualification/leads', statusFilter, callStatusFilter, currentProject?.id],
@@ -930,102 +1168,44 @@ export default function Qualification() {
                 )}
               </TabsContent>
               <TabsContent value="answers" className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={selectedLead.score !== null && selectedLead.score !== undefined ? (selectedLead.score >= 70 ? 'default' : selectedLead.score >= 40 ? 'secondary' : 'destructive') : 'outline'}>
-                      Score: {selectedLead.score !== null && selectedLead.score !== undefined ? `${selectedLead.score}% (${selectedLead.scoreGrade || '-'})` : 'Not calculated'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        try {
-                          const response = await fetch(`/api/qualification/leads/${selectedLead.id}/calculate-score`, {
-                            method: 'POST',
-                          });
-                          if (!response.ok) throw new Error('Failed to calculate score');
-                          const data = await response.json();
-                          toast({ title: `Score calculated: ${data.scoreDetails.score}% (Grade ${data.scoreDetails.scoreGrade})` });
-                          queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
-                          setSelectedLead(data.lead);
-                        } catch (error) {
-                          toast({ title: 'Failed to calculate score', variant: 'destructive' });
-                        }
-                      }}
-                      data-testid="button-calculate-score"
-                    >
-                      Calculate Score
-                    </Button>
-                  </div>
-                </div>
-
-                {selectedLead.answers && Object.keys(selectedLead.answers).length > 0 ? (
-                  <div className="space-y-3">
-                    {Object.entries(selectedLead.answers).map(([key, value]) => (
-                      <div key={key} className="border rounded-lg p-3">
-                        <Label className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</Label>
-                        <p className="font-medium mt-1">{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center p-8 text-muted-foreground">
-                    No parsed answers available. Complete a qualification call to populate this data.
-                  </div>
-                )}
-
-                <Separator className="my-4" />
-
-                <div className="space-y-3">
-                  <Label>Parse Call Transcript</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Paste a call transcript below to automatically extract answers using AI
-                  </p>
-                  <Textarea
-                    placeholder="Paste the call transcript here..."
-                    className="min-h-[120px]"
-                    id="transcript-input"
-                    data-testid="textarea-transcript"
-                  />
-                  <Button
-                    onClick={async () => {
-                      const textarea = document.getElementById('transcript-input') as HTMLTextAreaElement;
-                      const transcript = textarea?.value;
-                      if (!transcript?.trim()) {
-                        toast({ title: 'Please enter a transcript', variant: 'destructive' });
-                        return;
-                      }
-                      try {
-                        const response = await fetch(`/api/qualification/leads/${selectedLead.id}/parse-transcript`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ transcript }),
-                        });
-                        if (!response.ok) {
-                          const error = await response.json();
-                          throw new Error(error.message || 'Failed to parse transcript');
-                        }
-                        const data = await response.json();
-                        toast({ title: `Extracted ${Object.keys(data.extractedAnswers).length} answers from transcript` });
-                        queryClient.invalidateQueries({ queryKey: ['/api/qualification/leads'] });
-                        setSelectedLead(data.lead);
-                        textarea.value = '';
-                      } catch (error: any) {
-                        toast({ title: error.message || 'Failed to parse transcript', variant: 'destructive' });
-                      }
-                    }}
-                    data-testid="button-parse-transcript"
-                  >
-                    Parse Transcript with AI
-                  </Button>
-                </div>
+                <ParsedAnswersTab 
+                  lead={selectedLead} 
+                  onViewTranscript={async (conversationId: string) => {
+                    setIsLoadingTranscript(true);
+                    try {
+                      const response = await fetch(`/api/call-sessions/${conversationId}`);
+                      if (!response.ok) throw new Error('Failed to fetch transcript');
+                      const data = await response.json();
+                      setTranscriptData({ transcripts: data.transcripts || [], callSession: data.session || null });
+                      setIsTranscriptOpen(true);
+                    } catch (error) {
+                      toast({ title: 'Failed to load transcript', variant: 'destructive' });
+                    } finally {
+                      setIsLoadingTranscript(false);
+                    }
+                  }}
+                  isLoadingTranscript={isLoadingTranscript}
+                />
               </TabsContent>
               <TabsContent value="history" className="space-y-4">
-                <div className="text-center p-8 text-muted-foreground">
-                  Call history will appear here after calls are made.
-                </div>
+                <CallHistoryTab 
+                  leadId={selectedLead.id} 
+                  onViewTranscript={async (conversationId: string) => {
+                    setIsLoadingTranscript(true);
+                    try {
+                      const response = await fetch(`/api/call-sessions/${conversationId}`);
+                      if (!response.ok) throw new Error('Failed to fetch transcript');
+                      const data = await response.json();
+                      setTranscriptData({ transcripts: data.transcripts || [], callSession: data.session || null });
+                      setIsTranscriptOpen(true);
+                    } catch (error) {
+                      toast({ title: 'Failed to load transcript', variant: 'destructive' });
+                    } finally {
+                      setIsLoadingTranscript(false);
+                    }
+                  }}
+                  isLoadingTranscript={isLoadingTranscript}
+                />
               </TabsContent>
             </Tabs>
           )}
@@ -1337,6 +1517,65 @@ export default function Qualification() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTranscriptOpen} onOpenChange={setIsTranscriptOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Call Transcript
+            </DialogTitle>
+            <DialogDescription>
+              {transcriptData?.callSession?.startedAt && (
+                <span>
+                  Call on {format(new Date(transcriptData.callSession.startedAt), 'MMMM d, yyyy')} at {format(new Date(transcriptData.callSession.startedAt), 'h:mm a')}
+                  {transcriptData.callSession.callDurationSecs && (
+                    <> - Duration: {Math.floor(transcriptData.callSession.callDurationSecs / 60)}:{(transcriptData.callSession.callDurationSecs % 60).toString().padStart(2, '0')}</>
+                  )}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[500px] pr-4">
+            {transcriptData?.transcripts && transcriptData.transcripts.length > 0 ? (
+              <div className="space-y-4">
+                {transcriptData.transcripts
+                  .sort((a, b) => (a.timeInCallSecs || 0) - (b.timeInCallSecs || 0))
+                  .map((transcript, idx) => (
+                    <div key={transcript.id || idx} className={`flex ${transcript.role === 'agent' ? 'justify-start' : 'justify-end'}`}>
+                      <div className={`max-w-[80%] rounded-lg p-3 ${
+                        transcript.role === 'agent' 
+                          ? 'bg-primary/10 border-l-4 border-primary' 
+                          : 'bg-muted border-r-4 border-muted-foreground/30'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold uppercase">
+                            {transcript.role === 'agent' ? 'AI Agent' : 'Prospect'}
+                          </span>
+                          {transcript.timeInCallSecs !== undefined && transcript.timeInCallSecs !== null && (
+                            <span className="text-xs text-muted-foreground">
+                              {Math.floor(transcript.timeInCallSecs / 60)}:{(transcript.timeInCallSecs % 60).toString().padStart(2, '0')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{transcript.message}</p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center p-8 text-muted-foreground">
+                No transcript available for this call.
+              </div>
+            )}
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTranscriptOpen(false)} data-testid="button-close-transcript">
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

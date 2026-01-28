@@ -520,7 +520,7 @@ export interface IStorage {
   getCallSessionByCallSid(callSid: string, tenantId: string): Promise<CallSession | undefined>;
   getCallSessionByCallSidOnly(callSid: string): Promise<CallSession | undefined>; // For external webhooks without tenant context
   getOrphanedCallSessions(tenantId: string): Promise<CallSession[]>; // Sessions completed but missing conversation_id or analysis
-  getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]>;
+  getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string; qualificationLeadId?: string }): Promise<CallSession[]>;
   updateCallSession(id: string, tenantId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
   updateCallSessionByConversationId(conversationId: string, tenantId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
   deleteCallSession(id: string, tenantId: string): Promise<void>;
@@ -3413,11 +3413,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(callSessions.startedAt));
   }
 
-  async getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]> {
+  async getCallSessions(tenantId: string, filters?: { clientId?: string; initiatedByUserId?: string; status?: string; qualificationLeadId?: string }): Promise<CallSession[]> {
     const conditions = [eq(callSessions.tenantId, tenantId)];
     if (filters?.clientId) conditions.push(eq(callSessions.clientId, filters.clientId));
     if (filters?.initiatedByUserId) conditions.push(eq(callSessions.initiatedByUserId, filters.initiatedByUserId));
     if (filters?.status) conditions.push(eq(callSessions.status, filters.status));
+    if (filters?.qualificationLeadId) conditions.push(eq(callSessions.qualificationLeadId, filters.qualificationLeadId));
 
     return await db.select().from(callSessions).where(and(...conditions)).orderBy(desc(callSessions.startedAt));
   }

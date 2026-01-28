@@ -2594,7 +2594,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      const { limit, offset, clientId, status } = req.query;
+      const { limit, offset, clientId, status, qualificationLeadId } = req.query;
 
       // If user is not admin and doesn't have voice access, deny
       const isAdminUser = await checkAdminAccess(user, req.user.tenantId);
@@ -2613,6 +2613,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (status) {
         filters.status = status;
+      }
+      if (qualificationLeadId) {
+        filters.qualificationLeadId = qualificationLeadId;
       }
 
       const sessions = await storage.getCallSessions(tenantId, filters);
@@ -2686,7 +2689,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.endDate = new Date(endDate as string);
       }
       if (status) {
+      if (qualificationLeadId) {
+        filters.qualificationLeadId = qualificationLeadId;
+      }
         filters.status = status;
+      if (qualificationLeadId) {
+        filters.qualificationLeadId = qualificationLeadId;
+      }
+      }
+      if (qualificationLeadId) {
+        filters.qualificationLeadId = qualificationLeadId;
       }
       if (agentId && agentId !== 'all') {
         filters.agentId = agentId;
@@ -8860,8 +8872,17 @@ IMPORTANT:
         }
         // Always use the latest non-empty status
         if (status) {
+      if (qualificationLeadId) {
+        filters.qualificationLeadId = qualificationLeadId;
+      }
           client.status = status;
+      if (qualificationLeadId) {
+        filters.qualificationLeadId = qualificationLeadId;
+      }
         }
+      if (qualificationLeadId) {
+        filters.qualificationLeadId = qualificationLeadId;
+      }
         // Always use the latest non-empty transaction ID
         if (transactionId) {
           client.transactionId = transactionId;
