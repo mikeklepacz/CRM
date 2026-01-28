@@ -1417,10 +1417,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const response = await axios.post(
         'https://api.elevenlabs.io/v1/workspace/webhooks',
         {
-          settings: {
-            auth_type: 'hmac',
-            url: webhookUrl
-          }
+          url: webhookUrl,
+          auth_type: 'hmac',
+          name: 'CRM Auto-Registered Webhook',
+          events: ['post_call_transcription', 'call_initiation_failure']
         },
         {
           headers: {
@@ -25421,10 +25421,10 @@ ${conversationContext}`;
       const response = await axios.post(
         'https://api.elevenlabs.io/v1/workspace/webhooks',
         {
-          settings: {
-            auth_type: 'hmac',
-            url: webhookUrl
-          }
+          url: webhookUrl,
+          auth_type: 'hmac',
+          name: 'CRM Auto-Registered Webhook',
+          events: ['post_call_transcription', 'call_initiation_failure']
         },
         {
           headers: { 
