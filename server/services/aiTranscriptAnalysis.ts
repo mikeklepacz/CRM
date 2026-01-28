@@ -416,6 +416,12 @@ Remember to respond with ONLY a valid JSON object in the specified format.`;
       }
     };
 
+    // Build call summary note
+    const callDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const callSummaryNote = aiResponse.notes 
+      ? `[${callDate}] AI Call Summary: ${aiResponse.notes}` 
+      : null;
+    
     const leadUpdates: Partial<any> = {
       answers: aiResponse.answers,
       score,
@@ -425,10 +431,11 @@ Remember to respond with ONLY a valid JSON object in the specified format.`;
       pocEmail: aiResponse.poc.email,
       pocPhone: aiResponse.poc.phone,
       pocRole: aiResponse.poc.title,
-      // Follow-up fields for scheduling - only set when we have a valid timestamp
       followUpNeeded: hasValidFollowUp,
       followUpDate: followUpTimestamp,
-      callbackNote: hasValidFollowUp ? aiResponse.followUp.action : null, // Only store note if follow-up is scheduled
+      callbackNote: hasValidFollowUp ? aiResponse.followUp.action : null,
+      callSessionId: callSessionId, // Link call to lead for history
+      lastCallAt: new Date(),
       rawAiOutput: {
         parsedAt: new Date().toISOString(),
         model: 'gpt-4o',
@@ -436,7 +443,10 @@ Remember to respond with ONLY a valid JSON object in the specified format.`;
         rawResponse: aiResponse
       },
       status: qualificationResult === 'qualified' ? 'qualified' : 
-              qualificationResult === 'not_qualified' ? 'disqualified' : 'contacted'
+              qualificationResult === 'not_qualified' ? 'disqualified' : 'contacted',
+      ...(callSummaryNote && lead?.notes 
+        ? { notes: `${lead.notes}\n\n${callSummaryNote}` }
+        : callSummaryNote ? { notes: callSummaryNote } : {})
     };
 
     // Store extracted data in the session's aiAnalysis field including answers and POC

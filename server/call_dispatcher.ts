@@ -353,6 +353,9 @@ export class CallDispatcher {
       // This ensures voice proxy can find it immediately when stream starts
       // Store prompt data in storeSnapshot since metadata field doesn't exist in schema
       const connectionMode = useDirectElevenLabs ? 'direct' : 'proxy';
+      // Extract qualification lead ID if this is a lead call
+      const qualificationLeadId = clientData?.leadId || (client.uniqueIdentifier?.startsWith('lead:') ? client.uniqueIdentifier.replace('lead:', '') : null);
+      
       console.log('[CallDispatcher][DEBUG] Creating call session...');
       console.log('[CallDispatcher][DEBUG] Connection mode:', connectionMode);
       const callSession = await storage.createCallSession({
@@ -361,6 +364,7 @@ export class CallDispatcher {
         agentId: agent.agentId,
         phoneNumber,
         clientId: target.clientId,
+        qualificationLeadId, // Link to qualification lead for AI analysis updates
         status: 'initiated',
         connectionMode, // Track which path: 'direct' (ElevenLabs) or 'proxy' (Fly.io)
         storeSnapshot: {
