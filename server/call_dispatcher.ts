@@ -86,7 +86,68 @@ export class CallDispatcher {
     }
   }
 
-  async processQueuedCalls(): Promise<void> {
+  // Check system health before processing calls (comprehensive check per tenant)
+  private async checkSystemHealthForTenant(tenantId: string): Promise<string[]> {
+    const issues: string[] = [];
+    
+    try {
+      // Check 1: ElevenLabs API key
+      const elevenLabsConfig = await storage.getElevenLabsConfig(tenantId);
+      if (!elevenLabsConfig?.apiKey) {
+        issues.push('ElevenLabs API key not configured');
+      }
+      
+      // Check 2: Webhook registration (critical for analytics)
+      if (!elevenLabsConfig?.webhookSecret) {
+        issues.push('ElevenLabs webhook not registered - call data will be lost');
+      }
+      
+      // Check 3: At least one agent
+      const agents = await storage.getElevenLabsAgents(tenantId);
+      if (!agents || agents.length === 0) {
+        issues.push('No voice agents configured');
+      }
+      
+      // Check 4: Phone numbers
+      const phoneNumbers = await storage.getElevenLabsPhoneNumbers(tenantId);
+      if (!phoneNumbers || phoneNumbers.length === 0) {
+        issues.push('No Twilio phone numbers configured');
+      }
+      
+      // Check 5: Fly.io voice proxy (only check once globally)
+      const flyProxyUrl = process.env.FLY_VOICE_PROXY_URL || 'https://hemp-voice-proxy.fly.dev';
+      try {
+        const proxyRes = await axios.get(`${flyProxyUrl}/health`, { timeout: 5000 });
+        if (!proxyRes.data?.status || proxyRes.data.status !== 'ok') {
+          issues.push('Voice proxy is not healthy');
+        }
+      } catch (e: any) {
+        issues.push('Voice proxy is unreachable');
+      }
+    } catch (error: any) {
+      console.error('[CallDispatcher] Health check error:', error.message);
+      issues.push('Health check failed: ' + error.message);
+    }
+    
+    return issues;
+  }
+  
+  // Quick check for Fly proxy only (for legacy compatibility)
+  private async checkSystemHealth(): Promise<string[]> {
+    const issues: string[] = [];
+    try {
+      const flyProxyUrl = process.env.FLY_VOICE_PROXY_URL || 'https://hemp-voice-proxy.fly.dev';
+      const proxyRes = await axios.get(`${flyProxyUrl}/health`, { timeout: 5000 });
+      if (!proxyRes.data?.status || proxyRes.data.status !== 'ok') {
+        issues.push('Voice proxy is not healthy');
+      }
+    } catch (e: any) {
+      issues.push('Voice proxy is unreachable');
+    }
+    return issues;
+  }
+
+    async processQueuedCalls(): Promise<void> {
     const cycleStart = Date.now();
     console.log('[CallDispatcher][DEBUG] ========== PROCESS QUEUED CALLS ==========');
     console.log('[CallDispatcher][DEBUG] Cycle start:', new Date().toISOString());
@@ -102,6 +163,13 @@ export class CallDispatcher {
 
       // Cleanup stale in-progress targets (older than 10 minutes)
       await this.cleanupStaleTargets();
+
+      // System health pre-flight check - verify critical components
+      const healthIssues = await this.checkSystemHealth();
+      if (healthIssues.length > 0) {
+        console.log('[CallDispatcher][BLOCKED] System health check failed:', healthIssues.join(', '));
+        return;
+      }
 
       console.log('[CallDispatcher][DEBUG] Fetching targets ready for calling...');
       const targets = await storage.getCallTargetsReadyForCalling();
@@ -119,6 +187,16 @@ export class CallDispatcher {
       for (let i = 0; i < targets.length; i++) {
         const target = targets[i];
         console.log(`[CallDispatcher][DEBUG] Processing target ${i + 1}/${targets.length}: ${target.id}, tenantId: ${target.tenantId}`);
+        
+        // Per-tenant system health check
+        const tenantHealthIssues = await this.checkSystemHealthForTenant(target.tenantId);
+        if (tenantHealthIssues.length > 0) {
+          console.log(`[CallDispatcher][BLOCKED] Tenant ${target.tenantId} health check failed:`, tenantHealthIssues.join(', '));
+          await storage.updateCallCampaignTarget(target.id, target.tenantId, {
+            lastError: 'System health check failed: ' + tenantHealthIssues.join(', '),
+          });
+          continue;
+        }
         
         // Check if today is a no-send day for this tenant (cached per tenant)
         if (!holidayCache.has(target.tenantId)) {

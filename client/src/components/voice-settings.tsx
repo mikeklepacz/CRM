@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { SystemHealthBanner } from "@/components/SystemHealthBanner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -478,6 +479,7 @@ export function VoiceSettings({ tenantId }: VoiceSettingsProps = {}) {
 
   return (
     <div className="space-y-6">
+      <SystemHealthBanner />
       <Accordion type="multiple" defaultValue={["voice-agents"]} className="space-y-4">
         {/* 1. Voice Agents */}
         <AccordionItem value="voice-agents" className="border rounded-lg">

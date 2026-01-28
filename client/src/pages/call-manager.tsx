@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { SystemHealthBanner } from "@/components/SystemHealthBanner";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessAdminFeatures } from "@/lib/authUtils";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -2039,6 +2040,7 @@ export default function CallManager() {
     <div className="h-full overflow-auto p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Blocked Day Warning Banner */}
+        <SystemHealthBanner />
         {blockedDayData?.blocked && (
           <Card className="border-destructive bg-destructive/10" data-testid="card-blocked-day-warning">
             <CardContent className="p-4">

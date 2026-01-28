@@ -1279,32 +1279,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Unable to determine webhook URL. Deploy environment not configured." });
       }
 
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
-REPLACE_MARKER
+      // Call ElevenLabs API to register workspace webhook (new API as of 2025)
+      // Events: post_call_transcription, post_call_audio, call_initiation_failure
+      const response = await axios.post(
+        'https://api.elevenlabs.io/v1/workspace/webhooks',
+        {
+          url: webhookUrl,
+          events: ['post_call_transcription', 'post_call_audio', 'call_initiation_failure'],
+          auth_method: 'hmac'
+        },
+        {
+          headers: {
+            'xi-api-key': config.apiKey,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Store webhook secret if returned (for HMAC signature verification)
+      if (response.data?.signing_secret) {
+        await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret: response.data.signing_secret });
+      } else if (response.data?.secret) {
+        await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret: response.data.secret });
+      }
+
+      res.json({
+        message: 'Webhook registered successfully',
+        url: webhookUrl,
+        webhookId: response.data?.webhook_id || response.data?.id,
+        events: response.data?.events || ['post_call_transcription', 'call_initiation_failure']
+      });
     } catch (error: any) {
       console.error("Error registering webhook:", error.response?.data || error);
       res.status(500).json({ 
@@ -1336,6 +1340,109 @@ REPLACE_MARKER
     } catch (error: any) {
       console.error("Error fetching webhook status:", error);
       res.status(500).json({ message: error.message || "Failed to fetch webhook status" });
+    }
+  });
+
+
+  // System health check endpoint for voice calling infrastructure
+  app.get('/api/elevenlabs/system-health', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const issues: { severity: 'critical' | 'warning' | 'info', component: string, message: string }[] = [];
+      
+      // Check 1: ElevenLabs API key
+      const elevenLabsConfig = await storage.getElevenLabsConfig(tenantId);
+      if (!elevenLabsConfig?.apiKey) {
+        issues.push({
+          severity: 'critical',
+          component: 'elevenlabs',
+          message: 'ElevenLabs API key is not configured. Voice calls cannot be made.'
+        });
+      }
+      
+      // Check 2: ElevenLabs webhook registration
+      if (!elevenLabsConfig?.webhookSecret) {
+        issues.push({
+          severity: 'critical',
+          component: 'webhook',
+          message: 'ElevenLabs webhook is not registered. Call transcripts and analytics will not be captured. Go to Voice settings and click "Register Webhook".'
+        });
+      }
+      
+      // Check 3: At least one agent exists
+      const agents = await storage.getElevenLabsAgents(tenantId);
+      if (!agents || agents.length === 0) {
+        issues.push({
+          severity: 'critical',
+          component: 'agents',
+          message: 'No voice agents configured. Create at least one agent to make calls.'
+        });
+      }
+      
+      // Check 4: Fly.io voice proxy status
+      try {
+        const flyProxyUrl = process.env.FLY_VOICE_PROXY_URL || 'https://hemp-voice-proxy.fly.dev';
+        const proxyRes = await axios.get(`${flyProxyUrl}/health`, { timeout: 5000 });
+        if (!proxyRes.data?.status || proxyRes.data.status !== 'ok') {
+          issues.push({
+            severity: 'warning',
+            component: 'fly_proxy',
+            message: 'Voice proxy may be experiencing issues. Calls might have audio problems.'
+          });
+        }
+      } catch (e: any) {
+        issues.push({
+          severity: 'critical',
+          component: 'fly_proxy',
+          message: 'Voice proxy is unreachable. Calls will fail. Check Fly.io deployment status.'
+        });
+      }
+      
+      // Check 5: Twilio phone number configured
+      const phoneNumbers = await storage.getElevenLabsPhoneNumbers(tenantId);
+      if (!phoneNumbers || phoneNumbers.length === 0) {
+        issues.push({
+          severity: 'critical',
+          component: 'twilio',
+          message: 'No Twilio phone numbers configured. Outbound calls cannot be made.'
+        });
+      }
+      
+      // Determine overall status
+      const criticalCount = issues.filter(i => i.severity === 'critical').length;
+      const warningCount = issues.filter(i => i.severity === 'warning').length;
+      
+      let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+      if (criticalCount > 0) {
+        overallStatus = 'unhealthy';
+      } else if (warningCount > 0) {
+        overallStatus = 'degraded';
+      }
+      
+      // Can make calls only if no critical issues
+      const canMakeCalls = criticalCount === 0;
+      
+      res.json({
+        status: overallStatus,
+        canMakeCalls,
+        issues,
+        timestamp: new Date().toISOString(),
+        checks: {
+          elevenlabs_api: !!elevenLabsConfig?.apiKey,
+          webhook_registered: !!elevenLabsConfig?.webhookSecret,
+          agents_configured: agents && agents.length > 0,
+          phone_numbers_configured: phoneNumbers && phoneNumbers.length > 0,
+          fly_proxy_healthy: !issues.some(i => i.component === 'fly_proxy' && i.severity === 'critical')
+        }
+      });
+    } catch (error: any) {
+      console.error("Error checking system health:", error);
+      res.status(500).json({ 
+        status: 'unhealthy',
+        canMakeCalls: false,
+        message: error.message || "Failed to check system health",
+        issues: [{ severity: 'critical', component: 'system', message: 'Health check failed' }]
+      });
     }
   });
 
@@ -25010,23 +25117,34 @@ ${conversationContext}`;
       const host = req.get('host') || 'localhost:5000';
       const webhookUrl = `${protocol}://${host}/api/elevenlabs/webhook`;
 
+      // Call ElevenLabs API to register workspace webhook (new API as of 2025)
       const response = await axios.post(
-        "https://api.elevenlabs.io/v1/convai/webhook/register",
+        'https://api.elevenlabs.io/v1/workspace/webhooks',
         {
           url: webhookUrl,
-          events: ["conversation_initiation", "conversation_update", "conversation_end"],
+          events: ['post_call_transcription', 'call_initiation_failure'],
+          auth_method: 'hmac'
         },
         {
-          headers: { "xi-api-key": config.apiKey },
+          headers: { 
+            'xi-api-key': config.apiKey,
+            'Content-Type': 'application/json'
+          },
         }
       );
 
-      const webhookSecret = response.data.secret;
+      // Store webhook secret if returned
+      const webhookSecret = response.data.signing_secret || response.data.secret;
       if (webhookSecret) {
         await storage.updateElevenLabsConfig(tenantId, { webhookSecret });
       }
 
-      res.json({ message: "Webhook registered successfully", webhookUrl });
+      res.json({ 
+        message: 'Webhook registered successfully', 
+        webhookUrl,
+        webhookId: response.data?.webhook_id || response.data?.id,
+        events: ['post_call_transcription', 'call_initiation_failure']
+      });
     } catch (error: any) {
       console.error("Error registering webhook:", error);
       res.status(500).json({ message: error.message || "Failed to register webhook" });

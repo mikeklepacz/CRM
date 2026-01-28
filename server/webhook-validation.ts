@@ -2,7 +2,8 @@ import crypto from 'crypto';
 
 /**
  * Validate ElevenLabs webhook signature using HMAC authentication
- * @param signature - The ElevenLabs-Signature header value (format: "timestamp.signature")
+ * Supports both old format (timestamp.signature) and new format (timestamp,signature)
+ * @param signature - The ElevenLabs-Signature header value
  * @param requestBody - The raw request body as a string
  * @param webhookSecret - The shared secret configured in ElevenLabs dashboard
  * @returns true if signature is valid, false otherwise
@@ -17,10 +18,20 @@ export function validateElevenLabsSignature(
   }
 
   try {
-    // Parse signature format: "timestamp.signature"
-    const [timestamp, sig] = signature.split('.');
+    // Try new format first (timestamp,signature) then old format (timestamp.signature)
+    let timestamp: string | undefined;
+    let sig: string | undefined;
+
+    if (signature.includes(',')) {
+      // New format: "timestamp,signature"
+      [timestamp, sig] = signature.split(',');
+    } else if (signature.includes('.')) {
+      // Old format: "timestamp.signature"
+      [timestamp, sig] = signature.split('.');
+    }
+
     if (!timestamp || !sig) {
-      console.error('Invalid signature format');
+      console.error('[Webhook Validation] Invalid signature format:', signature?.substring(0, 50));
       return false;
     }
 
@@ -34,12 +45,18 @@ export function validateElevenLabsSignature(
       .digest('hex');
 
     // Constant-time comparison to prevent timing attacks
-    return crypto.timingSafeEqual(
-      Buffer.from(sig, 'hex'),
-      Buffer.from(expectedSignature, 'hex')
-    );
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(sig, 'hex'),
+        Buffer.from(expectedSignature, 'hex')
+      );
+    } catch (e) {
+      // If buffers are different lengths, timingSafeEqual throws
+      console.error('[Webhook Validation] Signature length mismatch');
+      return false;
+    }
   } catch (error) {
-    console.error('Error validating webhook signature:', error);
+    console.error('[Webhook Validation] Error validating webhook signature:', error);
     return false;
   }
 }
