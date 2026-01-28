@@ -456,11 +456,11 @@ export function CallDetailDialog({
                 {(session.aiAnalysis.extractedAnswers || session.aiAnalysis.extractedPoc) && (
                   <Card data-testid="card-campaign-analysis">
                     <CardHeader>
-                      <CardTitle className="text-base flex items-center gap-2">
+                      <CardTitle className="text-base flex items-center flex-wrap gap-2">
                         <Target className="h-4 w-4" />
                         Campaign Analysis
                         {session.aiAnalysis.campaignName && (
-                          <Badge variant="secondary" className="ml-2">
+                          <Badge variant="secondary" data-testid="badge-campaign-name">
                             {session.aiAnalysis.campaignName}
                           </Badge>
                         )}
@@ -469,7 +469,7 @@ export function CallDetailDialog({
                     <CardContent className="space-y-4">
                       {/* Qualification Status */}
                       {session.aiAnalysis.qualificationResult && (
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                        <div className="flex items-center flex-wrap justify-between gap-2 p-3 rounded-lg bg-muted/50" data-testid="row-qualification-status">
                           <span className="text-sm font-medium">Qualification Status</span>
                           <Badge 
                             variant={session.aiAnalysis.qualificationResult === 'qualified' ? 'default' : 
@@ -484,7 +484,7 @@ export function CallDetailDialog({
 
                       {/* Score */}
                       {session.aiAnalysis.score !== undefined && (
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                        <div className="flex items-center flex-wrap justify-between gap-2 p-3 rounded-lg bg-muted/50" data-testid="row-score">
                           <span className="text-sm font-medium">Score</span>
                           <span className="font-bold text-lg" data-testid="text-score">
                             {session.aiAnalysis.score} points
@@ -495,7 +495,7 @@ export function CallDetailDialog({
                       {/* Extracted POC */}
                       {session.aiAnalysis.extractedPoc && (
                         Object.values(session.aiAnalysis.extractedPoc).some(v => v) && (
-                          <div className="space-y-2">
+                          <div className="space-y-2" data-testid="section-poc">
                             <h4 className="text-sm font-medium text-muted-foreground">Point of Contact</h4>
                             <div className="grid grid-cols-2 gap-2 text-sm">
                               {session.aiAnalysis.extractedPoc.name && (
@@ -529,23 +529,26 @@ export function CallDetailDialog({
 
                       {/* Extracted Answers */}
                       {session.aiAnalysis.extractedAnswers && Object.keys(session.aiAnalysis.extractedAnswers).length > 0 && (
-                        <div className="space-y-2">
+                        <div className="space-y-2" data-testid="section-extracted-answers">
                           <h4 className="text-sm font-medium text-muted-foreground">Extracted Answers</h4>
                           <div className="space-y-2">
                             {Object.entries(session.aiAnalysis.extractedAnswers).map(([key, data]) => (
-                              <div key={key} className="flex items-start justify-between p-2 rounded bg-muted/30 text-sm">
+                              <div key={key} className="flex items-start flex-wrap justify-between gap-2 p-2 rounded bg-muted/30 text-sm" data-testid={`row-answer-${key}`}>
                                 <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}:</span>
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium" data-testid={`text-answer-${key}`}>
                                     {typeof data.value === 'boolean' 
                                       ? (data.value ? 'Yes' : 'No')
-                                      : Array.isArray(data.value) 
-                                        ? data.value.join(', ')
-                                        : String(data.value || 'N/A')}
+                                      : typeof data.value === 'number'
+                                        ? String(data.value)
+                                        : Array.isArray(data.value) 
+                                          ? data.value.join(', ')
+                                          : data.value != null && data.value !== '' ? String(data.value) : 'N/A'}
                                   </span>
                                   <Badge 
                                     variant={data.confidence === 'high' ? 'default' : data.confidence === 'medium' ? 'secondary' : 'outline'}
                                     className="text-xs"
+                                    data-testid={`badge-confidence-${key}`}
                                   >
                                     {data.confidence}
                                   </Badge>
