@@ -752,6 +752,7 @@ export interface IStorage {
 
   // Qualification Campaign operations
   listQualificationCampaigns(tenantId: string): Promise<QualificationCampaign[]>;
+  getActiveQualificationCampaign(tenantId: string): Promise<QualificationCampaign | undefined>;
   getQualificationCampaign(id: string, tenantId: string): Promise<QualificationCampaign | undefined>;
   createQualificationCampaign(data: InsertQualificationCampaign): Promise<QualificationCampaign>;
   updateQualificationCampaign(id: string, tenantId: string, updates: Partial<InsertQualificationCampaign>): Promise<QualificationCampaign>;
@@ -788,7 +789,7 @@ export interface IStorage {
   } | undefined>;
   updateAnalysisResults(
     sessionId: string,
-    leadId: string,
+    leadId: string | null,
     tenantId: string,
     sessionUpdates: Partial<InsertCallSession>,
     leadUpdates: Partial<InsertQualificationLead>
@@ -6023,6 +6024,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(qualificationCampaigns.createdAt));
   }
 
+  async getActiveQualificationCampaign(tenantId: string): Promise<QualificationCampaign | undefined> {
+    // Return the first active campaign for this tenant
+    const [campaign] = await db.select()
+      .from(qualificationCampaigns)
+      .where(and(
+        eq(qualificationCampaigns.tenantId, tenantId),
+        eq(qualificationCampaigns.isActive, true)
+      ))
+      .orderBy(desc(qualificationCampaigns.createdAt))
+      .limit(1);
+    return campaign;
+  }
+
   async getQualificationCampaign(id: string, tenantId: string): Promise<QualificationCampaign | undefined> {
     const [campaign] = await db.select()
       .from(qualificationCampaigns)
@@ -6346,18 +6360,22 @@ export class DatabaseStorage implements IStorage {
 
   async updateAnalysisResults(
     sessionId: string,
-    leadId: string,
+    leadId: string | null,
     tenantId: string,
     sessionUpdates: Partial<InsertCallSession>,
     leadUpdates: Partial<InsertQualificationLead>
   ): Promise<void> {
+    // Always update the session
     await db.update(callSessions)
       .set({ ...sessionUpdates, updatedAt: new Date() })
       .where(and(eq(callSessions.id, sessionId), eq(callSessions.tenantId, tenantId)));
 
-    await db.update(qualificationLeads)
-      .set({ ...leadUpdates, updatedAt: new Date() })
-      .where(and(eq(qualificationLeads.id, leadId), eq(qualificationLeads.tenantId, tenantId)));
+    // Only update lead if leadId is provided
+    if (leadId) {
+      await db.update(qualificationLeads)
+        .set({ ...leadUpdates, updatedAt: new Date() })
+        .where(and(eq(qualificationLeads.id, leadId), eq(qualificationLeads.tenantId, tenantId)));
+    }
   }
 }
 

@@ -291,10 +291,16 @@ export async function analyzeTranscript(
       throw new Error(`Call session ${callSessionId} not found or access denied`);
     }
 
-    const { session, transcripts, lead, campaign } = context;
+    let { session, transcripts, lead, campaign } = context;
 
-    if (!lead) {
-      throw new Error(`No qualification lead linked to call session ${callSessionId}`);
+    // If no lead is linked, try to find an active campaign for this tenant
+    // This allows analysis of calls that weren't started from the qualification module
+    if (!lead && !campaign) {
+      const activeCampaign = await storage.getActiveQualificationCampaign(tenantId);
+      if (activeCampaign) {
+        campaign = activeCampaign;
+        console.log(`[AI Analysis] No lead linked, using active campaign: ${campaign.name}`);
+      }
     }
 
     if (transcripts.length === 0) {
@@ -308,6 +314,7 @@ export async function analyzeTranscript(
 
     const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
+    // Get field definitions from campaign (if available) or use empty array for basic POC extraction
     const fieldDefinitions: FieldDefinition[] = campaign?.fieldDefinitions || [];
     
     const transcriptText = buildTranscriptText(transcripts);
@@ -432,7 +439,22 @@ Remember to respond with ONLY a valid JSON object in the specified format.`;
               qualificationResult === 'not_qualified' ? 'disqualified' : 'contacted'
     };
 
-    await storage.updateAnalysisResults(callSessionId, lead.id, tenantId, sessionUpdates, leadUpdates);
+    // Store extracted data in the session's aiAnalysis field including answers and POC
+    const enrichedSessionUpdates = {
+      ...sessionUpdates,
+      aiAnalysis: {
+        ...(session.aiAnalysis || {}),
+        ...sessionUpdates.aiAnalysis,
+        extractedAnswers: aiResponse.answers,
+        campaignName: campaign?.name || null,
+        campaignId: campaign?.id || null,
+        score,
+        scoreBreakdown: breakdown,
+        qualificationResult,
+      }
+    };
+
+    await storage.updateAnalysisResults(callSessionId, lead?.id || null, tenantId, enrichedSessionUpdates, leadUpdates);
 
     return {
       success: true,

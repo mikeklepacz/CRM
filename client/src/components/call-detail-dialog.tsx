@@ -45,6 +45,30 @@ interface CallSession {
     keyMoment?: string;
     agentStrengths?: string;
     lessonLearned?: string;
+    extractedPoc?: {
+      name?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      title?: string | null;
+    };
+    extractedAnswers?: {
+      [key: string]: {
+        value: any;
+        confidence: 'high' | 'medium' | 'low';
+      };
+    };
+    campaignName?: string | null;
+    campaignId?: string | null;
+    score?: number;
+    scoreBreakdown?: {
+      [key: string]: {
+        weight: number;
+        earned: number;
+        answer: any;
+      };
+    };
+    qualificationResult?: 'qualified' | 'not_qualified' | 'needs_review';
+    analysisCompletedAt?: string;
   } | null;
   callSuccessful: boolean | null;
   interestLevel: 'hot' | 'warm' | 'cold' | 'not-interested' | null;
@@ -424,6 +448,120 @@ export function CallDetailDialog({
                       <p className="text-sm" data-testid="text-lesson-learned">
                         {session.aiAnalysis.lessonLearned}
                       </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Campaign Analysis Results */}
+                {(session.aiAnalysis.extractedAnswers || session.aiAnalysis.extractedPoc) && (
+                  <Card data-testid="card-campaign-analysis">
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Target className="h-4 w-4" />
+                        Campaign Analysis
+                        {session.aiAnalysis.campaignName && (
+                          <Badge variant="secondary" className="ml-2">
+                            {session.aiAnalysis.campaignName}
+                          </Badge>
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Qualification Status */}
+                      {session.aiAnalysis.qualificationResult && (
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                          <span className="text-sm font-medium">Qualification Status</span>
+                          <Badge 
+                            variant={session.aiAnalysis.qualificationResult === 'qualified' ? 'default' : 
+                                    session.aiAnalysis.qualificationResult === 'not_qualified' ? 'destructive' : 'secondary'}
+                            data-testid="badge-qualification-result"
+                          >
+                            {session.aiAnalysis.qualificationResult === 'qualified' ? 'Qualified' :
+                             session.aiAnalysis.qualificationResult === 'not_qualified' ? 'Not Qualified' : 'Needs Review'}
+                          </Badge>
+                        </div>
+                      )}
+
+                      {/* Score */}
+                      {session.aiAnalysis.score !== undefined && (
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                          <span className="text-sm font-medium">Score</span>
+                          <span className="font-bold text-lg" data-testid="text-score">
+                            {session.aiAnalysis.score} points
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Extracted POC */}
+                      {session.aiAnalysis.extractedPoc && (
+                        Object.values(session.aiAnalysis.extractedPoc).some(v => v) && (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium text-muted-foreground">Point of Contact</h4>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              {session.aiAnalysis.extractedPoc.name && (
+                                <div>
+                                  <span className="text-muted-foreground">Name: </span>
+                                  <span data-testid="text-poc-name">{session.aiAnalysis.extractedPoc.name}</span>
+                                </div>
+                              )}
+                              {session.aiAnalysis.extractedPoc.title && (
+                                <div>
+                                  <span className="text-muted-foreground">Title: </span>
+                                  <span data-testid="text-poc-title">{session.aiAnalysis.extractedPoc.title}</span>
+                                </div>
+                              )}
+                              {session.aiAnalysis.extractedPoc.email && (
+                                <div>
+                                  <span className="text-muted-foreground">Email: </span>
+                                  <span data-testid="text-poc-email">{session.aiAnalysis.extractedPoc.email}</span>
+                                </div>
+                              )}
+                              {session.aiAnalysis.extractedPoc.phone && (
+                                <div>
+                                  <span className="text-muted-foreground">Phone: </span>
+                                  <span data-testid="text-poc-phone">{session.aiAnalysis.extractedPoc.phone}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      )}
+
+                      {/* Extracted Answers */}
+                      {session.aiAnalysis.extractedAnswers && Object.keys(session.aiAnalysis.extractedAnswers).length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium text-muted-foreground">Extracted Answers</h4>
+                          <div className="space-y-2">
+                            {Object.entries(session.aiAnalysis.extractedAnswers).map(([key, data]) => (
+                              <div key={key} className="flex items-start justify-between p-2 rounded bg-muted/30 text-sm">
+                                <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}:</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium" data-testid={`text-answer-${key}`}>
+                                    {typeof data.value === 'boolean' 
+                                      ? (data.value ? 'Yes' : 'No')
+                                      : Array.isArray(data.value) 
+                                        ? data.value.join(', ')
+                                        : String(data.value || 'N/A')}
+                                  </span>
+                                  <Badge 
+                                    variant={data.confidence === 'high' ? 'default' : data.confidence === 'medium' ? 'secondary' : 'outline'}
+                                    className="text-xs"
+                                  >
+                                    {data.confidence}
+                                  </Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Analysis Timestamp */}
+                      {session.aiAnalysis.analysisCompletedAt && (
+                        <p className="text-xs text-muted-foreground text-right">
+                          Analyzed: {format(new Date(session.aiAnalysis.analysisCompletedAt), 'MMM d, yyyy h:mm a')}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 )}
