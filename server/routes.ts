@@ -1279,14 +1279,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Unable to determine webhook URL. Deploy environment not configured." });
       }
 
-      // Call ElevenLabs API to register workspace webhook (new API as of 2025)
-      // Events: post_call_transcription, post_call_audio, call_initiation_failure
+      // First, check if webhooks already exist
+      let existingWebhooks: any[] = [];
+      try {
+        const listResponse = await axios.get(
+          'https://api.elevenlabs.io/v1/workspace/webhooks',
+          { headers: { 'xi-api-key': config.apiKey } }
+        );
+        existingWebhooks = listResponse.data?.webhooks || [];
+      } catch (listErr) {
+        console.log('[Webhook] Could not list existing webhooks:', listErr);
+      }
+
+      // Check if we already have a webhook for our URL
+      const existingWebhook = existingWebhooks.find((w: any) => w.url === webhookUrl || w.settings?.url === webhookUrl);
+      if (existingWebhook) {
+        // Store the secret if we have one
+        const webhookSecret = existingWebhook.webhook_secret || existingWebhook.signing_secret;
+        if (webhookSecret) {
+          await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret });
+        }
+        return res.json({
+          message: 'Webhook already registered',
+          url: webhookUrl,
+          webhookId: existingWebhook.webhook_id,
+          events: existingWebhook.events || ['post_call_transcription']
+        });
+      }
+
+      // Call ElevenLabs API to register workspace webhook (API format as of 2025)
       const response = await axios.post(
         'https://api.elevenlabs.io/v1/workspace/webhooks',
         {
-          url: webhookUrl,
-          events: ['post_call_transcription', 'post_call_audio', 'call_initiation_failure'],
-          auth_method: 'hmac'
+          settings: {
+            auth_type: 'hmac',
+            url: webhookUrl
+          }
         },
         {
           headers: {
@@ -1297,22 +1325,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Store webhook secret if returned (for HMAC signature verification)
-      if (response.data?.signing_secret) {
-        await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret: response.data.signing_secret });
-      } else if (response.data?.secret) {
-        await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret: response.data.secret });
+      const webhookSecret = response.data?.webhook_secret || response.data?.signing_secret || response.data?.secret;
+      if (webhookSecret) {
+        await storage.updateElevenLabsConfig(req.user.tenantId, { webhookSecret });
       }
 
       res.json({
         message: 'Webhook registered successfully',
         url: webhookUrl,
         webhookId: response.data?.webhook_id || response.data?.id,
-        events: response.data?.events || ['post_call_transcription', 'call_initiation_failure']
+        events: ['post_call_transcription', 'call_initiation_failure']
       });
     } catch (error: any) {
-      console.error("Error registering webhook:", error.response?.data || error);
-      res.status(500).json({ 
-        message: error.response?.data?.detail?.message || error.message || "Failed to register webhook",
+      const errorDetail = error.response?.data?.detail;
+      const errorMessage = Array.isArray(errorDetail) 
+        ? errorDetail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(', ')
+        : (errorDetail?.message || errorDetail || error.message || "Failed to register webhook");
+      console.error("Error registering webhook:", errorMessage, error.response?.data);
+      res.status(error.response?.status || 500).json({ 
+        message: errorMessage,
         details: error.response?.data
       });
     }
@@ -25134,17 +25165,54 @@ ${conversationContext}`;
         return res.status(400).json({ message: "ElevenLabs API key not configured for this tenant" });
       }
 
-      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'https';
-      const host = req.get('host') || 'localhost:5000';
-      const webhookUrl = `${protocol}://${host}/api/elevenlabs/webhook`;
+      // Get webhook URL
+      let webhookUrl: string;
+      if (process.env.REPLIT_DOMAINS) {
+        const domains = process.env.REPLIT_DOMAINS.split(',');
+        webhookUrl = `https://${domains[0]}/api/elevenlabs/webhook`;
+      } else if (process.env.REPLIT_DEV_DOMAIN) {
+        webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/elevenlabs/webhook`;
+      } else {
+        const host = req.get('host') || 'localhost:5000';
+        webhookUrl = `https://${host}/api/elevenlabs/webhook`;
+      }
 
-      // Call ElevenLabs API to register workspace webhook (new API as of 2025)
+      // First, check if webhooks already exist
+      let existingWebhooks: any[] = [];
+      try {
+        const listResponse = await axios.get(
+          'https://api.elevenlabs.io/v1/workspace/webhooks',
+          { headers: { 'xi-api-key': config.apiKey } }
+        );
+        existingWebhooks = listResponse.data?.webhooks || [];
+      } catch (listErr) {
+        console.log('[Webhook] Could not list existing webhooks:', listErr);
+      }
+
+      // Check if we already have a webhook for our URL
+      const existingWebhook = existingWebhooks.find((w: any) => w.url === webhookUrl || w.settings?.url === webhookUrl);
+      if (existingWebhook) {
+        // Store the secret if we have one
+        const webhookSecret = existingWebhook.webhook_secret || existingWebhook.signing_secret;
+        if (webhookSecret) {
+          await storage.updateElevenLabsConfig(tenantId, { webhookSecret });
+        }
+        return res.json({
+          message: 'Webhook already registered',
+          webhookUrl,
+          webhookId: existingWebhook.webhook_id,
+          events: existingWebhook.events || ['post_call_transcription']
+        });
+      }
+
+      // Call ElevenLabs API to register workspace webhook (API format as of 2025)
       const response = await axios.post(
         'https://api.elevenlabs.io/v1/workspace/webhooks',
         {
-          url: webhookUrl,
-          events: ['post_call_transcription', 'call_initiation_failure'],
-          auth_method: 'hmac'
+          settings: {
+            auth_type: 'hmac',
+            url: webhookUrl
+          }
         },
         {
           headers: { 
@@ -25155,7 +25223,7 @@ ${conversationContext}`;
       );
 
       // Store webhook secret if returned
-      const webhookSecret = response.data.signing_secret || response.data.secret;
+      const webhookSecret = response.data?.webhook_secret || response.data?.signing_secret || response.data?.secret;
       if (webhookSecret) {
         await storage.updateElevenLabsConfig(tenantId, { webhookSecret });
       }
@@ -25167,8 +25235,15 @@ ${conversationContext}`;
         events: ['post_call_transcription', 'call_initiation_failure']
       });
     } catch (error: any) {
-      console.error("Error registering webhook:", error);
-      res.status(500).json({ message: error.message || "Failed to register webhook" });
+      const errorDetail = error.response?.data?.detail;
+      const errorMessage = Array.isArray(errorDetail) 
+        ? errorDetail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(', ')
+        : (errorDetail?.message || errorDetail || error.message || "Failed to register webhook");
+      console.error("Error registering webhook:", errorMessage, error.response?.data);
+      res.status(error.response?.status || 500).json({ 
+        message: errorMessage,
+        details: error.response?.data
+      });
     }
   });
 
