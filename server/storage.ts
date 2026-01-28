@@ -230,6 +230,7 @@ export interface IStorage {
   listTenants(): Promise<Array<Tenant & { userCount: number }>>;
   getTenantById(tenantId: string): Promise<Tenant | undefined>;
   getTenantByIdOrSlug(idOrSlug: string): Promise<Tenant | undefined>;
+  getAllTenants(): Promise<Tenant[]>;
   createTenant(data: InsertTenant): Promise<Tenant>;
   updateTenant(tenantId: string, updates: Partial<InsertTenant>): Promise<Tenant>;
   getTenantStats(tenantId: string): Promise<{ userCount: number; clientCount: number; callCount: number }>;
@@ -501,6 +502,7 @@ export interface IStorage {
 
   // ElevenLabs Phone Numbers operations
   getAllElevenLabsPhoneNumbers(tenantId: string): Promise<ElevenLabsPhoneNumber[]>;
+  getElevenLabsPhoneNumbers(tenantId: string): Promise<ElevenLabsPhoneNumber[]>;
   getElevenLabsPhoneNumber(phoneNumberId: string, tenantId: string): Promise<ElevenLabsPhoneNumber | undefined>;
   upsertElevenLabsPhoneNumber(phoneData: InsertElevenLabsPhoneNumber): Promise<ElevenLabsPhoneNumber>;
   deleteElevenLabsPhoneNumber(phoneNumberId: string, tenantId: string): Promise<void>;
@@ -919,6 +921,10 @@ export class DatabaseStorage implements IStorage {
       .from(tenants)
       .where(or(eq(tenants.id, idOrSlug), eq(tenants.slug, idOrSlug)));
     return tenant;
+  }
+
+  async getAllTenants(): Promise<Tenant[]> {
+    return await db.select().from(tenants);
   }
 
   async createTenant(data: InsertTenant): Promise<Tenant> {
@@ -3272,6 +3278,10 @@ export class DatabaseStorage implements IStorage {
 
   // ElevenLabs Phone Numbers operations
   async getAllElevenLabsPhoneNumbers(tenantId: string): Promise<ElevenLabsPhoneNumber[]> {
+    return await db.select().from(elevenLabsPhoneNumbers).where(eq(elevenLabsPhoneNumbers.tenantId, tenantId));
+  }
+
+  async getElevenLabsPhoneNumbers(tenantId: string): Promise<ElevenLabsPhoneNumber[]> {
     return await db.select().from(elevenLabsPhoneNumbers).where(eq(elevenLabsPhoneNumbers.tenantId, tenantId));
   }
 
