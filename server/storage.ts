@@ -506,6 +506,7 @@ export interface IStorage {
   deleteElevenLabsPhoneNumber(phoneNumberId: string, tenantId: string): Promise<void>;
 
   getAllElevenLabsAgents(tenantId: string, projectId?: string): Promise<ElevenLabsAgent[]>;
+  getElevenLabsAgents(tenantId: string): Promise<ElevenLabsAgent[]>;
   getElevenLabsAgent(id: string, tenantId: string): Promise<ElevenLabsAgent | undefined>;
   getDefaultElevenLabsAgent(tenantId: string): Promise<ElevenLabsAgent | undefined>;
   createElevenLabsAgent(agent: InsertElevenLabsAgent): Promise<ElevenLabsAgent>;
@@ -3326,6 +3327,10 @@ export class DatabaseStorage implements IStorage {
       );
     }
     // If no projectId, return all agents for the tenant
+    return await db.select().from(elevenLabsAgents).where(eq(elevenLabsAgents.tenantId, tenantId));
+  }
+
+  async getElevenLabsAgents(tenantId: string): Promise<ElevenLabsAgent[]> {
     return await db.select().from(elevenLabsAgents).where(eq(elevenLabsAgents.tenantId, tenantId));
   }
 
