@@ -142,12 +142,12 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       continue;
     }
     
-    // CRITICAL: Clear any existing slot assignments for this recipient before reassigning
+    // CRITICAL: DELETE any existing unsent slot assignments for this recipient before reassigning
     // This prevents the same recipient from being assigned to multiple slots
     await db.execute(sql`
-      UPDATE daily_send_slots
-      SET recipient_id = NULL, filled = false
-      WHERE recipient_id = ${recipient.id}
+      DELETE FROM daily_send_slots
+      WHERE sent = FALSE
+        AND recipient_id = ${recipient.id}
     `);
     
     // Provide default timezone if missing

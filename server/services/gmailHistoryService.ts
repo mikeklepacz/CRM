@@ -165,10 +165,10 @@ async function markRecipientReplied(recipientId: string, sequenceId: string): Pr
     WHERE id = ${sequenceId}
   `);
 
-  await db.update(dailySendSlots)
-    .set({
-      filled: false,
-      recipientId: null,
-    })
-    .where(eq(dailySendSlots.recipientId, recipientId));
+  // DELETE any unsent slots for this recipient - they replied, no need to send
+  await db.execute(sql`
+    DELETE FROM daily_send_slots
+    WHERE sent = FALSE
+      AND recipient_id = ${recipientId}
+  `);
 }

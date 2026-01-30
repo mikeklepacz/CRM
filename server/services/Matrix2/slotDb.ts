@@ -134,16 +134,16 @@ export async function getNextAvailableSlot(afterSlotTimeUtc: string): Promise<Da
 }
 
 /**
- * Clear slots assigned to recipients from a specific sequence
- * Called when a sequence is deleted to free up those slots
+ * DELETE unsent slots assigned to recipients from a specific sequence
+ * Called when a sequence is deleted - slots are just removed, not cleared
  */
 export async function clearSlotsForSequence(sequenceId: string) {
   const result = await db.execute(sql`
-    UPDATE daily_send_slots
-    SET filled = FALSE, recipient_id = NULL
-    WHERE recipient_id::VARCHAR IN (
-      SELECT id FROM sequence_recipients WHERE sequence_id = ${sequenceId}
-    )
+    DELETE FROM daily_send_slots
+    WHERE sent = FALSE
+      AND recipient_id::VARCHAR IN (
+        SELECT id FROM sequence_recipients WHERE sequence_id = ${sequenceId}
+      )
   `);
   
   const affectedRows = (result as any).rowCount || 0;
@@ -151,14 +151,14 @@ export async function clearSlotsForSequence(sequenceId: string) {
 }
 
 /**
- * Clear slots assigned to a specific recipient
- * Called when a recipient is deleted to free up those slots
+ * DELETE unsent slots assigned to a specific recipient
+ * Called when a recipient is deleted - slots are just removed
  */
 export async function clearSlotsForRecipient(recipientId: string) {
   const result = await db.execute(sql`
-    UPDATE daily_send_slots
-    SET filled = FALSE, recipient_id = NULL
-    WHERE recipient_id = ${recipientId}
+    DELETE FROM daily_send_slots
+    WHERE sent = FALSE
+      AND recipient_id = ${recipientId}
   `);
   
   const affectedRows = (result as any).rowCount || 0;
@@ -166,14 +166,14 @@ export async function clearSlotsForRecipient(recipientId: string) {
 }
 
 /**
- * Clear all orphaned slots (pointing to deleted recipients)
+ * DELETE all orphaned unsent slots (pointing to deleted recipients)
  * Useful for cleanup after sequence deletion or data corruption
  */
 export async function clearOrphanedSlots() {
   const result = await db.execute(sql`
-    UPDATE daily_send_slots
-    SET filled = FALSE, recipient_id = NULL
-    WHERE recipient_id IS NOT NULL
+    DELETE FROM daily_send_slots
+    WHERE sent = FALSE
+      AND recipient_id IS NOT NULL
       AND recipient_id NOT IN (SELECT id FROM sequence_recipients)
   `);
   
@@ -182,15 +182,14 @@ export async function clearOrphanedSlots() {
 }
 
 /**
- * Clear all UNSENT slots for a sequence's recipients
+ * DELETE all UNSENT slots for a sequence's recipients
  * Called when a sequence is PAUSED to prevent fire-hose on unpause
- * Only clears slots where sent=FALSE, preserving send history
+ * Preserves sent slots (history) - only deletes unsent ones
  * Recipients go back to the assignment pool and get fresh future slots on unpause
  */
 export async function clearUnsentSlotsForSequence(sequenceId: string): Promise<number> {
   const result = await db.execute(sql`
-    UPDATE daily_send_slots
-    SET filled = FALSE, recipient_id = NULL
+    DELETE FROM daily_send_slots
     WHERE sent = FALSE
       AND recipient_id IS NOT NULL
       AND recipient_id::VARCHAR IN (

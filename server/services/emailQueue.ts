@@ -60,16 +60,15 @@ export async function processEmailQueue() {
   // Reuse 'now' from sending hours check above
   const nowUtcIso = now.toISOString();
   
-  // EXPIRED SLOT CLEANUP: Clear any filled slots older than 10 minutes
-  // These recipients return to the bin for future slots - NO catch-up behavior
+  // EXPIRED SLOT CLEANUP: DELETE any expired slots older than 10 minutes
+  // Recipients return to bin naturally - they're no longer assigned to any slot
+  // NO catch-up behavior - expired slots are just gone
   const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
   const tenMinutesAgoIso = tenMinutesAgo.toISOString();
   
   await db.execute(sql`
-    UPDATE daily_send_slots 
-    SET filled = FALSE, recipient_id = NULL
-    WHERE filled = TRUE 
-      AND sent = FALSE 
+    DELETE FROM daily_send_slots 
+    WHERE sent = FALSE 
       AND slot_time_utc < ${tenMinutesAgoIso}
   `);
 
@@ -139,10 +138,8 @@ export async function processEmailQueue() {
             WHERE id = ${slot.sequence_id}
           `);
           
-          // Clear the slot
-          await db.update(dailySendSlots)
-            .set({ filled: false, recipientId: null })
-            .where(eq(dailySendSlots.id, slot.id));
+          // DELETE the slot - recipient already marked as replied
+          await db.delete(dailySendSlots).where(eq(dailySendSlots.id, slot.id));
           
           continue; // Skip to next slot
         }
@@ -166,20 +163,12 @@ export async function processEmailQueue() {
           // Don't rethrow - continue processing other slots even if assignment fails
         }
       } else {
-        // Clear the slot - recipient returns to bin for next assignment cycle
-        // NO cascade/catch-up behavior - they just wait for a future slot
-        await db
-          .update(dailySendSlots)
-          .set({ filled: false, recipientId: null })
-          .where(eq(dailySendSlots.id, slot.id));
+        // DELETE the slot - recipient returns to bin for next assignment cycle
+        await db.delete(dailySendSlots).where(eq(dailySendSlots.id, slot.id));
       }
     } catch (error) {
-      // Clear the slot - recipient returns to bin for next assignment cycle
-      // NO cascade/catch-up behavior - they just wait for a future slot
-      await db
-        .update(dailySendSlots)
-        .set({ filled: false, recipientId: null })
-        .where(eq(dailySendSlots.id, slot.id));
+      // DELETE the slot - recipient returns to bin for next assignment cycle
+      await db.delete(dailySendSlots).where(eq(dailySendSlots.id, slot.id));
     }
   }
 }
