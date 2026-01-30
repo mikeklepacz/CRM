@@ -76,12 +76,14 @@ export async function processEmailQueue() {
   // Get slots that are ready to send NOW (present-focused)
   // CRITICAL: Only find slots within current 10-minute window
   // CRITICAL: Only send if sequence is ACTIVE (pause/resume controls sending)
+  // CRITICAL: Only process slots with valid email_account_id (block legacy NULL slots)
   // NO LIMIT - slot generation IS the daily limit, no batching possible
   const result = await db.execute(sql`
     SELECT 
       dss.id, 
       dss.slot_time_utc, 
       dss.recipient_id,
+      dss.email_account_id,
       s.id as sequence_id,
       s.status as sequence_status,
       s.name as sequence_name,
@@ -93,6 +95,7 @@ export async function processEmailQueue() {
     WHERE dss.sent = FALSE
       AND dss.filled = TRUE
       AND dss.recipient_id IS NOT NULL
+      AND dss.email_account_id IS NOT NULL
       AND dss.slot_time_utc >= ${tenMinutesAgoIso}
       AND dss.slot_time_utc <= ${nowUtcIso}
       AND s.status = 'active'
