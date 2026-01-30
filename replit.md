@@ -86,10 +86,13 @@ The application features a client dashboard unifying data, transitioning from a 
 - **E-Hub Queue Coordinator**: Centralized FIFO scheduling, rate limiting, and geographic distribution.
 - **Matrix2 Scheduler**: Slot-first architecture for email scheduling with strict safety controls:
   - **Present-focused queue**: Only processes slots within 10-minute window of NOW (no catch-up)
-  - **Expired slot cleanup**: Slots older than 10 minutes are cleared, recipients return to bin
+  - **Expired slots DELETED**: Slots older than 10 minutes are deleted entirely (not cleared)
+  - **Failed sends DELETED**: Any slot that fails to send is deleted, recipient returns to bin
+  - **Slot lifecycle**: Created (filled=false) → Assigned (filled=true) → Sent (sent=true) OR Deleted
+  - **No stale slots**: Slots never transition back to filled=false - they succeed or get deleted
+  - **History table**: Over time, daily_send_slots becomes mostly sent email history
   - **Daily limit is LAW**: Slot generation enforces per-account daily email limit (e.g., 250/account)
   - **No batch sending**: Removed LIMIT clause - slot generation IS the rate limiter
-  - **No cascade/catch-up**: Failed sends return recipients to bin, no domino displacement
   - **Email account required**: Slots must have valid email_account_id to be processed
 
 ## External Dependencies
