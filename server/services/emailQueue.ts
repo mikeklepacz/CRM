@@ -1,9 +1,10 @@
 // server/services/emailQueue.ts
-import { ensureDailySlots } from "./Matrix2/slotGenerator";
+// ensureDailySlots imported but not used in this file - slot generation handled by slotGenerator
+// import { ensureDailySlots } from "./Matrix2/slotGenerator";
 import { assignRecipientsToSlots } from "./Matrix2/slotAssigner";
 import { storage } from "../storage";
 import { sendEmailToRecipient } from "./emailSender";
-import { markSlotSent, getNextAvailableSlot, fillSlot } from "./Matrix2/slotDb";
+import { markSlotSent } from "./Matrix2/slotDb";
 import { db } from "../db";
 import { sql, eq } from "drizzle-orm";
 import { dailySendSlots, sequenceRecipients } from "../../shared/schema";
@@ -13,38 +14,6 @@ import { shouldSendEmail } from "./replyGuard";
 // Queue state
 let isProcessing = false;
 let queueInterval: NodeJS.Timeout | null = null;
-
-/**
- * Recursively bump displaced recipient forward (domino effect)
- * When someone takes your slot, you take the next slot, displacing the next person, etc.
- */
-async function cascadeBumpRecipient(displacedRecipientId: string, fromSlotTime: string): Promise<void> {
-  // Find next available slot after the one they were displaced from
-  const nextSlotResult = await db.execute(sql`
-    SELECT id, slot_time_utc, filled, recipient_id
-    FROM daily_send_slots
-    WHERE slot_time_utc > ${fromSlotTime}
-      AND sent = FALSE
-    ORDER BY slot_time_utc ASC
-    LIMIT 1
-  `);
-  const nextSlotRows = (nextSlotResult as any).rows || [];
-  
-  if (nextSlotRows.length === 0) {
-    return; // End of chain - this person stays in pool
-  }
-  
-  const nextSlot = nextSlotRows[0];
-  const nextDisplacedRecipientId = nextSlot.recipient_id; // Who's currently in that slot
-  
-  // Take the next slot
-  await fillSlot(nextSlot.id, displacedRecipientId);
-  
-  // If someone was in that next slot, cascade them forward too (domino effect)
-  if (nextDisplacedRecipientId) {
-    await cascadeBumpRecipient(nextDisplacedRecipientId, nextSlot.slot_time_utc);
-  }
-}
 
 export async function processEmailQueue() {
   const tenantId = await storage.getAdminTenantId();
@@ -88,10 +57,26 @@ export async function processEmailQueue() {
     // Don't fail the queue - continue to send ready emails
   }
 
-  const nowUtcIso = new Date().toISOString();
+  // Reuse 'now' from sending hours check above
+  const nowUtcIso = now.toISOString();
+  
+  // EXPIRED SLOT CLEANUP: Clear any filled slots older than 10 minutes
+  // These recipients return to the bin for future slots - NO catch-up behavior
+  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+  const tenMinutesAgoIso = tenMinutesAgo.toISOString();
+  
+  await db.execute(sql`
+    UPDATE daily_send_slots 
+    SET filled = FALSE, recipient_id = NULL
+    WHERE filled = TRUE 
+      AND sent = FALSE 
+      AND slot_time_utc < ${tenMinutesAgoIso}
+  `);
 
-  // Get slots that are ready to send (filled, not sent, time has arrived)
+  // Get slots that are ready to send NOW (present-focused)
+  // CRITICAL: Only find slots within current 10-minute window
   // CRITICAL: Only send if sequence is ACTIVE (pause/resume controls sending)
+  // NO LIMIT - slot generation IS the daily limit, no batching possible
   const result = await db.execute(sql`
     SELECT 
       dss.id, 
@@ -108,10 +93,10 @@ export async function processEmailQueue() {
     WHERE dss.sent = FALSE
       AND dss.filled = TRUE
       AND dss.recipient_id IS NOT NULL
+      AND dss.slot_time_utc >= ${tenMinutesAgoIso}
       AND dss.slot_time_utc <= ${nowUtcIso}
       AND s.status = 'active'
     ORDER BY dss.slot_time_utc ASC
-    LIMIT 10
   `);
 
   const slots = (result as any).rows || [];
@@ -178,24 +163,20 @@ export async function processEmailQueue() {
           // Don't rethrow - continue processing other slots even if assignment fails
         }
       } else {
-        // Clear current slot first
+        // Clear the slot - recipient returns to bin for next assignment cycle
+        // NO cascade/catch-up behavior - they just wait for a future slot
         await db
           .update(dailySendSlots)
           .set({ filled: false, recipientId: null })
           .where(eq(dailySendSlots.id, slot.id));
-        
-        // Cascade the failed recipient forward (domino effect)
-        await cascadeBumpRecipient(slot.recipient_id, slot.slot_time_utc);
       }
     } catch (error) {
-      // Clear current slot first
+      // Clear the slot - recipient returns to bin for next assignment cycle
+      // NO cascade/catch-up behavior - they just wait for a future slot
       await db
         .update(dailySendSlots)
         .set({ filled: false, recipientId: null })
         .where(eq(dailySendSlots.id, slot.id));
-      
-      // Cascade the failed recipient forward (domino effect)
-      await cascadeBumpRecipient(slot.recipient_id, slot.slot_time_utc);
     }
   }
 }
