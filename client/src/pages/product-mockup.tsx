@@ -335,6 +335,7 @@ export default function ProductMockup() {
   const [showBleedOverlay, setShowBleedOverlay] = useState(true);
   const [bleedOverlayLoaded, setBleedOverlayLoaded] = useState(false);
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
+  const [showKraftEffect, setShowKraftEffect] = useState(true);
   const [fontsLoaded, setFontsLoaded] = useState(fontsPreloaded);
   
   // Project info state (required before using designer)
@@ -505,9 +506,13 @@ export default function ProductMockup() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    applyKraftBase(ctx, LABEL_WIDTH, LABEL_HEIGHT);
-
-    ctx.globalCompositeOperation = 'multiply';
+    if (showKraftEffect) {
+      applyKraftBase(ctx, LABEL_WIDTH, LABEL_HEIGHT);
+      ctx.globalCompositeOperation = 'multiply';
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, LABEL_WIDTH, LABEL_HEIGHT);
+    }
 
     elements.filter(el => el.visible !== false).forEach(el => {
       ctx.save();
@@ -581,7 +586,7 @@ export default function ProductMockup() {
         ctx.restore();
       }
     }
-  }, [elements, selectedId, applyKraftBase, showBleedOverlay, bleedOverlayLoaded]);
+  }, [elements, selectedId, applyKraftBase, showBleedOverlay, bleedOverlayLoaded, showKraftEffect]);
 
   const createLabelTexture = useCallback((): THREE.CanvasTexture => {
     // First create the flat label canvas
@@ -590,8 +595,13 @@ export default function ProductMockup() {
     flatCanvas.height = LABEL_HEIGHT;
     const flatCtx = flatCanvas.getContext('2d')!;
 
-    applyKraftBase(flatCtx, LABEL_WIDTH, LABEL_HEIGHT);
-    flatCtx.globalCompositeOperation = 'multiply';
+    if (showKraftEffect) {
+      applyKraftBase(flatCtx, LABEL_WIDTH, LABEL_HEIGHT);
+      flatCtx.globalCompositeOperation = 'multiply';
+    } else {
+      flatCtx.fillStyle = '#ffffff';
+      flatCtx.fillRect(0, 0, LABEL_WIDTH, LABEL_HEIGHT);
+    }
 
     elements.filter(el => el.visible !== false).forEach(el => {
       flatCtx.save();
@@ -641,7 +651,7 @@ export default function ProductMockup() {
     
     texture.needsUpdate = true;
     return texture;
-  }, [elements, applyKraftBase, textureMapping, labelRotation]);
+  }, [elements, applyKraftBase, textureMapping, labelRotation, showKraftEffect]);
 
   useEffect(() => {
     drawFlatLabel();
@@ -1393,9 +1403,14 @@ export default function ProductMockup() {
       cleanCanvas.height = LABEL_HEIGHT;
       const cleanCtx = cleanCanvas.getContext('2d')!;
       
-      // Draw kraft paper base
-      applyKraftBase(cleanCtx, LABEL_WIDTH, LABEL_HEIGHT);
-      cleanCtx.globalCompositeOperation = 'multiply';
+      // Draw kraft paper base (conditional)
+      if (showKraftEffect) {
+        applyKraftBase(cleanCtx, LABEL_WIDTH, LABEL_HEIGHT);
+        cleanCtx.globalCompositeOperation = 'multiply';
+      } else {
+        cleanCtx.fillStyle = '#ffffff';
+        cleanCtx.fillRect(0, 0, LABEL_WIDTH, LABEL_HEIGHT);
+      }
       
       // Draw all visible elements (no bleed, no selection)
       elements.filter(el => el.visible !== false).forEach(el => {
@@ -1982,11 +1997,19 @@ export default function ProductMockup() {
                   </div>
                 )}
 
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <p className="text-xs text-amber-800 dark:text-amber-200">
-                    <strong>Kraft Paper:</strong> Colors blend with brown paper. White becomes paper color.
+                <button
+                  onClick={() => setShowKraftEffect(!showKraftEffect)}
+                  className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                    showKraftEffect 
+                      ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' 
+                      : 'bg-muted/50 border-muted-foreground/20'
+                  }`}
+                  data-testid="button-toggle-kraft"
+                >
+                  <p className={`text-xs ${showKraftEffect ? 'text-amber-800 dark:text-amber-200' : 'text-muted-foreground'}`}>
+                    <strong>Kraft Paper:</strong> {showKraftEffect ? 'ON' : 'OFF'} - Colors blend with brown paper. White becomes paper color.
                   </p>
-                </div>
+                </button>
                 
                 <p className="text-[10px] text-muted-foreground/70 text-center leading-relaxed">
                   <span className="font-medium">Shortcuts:</span> Delete/Backspace removes selection • Alt/Option+drag duplicates • Shift+drag constrains to axis
