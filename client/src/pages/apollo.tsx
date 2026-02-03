@@ -42,7 +42,8 @@ import {
   MapPin,
   Factory,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Plus
 } from "lucide-react";
 
 interface ApolloSettings {
@@ -196,6 +197,12 @@ export default function Apollo() {
   const [reviewQueueLoading, setReviewQueueLoading] = useState(false);
   const [reviewSelectedPeople, setReviewSelectedPeople] = useState<Set<string>>(new Set());
   const [keywordsExpanded, setKeywordsExpanded] = useState(false);
+  const [manualAddOpen, setManualAddOpen] = useState(false);
+  const [manualCompanyName, setManualCompanyName] = useState("");
+  const [manualCompanyWebsite, setManualCompanyWebsite] = useState("");
+  const [manualPreviewResult, setManualPreviewResult] = useState<PreviewResult | null>(null);
+  const [manualPreviewLoading, setManualPreviewLoading] = useState(false);
+  const [manualEnriching, setManualEnriching] = useState(false);
 
   const { data: settings, isLoading: settingsLoading } = useQuery<ApolloSettings>({
     queryKey: ["/api/apollo/settings"],
@@ -628,6 +635,82 @@ export default function Apollo() {
     setSelectedLinks(newSet);
   };
 
+  const handleManualAddPreview = async () => {
+    if (!manualCompanyName.trim()) {
+      toast({ title: "Please enter a company name", variant: "destructive" });
+      return;
+    }
+    
+    setManualPreviewLoading(true);
+    setManualPreviewResult(null);
+    
+    try {
+      const domain = extractDomain(manualCompanyWebsite);
+      const response = await apiRequest("POST", "/api/apollo/preview", {
+        domain: domain || undefined,
+        companyName: !domain ? manualCompanyName : undefined,
+      }) as PreviewResult;
+      setManualPreviewResult(response);
+    } catch (error: any) {
+      toast({ 
+        title: "Preview failed", 
+        description: error.message || "Failed to preview company", 
+        variant: "destructive" 
+      });
+    }
+    
+    setManualPreviewLoading(false);
+  };
+
+  const handleManualEnrich = async () => {
+    if (!manualPreviewResult?.company) return;
+    
+    setManualEnriching(true);
+    
+    try {
+      const manualLink = `manual:${crypto.randomUUID()}`;
+      const domain = extractDomain(manualCompanyWebsite);
+      
+      await apiRequest("POST", "/api/apollo/enrich", {
+        googleSheetLink: manualLink,
+        domain: domain || undefined,
+        companyName: !domain ? manualCompanyName : undefined,
+        projectId: currentProject?.id,
+      });
+      
+      toast({
+        title: "Enrichment complete",
+        description: `Successfully enriched contacts for "${manualCompanyName}"`,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/check-enrichment"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/settings"] });
+      
+      setManualAddOpen(false);
+      setManualCompanyName("");
+      setManualCompanyWebsite("");
+      setManualPreviewResult(null);
+    } catch (error: any) {
+      toast({
+        title: "Enrichment failed",
+        description: error.message || "Failed to enrich contacts",
+        variant: "destructive",
+      });
+    }
+    
+    setManualEnriching(false);
+  };
+
+  const handleManualDialogClose = (open: boolean) => {
+    if (!open && !manualEnriching) {
+      setManualAddOpen(false);
+      setManualCompanyName("");
+      setManualCompanyWebsite("");
+      setManualPreviewResult(null);
+    }
+  };
+
   return (
     <div className="container mx-auto py-6 px-4 space-y-6">
       <div className="flex items-center justify-between">
@@ -698,6 +781,15 @@ export default function Apollo() {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="default"
+                    onClick={() => setManualAddOpen(true)}
+                    disabled={!currentProject}
+                    data-testid="button-manual-add"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Manual Add
+                  </Button>
                   <Input
                     placeholder="Search by name, email, or state..."
                     value={searchQuery}
@@ -1004,6 +1096,180 @@ export default function Apollo() {
             keywordsExpanded={keywordsExpanded}
             onToggleKeywords={() => setKeywordsExpanded(!keywordsExpanded)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manualAddOpen} onOpenChange={handleManualDialogClose}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Company Manually</DialogTitle>
+            <DialogDescription>
+              Enter a company name and optional website to search Apollo for contacts
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="manualCompanyName">Company Name *</Label>
+              <Input
+                id="manualCompanyName"
+                placeholder="Enter company name..."
+                value={manualCompanyName}
+                onChange={(e) => setManualCompanyName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleManualAddPreview()}
+                data-testid="input-manual-company-name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="manualCompanyWebsite">Website (optional)</Label>
+              <Input
+                id="manualCompanyWebsite"
+                placeholder="e.g., example.com"
+                value={manualCompanyWebsite}
+                onChange={(e) => setManualCompanyWebsite(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleManualAddPreview()}
+                data-testid="input-manual-company-website"
+              />
+              <p className="text-xs text-muted-foreground">
+                Providing a website improves search accuracy
+              </p>
+            </div>
+            
+            <Button 
+              onClick={handleManualAddPreview}
+              disabled={manualPreviewLoading || !manualCompanyName.trim()}
+              className="w-full"
+              data-testid="button-manual-preview"
+            >
+              {manualPreviewLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4 mr-2" />
+              )}
+              Search Apollo
+            </Button>
+
+            {manualPreviewResult && (
+              <div className="border-t pt-4 space-y-4">
+                {manualPreviewResult.company ? (
+                  <>
+                    <div className="border rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        {manualPreviewResult.company.logo_url && (
+                          <img 
+                            src={manualPreviewResult.company.logo_url} 
+                            alt={manualPreviewResult.company.name} 
+                            className="h-12 w-12 rounded object-contain bg-white"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <h4 className="font-semibold flex items-center gap-2">
+                            {manualPreviewResult.company.name}
+                            {manualPreviewResult.company.linkedin_url && (
+                              <a href={manualPreviewResult.company.linkedin_url} target="_blank" rel="noopener noreferrer">
+                                <Linkedin className="h-4 w-4 text-blue-600" />
+                              </a>
+                            )}
+                          </h4>
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            {manualPreviewResult.company.industry && <p>{manualPreviewResult.company.industry}</p>}
+                            {manualPreviewResult.company.estimated_num_employees && (
+                              <p>{manualPreviewResult.company.estimated_num_employees} employees</p>
+                            )}
+                            {(manualPreviewResult.company.city || manualPreviewResult.company.state || manualPreviewResult.company.country) && (
+                              <p>
+                                {[manualPreviewResult.company.city, manualPreviewResult.company.state, manualPreviewResult.company.country]
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium mb-2 flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Available Contacts ({manualPreviewResult.totalContacts} total, showing {manualPreviewResult.contacts.length})
+                      </h4>
+                      {manualPreviewResult.contacts.length > 0 ? (
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                          {manualPreviewResult.contacts.map((person) => (
+                            <div key={person.id} className="border rounded-lg p-3 flex items-center justify-between">
+                              <div>
+                                <p className="font-medium">
+                                  {person.first_name} {person.last_name?.replace(/\*+/g, "***")}
+                                </p>
+                                <p className="text-sm text-muted-foreground">{person.title}</p>
+                                {person.seniority && (
+                                  <Badge variant="outline" className="mt-1 text-xs">
+                                    {person.seniority}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {person.has_email && (
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <Mail className="h-4 w-4 text-green-600" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>Has email</TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {person.linkedin_url && (
+                                  <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer">
+                                    <Linkedin className="h-4 w-4 text-blue-600" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            No contacts found matching your target criteria.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4 border-t">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => handleManualDialogClose(false)}
+                        disabled={manualEnriching}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={handleManualEnrich} 
+                        disabled={manualEnriching || manualPreviewResult.contacts.length === 0}
+                        data-testid="button-manual-enrich"
+                      >
+                        {manualEnriching ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4 mr-2" />
+                        )}
+                        Enrich {manualPreviewResult.contacts.length} Contacts
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No matching company found in Apollo. Try with a different name or add a website domain.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
