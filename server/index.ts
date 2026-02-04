@@ -11,7 +11,6 @@ import { startEmailQueueProcessor } from "./services/emailQueue";
 import { startSlotMaintenance } from "./services/slotMaintenance";
 import { gmailWatchManager } from "./services/gmailWatchManager";
 import { startReconciliationWorker } from "./services/elevenLabsReconciliation";
-import { startClaimExpirationWorker } from "./services/claimExpiration";
 
 const app = express();
 
@@ -119,11 +118,6 @@ app.use((req, res, next) => {
     // Start ElevenLabs call reconciliation worker (matches orphaned sessions to conversations)
     startReconciliationWorker(10 * 60 * 1000); // Every 10 minutes
     log('[Reconciliation] ElevenLabs reconciliation worker started (runs every 10 min)');
-
-    // Start claim expiration worker (auto-unclaims stale stores)
-    // Claimed status: 14 days, Other statuses (Emailed, Contacted, etc): 60 days
-    startClaimExpirationWorker(60 * 60 * 1000); // Every hour
-    log('[ClaimExpiration] Claim expiration worker started (runs every hour)');
 
     // Start Gmail Push Notification watch (for E-Hub reply detection)
     setTimeout(async () => {
