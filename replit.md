@@ -74,6 +74,7 @@ The application features a client dashboard unifying data, transitioning from a 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for operational data and user preferences.
 - **Backend**: Express.js and Node.js.
+- **API Conservation**: Avoid background workers that poll constantly (10,000+ locations could overwhelm Google Sheets API). Prefer "opportunistic cleanup" patterns - execute cleanup during normal user-initiated data loads rather than scheduled polling.
 - **Unified Status Color System**: Consistent status coloring across UI elements.
 - **AI Architecture**: Exclusively OpenAI Assistants API (Aligner for E-Hub/KB/call analysis; Wick Coach for sales assist/call analysis).
 - **KB System**: Three tables (`kb_files`, `kb_file_versions`, `kb_change_proposals`), custom diff algorithm.
