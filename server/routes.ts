@@ -8922,16 +8922,20 @@ IMPORTANT:
       const parentLinkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'parent link');
 
       // ============================================================================
-      // Claim Expiration Logic - Auto-delete expired claims
+      // Claim Expiration Logic - Clear Agent Name and Status for expired claims
+      // Uses 'time' column (Column O) which is written when a store is claimed
+      // This preserves other valuable data (notes, next actions, contacts)
       // ============================================================================
       const CLAIM_EXPIRATION_DAYS = 14;
       const OTHER_STATUS_EXPIRATION_DAYS = 60;
       const EXPIRABLE_STATUSES = ['claimed', 'emailed', 'contacted', 'interested', 'sample sent'];
+      const timeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'time');
 
       function parseExpirationDate(dateStr: string): Date | null {
         if (!dateStr || dateStr.trim() === '') return null;
         try {
           const cleaned = dateStr.trim();
+          // Handle MM/DD/YYYY or MM/DD/YY format
           if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(cleaned)) {
             const parts = cleaned.split('/');
             const month = parseInt(parts[0], 10) - 1;
@@ -8940,25 +8944,32 @@ IMPORTANT:
             if (year < 100) year += 2000;
             return new Date(year, month, day);
           }
+          // Handle ISO format (from our timestamp writes)
           const parsed = new Date(cleaned);
           if (!isNaN(parsed.getTime())) return parsed;
           return null;
         } catch { return null; }
       }
 
-      // Identify expired rows
+      // Identify expired rows (only if 'time' column exists - rows without timestamps are grandfathered)
       const expiredRowIndices: Array<{ rowIndex: number; status: string; daysSince: number }> = [];
       const now = new Date();
 
-      if (statusIndex !== -1 && dateIndex !== -1) {
+      if (statusIndex !== -1 && timeIndex !== -1 && agentNameIndex !== -1) {
         for (let i = 1; i < trackerRows.length; i++) {
           const row = trackerRows[i];
           const status = (row[statusIndex]?.toString().trim() || '').toLowerCase();
-          const dateStr = row[dateIndex]?.toString() || '';
+          const timeStr = row[timeIndex]?.toString() || '';
+          const agentName = row[agentNameIndex]?.toString().trim() || '';
 
+          // Skip if not an expirable status
           if (!EXPIRABLE_STATUSES.includes(status)) continue;
+          // Skip if no agent assigned (already unclaimed)
+          if (!agentName) continue;
+          // Skip if no timestamp (grandfathered - these won't expire until reclaimed)
+          if (!timeStr) continue;
 
-          const claimDate = parseExpirationDate(dateStr);
+          const claimDate = parseExpirationDate(timeStr);
           if (!claimDate) continue;
 
           const daysSince = Math.floor((now.getTime() - claimDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -8970,20 +8981,41 @@ IMPORTANT:
         }
       }
 
-      // Delete expired rows in REVERSE order (to avoid index shifting)
-      if (expiredRowIndices.length > 0 && trackerSheet.sheetId) {
-        expiredRowIndices.sort((a, b) => b.rowIndex - a.rowIndex); // Sort descending
+      // Clear Agent Name and Status for expired claims (preserves other data like notes, contacts)
+      if (expiredRowIndices.length > 0) {
+        const agentNameCol = String.fromCharCode(65 + agentNameIndex);
+        const statusCol = String.fromCharCode(65 + statusIndex);
+        const timeCol = timeIndex !== -1 ? String.fromCharCode(65 + timeIndex) : null;
 
         for (const { rowIndex, status, daysSince } of expiredRowIndices) {
           try {
-            await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, trackerSheet.sheetId!, rowIndex);
-            console.log(`[ClaimExpiration] Deleted expired row ${rowIndex} (${status}, ${daysSince} days old)`);
+            // Clear Agent Name
+            await googleSheets.writeSheetData(
+              trackerSheet.spreadsheetId, 
+              `${trackerSheet.sheetName}!${agentNameCol}${rowIndex}`, 
+              [['']]
+            );
+            // Clear Status
+            await googleSheets.writeSheetData(
+              trackerSheet.spreadsheetId, 
+              `${trackerSheet.sheetName}!${statusCol}${rowIndex}`, 
+              [['']]
+            );
+            // Clear Time column (so if reclaimed, new timestamp is written)
+            if (timeCol) {
+              await googleSheets.writeSheetData(
+                trackerSheet.spreadsheetId, 
+                `${trackerSheet.sheetName}!${timeCol}${rowIndex}`, 
+                [['']]
+              );
+            }
+            console.log(`[ClaimExpiration] Expired claim cleared at row ${rowIndex} (${status}, ${daysSince} days old)`);
           } catch (err: any) {
-            console.error(`[ClaimExpiration] Failed to delete row ${rowIndex}:`, err.message);
+            console.error(`[ClaimExpiration] Failed to clear row ${rowIndex}:`, err.message);
           }
         }
 
-        // Re-read tracker data after deletions
+        // Re-read tracker data after clearing expired claims
         const updatedTrackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
         trackerRows.length = 0;
         trackerRows.push(...updatedTrackerRows);
@@ -12849,6 +12881,7 @@ IMPORTANT:
       const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
       const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
       const statusIndex = headers.findIndex(h => h.toLowerCase() === 'status');
+      const timeIndex = headers.findIndex(h => h.toLowerCase() === 'time');
       
       if (linkIndex === -1) {
         console.error('[CREATE-TRACKER-ROW] Link column not found');
@@ -12864,6 +12897,11 @@ IMPORTANT:
       
       if (statusIndex !== -1) {
         newRow[statusIndex] = 'Claimed';
+      }
+      
+      // Write claim timestamp for expiration tracking
+      if (timeIndex !== -1) {
+        newRow[timeIndex] = new Date().toISOString();
       }
       
       console.log('[CREATE-TRACKER-ROW] Creating row for link:', link);
@@ -13456,12 +13494,13 @@ IMPORTANT:
       const trackerLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const trackerAgentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent' || h.toLowerCase() === 'agent name');
       const trackerStatusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
+      const trackerTimeIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'time');
 
       if (trackerLinkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found in Commission Tracker' });
       }
 
-      console.log('[VCARD-CLAIM] Commission Tracker headers - Link:', trackerLinkIndex, 'Agent:', trackerAgentIndex, 'Status:', trackerStatusIndex);
+      console.log('[VCARD-CLAIM] Commission Tracker headers - Link:', trackerLinkIndex, 'Agent:', trackerAgentIndex, 'Status:', trackerStatusIndex, 'Time:', trackerTimeIndex);
 
       let updatedCount = 0;
       let createdCount = 0;
@@ -13512,6 +13551,20 @@ IMPORTANT:
               await delay(WRITE_DELAY_MS);
             } catch (writeError: any) {
               console.error(`[VCARD-CLAIM] ✗ Agent write failed:`, writeError.message);
+            }
+          }
+
+          // Write claim timestamp to Time column (for expiration tracking)
+          if (trackerTimeIndex !== -1) {
+            const timeColumnLetter = String.fromCharCode(65 + trackerTimeIndex);
+            const timeCellRange = `${sheetName}!${timeColumnLetter}${trackerRowIndex}`;
+            try {
+              const claimTimestamp = new Date().toISOString();
+              await googleSheets.writeSheetData(spreadsheetId, timeCellRange, [[claimTimestamp]]);
+              console.log(`[VCARD-CLAIM] ✓ Claim timestamp written: ${claimTimestamp}`);
+              await delay(WRITE_DELAY_MS);
+            } catch (writeError: any) {
+              console.error(`[VCARD-CLAIM] ✗ Timestamp write failed:`, writeError.message);
             }
           }
 
