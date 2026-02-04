@@ -8921,6 +8921,73 @@ IMPORTANT:
       const orderIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'order number' || h.toLowerCase() === 'order id');
       const parentLinkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'parent link');
 
+      // ============================================================================
+      // Claim Expiration Logic - Auto-delete expired claims
+      // ============================================================================
+      const CLAIM_EXPIRATION_DAYS = 14;
+      const OTHER_STATUS_EXPIRATION_DAYS = 60;
+      const EXPIRABLE_STATUSES = ['claimed', 'emailed', 'contacted', 'interested', 'sample sent'];
+
+      function parseExpirationDate(dateStr: string): Date | null {
+        if (!dateStr || dateStr.trim() === '') return null;
+        try {
+          const cleaned = dateStr.trim();
+          if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(cleaned)) {
+            const parts = cleaned.split('/');
+            const month = parseInt(parts[0], 10) - 1;
+            const day = parseInt(parts[1], 10);
+            let year = parseInt(parts[2], 10);
+            if (year < 100) year += 2000;
+            return new Date(year, month, day);
+          }
+          const parsed = new Date(cleaned);
+          if (!isNaN(parsed.getTime())) return parsed;
+          return null;
+        } catch { return null; }
+      }
+
+      // Identify expired rows
+      const expiredRowIndices: Array<{ rowIndex: number; status: string; daysSince: number }> = [];
+      const now = new Date();
+
+      if (statusIndex !== -1 && dateIndex !== -1) {
+        for (let i = 1; i < trackerRows.length; i++) {
+          const row = trackerRows[i];
+          const status = (row[statusIndex]?.toString().trim() || '').toLowerCase();
+          const dateStr = row[dateIndex]?.toString() || '';
+
+          if (!EXPIRABLE_STATUSES.includes(status)) continue;
+
+          const claimDate = parseExpirationDate(dateStr);
+          if (!claimDate) continue;
+
+          const daysSince = Math.floor((now.getTime() - claimDate.getTime()) / (1000 * 60 * 60 * 24));
+          const expirationThreshold = status === 'claimed' ? CLAIM_EXPIRATION_DAYS : OTHER_STATUS_EXPIRATION_DAYS;
+
+          if (daysSince > expirationThreshold) {
+            expiredRowIndices.push({ rowIndex: i + 1, status, daysSince }); // 1-indexed for Sheets API
+          }
+        }
+      }
+
+      // Delete expired rows in REVERSE order (to avoid index shifting)
+      if (expiredRowIndices.length > 0 && trackerSheet.sheetId) {
+        expiredRowIndices.sort((a, b) => b.rowIndex - a.rowIndex); // Sort descending
+
+        for (const { rowIndex, status, daysSince } of expiredRowIndices) {
+          try {
+            await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, trackerSheet.sheetId!, rowIndex);
+            console.log(`[ClaimExpiration] Deleted expired row ${rowIndex} (${status}, ${daysSince} days old)`);
+          } catch (err: any) {
+            console.error(`[ClaimExpiration] Failed to delete row ${rowIndex}:`, err.message);
+          }
+        }
+
+        // Re-read tracker data after deletions
+        const updatedTrackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+        trackerRows.length = 0;
+        trackerRows.push(...updatedTrackerRows);
+      }
 
       // Group commissions by client Link
       const clientMap: Map<string, {
@@ -9013,17 +9080,8 @@ IMPORTANT:
         }
         // Always use the latest non-empty status
         if (status) {
-      if (qualificationLeadId) {
-        filters.qualificationLeadId = qualificationLeadId;
-      }
           client.status = status;
-      if (qualificationLeadId) {
-        filters.qualificationLeadId = qualificationLeadId;
-      }
         }
-      if (qualificationLeadId) {
-        filters.qualificationLeadId = qualificationLeadId;
-      }
         // Always use the latest non-empty transaction ID
         if (transactionId) {
           client.transactionId = transactionId;
