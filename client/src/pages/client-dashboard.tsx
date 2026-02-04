@@ -4171,7 +4171,7 @@ export default function ClientDashboard() {
               Cancel
             </Button>
             <Button 
-              onClick={() => {
+              onClick={async () => {
                 try {
                   generateAndDownloadVCard(
                     filteredData,
@@ -4184,6 +4184,32 @@ export default function ClientDashboard() {
                     title: "Export Complete",
                     description: `Exported ${filteredData.length} contacts to vCard`,
                   });
+                  
+                  // Update status to 'Claimed' for all exported stores
+                  const storeLinks = [...new Set(filteredData
+                    .map((store: any) => store['Link'] || store['link'])
+                    .filter(Boolean))];
+                  
+                  if (storeLinks.length > 0) {
+                    try {
+                      const response = await apiRequest('POST', '/api/stores/claim-vcard-export', { storeLinks });
+                      
+                      if (response.updated || response.created) {
+                        toast({
+                          title: "Stores Claimed",
+                          description: `Updated ${response.updated} stores, created ${response.created} new entries`,
+                        });
+                        queryClient.invalidateQueries({ queryKey: ['/api/sheets'] });
+                      }
+                    } catch (claimError) {
+                      console.error('Failed to claim stores after vCard export:', claimError);
+                      toast({
+                        title: "Claim Failed",
+                        description: "vCard exported but status update failed. You may need to manually claim stores.",
+                        variant: "destructive",
+                      });
+                    }
+                  }
                 } catch (error) {
                   console.error('vCard Export Error:', error);
                   toast({

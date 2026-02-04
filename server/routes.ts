@@ -13359,6 +13359,139 @@ IMPORTANT:
     }
   });
 
+  // Claim stores via vCard export - updates status to 'Claimed' for all exported stores
+  app.post('/api/stores/claim-vcard-export', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { storeLinks } = req.body;
+
+      if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
+        return res.status(400).json({ message: "Store links array is required" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user || !user.agentName) {
+        return res.status(400).json({ message: "Agent name not set in profile" });
+      }
+
+      console.log('[VCARD-CLAIM] Request:', { storeCount: storeLinks.length, agentName: user.agentName });
+
+      // Get Commission Tracker sheet (source of truth)
+      const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: "Commission Tracker sheet not found" });
+      }
+
+      const { spreadsheetId, sheetName } = trackerSheet;
+
+      // Read tracker data
+      const trackerRange = `${sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(spreadsheetId, trackerRange);
+
+      if (trackerRows.length === 0) {
+        return res.status(404).json({ message: 'Commission Tracker is empty' });
+      }
+
+      const trackerHeaders = trackerRows[0];
+      const trackerLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const trackerAgentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent' || h.toLowerCase() === 'agent name');
+      const trackerStatusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
+
+      if (trackerLinkIndex === -1) {
+        return res.status(404).json({ message: 'Link column not found in Commission Tracker' });
+      }
+
+      console.log('[VCARD-CLAIM] Commission Tracker headers - Link:', trackerLinkIndex, 'Agent:', trackerAgentIndex, 'Status:', trackerStatusIndex);
+
+      let updatedCount = 0;
+      let createdCount = 0;
+      let skippedCount = 0;
+
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const WRITE_DELAY_MS = 200;
+
+      for (let idx = 0; idx < storeLinks.length; idx++) {
+        const storeLink = storeLinks[idx];
+        const normalizedLink = normalizeLink(storeLink);
+
+        console.log(`[VCARD-CLAIM] Processing store ${idx + 1}/${storeLinks.length}: ${storeLink}`);
+
+        // Find existing tracker row with this link
+        let trackerRowIndex = -1;
+        for (let i = 1; i < trackerRows.length; i++) {
+          if (normalizeLink(trackerRows[i][trackerLinkIndex] || '') === normalizedLink) {
+            trackerRowIndex = i + 1; // +1 for 1-indexed Google Sheets
+            break;
+          }
+        }
+
+        if (trackerRowIndex !== -1) {
+          // Row exists - update Status to 'Claimed' and Agent Name
+          console.log(`[VCARD-CLAIM] Row exists at ${trackerRowIndex}, updating status to Claimed...`);
+
+          // Update Status to 'Claimed'
+          if (trackerStatusIndex !== -1) {
+            const statusColumnLetter = String.fromCharCode(65 + trackerStatusIndex);
+            const statusCellRange = `${sheetName}!${statusColumnLetter}${trackerRowIndex}`;
+            try {
+              await googleSheets.writeSheetData(spreadsheetId, statusCellRange, [['Claimed']]);
+              console.log(`[VCARD-CLAIM] ✓ Status updated to Claimed`);
+              await delay(WRITE_DELAY_MS);
+            } catch (writeError: any) {
+              console.error(`[VCARD-CLAIM] ✗ Status write failed:`, writeError.message);
+            }
+          }
+
+          // Update Agent Name
+          if (trackerAgentIndex !== -1) {
+            const agentColumnLetter = String.fromCharCode(65 + trackerAgentIndex);
+            const agentCellRange = `${sheetName}!${agentColumnLetter}${trackerRowIndex}`;
+            try {
+              await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.agentName]]);
+              console.log(`[VCARD-CLAIM] ✓ Agent updated to ${user.agentName}`);
+              await delay(WRITE_DELAY_MS);
+            } catch (writeError: any) {
+              console.error(`[VCARD-CLAIM] ✗ Agent write failed:`, writeError.message);
+            }
+          }
+
+          updatedCount++;
+        } else {
+          // Row doesn't exist - create new tracker row
+          console.log(`[VCARD-CLAIM] Row doesn't exist, creating new tracker row...`);
+
+          const created = await createBasicTrackerRow(spreadsheetId, sheetName, storeLink, user.agentName);
+          if (created) {
+            createdCount++;
+            console.log(`[VCARD-CLAIM] ✓ Created new tracker row`);
+          } else {
+            skippedCount++;
+            console.log(`[VCARD-CLAIM] ✗ Failed to create tracker row`);
+          }
+          await delay(WRITE_DELAY_MS);
+        }
+      }
+
+      // Clear cache for this user
+      clearUserCache(userId);
+
+      console.log(`[VCARD-CLAIM] Complete! Updated: ${updatedCount}, Created: ${createdCount}, Skipped: ${skippedCount}`);
+      
+      res.json({ 
+        message: `Successfully claimed ${updatedCount + createdCount} stores via vCard export`,
+        updated: updatedCount,
+        created: createdCount,
+        skipped: skippedCount,
+        total: storeLinks.length
+      });
+    } catch (error: any) {
+      console.error("Error claiming stores via vCard export:", error);
+      res.status(500).json({ message: error.message || "Failed to claim stores via vCard export" });
+    }
+  });
+
   // Claim a store by creating a new tracker row (ONLY writes to Commission Tracker - Store DB syncs via formulas)
   app.post('/api/sheets/:id/claim-store', isAuthenticatedCustom, async (req: any, res) => {
     try {
