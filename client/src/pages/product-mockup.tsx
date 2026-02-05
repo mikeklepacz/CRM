@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, Type, Check, ChevronsUpDown, Loader2, Save, X } from 'lucide-react';
+import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, Type, Check, ChevronsUpDown, Loader2, Save, X, Sun } from 'lucide-react';
 import ColorPicker, { useColorPicker } from '@/vendor/react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
@@ -273,6 +273,16 @@ interface LightingSettings {
   keyDistance: number; // Distance of key light from center
 }
 
+const DEFAULT_LIGHTING: LightingSettings = {
+  ambient: 0.4,
+  front: 3.2,
+  top: 0.8,
+  warmth: 0.15,
+  keyAngle: 325,
+  keyHeight: 30,
+  keyDistance: 2.5,
+};
+
 // PERMANENT DEFAULTS - These are the "in stone" settings for the 3D product mockup
 const DEFAULT_CYLINDER_POS: CylinderPos = { 
   x: 0.0013, 
@@ -435,17 +445,7 @@ export default function ProductMockup() {
     setSavedSwatches(prev => prev.filter(s => s.id !== id));
   };
   
-  // LOCKED LIGHTING SETTINGS - These are "in stone" and hidden from UI
-  // Reduced ambient to preserve true blacks on the label
-  const lighting: LightingSettings = {
-    ambient: 0.4,      // Lower ambient to preserve blacks
-    front: 3.2,        // Slightly higher key light to compensate
-    top: 0.8,          // Fill light intensity  
-    warmth: 0.15,      // Slight warm tint
-    keyAngle: 325,     // Key light angle
-    keyHeight: 30,     // Key light height
-    keyDistance: 2.5,  // Key light distance
-  };
+  const [lighting, setLighting] = useState<LightingSettings>({ ...DEFAULT_LIGHTING });
   
   useEffect(() => {
     const img = new window.Image();
@@ -1307,6 +1307,7 @@ export default function ProductMockup() {
     setElements([]);
     setSelectedId(null);
     setLabelRotation(0);
+    setLighting({ ...DEFAULT_LIGHTING });
     // viewRotation stays locked at 115° for correct tilt alignment
   };
 
@@ -2074,6 +2075,103 @@ export default function ProductMockup() {
                 step={5}
                 data-testid="slider-view-rotation"
               />
+            </div>
+
+            <div className="space-y-2 pt-2 border-t">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <Sun className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Lighting</Label>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setLighting({ ...DEFAULT_LIGHTING })}
+                  data-testid="button-reset-lighting"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reset
+                </Button>
+              </div>
+              <div className="space-y-1.5">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Ambient: {lighting.ambient.toFixed(2)}</Label>
+                  <Slider
+                    value={[lighting.ambient]}
+                    onValueChange={([v]) => setLighting(prev => ({ ...prev, ambient: v }))}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    data-testid="slider-lighting-ambient"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Key Light: {lighting.front.toFixed(2)}</Label>
+                  <Slider
+                    value={[lighting.front]}
+                    onValueChange={([v]) => setLighting(prev => ({ ...prev, front: v }))}
+                    min={0}
+                    max={6}
+                    step={0.1}
+                    data-testid="slider-lighting-front"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Fill Light: {lighting.top.toFixed(2)}</Label>
+                  <Slider
+                    value={[lighting.top]}
+                    onValueChange={([v]) => setLighting(prev => ({ ...prev, top: v }))}
+                    min={0}
+                    max={3}
+                    step={0.05}
+                    data-testid="slider-lighting-fill"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Warmth: {lighting.warmth.toFixed(2)}</Label>
+                  <Slider
+                    value={[lighting.warmth]}
+                    onValueChange={([v]) => setLighting(prev => ({ ...prev, warmth: v }))}
+                    min={-1}
+                    max={1}
+                    step={0.05}
+                    data-testid="slider-lighting-warmth"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Key Angle: {lighting.keyAngle}°</Label>
+                  <Slider
+                    value={[lighting.keyAngle]}
+                    onValueChange={([v]) => setLighting(prev => ({ ...prev, keyAngle: v }))}
+                    min={0}
+                    max={360}
+                    step={5}
+                    data-testid="slider-lighting-key-angle"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Key Height: {lighting.keyHeight}°</Label>
+                  <Slider
+                    value={[lighting.keyHeight]}
+                    onValueChange={([v]) => setLighting(prev => ({ ...prev, keyHeight: v }))}
+                    min={-90}
+                    max={90}
+                    step={5}
+                    data-testid="slider-lighting-key-height"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Key Distance: {lighting.keyDistance.toFixed(1)}</Label>
+                  <Slider
+                    value={[lighting.keyDistance]}
+                    onValueChange={([v]) => setLighting(prev => ({ ...prev, keyDistance: v }))}
+                    min={0.5}
+                    max={5}
+                    step={0.1}
+                    data-testid="slider-lighting-key-distance"
+                  />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
