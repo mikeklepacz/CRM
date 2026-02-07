@@ -91,6 +91,8 @@ interface InlineAIChatEnhancedProps {
   };
   contextUpdateTrigger?: number;
   loadDefaultScriptTrigger?: number;
+  trackerSheetId?: string;
+  onStatusChange?: (newStatus: string) => void;
 }
 
 // Helper function to clean and format AI output
@@ -263,7 +265,7 @@ function replaceSimpleTemplateVariables(
   return result;
 }
 
-export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadDefaultScriptTrigger }: InlineAIChatEnhancedProps) {
+export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadDefaultScriptTrigger, trackerSheetId, onStatusChange }: InlineAIChatEnhancedProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1192,11 +1194,22 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       
       return draftResult;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast({
         title: "Success",
         description: data.message || "Gmail draft created successfully!",
       });
+      if (storeContext?.link && trackerSheetId) {
+        try {
+          await apiRequest('POST', '/api/sheets/tracker/upsert', {
+            link: storeContext.link,
+            updates: { 'Status': 'Emailed' },
+          });
+          onStatusChange?.('Emailed');
+        } catch (err) {
+          console.error('[EmailDraft] Failed to update status to Emailed:', err);
+        }
+      }
     },
     onError: (error: any) => {
       toast({
@@ -1404,6 +1417,17 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
             description: error instanceof Error ? error.message : "Failed to enroll in follow-up sequence",
             variant: "destructive",
           });
+        }
+        if (trackerSheetId) {
+          try {
+            await apiRequest('POST', '/api/sheets/tracker/upsert', {
+              link: storeContext.link,
+              updates: { 'Status': 'Emailed' },
+            });
+            onStatusChange?.('Emailed');
+          } catch (err) {
+            console.error('[EmailDraft] Failed to update status to Emailed:', err);
+          }
         }
       }
       

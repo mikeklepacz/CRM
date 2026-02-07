@@ -1227,6 +1227,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                   }}
                   contextUpdateTrigger={contextUpdateTrigger}
                   loadDefaultScriptTrigger={loadDefaultScriptTrigger}
+                  trackerSheetId={trackerSheetId}
+                  onStatusChange={(newStatus) => {
+                    handleInputChange('status', newStatus);
+                    setInitialData(prev => ({ ...prev, status: newStatus }));
+                  }}
                 />
               </div>
             )}
