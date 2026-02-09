@@ -942,10 +942,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         // Update last trigger to prevent duplicate loads
         setLastLoadTrigger(loadDefaultScriptTrigger);
         
-        toast({ 
-          title: "Default Script Loaded", 
-          description: `"${defaultScript.title}" ready for your call` 
-        });
       }
       // Always update trigger to prevent repeated checks if no default script exists
       setLastLoadTrigger(loadDefaultScriptTrigger);
