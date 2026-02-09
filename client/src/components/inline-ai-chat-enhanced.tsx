@@ -1631,7 +1631,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                 />
               </CollapsibleTrigger>
             </div>
-            <CollapsibleContent className="flex-1 min-h-0 overflow-y-auto">
+            <CollapsibleContent className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
               <div className="p-2 space-y-3">
                   {/* Template Builder Button */}
                   <Button
