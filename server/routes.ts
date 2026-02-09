@@ -12354,30 +12354,60 @@ IMPORTANT:
         (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null)?.trim() || 
         null;
 
-      // Filter Store Database by Agent Name (for non-admin users)
-      let filteredStoreData = storeData;
-      const storeAgentColumnName = storeHeaders.find(h => 
+      // TRACKER OWNERSHIP MAP (Single Source of Truth)
+      const trackerAgentColumnName = trackerHeaders.find(h => 
         h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
       );
+      const trackerLinkColumnName = trackerHeaders.find(h => 
+        h.toLowerCase() === joinColumn.toLowerCase()
+      ) || joinColumn;
 
-      if (!isAdminUser && storeAgentColumnName && userAgentName) {
-        filteredStoreData = storeData.filter(row => {
-          const rowAgentName = row[storeAgentColumnName];
-          // Show unclaimed stores (empty Agent Name) OR stores assigned to this agent
-          return !rowAgentName || rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
+      const trackerOwnershipMap = new Map<string, string>();
+      if (trackerAgentColumnName && trackerLinkColumnName) {
+        trackerData.forEach(row => {
+          const link = normalizeLink((row[trackerLinkColumnName] || '').toString());
+          const agentName = (row[trackerAgentColumnName] || '').toString().trim();
+          if (link && agentName) {
+            trackerOwnershipMap.set(link, agentName);
+          }
         });
-        console.log(`Filtered store data for agent "${userAgentName}": ${filteredStoreData.length} rows (includes unclaimed stores)`);
+      }
+
+      if (!isAdminUser) {
+        const uniqueAgents = new Set(trackerOwnershipMap.values());
+        console.log(`[RLS] User: "${user?.username}", agentName: "${userAgentName}", isAdmin: ${isAdminUser}`);
+        console.log(`[RLS] Tracker ownership map: ${trackerOwnershipMap.size} entries, unique agents: [${[...uniqueAgents].join(', ')}]`);
+        console.log(`[RLS] Total store rows: ${storeData.length}, Total tracker rows: ${trackerData.length}`);
+      }
+
+      // Filter Store Database using Tracker Ownership Map
+      let filteredStoreData = storeData;
+      const storeJoinColumnName = storeHeaders.find(h => 
+        h.toLowerCase() === joinColumn.toLowerCase()
+      ) || joinColumn;
+
+      if (!isAdminUser && userAgentName) {
+        const userAgentLower = userAgentName.toLowerCase().trim();
+        filteredStoreData = storeData.filter(row => {
+          const storeLink = normalizeLink((row[storeJoinColumnName] || '').toString());
+          if (!storeLink) return true;
+          const ownerAgent = trackerOwnershipMap.get(storeLink);
+          if (!ownerAgent) return true;
+          return ownerAgent.toLowerCase().trim() === userAgentLower;
+        });
+        console.log(`[RLS] Store filter: ${storeData.length} -> ${filteredStoreData.length} rows for agent "${userAgentName}"`);
       } else if (!isAdminUser && !userAgentName) {
-        // No agent name available for the user, filter all rows to empty
-        filteredStoreData = [];
-        console.log('No agent name found for user, filtering all store rows');
+        filteredStoreData = storeData.filter(row => {
+          const storeLink = normalizeLink((row[storeJoinColumnName] || '').toString());
+          if (!storeLink) return true;
+          const ownerAgent = trackerOwnershipMap.get(storeLink);
+          return !ownerAgent;
+        });
+        console.log(`[RLS] Store filter (no agentName): ${storeData.length} -> ${filteredStoreData.length} rows (unclaimed only)`);
       }
 
       // Filter Tracker Data by Agent Name (for non-admin users)
       let filteredTrackerData = trackerData;
-      const trackerAgentColumnName = trackerHeaders.find(h => 
-        h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
-      );
 
       if (!isAdminUser && trackerAgentColumnName && userAgentName) {
         filteredTrackerData = trackerData.filter(row => {
@@ -12659,19 +12689,26 @@ IMPORTANT:
       // 2. Their own claimed stores (Agent Name matches their agentName)
       // Admins see everything.
       // ============================================================================
-      if (!isAdminUser && user?.agentName) {
-        const agentNameCol = trackerHeaders.find(h => h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name') || 'Agent Name';
+      if (!isAdminUser) {
+        const beforeCount = mergedData.length;
+        const userAgentLower = userAgentName?.toLowerCase().trim() || '';
+        
         mergedData = mergedData.filter(row => {
-          const rowAgentName = (row[agentNameCol] || '').toString().trim();
-          // Keep if: no agent assigned (unclaimed) OR agent matches current user
-          return !rowAgentName || rowAgentName.toLowerCase().trim() === user.agentName.toLowerCase().trim();
+          const rowLink = normalizeLink(
+            (row[actualStoreJoinColumn] || row[actualTrackerJoinColumn] || '').toString()
+          );
+          
+          if (!rowLink) return true;
+          
+          const ownerAgent = trackerOwnershipMap.get(rowLink);
+          if (!ownerAgent) return true;
+          
+          if (!userAgentLower) return false;
+          
+          return ownerAgent.toLowerCase().trim() === userAgentLower;
         });
-      } else if (!isAdminUser && !user?.agentName) {
-        const agentNameCol = trackerHeaders.find(h => h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name') || 'Agent Name';
-        mergedData = mergedData.filter(row => {
-          const rowAgentName = (row[agentNameCol] || '').toString().trim();
-          return !rowAgentName;
-        });
+        
+        console.log(`[RLS] Post-merge filter: ${beforeCount} -> ${mergedData.length} rows for agent "${userAgentName}"`);
       }
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)
