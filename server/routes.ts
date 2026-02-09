@@ -674,6 +674,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+
+  app.post("/api/client-error", (req, res) => {
+    console.error("[CLIENT ERROR]", req.body?.message, req.body?.stack);
+    res.json({ ok: true });
+  });
   // Username/Password Authentication Routes
   app.post('/api/auth/login', async (req, res) => {
     try {
