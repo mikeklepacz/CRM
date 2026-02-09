@@ -936,9 +936,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         };
         setTimeline(prev => [...prev, scriptItem]);
         
-        // Switch to chat view
-        setTemplatesOpen(false);
-        
         // Update last trigger to prevent duplicate loads
         setLastLoadTrigger(loadDefaultScriptTrigger);
         

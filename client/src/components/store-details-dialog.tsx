@@ -291,6 +291,27 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
     };
   }, [allVisibleStores, row]);
 
+  useEffect(() => {
+    if (!open || !onNavigateToStore) return;
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
+      if (e.key === 'ArrowLeft' && prevStore) {
+        e.preventDefault();
+        const hasChanges = Object.keys(formData).some(k => formData[k as keyof typeof formData] !== initialData[k as keyof typeof initialData]);
+        if (hasChanges) saveMutation.mutate({ closeDialog: false });
+        onNavigateToStore(prevStore);
+      } else if (e.key === 'ArrowRight' && nextStore) {
+        e.preventDefault();
+        const hasChanges = Object.keys(formData).some(k => formData[k as keyof typeof formData] !== initialData[k as keyof typeof initialData]);
+        if (hasChanges) saveMutation.mutate({ closeDialog: false });
+        onNavigateToStore(nextStore);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, prevStore, nextStore, onNavigateToStore, formData, initialData]);
+
   // Drag and drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
