@@ -4502,13 +4502,13 @@ Ready to receive calls?`;
       console.log('[Wick Coach] Run started with JSON mode:', run.id);
 
       // Poll for completion
-      let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
       let attempts = 0;
       const maxAttempts = 120; // 60 seconds max (longer timeout for micro-batching)
 
       while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
-        runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+        runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
         attempts++;
       }
 
@@ -5023,7 +5023,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       });
 
       // Poll for completion (long timeout for complex transcript analysis)
-      let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId });
       let attempts = 0;
       const maxAttempts = 600; // 5 minutes max for deep analysis
 
@@ -5032,7 +5032,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
           throw new Error('Aligner analysis timeout - transcript too complex');
         }
         await new Promise(resolve => setTimeout(resolve, 500));
-        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId });
         attempts++;
       }
 
@@ -5182,7 +5182,7 @@ The user has agreed to create proposals. Please output your recommended changes 
       });
 
       // Poll for completion
-      let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId });
       let attempts = 0;
       const maxAttempts = 60;
 
@@ -5191,7 +5191,7 @@ The user has agreed to create proposals. Please output your recommended changes 
           throw new Error('Aligner response timeout');
         }
         await new Promise(resolve => setTimeout(resolve, 500));
-        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId });
         attempts++;
       }
 
@@ -6787,13 +6787,13 @@ IMPORTANT:
       console.log('[KB Analyze] Run started with JSON mode:', run.id);
 
       // Poll for completion
-      let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
       let attempts = 0;
       const maxAttempts = 120; // 60 seconds max (longer timeout for micro-batching)
 
       while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
-        runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+        runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
         attempts++;
       }
 
@@ -18419,12 +18419,12 @@ Use this store information to provide context-aware responses. When helping draf
 
           // Poll for completion (OPTIMIZED: faster polling at 500ms instead of 1000ms)
           console.log('💬 [CHAT] Polling for completion...');
-          let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+          let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId });
           let attempts = 0;
           while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < 60) {
             console.log('💬 [CHAT] Run status:', runStatus.status, 'attempt:', attempts + 1);
             await new Promise(resolve => setTimeout(resolve, 500)); // OPTIMIZED: 500ms instead of 1000ms
-            runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+            runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId });
             attempts++;
           }
 
@@ -22633,13 +22633,13 @@ Based on the conversation, help the user design an effective email sequence that
       });
 
       // Poll for completion
-      let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId });
       let attempts = 0;
       const maxAttempts = 60; // 60 seconds timeout
 
       while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
         await new Promise(resolve => setTimeout(resolve, 1000));
-        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId });
         attempts++;
         
         if (attempts >= maxAttempts) {
@@ -22764,7 +22764,7 @@ ${conversationContext}`;
       });
 
       // Poll for completion (2.5s interval, max 2 minutes)
-      let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
       let pollCount = 0;
       const maxPolls = 48; // 2 minutes max (48 * 2.5s)
       const POLL_INTERVAL = 2500;
@@ -22777,7 +22777,7 @@ ${conversationContext}`;
         }
 
         await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-        runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+        runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
       }
 
       if (runStatus.status !== 'completed') {
