@@ -18382,15 +18382,24 @@ Use this store information to provide context-aware responses. When helping draf
 
           if (threadId) {
             console.log('💬 [CHAT] Reusing existing thread:', threadId);
-          } else {
+            try {
+              await openai.beta.threads.retrieve(threadId);
+            } catch (err: any) {
+              console.log('💬 [CHAT] Existing thread not found in OpenAI, creating new one...');
+              threadId = null;
+            }
+          }
+
+          if (!threadId) {
             console.log('💬 [CHAT] Creating new thread for this conversation...');
             const thread = await openai.beta.threads.create();
             threadId = thread.id;
             console.log('💬 [CHAT] New thread created:', threadId);
 
-            // Save thread ID to conversation for future reuse
-            await storage.updateConversation(activeConversationId, tenantId, { threadId });
-            console.log('💬 [CHAT] Thread ID saved to conversation');
+            if (activeConversationId) {
+              await storage.updateConversation(activeConversationId, tenantId, { threadId });
+              console.log('💬 [CHAT] Thread ID saved to conversation');
+            }
           }
 
           // Add message to thread
