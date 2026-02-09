@@ -1450,7 +1450,7 @@ export default function ClientDashboard() {
   };
 
   // Get all unique states from the data (with full names) and their counts
-  const { allStates, stateCounts } = useMemo(() => {
+  const { allStates, stateCounts, statelessCount } = useMemo(() => {
     const states = new Set<string>();
     const counts: Record<string, number> = {};
 
