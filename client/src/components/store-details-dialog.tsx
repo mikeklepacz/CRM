@@ -255,11 +255,13 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [isClaiming, setIsClaiming] = useState(false);
 
   // Section ordering state with localStorage persistence
-  const DEFAULT_SECTION_ORDER = ['basic-info', 'contact-info', 'sales-info'];
+  const DEFAULT_SECTION_ORDER = ['contact-info', 'sales-info'];
   const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('storeDialog_sectionOrder');
-      return stored ? JSON.parse(stored) : DEFAULT_SECTION_ORDER;
+      if (!stored) return DEFAULT_SECTION_ORDER;
+      const parsed = JSON.parse(stored);
+      return parsed.filter((s: string) => s !== 'basic-info');
     } catch (error) {
       console.warn('Failed to parse stored section order, using default:', error);
       return DEFAULT_SECTION_ORDER;
@@ -1094,7 +1096,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent enableEnterSubmit={false} className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden flex flex-col" : "max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"}>
           <DialogHeader>
-            <DialogTitle className="text-center">Store Details</DialogTitle>
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <span className="truncate">{formData.name || 'Store Details'}</span>
+            </DialogTitle>
             <DialogDescription>
               View and edit store information, contact details, and notes
             </DialogDescription>
@@ -2039,49 +2043,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                             }
 
                             if (sectionId === 'basic-info') {
-                              return (
-                                <SortableSection key="basic-info" id="basic-info">
-                                  <AccordionItem value="basic-info" data-testid="accordion-item-basic-info">
-                                    <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-basic-info">
-                                      Basic Information
-                                    </AccordionTrigger>
-                                    <AccordionContent>
-                                      <div className="space-y-4 pt-2">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                          <div className="space-y-2">
-                                            <Label htmlFor="name">Store Name</Label>
-                                            <Input
-                                              id="name"
-                                              data-testid="input-store-name"
-                                              value={formData.name}
-                                              onChange={(e) => handleInputChange('name', e.target.value)}
-                                              placeholder="Enter store name"
-                                            />
-                                          </div>
-                                          <div className="space-y-2">
-                                            <Label htmlFor="type">Type</Label>
-                                            <Input
-                                              id="type"
-                                              data-testid="input-type"
-                                              value={formData.type}
-                                              onChange={(e) => handleInputChange('type', e.target.value)}
-                                              placeholder="e.g., Dispensary, Headshop"
-                                            />
-                                          </div>
-                                        </div>
-
-                                        {/* Profile Link - HIDDEN */}
-                                        <input
-                                          type="hidden"
-                                          id="link"
-                                          value={formData.link}
-                                          onChange={(e) => handleInputChange('link', e.target.value)}
-                                        />
-                                      </div>
-                                    </AccordionContent>
-                                  </AccordionItem>
-                                </SortableSection>
-                              );
+                              return null;
                             }
 
                             if (sectionId === 'contact-info') {

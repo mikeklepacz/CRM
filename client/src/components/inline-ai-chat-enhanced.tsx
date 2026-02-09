@@ -269,7 +269,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const { toast } = useToast();
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(() => {
+    try {
+      return localStorage.getItem('wickCoach_templatesOpen') === 'true';
+    } catch { return false; }
+  });
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -1456,21 +1460,29 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
 
-  const [conversationsOpen, setConversationsOpen] = useState(true);
+  const [conversationsOpen, setConversationsOpen] = useState(() => {
+    try {
+      const stored = localStorage.getItem('wickCoach_conversationsOpen');
+      return stored !== null ? stored === 'true' : true;
+    } catch { return true; }
+  });
 
-  // Mutually exclusive toggle
   const handleConversationsToggle = (isOpen: boolean) => {
     if (isOpen) {
       setTemplatesOpen(false);
+      try { localStorage.setItem('wickCoach_templatesOpen', 'false'); } catch {}
     }
     setConversationsOpen(isOpen);
+    try { localStorage.setItem('wickCoach_conversationsOpen', String(isOpen)); } catch {}
   };
 
   const handleTemplatesToggle = (isOpen: boolean) => {
     if (isOpen) {
       setConversationsOpen(false);
+      try { localStorage.setItem('wickCoach_conversationsOpen', 'false'); } catch {}
     }
     setTemplatesOpen(isOpen);
+    try { localStorage.setItem('wickCoach_templatesOpen', String(isOpen)); } catch {}
   };
 
   return (
