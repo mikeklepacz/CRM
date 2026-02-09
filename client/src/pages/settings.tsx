@@ -33,6 +33,7 @@ const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
+  username: z.string().min(1, "Username is required"),
   agentName: z.string().optional(),
   phone: z.string().optional(),
   meetingLink: z.string().url("Invalid URL").optional().or(z.literal("")),
@@ -219,6 +220,7 @@ export default function Settings() {
       firstName: user?.firstName || "",
       lastName: user?.lastName || "",
       email: user?.email || "",
+      username: (user as any)?.username || "",
       agentName: user?.agentName || "",
       phone: (user as any)?.phone || "",
       meetingLink: (user as any)?.meetingLink || "",
@@ -643,6 +645,22 @@ export default function Settings() {
                         <FormControl>
                           <Input type="email" {...field} data-testid="input-profile-email" />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Username</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-username" />
+                        </FormControl>
+                        <FormDescription>
+                          Your login username
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
