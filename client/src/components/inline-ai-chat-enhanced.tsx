@@ -1668,8 +1668,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                   </div>
 
                   {/* Template List */}
-                  <ScrollArea className="flex-1 min-h-0">
-                    <div className="space-y-2 pr-3">
+                    <div className="space-y-2">
                     {filteredTemplates.map((template) => (
                       <div key={template.id} className="p-2 border rounded-md bg-card" data-testid={`template-${template.id}`}>
                         <div className="flex items-start justify-between mb-1">
@@ -1795,7 +1794,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                       </div>
                     ))}
                     </div>
-                  </ScrollArea>
                 </div>
               </CollapsibleContent>
           </Collapsible>
