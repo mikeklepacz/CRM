@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, FileText, Check, ChevronsUpDown, Info, GripVertical } from "lucide-react";
+import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, ChevronLeft, ChevronRight, Plus, FileText, Check, ChevronsUpDown, Info, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -121,7 +121,7 @@ function SortableSection({ id, children }: { id: string; children: React.ReactNo
 }
 
 // Store Details Dialog Component
-export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger }: {
+export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger, allVisibleStores, onNavigateToStore }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   row: any;
@@ -138,6 +138,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   contextUpdateTrigger: number;
   setContextUpdateTrigger: (value: number | ((prev: number) => number)) => void;
   loadDefaultScriptTrigger: number;
+  allVisibleStores?: any[];
+  onNavigateToStore?: (row: any) => void;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -267,6 +269,27 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       return DEFAULT_SECTION_ORDER;
     }
   });
+
+  const getStoreName = (store: any) => {
+    if (!store) return '';
+    return store.Name || store.name || store['Store Name'] || store['store name'] || 'Unknown';
+  };
+
+  const { prevStore, nextStore, currentStoreIndex } = useMemo(() => {
+    if (!allVisibleStores || allVisibleStores.length <= 1) {
+      return { prevStore: null, nextStore: null, currentStoreIndex: -1 };
+    }
+    const currentIndex = allVisibleStores.findIndex((s: any) => {
+      const sLink = getLinkValue(s);
+      const rowLink = getLinkValue(row);
+      return sLink && rowLink && normalizeLink(sLink) === normalizeLink(rowLink);
+    });
+    return {
+      prevStore: currentIndex > 0 ? allVisibleStores[currentIndex - 1] : null,
+      nextStore: currentIndex < allVisibleStores.length - 1 ? allVisibleStores[currentIndex + 1] : null,
+      currentStoreIndex: currentIndex
+    };
+  }, [allVisibleStores, row]);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -1096,8 +1119,38 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent enableEnterSubmit={false} className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden flex flex-col" : "max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"}>
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between gap-2">
-              <span className="truncate">{formData.name || 'Store Details'}</span>
+            <DialogTitle className="flex items-center justify-center gap-3 w-full">
+              {prevStore !== null || nextStore !== null ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center gap-1 shrink-0"
+                    disabled={!prevStore}
+                    style={{ visibility: prevStore ? 'visible' : 'hidden' }}
+                    onClick={() => { if (prevStore && onNavigateToStore) { saveMutation.mutate({ closeDialog: false }); onNavigateToStore(prevStore); } }}
+                    data-testid="button-prev-store"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    <span className="text-xs max-w-[120px] truncate hidden sm:inline">{getStoreName(prevStore)}</span>
+                  </Button>
+                  <span className="truncate text-center flex-1 min-w-0">{formData.name || 'Store Details'}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center gap-1 shrink-0"
+                    disabled={!nextStore}
+                    style={{ visibility: nextStore ? 'visible' : 'hidden' }}
+                    onClick={() => { if (nextStore && onNavigateToStore) { saveMutation.mutate({ closeDialog: false }); onNavigateToStore(nextStore); } }}
+                    data-testid="button-next-store"
+                  >
+                    <span className="text-xs max-w-[120px] truncate hidden sm:inline">{getStoreName(nextStore)}</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <span className="truncate text-center flex-1">{formData.name || 'Store Details'}</span>
+              )}
             </DialogTitle>
             <DialogDescription className="sr-only">Store details</DialogDescription>
             <div className="flex items-center justify-between gap-4 pt-2">

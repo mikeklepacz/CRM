@@ -52,7 +52,7 @@ import { StoreDetailsDialog } from "@/components/store-details-dialog";
 const REGIONS: Record<string, string> = {
   // US States
   'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
-  'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
+  'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'DC': 'District of Columbia', 'FL': 'Florida', 'GA': 'Georgia',
   'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
   'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
   'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
@@ -415,6 +415,7 @@ export default function ClientDashboard() {
   const [showMyStoresOnly, setShowMyStoresOnly] = useState<boolean>(false);
   const [showUnclaimedOnly, setShowUnclaimedOnly] = useState<boolean>(false);
   const [showCanadaOnly, setShowCanadaOnly] = useState<boolean>(false);
+  const [showStateless, setShowStateless] = useState(false);
   const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
   const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
@@ -1174,6 +1175,9 @@ export default function ClientDashboard() {
         if (userPreferences && 'showUnclaimedOnly' in userPreferences && userPreferences.showUnclaimedOnly !== undefined) {
           setShowUnclaimedOnly(userPreferences.showUnclaimedOnly);
         }
+        if (userPreferences?.showStateless !== undefined) {
+          setShowStateless(userPreferences.showStateless);
+        }
         if (userPreferences?.viewAsAgent !== undefined) {
           setViewAsAgent(userPreferences.viewAsAgent);
         }
@@ -1490,9 +1494,45 @@ export default function ClientDashboard() {
       });
     });
 
+    let statelessCount = 0;
+    const stateColumnsForCount = headers.filter((h: string) => {
+      const lower = h.toLowerCase();
+      return lower === 'state' || lower.includes(', state');
+    });
+    data.forEach((row: any) => {
+      let hasValidState = false;
+      stateColumnsForCount.forEach((col: string) => {
+        const value = row[col];
+        if (value && String(value).trim()) {
+          const valueStr = String(value).trim();
+          let stateAbbrev = valueStr;
+          if (valueStr.includes(',')) {
+            const parts = valueStr.split(',');
+            if (parts.length >= 2) {
+              stateAbbrev = parts[parts.length - 1].trim();
+            }
+          }
+          let stateName = stateAbbrev;
+          if (stateAbbrev.length === 2) {
+            const fullName = getStateName(stateAbbrev);
+            if (fullName) {
+              stateName = fullName;
+            }
+          }
+          if (isValidStateName(stateName)) {
+            hasValidState = true;
+          }
+        }
+      });
+      if (!hasValidState) {
+        statelessCount++;
+      }
+    });
+
     return {
       allStates: Array.from(states).sort(),
-      stateCounts: counts
+      stateCounts: counts,
+      statelessCount
     };
   }, [headers, data]);
 
@@ -1668,6 +1708,7 @@ export default function ClientDashboard() {
           columnOrder,
           columnWidths,
           selectedStates: Array.from(selectedStates),
+          showStateless,
           selectedCities: Array.from(selectedCities),
           fontSize,
           rowHeight,
@@ -1702,7 +1743,7 @@ export default function ClientDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, freezeFirstColumn, showMyStoresOnly, showUnclaimedOnly]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, freezeFirstColumn, showMyStoresOnly, showUnclaimedOnly, showStateless]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -1752,10 +1793,12 @@ export default function ClientDashboard() {
 
   const selectAllStates = () => {
     setSelectedStates(new Set(allStates));
+    setShowStateless(true);
   };
 
   const clearAllStates = () => {
     setSelectedStates(new Set());
+    setShowStateless(false);
   };
 
   // Auto-fit all columns to content
@@ -1991,14 +2034,7 @@ export default function ClientDashboard() {
           }
           return selectedStates.has(rowStateName);
         } else {
-          // Row has NO valid state - apply Country filter only
-          if (selectedCountries.size === 0) {
-            return false;
-          }
-          if (selectedCountries.size === allCountries.length) {
-            return true;
-          }
-          return rowCountry ? selectedCountries.has(rowCountry) : false;
+          return showStateless;
         }
       });
 
@@ -2168,17 +2204,7 @@ export default function ClientDashboard() {
         // Otherwise, check if this state is selected
         return selectedStates.has(rowStateName);
       } else {
-        // Row has NO valid state - apply Country filter only
-        // If no countries are selected, this row is excluded
-        if (selectedCountries.size === 0) {
-          return false;
-        }
-        // If all countries are selected, include this row
-        if (selectedCountries.size === allCountries.length) {
-          return true;
-        }
-        // Otherwise, check if this country is selected
-        return rowCountry ? selectedCountries.has(rowCountry) : false;
+        return showStateless;
       }
     });
 
@@ -2264,7 +2290,8 @@ export default function ClientDashboard() {
     sortDirection,
     showMyStoresOnly,
     selectedStatuses,
-    selectedFranchise
+    selectedFranchise,
+    showStateless
   ]);
 
   const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
@@ -2723,7 +2750,7 @@ export default function ClientDashboard() {
                       style={currentColors.statesButton ? { backgroundColor: currentColors.statesButton, borderColor: currentColors.statesButton } : undefined}
                     >
                       <Settings2 className="mr-2 h-4 w-4" />
-                      States ({selectedStates.size}/{allStates.length})
+                      States ({selectedStates.size + (showStateless ? 1 : 0)}/{allStates.length + 1})
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-80">
@@ -2799,6 +2826,27 @@ export default function ClientDashboard() {
                           ))}
                         </div>
                       </ScrollArea>
+
+                      {/* Stateless Checkbox */}
+                      <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                        <Checkbox
+                          id="stateless-toggle"
+                          checked={showStateless}
+                          onCheckedChange={(checked) => {
+                            setShowStateless(!!checked);
+                          }}
+                          data-testid="checkbox-stateless-toggle"
+                        />
+                        <Label
+                          htmlFor="stateless-toggle"
+                          className="text-sm cursor-pointer flex-1 font-medium"
+                        >
+                          Stateless
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          ({statelessCount} shops)
+                        </span>
+                      </div>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -4064,6 +4112,14 @@ export default function ClientDashboard() {
           contextUpdateTrigger={contextUpdateTrigger}
           setContextUpdateTrigger={setContextUpdateTrigger}
           loadDefaultScriptTrigger={loadDefaultScriptTrigger}
+          allVisibleStores={filteredData}
+          onNavigateToStore={(newRow) => {
+            setStoreDetailsDialog({
+              open: true,
+              row: newRow,
+            });
+            setLoadDefaultScriptTrigger(prev => prev + 1);
+          }}
         />
       )}
 
