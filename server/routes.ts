@@ -674,11 +674,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
-
-  app.post("/api/client-error", (req, res) => {
-    console.error("[CLIENT ERROR]", req.body?.message, req.body?.stack);
-    res.json({ ok: true });
-  });
   // Username/Password Authentication Routes
   app.post('/api/auth/login', async (req, res) => {
     try {
@@ -12351,6 +12346,9 @@ IMPORTANT:
       // - Row-level security completely bypassed
       // ============================================================================
 
+      // Check admin access once for all pre-merge filtering
+      const isAdminUser = await checkAdminAccess(user, tenantId);
+
       // Get user agent name for filtering
       const userAgentName = user?.agentName || 
         (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null)?.trim() || 
@@ -12362,14 +12360,14 @@ IMPORTANT:
         h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
       );
 
-      if (user?.role !== 'admin' && storeAgentColumnName && userAgentName) {
+      if (!isAdminUser && storeAgentColumnName && userAgentName) {
         filteredStoreData = storeData.filter(row => {
           const rowAgentName = row[storeAgentColumnName];
           // Show unclaimed stores (empty Agent Name) OR stores assigned to this agent
           return !rowAgentName || rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
         });
         console.log(`Filtered store data for agent "${userAgentName}": ${filteredStoreData.length} rows (includes unclaimed stores)`);
-      } else if (user?.role !== 'admin' && !userAgentName) {
+      } else if (!isAdminUser && !userAgentName) {
         // No agent name available for the user, filter all rows to empty
         filteredStoreData = [];
         console.log('No agent name found for user, filtering all store rows');
@@ -12381,14 +12379,14 @@ IMPORTANT:
         h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
       );
 
-      if (user?.role !== 'admin' && trackerAgentColumnName && userAgentName) {
+      if (!isAdminUser && trackerAgentColumnName && userAgentName) {
         filteredTrackerData = trackerData.filter(row => {
           const rowAgentName = row[trackerAgentColumnName];
-          // Case-insensitive match
-          return rowAgentName && rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
+          // Keep unclaimed tracker rows (empty agent name) OR rows assigned to this agent
+          return !rowAgentName || !rowAgentName.trim() || rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
         });
-        console.log(`Filtered tracker data for agent "${userAgentName}": ${filteredTrackerData.length} rows`);
-      } else if (user?.role !== 'admin' && !userAgentName) {
+        console.log(`Filtered tracker data for agent "${userAgentName}": ${filteredTrackerData.length} rows (includes unclaimed)`);
+      } else if (!isAdminUser && !userAgentName) {
         // No agent name available, filter all tracker rows to empty
         filteredTrackerData = [];
         console.log('No agent name found for user, filtering all tracker rows');
@@ -12653,6 +12651,29 @@ IMPORTANT:
         });
       }
 
+      // ============================================================================
+      // Agent Row-Level Security
+      // ============================================================================
+      // Agents can only see:
+      // 1. Unclaimed stores (no Agent Name in Commission Tracker)
+      // 2. Their own claimed stores (Agent Name matches their agentName)
+      // Admins see everything.
+      // ============================================================================
+      if (!isAdminUser && user?.agentName) {
+        const agentNameCol = trackerHeaders.find(h => h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name') || 'Agent Name';
+        mergedData = mergedData.filter(row => {
+          const rowAgentName = (row[agentNameCol] || '').toString().trim();
+          // Keep if: no agent assigned (unclaimed) OR agent matches current user
+          return !rowAgentName || rowAgentName.toLowerCase().trim() === user.agentName.toLowerCase().trim();
+        });
+      } else if (!isAdminUser && !user?.agentName) {
+        const agentNameCol = trackerHeaders.find(h => h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name') || 'Agent Name';
+        mergedData = mergedData.filter(row => {
+          const rowAgentName = (row[agentNameCol] || '').toString().trim();
+          return !rowAgentName;
+        });
+      }
+
       // Combine headers (store headers + tracker headers, avoiding duplicates)
       const allHeaders = [...storeHeaders];
       trackerHeaders.forEach(header => {
@@ -12676,7 +12697,6 @@ IMPORTANT:
       ].filter(col => allHeaders.some(h => h.toLowerCase() === col.toLowerCase())); // Only include if they exist
 
       // For agents (non-admins), remove the read-only columns
-      const isAdminUser = await checkAdminAccess(user, tenantId);
       if (!isAdminUser) {
         editableColumns = editableColumns.filter(col => 
           !agentReadOnlyColumns.includes(col.toLowerCase())

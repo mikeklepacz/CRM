@@ -2101,7 +2101,13 @@ export default function ClientDashboard() {
       return filtered;
     }
 
-    // Regular filtering (all stores mode and Show Unclaimed Shops mode)
+    // Agent enforcement: agents must have either "My Stores" or "Show Unclaimed Shops" checked
+    // When neither is checked, agents see nothing. Admins see everything.
+    if (!isRealAdmin && !showUnclaimedOnly && !showMyStoresOnly) {
+      return [];
+    }
+
+    // Regular filtering (Show Unclaimed Shops mode for agents, all stores for admins)
     
     // Helper to check if a row has a valid state (no numbers, recognized state name)
     const stateColumns = headers.filter((h: string) => {
@@ -2157,13 +2163,12 @@ export default function ClientDashboard() {
       });
     });
 
-    // Show Unclaimed Shops: exclude stores claimed by current user
-    if (showUnclaimedOnly && currentUser?.agentName) {
+    // Show Unclaimed Shops: for agents, only show stores with no agent claim
+    if (showUnclaimedOnly && !isRealAdmin) {
       filtered = filtered.filter((row: any) => {
         const agentName = row['Agent Name'] || row['agent name'] || row['Agent'] || row['agent'] || '';
         const agentNameStr = agentName.toString().trim();
-        // Exclude if agent name matches current user's agent name
-        return agentNameStr !== currentUser.agentName;
+        return !agentNameStr;
       });
     }
 
@@ -2289,6 +2294,8 @@ export default function ClientDashboard() {
     sortColumn,
     sortDirection,
     showMyStoresOnly,
+    showUnclaimedOnly,
+    isRealAdmin,
     selectedStatuses,
     selectedFranchise,
     showStateless
