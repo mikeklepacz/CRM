@@ -1128,7 +1128,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                     className="flex items-center gap-1 shrink-0"
                     disabled={!prevStore}
                     style={{ visibility: prevStore ? 'visible' : 'hidden' }}
-                    onClick={() => { if (prevStore && onNavigateToStore) { saveMutation.mutate({ closeDialog: false }); onNavigateToStore(prevStore); } }}
+                    onClick={() => { if (prevStore && onNavigateToStore) { const hasChanges = Object.keys(formData).some(k => formData[k as keyof typeof formData] !== initialData[k as keyof typeof initialData]); if (hasChanges) { saveMutation.mutate({ closeDialog: false }); } onNavigateToStore(prevStore); } }}
                     data-testid="button-prev-store"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -1141,7 +1141,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                     className="flex items-center gap-1 shrink-0"
                     disabled={!nextStore}
                     style={{ visibility: nextStore ? 'visible' : 'hidden' }}
-                    onClick={() => { if (nextStore && onNavigateToStore) { saveMutation.mutate({ closeDialog: false }); onNavigateToStore(nextStore); } }}
+                    onClick={() => { if (nextStore && onNavigateToStore) { const hasChanges = Object.keys(formData).some(k => formData[k as keyof typeof formData] !== initialData[k as keyof typeof initialData]); if (hasChanges) { saveMutation.mutate({ closeDialog: false }); } onNavigateToStore(nextStore); } }}
                     data-testid="button-next-store"
                   >
                     <span className="text-xs max-w-[120px] truncate hidden sm:inline">{getStoreName(nextStore)}</span>
