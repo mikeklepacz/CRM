@@ -431,7 +431,6 @@ export function useCustomTheme() {
   // Mutation to update a single status entry (using clean status names)
   const updateStatusEntryMutation = useMutation({
     mutationFn: async ({ index, name, bgColor, textColor }: { index: number; name: string; bgColor: string; textColor: string }) => {
-      // Use clean status name as the key
       const cleanStatusColors = migrateStatusColors(currentColors.statusColors);
       cleanStatusColors[name] = { background: bgColor, text: textColor };
       
@@ -459,6 +458,35 @@ export function useCustomTheme() {
   const updateStatusEntry = useCallback((index: number, name: string, bgColor: string, textColor: string) => {
     updateStatusEntryMutation.mutate({ index, name, bgColor, textColor });
   }, [updateStatusEntryMutation]);
+
+  // Batch mutation to save ALL status colors in a single API call (prevents race condition)
+  const saveAllStatusColorsMutation = useMutation({
+    mutationFn: async (allStatusColors: { [status: string]: { background: string; text: string } }) => {
+      const cleanStatusColors = migrateStatusColors(allStatusColors);
+      const updatedColors = { ...currentColors, statusColors: cleanStatusColors };
+
+      debug.statusSave('Batch saving all status colors', { count: Object.keys(cleanStatusColors).length });
+
+      const preferences: any = userPreferences ? { ...userPreferences } : {};
+      if (actualTheme === 'dark') {
+        preferences.darkModeColors = updatedColors;
+        preferences.hasDarkOverrides = true;
+      } else {
+        preferences.lightModeColors = updatedColors;
+        preferences.hasLightOverrides = true;
+      }
+
+      return await apiRequest('PUT', '/api/user/preferences', preferences);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      debug.statusSave('All status colors saved successfully in single batch');
+    },
+  });
+
+  const saveAllStatusColors = useCallback((allStatusColors: { [status: string]: { background: string; text: string } }) => {
+    return saveAllStatusColorsMutation.mutateAsync(allStatusColors);
+  }, [saveAllStatusColorsMutation]);
 
   // Get colorPresets from user preferences
   const colorPresets = userPreferences?.colorPresets ?? [];
@@ -499,10 +527,12 @@ export function useCustomTheme() {
       setColorRowByStatus,
       updateStatusEntry,
       isUpdatingStatus: updateStatusEntryMutation.isPending,
+      saveAllStatusColors,
+      isSavingAllStatusColors: saveAllStatusColorsMutation.isPending,
       colorPresets,
       setColorPresets,
       deleteColorPreset,
     }),
-    [lightColors, darkColors, currentColors, statusOptions, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending, colorPresets, setColorPresets, deleteColorPreset]
+    [lightColors, darkColors, currentColors, statusOptions, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending, saveAllStatusColors, saveAllStatusColorsMutation.isPending, colorPresets, setColorPresets, deleteColorPreset]
   );
 }

@@ -160,7 +160,7 @@ function StatusEditorPopover({
   statusColors,
   colorRowByStatus,
   setColorRowByStatus,
-  updateStatusEntry,
+  saveAllStatusColors,
   colorPresets,
   setColorPresets,
   deleteColorPreset,
@@ -170,7 +170,7 @@ function StatusEditorPopover({
   statusColors: { [status: string]: { background: string; text: string } };
   colorRowByStatus: boolean;
   setColorRowByStatus: (value: boolean) => void;
-  updateStatusEntry: (index: number, name: string, bgColor: string, textColor: string) => void;
+  saveAllStatusColors: (allColors: { [status: string]: { background: string; text: string } }) => Promise<any>;
   colorPresets: Array<{name: string, color: string}>;
   setColorPresets: (presets: Array<{name: string, color: string}>) => void;
   deleteColorPreset: (index: number) => void;
@@ -185,7 +185,6 @@ function StatusEditorPopover({
 
   const isAdmin = canAccessAdminFeatures(currentUser);
 
-  // Update local state when props change
   useEffect(() => {
     setLocalStatuses(statusOptions);
     setLocalColors(statusColors);
@@ -194,12 +193,11 @@ function StatusEditorPopover({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Save all status entries using clean status names
-      for (let i = 0; i < localStatuses.length; i++) {
-        const statusName = localStatuses[i];
-        const colors = localColors[statusName] || { background: '#e5e7eb', text: '#000000' };
-        await updateStatusEntry(i, statusName, colors.background, colors.text);
+      const colorsToSave: { [status: string]: { background: string; text: string } } = {};
+      for (const statusName of localStatuses) {
+        colorsToSave[statusName] = localColors[statusName] || { background: '#e5e7eb', text: '#000000' };
       }
+      await saveAllStatusColors(colorsToSave);
 
       toast({
         title: "Success",
@@ -433,7 +431,7 @@ export default function ClientDashboard() {
   const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
 
   // Use global theme hook for colors and statuses
-  const { lightColors, darkColors, currentColors, statusColors, statusOptions, colorRowByStatus, setColorRowByStatus, updateStatusEntry, colorPresets, setColorPresets, deleteColorPreset } = useCustomTheme();
+  const { lightColors, darkColors, currentColors, statusColors, statusOptions, colorRowByStatus, setColorRowByStatus, saveAllStatusColors, colorPresets, setColorPresets, deleteColorPreset } = useCustomTheme();
 
   // Address edit dialog state
   const [addressEditDialog, setAddressEditDialog] = useState<{
@@ -2699,7 +2697,7 @@ export default function ClientDashboard() {
                         statusColors={statusColors}
                         colorRowByStatus={colorRowByStatus}
                         setColorRowByStatus={setColorRowByStatus}
-                        updateStatusEntry={updateStatusEntry}
+                        saveAllStatusColors={saveAllStatusColors}
                         colorPresets={colorPresets}
                         setColorPresets={setColorPresets}
                         deleteColorPreset={deleteColorPreset}
