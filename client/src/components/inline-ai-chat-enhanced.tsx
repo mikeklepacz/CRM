@@ -1630,8 +1630,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                   className={`h-4 w-4 transition-transform ${templatesOpen ? "rotate-180" : ""}`}
                 />
               </CollapsibleTrigger>
-              <CollapsibleContent className="flex-1 min-h-0 overflow-hidden">
-                <div className="p-2 space-y-3 h-full overflow-y-auto">
+            </div>
+            <CollapsibleContent className="flex-1 min-h-0 overflow-y-auto">
+              <div className="p-2 space-y-3">
                   {/* Template Builder Button */}
                   <Button
                     onClick={() => {
@@ -1797,7 +1798,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                   </ScrollArea>
                 </div>
               </CollapsibleContent>
-            </div>
           </Collapsible>
         </div>
       )}
