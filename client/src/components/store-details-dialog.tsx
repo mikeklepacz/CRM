@@ -1099,9 +1099,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
             <DialogTitle className="flex items-center justify-between gap-2">
               <span className="truncate">{formData.name || 'Store Details'}</span>
             </DialogTitle>
-            <DialogDescription>
-              View and edit store information, contact details, and notes
-            </DialogDescription>
+            <DialogDescription className="sr-only">Store details</DialogDescription>
             <div className="flex items-center justify-between gap-4 pt-2">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
