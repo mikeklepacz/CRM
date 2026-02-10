@@ -8384,6 +8384,7 @@ IMPORTANT:
             .insert(sequenceRecipientMessages)
             .values({
               recipientId: enrolled.id,
+              tenantId: req.user.tenantId,
               stepNumber: 1,
               subject: subject,
               body: body,
