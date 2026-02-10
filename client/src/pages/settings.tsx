@@ -1168,7 +1168,7 @@ export default function Settings() {
                     <Label htmlFor="module-labelDesigner" className="font-normal cursor-pointer">Label Designer</Label>
                   </div>
                 )}
-                {canAccessAdminFeatures(user) && shouldShowModuleOption('analytics') && (
+                {shouldShowModuleOption('analytics') && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-analytics"
@@ -1179,7 +1179,7 @@ export default function Settings() {
                     <Label htmlFor="module-analytics" className="font-normal cursor-pointer">Analytics</Label>
                   </div>
                 )}
-                {canAccessAdminFeatures(user) && shouldShowModuleOption('pipelines') && (
+                {shouldShowModuleOption('pipelines') && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-pipelines"

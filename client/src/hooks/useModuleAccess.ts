@@ -70,7 +70,7 @@ export function isNavItemEnabled(
   allowedModules: string[] | null | undefined,
   isLoading: boolean
 ): boolean {
-  if (isLoading) return true;
+  if (isLoading) return false;
   const moduleId = MODULE_NAV_MAPPING[navKey];
   if (!moduleId) return true;
   if (allowedModules === undefined || allowedModules === null) return true;
