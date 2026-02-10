@@ -238,7 +238,7 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
             variant="ghost"
             size="icon"
             onClick={handleExportCalendar}
-            className="h-7 w-7 ml-auto"
+            className="ml-auto"
             data-testid="button-export-calendar"
             title="Export to calendar (.ics)"
           >

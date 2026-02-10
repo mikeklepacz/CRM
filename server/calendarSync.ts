@@ -27,6 +27,7 @@ export async function syncRemindersToCalendar(userId: string, tenantId?: string)
     // Get system OAuth credentials
     const systemIntegration = await storage.getSystemIntegration('google_sheets');
     if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+      console.error('[SyncRemindersToCalendar] Missing system integration credentials');
       return { created: 0, errors: 0 };
     }
 
@@ -153,6 +154,7 @@ export async function syncRemindersToCalendar(userId: string, tenantId?: string)
         }
       } catch (error: any) {
         errors++;
+        console.error(`[SyncRemindersToCalendar] Error creating calendar event for reminder ${reminder.id}: ${error.message}`);
       }
     }
     
@@ -168,6 +170,7 @@ export async function syncRemindersToCalendar(userId: string, tenantId?: string)
     
     return { created, errors };
   } catch (error: any) {
+    console.error(`[SyncRemindersToCalendar] Unexpected error: ${error.message}`);
     return { created: 0, errors: 0 };
   }
 }
@@ -290,6 +293,7 @@ export async function cleanupDeletedCalendarEvents(userId: string, tenantId?: st
     const user = await storage.getUserById(userId);
     const effectiveTenantId = tenantId || user?.tenantId || '';
     if (!effectiveTenantId) {
+      console.error(`[CalendarCleanup] Missing tenantId for user ${userId}`);
       return { deleted: 0, errors: 0 };
     }
 
