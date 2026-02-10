@@ -1,0 +1,239 @@
+index-DYGQsaRU.js:858 [VoIP] Initializing device...
+index-DYGQsaRU.js:858 [VoIP] Token received, creating Device...
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Set logger default level to 1
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .constructor {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .updateToken
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .updateOptions {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Set logger default level to 1
+index-DYGQsaRU.js:844 [TwilioVoice][AudioProcessorEventObserver] Creating AudioProcessorEventObserver instance
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .register
+index-DYGQsaRU.js:844 [TwilioVoice][Device] #registering
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Setting up VSP
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] WSTransport.open() called...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Attempting to connect...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Closing and cleaning up WebSocket...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] No WebSocket to clean up.
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] #deviceChange []
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] #deviceChange []
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set 
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set 
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set default
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set default
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] Warning: Unable to set audio output devices. InvalidArgumentError: Devices not found: default
+warn @ index-DYGQsaRU.js:844
+(anonymous) @ index-DYGQsaRU.js:844
+Promise.catch
+(anonymous) @ index-DYGQsaRU.js:844
+Promise.then
+_initializeEnumeration @ index-DYGQsaRU.js:844
+PD @ index-DYGQsaRU.js:844
+_setupAudioHelper @ index-DYGQsaRU.js:858
+updateOptions @ index-DYGQsaRU.js:858
+yr @ index-DYGQsaRU.js:858
+(anonymous) @ index-DYGQsaRU.js:858
+await in (anonymous)
+(anonymous) @ index-DYGQsaRU.js:858
+zB @ index-DYGQsaRU.js:40
+F0 @ index-DYGQsaRU.js:40
+d_e @ index-DYGQsaRU.js:40
+Bv @ index-DYGQsaRU.js:40
+wV @ index-DYGQsaRU.js:40
+Zg @ index-DYGQsaRU.js:38
+(anonymous) @ index-DYGQsaRU.js:40
+setTimeout
+i @ index-DYGQsaRU.js:48
+o @ index-DYGQsaRU.js:48
+batch @ index-DYGQsaRU.js:48
+Bp @ index-DYGQsaRU.js:48
+setData @ index-DYGQsaRU.js:48
+onSuccess @ index-DYGQsaRU.js:48
+h @ index-DYGQsaRU.js:48
+Promise.then
+A @ index-DYGQsaRU.js:48
+start @ index-DYGQsaRU.js:48
+fetch @ index-DYGQsaRU.js:48
+j2 @ index-DYGQsaRU.js:48
+onSubscribe @ index-DYGQsaRU.js:48
+subscribe @ index-DYGQsaRU.js:48
+(anonymous) @ index-DYGQsaRU.js:48
+Rie @ index-DYGQsaRU.js:38
+zB @ index-DYGQsaRU.js:40
+F0 @ index-DYGQsaRU.js:40
+wV @ index-DYGQsaRU.js:40
+Zg @ index-DYGQsaRU.js:38
+d_e @ index-DYGQsaRU.js:40
+Bv @ index-DYGQsaRU.js:40
+gae @ index-DYGQsaRU.js:40
+_ @ index-DYGQsaRU.js:25
+T @ index-DYGQsaRU.js:25
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] WebSocket opened successfully.
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] Setting token and publishing listen
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] maxPreferredDurationMs:0
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] reconnectTimeout:0
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Sending: {"payload":{"browserinfo":{"browser":{"platform":"MacIntel","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"},"p":"browser","plugin":"rtc","v":"2.18.0"},"reconnectTimeout":0,"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImN0eSI6InR3aWxpby1mcGE7dj0xIn0.eyJqdGkiOiJTS2E4MTlkMTMxYTdlZWU3NTY5N2U2YmQ2OTkyZjg4Mzg4LTE3NzA3NDkwODkiLCJncmFudHMiOnsiaWRlbnRpdHkiOiI0ZGYzNTg3Ni1hYjg5LTQ4NjAtODY1Ni0wNDQwYWNjZmVhMTQiLCJ2b2ljZSI6eyJvdXRnb2luZyI6eyJhcHBsaWNhdGlvbl9zaWQiOiJBUGFlMWUyYjk1ZDYxZGYxNDVhNmQyMzM4MDBhNTRkZDQxIn19fSwiaWF0IjoxNzcwNzQ5MDg5LCJleHAiOjE3NzA3NTI2ODksImlzcyI6IlNLYTgxOWQxMzFhN2VlZTc1Njk3ZTZiZDY5OTJmODgzODgiLCJzdWIiOiJBQzkyOTcwNzBkYTQ0NmFhY2YwYjNjZGMyYjE5ZjI1OTk0In0.PqkBDo9HFdm8vgs9dPadaeg-8LtVOBSjZZI2Rs8F00k"},"type":"listen","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Received: {"payload":{"edge":"frankfurt","region":"EU_FRANKFURT","home":"us1","token":{"identity":"4df35876-ab89-4860-8656-0440accfea14","ttl":3600}},"type":"connected","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Sending: {"payload":{"media":{"audio":true}},"type":"register","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Received: {"payload":{},"type":"ready","version":""}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Stream is ready
+index-DYGQsaRU.js:844 [TwilioVoice][Device] #registered
+index-DYGQsaRU.js:858 [VoIP] Device registered event fired
+index-DYGQsaRU.js:858 [VoIP] Device registered successfully
+index-DYGQsaRU.js:858 [VoIP] Initializing device...
+index-DYGQsaRU.js:858 [VoIP] Token received, creating Device...
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Set logger default level to 1
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .constructor {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .updateToken
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .updateOptions {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Set logger default level to 1
+index-DYGQsaRU.js:844 [TwilioVoice][AudioProcessorEventObserver] Creating AudioProcessorEventObserver instance
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .register
+index-DYGQsaRU.js:844 [TwilioVoice][Device] #registering
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Setting up VSP
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] WSTransport.open() called...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Attempting to connect...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Closing and cleaning up WebSocket...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] No WebSocket to clean up.
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] #deviceChange []
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] #deviceChange []
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set 
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set 
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set default
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set default
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] Warning: Unable to set audio output devices. InvalidArgumentError: Devices not found: default
+warn @ index-DYGQsaRU.js:844
+(anonymous) @ index-DYGQsaRU.js:844
+Promise.catch
+(anonymous) @ index-DYGQsaRU.js:844
+Promise.then
+_initializeEnumeration @ index-DYGQsaRU.js:844
+PD @ index-DYGQsaRU.js:844
+_setupAudioHelper @ index-DYGQsaRU.js:858
+updateOptions @ index-DYGQsaRU.js:858
+yr @ index-DYGQsaRU.js:858
+(anonymous) @ index-DYGQsaRU.js:858
+await in (anonymous)
+(anonymous) @ index-DYGQsaRU.js:858
+zB @ index-DYGQsaRU.js:40
+F0 @ index-DYGQsaRU.js:40
+wV @ index-DYGQsaRU.js:40
+Zg @ index-DYGQsaRU.js:38
+d_e @ index-DYGQsaRU.js:40
+Bv @ index-DYGQsaRU.js:40
+gae @ index-DYGQsaRU.js:40
+_ @ index-DYGQsaRU.js:25
+T @ index-DYGQsaRU.js:25
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] WebSocket opened successfully.
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] Setting token and publishing listen
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] maxPreferredDurationMs:0
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] reconnectTimeout:0
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Sending: {"payload":{"browserinfo":{"browser":{"platform":"MacIntel","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"},"p":"browser","plugin":"rtc","v":"2.18.0"},"reconnectTimeout":0,"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImN0eSI6InR3aWxpby1mcGE7dj0xIn0.eyJqdGkiOiJTS2E4MTlkMTMxYTdlZWU3NTY5N2U2YmQ2OTkyZjg4Mzg4LTE3NzA3NDkwOTIiLCJncmFudHMiOnsiaWRlbnRpdHkiOiI0ZGYzNTg3Ni1hYjg5LTQ4NjAtODY1Ni0wNDQwYWNjZmVhMTQiLCJ2b2ljZSI6eyJvdXRnb2luZyI6eyJhcHBsaWNhdGlvbl9zaWQiOiJBUGFlMWUyYjk1ZDYxZGYxNDVhNmQyMzM4MDBhNTRkZDQxIn19fSwiaWF0IjoxNzcwNzQ5MDkyLCJleHAiOjE3NzA3NTI2OTIsImlzcyI6IlNLYTgxOWQxMzFhN2VlZTc1Njk3ZTZiZDY5OTJmODgzODgiLCJzdWIiOiJBQzkyOTcwNzBkYTQ0NmFhY2YwYjNjZGMyYjE5ZjI1OTk0In0.dLjD0qgxlbOIHlLLiQUGUrhPavka_d-lcr0BagofZB8"},"type":"listen","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Received: {"payload":{"edge":"frankfurt","region":"EU_FRANKFURT","home":"us1","token":{"identity":"4df35876-ab89-4860-8656-0440accfea14","ttl":3599}},"type":"connected","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Sending: {"payload":{"media":{"audio":true}},"type":"register","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Received: {"payload":{},"type":"ready","version":""}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Stream is ready
+index-DYGQsaRU.js:844 [TwilioVoice][Device] #registered
+index-DYGQsaRU.js:858 [VoIP] Device registered event fired
+index-DYGQsaRU.js:858 [VoIP] Device registered successfully
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] heartbeat
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] heartbeat
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] heartbeat
+index-DYGQsaRU.js:858 [VoIP] Initializing device...
+clients:1 Launched external handler for 'tel:+1-661-777-5464'.
+index-DYGQsaRU.js:858 [VoIP] Token received, creating Device...
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Set logger default level to 1
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .constructor {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .updateToken
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .updateOptions {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Set logger default level to 1
+index-DYGQsaRU.js:844 [TwilioVoice][AudioProcessorEventObserver] Creating AudioProcessorEventObserver instance
+index-DYGQsaRU.js:844 [TwilioVoice][Device] .register
+index-DYGQsaRU.js:844 [TwilioVoice][Device] #registering
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Setting up VSP
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] WSTransport.open() called...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Attempting to connect...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Closing and cleaning up WebSocket...
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] No WebSocket to clean up.
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] #deviceChange []
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] #deviceChange []
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set 
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set 
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set default
+index-DYGQsaRU.js:844 [TwilioVoice][OutputDeviceCollection] .set default
+index-DYGQsaRU.js:844 [TwilioVoice][AudioHelper] Warning: Unable to set audio output devices. InvalidArgumentError: Devices not found: default
+warn @ index-DYGQsaRU.js:844
+(anonymous) @ index-DYGQsaRU.js:844
+Promise.catch
+(anonymous) @ index-DYGQsaRU.js:844
+Promise.then
+_initializeEnumeration @ index-DYGQsaRU.js:844
+PD @ index-DYGQsaRU.js:844
+_setupAudioHelper @ index-DYGQsaRU.js:858
+updateOptions @ index-DYGQsaRU.js:858
+yr @ index-DYGQsaRU.js:858
+(anonymous) @ index-DYGQsaRU.js:858
+await in (anonymous)
+(anonymous) @ index-DYGQsaRU.js:858
+zB @ index-DYGQsaRU.js:40
+F0 @ index-DYGQsaRU.js:40
+d_e @ index-DYGQsaRU.js:40
+Bv @ index-DYGQsaRU.js:40
+wV @ index-DYGQsaRU.js:40
+Zg @ index-DYGQsaRU.js:38
+(anonymous) @ index-DYGQsaRU.js:40
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] WebSocket opened successfully.
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] Setting token and publishing listen
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] maxPreferredDurationMs:0
+index-DYGQsaRU.js:844 [TwilioVoice][PStream] reconnectTimeout:0
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Sending: {"payload":{"browserinfo":{"browser":{"platform":"MacIntel","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"},"p":"browser","plugin":"rtc","v":"2.18.0"},"reconnectTimeout":0,"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImN0eSI6InR3aWxpby1mcGE7dj0xIn0.eyJqdGkiOiJTS2E4MTlkMTMxYTdlZWU3NTY5N2U2YmQ2OTkyZjg4Mzg4LTE3NzA3NDkxMTAiLCJncmFudHMiOnsiaWRlbnRpdHkiOiI0ZGYzNTg3Ni1hYjg5LTQ4NjAtODY1Ni0wNDQwYWNjZmVhMTQiLCJ2b2ljZSI6eyJvdXRnb2luZyI6eyJhcHBsaWNhdGlvbl9zaWQiOiJBUGFlMWUyYjk1ZDYxZGYxNDVhNmQyMzM4MDBhNTRkZDQxIn19fSwiaWF0IjoxNzcwNzQ5MTEwLCJleHAiOjE3NzA3NTI3MTAsImlzcyI6IlNLYTgxOWQxMzFhN2VlZTc1Njk3ZTZiZDY5OTJmODgzODgiLCJzdWIiOiJBQzkyOTcwNzBkYTQ0NmFhY2YwYjNjZGMyYjE5ZjI1OTk0In0.3JTGlkgxPjyGQyV4rZPVQZ3DB6RPr91_2-zjaP8zKSw"},"type":"listen","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Received: {"payload":{"edge":"frankfurt","region":"EU_FRANKFURT","home":"us1","token":{"identity":"4df35876-ab89-4860-8656-0440accfea14","ttl":3600}},"type":"connected","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Sending: {"payload":{"media":{"audio":true}},"type":"register","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Received: {"payload":{},"type":"ready","version":""}
+index-DYGQsaRU.js:844 [TwilioVoice][Device] Stream is ready
+index-DYGQsaRU.js:844 [TwilioVoice][Device] #registered
+index-DYGQsaRU.js:858 [VoIP] Device registered event fired
+index-DYGQsaRU.js:858 [VoIP] Device registered successfully
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] heartbeat
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] Sending: {"payload":{"media":{"audio":true}},"type":"register","version":"1.6"}
+index-DYGQsaRU.js:844 [TwilioVoice][WSTransport] heartbeat
