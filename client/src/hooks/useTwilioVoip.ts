@@ -45,8 +45,16 @@ export function useTwilioVoip() {
         codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
       });
 
-      device.on("error", (error) => {
-        console.error("[VoIP] Device error:", error);
+      device.on("registered", () => {
+        console.log("[VoIP] Device registered event fired");
+      });
+
+      device.on("unregistered", () => {
+        console.log("[VoIP] Device unregistered");
+      });
+
+      device.on("error", (error: any) => {
+        console.error("[VoIP] Device error:", error?.message || error?.code, error);
         setState((prev) => ({ ...prev, status: "idle" }));
       });
 
@@ -63,11 +71,12 @@ export function useTwilioVoip() {
       await device.register();
       deviceRef.current = device;
       console.log("[VoIP] Device registered successfully");
-    } catch (err) {
-      console.error("[VoIP] Failed to initialize device:", err);
+    } catch (err: any) {
+      const errorMsg = err?.message || err?.code || String(err);
+      console.error("[VoIP] Failed to initialize device:", errorMsg, err);
       toast({
         title: "VoIP setup failed",
-        description: "Browser calling could not initialize. Calls will use your phone dialer.",
+        description: `Browser calling could not initialize: ${errorMsg}`,
         variant: "destructive",
       });
     } finally {
