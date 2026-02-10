@@ -27127,7 +27127,6 @@ ${conversationContext}`;
       const { url, label } = req.body;
       if (!url || typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: "A valid URL is required" });
       if (!label || typeof label !== 'string' || !label.trim()) return res.status(400).json({ error: "A label is required" });
-      if (url.length > 2000) return res.status(400).json({ error: "URL is too long" });
       if (label.length > 255) return res.status(400).json({ error: "Label is too long" });
       const image = await storage.createEmailImage({ tenantId: req.user.tenantId, url: url.trim(), label: label.trim() });
       res.json(image);

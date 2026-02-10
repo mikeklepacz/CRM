@@ -888,6 +888,10 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/email-images'] });
+      toast({ title: "Image saved", description: "Image added to your library" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to save image", description: error.message || "Something went wrong", variant: "destructive" });
     },
   });
 
