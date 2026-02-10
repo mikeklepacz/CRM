@@ -36,8 +36,7 @@ export function useTwilioVoip() {
 
     try {
       console.log("[VoIP] Initializing device...");
-      const res = await apiRequest("GET", "/api/twilio/voip-token");
-      const data = await res.json();
+      const data = await apiRequest("GET", "/api/twilio/voip-token");
       console.log("[VoIP] Token received, creating Device...");
 
       const device = new Device(data.token, {
@@ -60,9 +59,8 @@ export function useTwilioVoip() {
 
       device.on("tokenWillExpire", async () => {
         try {
-          const res = await apiRequest("GET", "/api/twilio/voip-token");
-          const data = await res.json();
-          device.updateToken(data.token);
+          const refreshData = await apiRequest("GET", "/api/twilio/voip-token");
+          device.updateToken(refreshData.token);
         } catch (err) {
           console.error("[VoIP] Token refresh failed:", err);
         }
