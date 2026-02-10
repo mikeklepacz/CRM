@@ -51,7 +51,7 @@ import {
   insertTenantSchema,
 } from "@shared/schema";
 import { google } from "googleapis";
-import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
+import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded, cleanupDeletedCalendarEvents } from "./calendarSync";
 import { notifyNewTicket, notifyTicketReply } from "./gmail";
 import { format } from "date-fns";
 import { computeHash, getCached, setCache } from "./services/sheetCache";
@@ -898,6 +898,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Sync any reminders that don't have calendar events yet
           await syncRemindersToCalendar(userId, req.user.tenantId);
+
+          // Clean up reminders whose calendar events were deleted while webhook was down
+          await cleanupDeletedCalendarEvents(userId, req.user.tenantId);
 
           // Renew watch channel if close to expiry
           await renewCalendarWatchIfNeeded(userId);
@@ -19527,12 +19530,13 @@ Use this store information to provide context-aware responses. When helping draf
               googleCalendarWebhookExpiry: expiration,
             });
           } catch (renewError: any) {
+            console.error(`[WebhookRenewal] Failed to renew webhook for user ${integration.userId}:`, renewError.message);
             // Webhook renewal failed - bidirectional sync will stop working for this user
           }
         }
       }
     } catch (error: any) {
-      // Renewal check failed
+      console.error("[WebhookRenewal] Renewal check failed:", error.message);
     }
   }
 

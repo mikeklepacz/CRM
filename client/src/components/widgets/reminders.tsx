@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bell, Clock, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
+import { Bell, Clock, Download, Store, Globe, User, Mail, Phone, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { formatTimezoneDisplay } from "@shared/timezoneUtils";
 import { useAgentFilter } from '@/contexts/agent-filter-context';
 import { VoipCallButton } from "@/components/voip-call-button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 interface Reminder {
   id: string;
@@ -43,6 +45,26 @@ interface RemindersWidgetProps {
 export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
   const { toast } = useToast();
   const { selectedAgentIds } = useAgentFilter();
+
+  const deleteReminderMutation = useMutation({
+    mutationFn: async (reminderId: string) => {
+      await apiRequest('DELETE', `/api/reminders/${reminderId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/reminders'] });
+      toast({
+        title: "Reminder deleted",
+        description: "The reminder has been removed from the CRM and your Google Calendar."
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to delete",
+        description: error.message || "Could not delete the reminder. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
 
   const { data, isLoading, error } = useQuery<{ reminders: Reminder[] }>({
     queryKey: ['/api/reminders', selectedAgentIds],
@@ -235,37 +257,38 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
           <div className="flex-1 min-h-0 overflow-y-auto pr-2">
             <div className="space-y-3">
               {activeReminders.map((reminder) => (
-                <div
-                  key={reminder.id}
-                  className={`flex items-start gap-3 p-3 rounded-md border transition-colors ${
-                    isOverdue(reminder)
-                      ? 'bg-destructive/10 border-destructive/20'
-                      : 'bg-muted/30 border-border hover-elevate'
-                  }`}
-                  data-testid={`reminder-${reminder.id}`}
-                >
-                  {/* Icon */}
-                  <div className="flex-shrink-0 mt-0.5">
-                    <Clock className={`h-4 w-4 ${isOverdue(reminder) ? 'text-destructive' : 'text-muted-foreground'}`} />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium leading-snug">
-                            {reminder.title}
-                          </p>
-                          {reminder.agentName && (
-                            <Badge variant="secondary" className="text-xs" data-testid={`badge-agent-${reminder.id}`}>
-                              <User className="h-3 w-3 mr-1" />
-                              {reminder.agentName}
-                            </Badge>
-                          )}
-                        </div>
+                <ContextMenu key={reminder.id}>
+                  <ContextMenuTrigger asChild>
+                    <div
+                      className={`flex items-start gap-3 p-3 rounded-md border transition-colors ${
+                        isOverdue(reminder)
+                          ? 'bg-destructive/10 border-destructive/20'
+                          : 'bg-muted/30 border-border hover-elevate'
+                      }`}
+                      data-testid={`reminder-${reminder.id}`}
+                    >
+                      {/* Icon */}
+                      <div className="flex-shrink-0 mt-0.5">
+                        <Clock className={`h-4 w-4 ${isOverdue(reminder) ? 'text-destructive' : 'text-muted-foreground'}`} />
                       </div>
-                    </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-medium leading-snug">
+                                {reminder.title}
+                              </p>
+                              {reminder.agentName && (
+                                <Badge variant="secondary" className="text-xs" data-testid={`badge-agent-${reminder.id}`}>
+                                  <User className="h-3 w-3 mr-1" />
+                                  {reminder.agentName}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                     {reminder.storeMetadata?.storeName && (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Store className="h-3 w-3" />
@@ -349,6 +372,19 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                     </div>
                   </div>
                 </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem
+                  className="text-destructive focus:text-destructive"
+                  disabled={deleteReminderMutation.isPending}
+                  onClick={() => deleteReminderMutation.mutate(reminder.id)}
+                  data-testid={`context-delete-reminder-${reminder.id}`}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {deleteReminderMutation.isPending ? 'Deleting...' : 'Delete Reminder'}
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
               ))}
             </div>
           </div>
