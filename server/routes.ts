@@ -897,7 +897,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setImmediate(async () => {
         try {
           // Sync any reminders that don't have calendar events yet
-          await syncRemindersToCalendar(userId);
+          await syncRemindersToCalendar(userId, req.user.tenantId);
 
           // Renew watch channel if close to expiry
           await renewCalendarWatchIfNeeded(userId);
@@ -17261,6 +17261,60 @@ ${rawText}`;
       const existing = await storage.getReminderById(id, tenantId);
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: 'Reminder not found' });
+      }
+
+      // Delete Google Calendar event if linked (best-effort, non-blocking)
+      if (existing.googleCalendarEventId) {
+        try {
+          const integration = await storage.getUserIntegration(userId);
+          if (integration?.googleCalendarAccessToken) {
+            const systemIntegration = await storage.getSystemIntegration('google_sheets');
+            if (systemIntegration?.googleClientId && systemIntegration?.googleClientSecret) {
+              let accessToken = integration.googleCalendarAccessToken;
+              if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
+                if (integration.googleCalendarRefreshToken) {
+                  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                      client_id: systemIntegration.googleClientId,
+                      client_secret: systemIntegration.googleClientSecret,
+                      refresh_token: integration.googleCalendarRefreshToken,
+                      grant_type: 'refresh_token'
+                    })
+                  });
+                  if (tokenResponse.ok) {
+                    const tokens = await tokenResponse.json();
+                    accessToken = tokens.access_token;
+                    await storage.updateUserIntegration(userId, {
+                      googleCalendarAccessToken: tokens.access_token,
+                      googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
+                    });
+                  }
+                }
+              }
+
+              const oauth2Client = new google.auth.OAuth2(
+                systemIntegration.googleClientId,
+                systemIntegration.googleClientSecret
+              );
+              oauth2Client.setCredentials({
+                access_token: accessToken,
+                refresh_token: integration.googleCalendarRefreshToken || undefined
+              });
+
+              const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+              await calendar.events.delete({
+                calendarId: 'primary',
+                eventId: existing.googleCalendarEventId,
+              });
+              console.log(`[Reminder Delete] Deleted Google Calendar event ${existing.googleCalendarEventId}`);
+            }
+          }
+        } catch (calendarError: any) {
+          console.error(`[Reminder Delete] Failed to delete calendar event: ${calendarError.message}`);
+          // Non-blocking - continue with DB deletion even if calendar delete fails
+        }
       }
 
       await storage.deleteReminder(id, tenantId);

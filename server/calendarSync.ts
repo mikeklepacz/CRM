@@ -13,8 +13,11 @@ import { eventGateway } from './services/events/gateway';
  *   - Calculates event end time using pure string arithmetic (+30 mins)
  *   - Handles midnight rollover correctly
  */
-export async function syncRemindersToCalendar(userId: string): Promise<{ created: number; errors: number }> {
+export async function syncRemindersToCalendar(userId: string, tenantId?: string): Promise<{ created: number; errors: number }> {
   try {
+    const user = await storage.getUserById(userId);
+    const effectiveTenantId = tenantId || user?.tenantId || '';
+
     // Get user's calendar integration
     const integration = await storage.getUserIntegration(userId);
     if (!integration?.googleCalendarAccessToken) {
@@ -67,7 +70,7 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
     // Get all reminders for this user without calendar events
-    const reminders = await storage.getRemindersByUser(userId);
+    const reminders = await storage.getRemindersByUser(userId, effectiveTenantId);
     const remindersToSync = reminders.filter(r => !r.googleCalendarEventId && !r.isCompleted);
 
     let created = 0;
@@ -143,7 +146,7 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
 
         // Update reminder with calendar event ID
         if (createdEvent.data.id) {
-          await storage.updateReminder(reminder.id, {
+          await storage.updateReminder(reminder.id, effectiveTenantId, {
             googleCalendarEventId: createdEvent.data.id
           });
           created++;
