@@ -14,7 +14,7 @@ export function convertToDirectImageUrl(url: string): string {
   }
 
   if (fileId) {
-    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
   }
 
   return url;

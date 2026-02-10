@@ -267,11 +267,11 @@ function replaceSimpleTemplateVariables(
     let directUrl = url.trim();
     const fileMatch = directUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
     if (fileMatch) {
-      directUrl = `https://drive.google.com/thumbnail?id=${fileMatch[1]}&sz=w800`;
+      directUrl = `https://lh3.googleusercontent.com/d/${fileMatch[1]}`;
     } else {
       const idMatch = directUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
       if (idMatch) {
-        directUrl = `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
+        directUrl = `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
       }
     }
     return `<img src="${directUrl}" alt="" style="max-width: 100%; height: auto; display: block; margin: 10px 0;" />`;
@@ -344,16 +344,32 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const [newImageLabel, setNewImageLabel] = useState("");
   const [imagePreviewError, setImagePreviewError] = useState(false);
 
-  const convertToDirectImageUrl = (url: string): string => {
-    let fileId: string | null = null;
+  const extractGoogleDriveFileId = (url: string): string | null => {
     const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (fileMatch) fileId = fileMatch[1];
-    if (!fileId) {
-      const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (idMatch) fileId = idMatch[1];
-    }
-    if (fileId) return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+    if (fileMatch) return fileMatch[1];
+    const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (idMatch) return idMatch[1];
+    return null;
+  };
+
+  const convertToDirectImageUrl = (url: string): string => {
+    const fileId = extractGoogleDriveFileId(url);
+    if (fileId) return `https://lh3.googleusercontent.com/d/${fileId}`;
     return url;
+  };
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, originalUrl: string) => {
+    const img = e.target as HTMLImageElement;
+    const fileId = extractGoogleDriveFileId(originalUrl);
+    if (!fileId) { img.style.display = 'none'; return; }
+    const currentSrc = img.src;
+    if (currentSrc.includes('googleusercontent.com')) {
+      img.src = `https://drive.google.com/uc?export=view&id=${fileId}`;
+    } else if (currentSrc.includes('uc?export=view')) {
+      img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+    } else {
+      img.style.display = 'none';
+    }
   };
 
   // Tag management state
@@ -2608,7 +2624,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                             src={convertToDirectImageUrl(img.url)}
                                             alt={img.label}
                                             className="w-full h-16 object-cover rounded"
-                                            onError={(e) => { (e.target as HTMLImageElement).src = ''; (e.target as HTMLImageElement).alt = 'Failed to load'; }}
+                                            onError={(e) => handleImageError(e, img.url)}
                                           />
                                           <p className="text-xs truncate mt-1 text-muted-foreground">{img.label}</p>
                                         </button>
@@ -2651,7 +2667,18 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                         src={convertToDirectImageUrl(newImageUrl)}
                                         alt="Preview"
                                         className="w-full h-20 object-cover rounded"
-                                        onError={() => setImagePreviewError(true)}
+                                        onError={(e) => {
+                                          const fileId = extractGoogleDriveFileId(newImageUrl);
+                                          if (!fileId) { setImagePreviewError(true); return; }
+                                          const img = e.target as HTMLImageElement;
+                                          if (img.src.includes('googleusercontent.com')) {
+                                            img.src = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                                          } else if (img.src.includes('uc?export=view')) {
+                                            img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+                                          } else {
+                                            setImagePreviewError(true);
+                                          }
+                                        }}
                                         data-testid="img-new-image-preview"
                                       />
                                     </div>
@@ -2702,7 +2729,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                   src={convertToDirectImageUrl(url)}
                                   alt={`Image ${idx + 1}`}
                                   className="h-10 w-10 object-cover rounded"
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  onError={(e) => handleImageError(e, url)}
                                 />
                                 <span className="text-xs text-muted-foreground max-w-[120px] truncate">{url.split('/').pop() || 'Image'}</span>
                               </div>
