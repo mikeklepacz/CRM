@@ -416,7 +416,7 @@ export default function ClientDashboard() {
   const [citySearchTerm, setCitySearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [showMyStoresOnly, setShowMyStoresOnly] = useState<boolean>(false);
-  const [showUnclaimedOnly, setShowUnclaimedOnly] = useState<boolean>(false);
+  const [showUnclaimedOnly, setShowUnclaimedOnly] = useState<boolean>(true);
   const [showCanadaOnly, setShowCanadaOnly] = useState<boolean>(false);
   const [showStateless, setShowStateless] = useState(false);
   const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
@@ -1177,6 +1177,8 @@ export default function ClientDashboard() {
         }
         if (userPreferences && 'showUnclaimedOnly' in userPreferences && userPreferences.showUnclaimedOnly !== undefined) {
           setShowUnclaimedOnly(userPreferences.showUnclaimedOnly);
+        } else if (!userPreferences?.showMyStoresOnly) {
+          setShowUnclaimedOnly(true);
         }
         if (userPreferences?.showStateless !== undefined) {
           setShowStateless(userPreferences.showStateless);
@@ -1205,6 +1207,7 @@ export default function ClientDashboard() {
         setColorRowByStatus(false); // Default to false
         setFreezeFirstColumn(false); // Default to false
         setShowMyStoresOnly(false); // Default to false
+        setShowUnclaimedOnly(true); // Default to showing unclaimed shops
         setPreferencesLoaded(true);
       } else {
         // Preferences already loaded - check for new headers
