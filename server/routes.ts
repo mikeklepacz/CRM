@@ -28,6 +28,7 @@ import OpenAI, { toFile } from "openai";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
 import { updateCommissionTrackerStatus } from "./services/commissionTrackerUpdate";
+import { replaceImagePlaceholders } from "./utils/imageUtils";
 import { ensureDailySlots } from "./services/Matrix2/slotGenerator";
 import { assignSingleRecipient } from "./services/Matrix2/slotAssigner";
 import {
@@ -8288,14 +8289,17 @@ IMPORTANT:
         });
       }
 
-      // Create RFC 2822 formatted email
+      // Process image placeholders and create RFC 2822 formatted HTML email
+      const processedBody = replaceImagePlaceholders(body);
+      const isHtml = processedBody !== body;
       const emailContent = [
+        `MIME-Version: 1.0`,
+        `Content-Type: ${isHtml ? "text/html" : "text/plain"}; charset=UTF-8`,
         `To: ${to}`,
         `Subject: ${subject}`,
-        '',
-        body
-      ].join('\r\n');
-
+        "",
+        processedBody
+      ].join("\r\n");
       // Base64 encode for Gmail API
       const encodedMessage = Buffer.from(emailContent)
         .toString('base64')
@@ -8371,6 +8375,7 @@ IMPORTANT:
               link: clientLink || null,
               status: 'awaiting_reply',
               currentStep: 1, // Manual email = Step 1
+              tenantId: req.user.tenantId,
             })
             .returning();
           
@@ -21259,6 +21264,7 @@ Use this store information to provide context-aware responses. When helping draf
                 .insert(sequenceRecipients)
                 .values({
                   sequenceId: manualFollowUpsSequence.id,
+                  tenantId: req.user.tenantId,
                   name: recipientEmail,
                   email: recipientEmail,
                   currentStep: 1,
