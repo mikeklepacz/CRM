@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import { Device, Call } from "@twilio/voice-sdk";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
@@ -13,27 +13,48 @@ interface VoipState {
   activePhoneNumber: string | null;
 }
 
-export function useTwilioVoip() {
-  const { user } = useAuth();
-  const deviceRef = useRef<Device | null>(null);
-  const callRef = useRef<Call | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const initializingRef = useRef(false);
+const DEFAULT_STATE: VoipState = {
+  status: "idle",
+  isMuted: false,
+  duration: 0,
+  activePhoneNumber: null,
+};
 
-  const [state, setState] = useState<VoipState>({
-    status: "idle",
-    isMuted: false,
-    duration: 0,
-    activePhoneNumber: null,
-  });
+let sharedDevice: Device | null = null;
+let sharedCall: Call | null = null;
+let sharedTimer: ReturnType<typeof setInterval> | null = null;
+let sharedState: VoipState = { ...DEFAULT_STATE };
+let initPromise: Promise<Device | null> | null = null;
+const listeners = new Set<() => void>();
 
-  const { toast } = useToast();
-  const hasTwilioNumber = !!user?.twilioPhoneNumber;
+function getSnapshot(): VoipState {
+  return sharedState;
+}
 
-  const initDevice = useCallback(async () => {
-    if (deviceRef.current || !hasTwilioNumber || initializingRef.current) return;
-    initializingRef.current = true;
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
 
+function updateState(partial: Partial<VoipState>) {
+  sharedState = { ...sharedState, ...partial };
+  listeners.forEach((fn) => fn());
+}
+
+function resetState() {
+  if (sharedTimer) {
+    clearInterval(sharedTimer);
+    sharedTimer = null;
+  }
+  sharedCall = null;
+  updateState({ ...DEFAULT_STATE });
+}
+
+async function initSharedDevice(): Promise<Device | null> {
+  if (sharedDevice) return sharedDevice;
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
     try {
       console.log("[VoIP] Initializing device...");
       const data = await apiRequest("GET", "/api/twilio/voip-token");
@@ -54,7 +75,8 @@ export function useTwilioVoip() {
 
       device.on("error", (error: any) => {
         console.error("[VoIP] Device error:", error?.message || error?.code, error);
-        setState((prev) => ({ ...prev, status: "idle" }));
+        sharedDevice = null;
+        resetState();
       });
 
       device.on("tokenWillExpire", async () => {
@@ -67,36 +89,41 @@ export function useTwilioVoip() {
       });
 
       await device.register();
-      deviceRef.current = device;
+      sharedDevice = device;
       console.log("[VoIP] Device registered successfully");
+      return device;
     } catch (err: any) {
       const errorMsg = err?.message || err?.code || String(err);
       console.error("[VoIP] Failed to initialize device:", errorMsg, err);
-      toast({
-        title: "VoIP setup failed",
-        description: `Browser calling could not initialize: ${errorMsg}`,
-        variant: "destructive",
-      });
+      return null;
     } finally {
-      initializingRef.current = false;
+      initPromise = null;
     }
-  }, [hasTwilioNumber]);
+  })();
+
+  return initPromise;
+}
+
+export function useTwilioVoip() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const hasTwilioNumber = !!user?.twilioPhoneNumber;
+
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   useEffect(() => {
-    if (hasTwilioNumber) {
-      initDevice();
+    if (hasTwilioNumber && !sharedDevice && !initPromise) {
+      initSharedDevice().then((device) => {
+        if (!device) {
+          toast({
+            title: "VoIP setup failed",
+            description: "Browser calling could not initialize. Check your Twilio configuration.",
+            variant: "destructive",
+          });
+        }
+      });
     }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (callRef.current) callRef.current.disconnect();
-      if (deviceRef.current) {
-        deviceRef.current.destroy();
-        deviceRef.current = null;
-      }
-      initializingRef.current = false;
-    };
-  }, [hasTwilioNumber, initDevice]);
+  }, [hasTwilioNumber]);
 
   const makeCall = useCallback(
     async (phoneNumber: string) => {
@@ -105,11 +132,12 @@ export function useTwilioVoip() {
         return;
       }
 
-      if (!deviceRef.current) {
-        await initDevice();
+      let device = sharedDevice;
+      if (!device) {
+        device = await initSharedDevice();
       }
 
-      if (!deviceRef.current) {
+      if (!device) {
         console.error("[VoIP] Device not ready, falling back to tel:");
         toast({
           title: "VoIP unavailable",
@@ -120,106 +148,66 @@ export function useTwilioVoip() {
         return;
       }
 
-      if (callRef.current) {
-        callRef.current.disconnect();
+      if (sharedCall) {
+        sharedCall.disconnect();
       }
 
       try {
-        setState({
+        updateState({
           status: "connecting",
           isMuted: false,
           duration: 0,
           activePhoneNumber: phoneNumber,
         });
 
-        const call = await deviceRef.current.connect({
+        const call = await device.connect({
           params: {
             To: phoneNumber,
             CallerId: user!.twilioPhoneNumber!,
           },
         });
 
-        callRef.current = call;
+        sharedCall = call;
 
         call.on("ringing", () => {
-          setState((prev) => ({ ...prev, status: "ringing" }));
+          updateState({ status: "ringing" });
         });
 
         call.on("accept", () => {
-          setState((prev) => ({ ...prev, status: "connected", duration: 0 }));
-          timerRef.current = setInterval(() => {
-            setState((prev) => ({ ...prev, duration: prev.duration + 1 }));
+          updateState({ status: "connected", duration: 0 });
+          sharedTimer = setInterval(() => {
+            updateState({ duration: (sharedState.duration || 0) + 1 });
           }, 1000);
         });
 
-        call.on("disconnect", () => {
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          callRef.current = null;
-          setState({
-            status: "idle",
-            isMuted: false,
-            duration: 0,
-            activePhoneNumber: null,
-          });
-        });
-
-        call.on("cancel", () => {
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          callRef.current = null;
-          setState({
-            status: "idle",
-            isMuted: false,
-            duration: 0,
-            activePhoneNumber: null,
-          });
-        });
+        call.on("disconnect", () => resetState());
+        call.on("cancel", () => resetState());
 
         call.on("error", (error) => {
           console.error("[VoIP] Call error:", error);
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          callRef.current = null;
-          setState({
-            status: "idle",
-            isMuted: false,
-            duration: 0,
-            activePhoneNumber: null,
-          });
+          resetState();
         });
       } catch (err) {
         console.error("[VoIP] Failed to make call:", err);
-        setState({
-          status: "idle",
-          isMuted: false,
-          duration: 0,
-          activePhoneNumber: null,
-        });
+        resetState();
       }
     },
-    [hasTwilioNumber, user, initDevice]
+    [hasTwilioNumber, user]
   );
 
   const hangup = useCallback(() => {
-    if (callRef.current) {
-      callRef.current.disconnect();
+    if (sharedCall) {
+      sharedCall.disconnect();
     }
   }, []);
 
   const toggleMute = useCallback(() => {
-    if (callRef.current) {
-      const newMuted = !state.isMuted;
-      callRef.current.mute(newMuted);
-      setState((prev) => ({ ...prev, isMuted: newMuted }));
+    if (sharedCall) {
+      const newMuted = !sharedState.isMuted;
+      sharedCall.mute(newMuted);
+      updateState({ isMuted: newMuted });
     }
-  }, [state.isMuted]);
+  }, []);
 
   return {
     ...state,
