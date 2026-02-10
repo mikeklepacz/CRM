@@ -927,6 +927,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allowedModules = tenant?.settings?.allowedModules || null;
       }
       
+      console.log('[Auth User] Returning user data, twilioPhoneNumber:', user?.twilioPhoneNumber || 'NOT SET');
       res.json({
         ...user,
         tenantId: effectiveTenantId,
@@ -2573,6 +2574,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/twilio/voip-token - Generate Twilio AccessToken for browser VoIP
   app.get('/api/twilio/voip-token', isAuthenticatedCustom, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims?.sub;
+      console.log('[VoIP Token] Token requested by user:', userId);
+      console.log('[VoIP Token] ENV check - ACCOUNT_SID:', !!process.env.TWILIO_ACCOUNT_SID, 'API_KEY:', !!process.env.TWILIO_API_KEY, 'API_SECRET:', !!process.env.TWILIO_API_SECRET, 'TWIML_APP_SID:', !!process.env.TWILIO_TWIML_APP_SID);
+
       const { AccessToken } = twilio.jwt;
       const { VoiceGrant } = AccessToken;
 
@@ -2580,7 +2585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         process.env.TWILIO_ACCOUNT_SID!,
         process.env.TWILIO_API_KEY!,
         process.env.TWILIO_API_SECRET!,
-        { identity: req.user.id, ttl: 3600 }
+        { identity: userId, ttl: 3600 }
       );
       const voiceGrant = new VoiceGrant({
         outgoingApplicationSid: process.env.TWILIO_TWIML_APP_SID,
@@ -2588,11 +2593,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       accessToken.addGrant(voiceGrant);
 
-      res.json({ token: accessToken.toJwt(), identity: req.user.id });
+      console.log('[VoIP Token] Token generated successfully for identity:', userId);
+      res.json({ token: accessToken.toJwt(), identity: userId });
     } catch (error: any) {
-      console.error('[VoIP Token] Error:', error);
+      console.error('[VoIP Token] Error generating token:', error.message, error.stack);
       res.status(500).json({ error: error.message || 'Failed to generate VoIP token' });
     }
+  });
+
+  // GET /api/twilio/voip-check - Diagnostic endpoint (no auth) to verify VoIP config
+  app.get('/api/twilio/voip-check', async (req: any, res) => {
+    res.json({
+      hasAccountSid: !!process.env.TWILIO_ACCOUNT_SID,
+      hasApiKey: !!process.env.TWILIO_API_KEY,
+      hasApiSecret: !!process.env.TWILIO_API_SECRET,
+      hasTwimlAppSid: !!process.env.TWILIO_TWIML_APP_SID,
+      allConfigured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET && process.env.TWILIO_TWIML_APP_SID),
+    });
   });
 
   // POST /api/twilio/voip-twiml - TwiML endpoint for browser VoIP calls
