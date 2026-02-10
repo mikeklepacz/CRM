@@ -4025,15 +4025,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get sheets configuration
-      const configuredSheets = await storage.getSheets();
-      const storeSheet = configuredSheets.find((s: any) => s.sheetPurpose === "Store Database");
+      const tenantId = (req.user as any).tenantId;
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
       
       if (!storeSheet) {
         return res.status(404).json({ error: 'Store Database sheet not configured' });
       }
 
       // Fetch all rows from Store Database
-      const sheetData = await googleSheets.readSheetData(storeSheet.id, 'A:ZZ');
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const sheetData = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
       
       if (!sheetData || sheetData.length === 0) {
         return res.status(404).json({ error: 'No data found in Store Database' });
