@@ -2649,8 +2649,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                   <p className="text-xs font-medium">Add New Image</p>
                                   <Input
                                     placeholder="Paste image URL (Google Drive, etc.)"
-                                    value={newImageUrl}
+                                    value={newImageUrl.startsWith('data:') ? 'Pasted image (use a URL instead)' : newImageUrl}
                                     onChange={(e) => { setNewImageUrl(e.target.value); setImagePreviewError(false); }}
+                                    onPaste={(e) => {
+                                      const text = e.clipboardData.getData('text/plain');
+                                      if (text && !text.startsWith('data:')) {
+                                        e.preventDefault();
+                                        setNewImageUrl(text.trim());
+                                        setImagePreviewError(false);
+                                      }
+                                    }}
                                     className="text-xs"
                                     data-testid="input-new-image-url"
                                   />
@@ -2661,7 +2669,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                     className="text-xs"
                                     data-testid="input-new-image-label"
                                   />
-                                  {newImageUrl && !imagePreviewError && (
+                                  {newImageUrl && !imagePreviewError && !newImageUrl.startsWith('data:') && (
                                     <div className="rounded border p-1">
                                       <img
                                         src={convertToDirectImageUrl(newImageUrl)}
@@ -2683,16 +2691,20 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                       />
                                     </div>
                                   )}
-                                  {imagePreviewError && (
+                                  {newImageUrl.startsWith('data:') && (
+                                    <p className="text-xs text-destructive">Please paste a URL link, not an image directly. Use a Google Drive share link or any public image URL.</p>
+                                  )}
+                                  {imagePreviewError && !newImageUrl.startsWith('data:') && (
                                     <p className="text-xs text-destructive">Could not load image preview. Check the URL.</p>
                                   )}
                                   <Button
                                     size="sm"
                                     className="w-full"
-                                    disabled={!newImageUrl || !newImageLabel || saveImageMutation.isPending}
+                                    disabled={!newImageUrl || !newImageLabel || saveImageMutation.isPending || newImageUrl.startsWith('data:')}
                                     onClick={async () => {
-                                      await saveImageMutation.mutateAsync({ url: newImageUrl, label: newImageLabel });
-                                      insertImageAtCursor(newImageUrl, 'body');
+                                      const urlToSave = convertToDirectImageUrl(newImageUrl.trim());
+                                      await saveImageMutation.mutateAsync({ url: urlToSave, label: newImageLabel });
+                                      insertImageAtCursor(urlToSave, 'body');
                                       setNewImageUrl("");
                                       setNewImageLabel("");
                                       setImagePreviewError(false);
