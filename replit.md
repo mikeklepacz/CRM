@@ -38,7 +38,7 @@ The application features a client dashboard unifying data, transitioning from a 
 - **ElevenLabs AI Voice Calling**: Automated outbound calling with multi-agent support, queue management, and ambient audio mixing. Uses a Fly.io voice-proxy for Twilio WebSocket handling.
 - **AI Insights**: OpenAI-powered call performance analysis (admin-only).
 - **Self-Evolving Knowledge Base**: Version-controlled KB with AI-powered improvements.
-- **E-Hub: Email Campaign System**: AI-powered cold outreach with automated sequences, reply detection, and CRM sync (admin-only). Integrated with Apollo.io for enriched contacts.
+- **E-Hub: Email Campaign System**: AI-powered cold outreach with automated sequences, reply detection, and CRM sync (admin-only). Integrated with Apollo.io for enriched contacts. Supports inline images in email templates via `{{image:URL}}` placeholders — users can paste Google Drive links or any image URL through the Image Library button in the Template Builder. Images are stored per-tenant in `email_images` table and converted to HTML `<img>` tags when emails are sent.
 - **Apollo.io Integration**: Lead enrichment system to add contact data (emails, phone numbers, job titles, seniorities) from Apollo.io. Features preview-before-enrich workflow to minimize API credit usage, bulk enrichment, credit tracking, and integration with E-Hub email sequences. Uses the "Link" column from Google Sheets as the universal connector between systems.
 - **Manual Follow-Ups**: Human-to-AI handoff for follow-ups, triggered by Gmail drafts, with AI context preservation.
 - **Real-Time Updates**: Server-Sent Events (SSE) for push-based UI updates and React Query cache invalidation.

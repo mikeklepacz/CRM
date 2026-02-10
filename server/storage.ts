@@ -205,6 +205,9 @@ import {
   emailAccounts,
   type EmailAccount,
   type InsertEmailAccount,
+  emailImages,
+  type EmailImage,
+  type InsertEmailImage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
@@ -797,6 +800,11 @@ export interface IStorage {
     sessionUpdates: Partial<InsertCallSession>,
     leadUpdates: Partial<InsertQualificationLead>
   ): Promise<void>;
+
+  // Email Image Library operations
+  listEmailImages(tenantId: string): Promise<EmailImage[]>;
+  createEmailImage(data: InsertEmailImage): Promise<EmailImage>;
+  deleteEmailImage(id: string, tenantId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6392,6 +6400,21 @@ export class DatabaseStorage implements IStorage {
         .set({ ...leadUpdates, updatedAt: new Date() })
         .where(and(eq(qualificationLeads.id, leadId), eq(qualificationLeads.tenantId, tenantId)));
     }
+  }
+
+  // Email Image Library operations
+  async listEmailImages(tenantId: string): Promise<EmailImage[]> {
+    return await db.select().from(emailImages).where(eq(emailImages.tenantId, tenantId)).orderBy(desc(emailImages.createdAt));
+  }
+
+  async createEmailImage(data: InsertEmailImage): Promise<EmailImage> {
+    const [image] = await db.insert(emailImages).values(data).returning();
+    return image;
+  }
+
+  async deleteEmailImage(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(emailImages).where(and(eq(emailImages.id, id), eq(emailImages.tenantId, tenantId))).returning();
+    return result.length > 0;
   }
 }
 

@@ -27106,6 +27106,47 @@ ${conversationContext}`;
       res.status(500).json({ message: error.message || 'Failed to update email account' });
     }
   });
+  // ========================================
+  // EMAIL IMAGE LIBRARY ROUTES
+  // ========================================
+
+  // Email Image Library routes
+  app.get("/api/email-images", async (req: any, res) => {
+    if (!req.user?.tenantId) return res.status(401).json({ error: "Not authenticated" });
+    try {
+      const images = await storage.listEmailImages(req.user.tenantId);
+      res.json(images);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/email-images", async (req: any, res) => {
+    if (!req.user?.tenantId) return res.status(401).json({ error: "Not authenticated" });
+    try {
+      const { url, label } = req.body;
+      if (!url || typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: "A valid URL is required" });
+      if (!label || typeof label !== 'string' || !label.trim()) return res.status(400).json({ error: "A label is required" });
+      if (url.length > 2000) return res.status(400).json({ error: "URL is too long" });
+      if (label.length > 255) return res.status(400).json({ error: "Label is too long" });
+      const image = await storage.createEmailImage({ tenantId: req.user.tenantId, url: url.trim(), label: label.trim() });
+      res.json(image);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/email-images/:id", async (req: any, res) => {
+    if (!req.user?.tenantId) return res.status(401).json({ error: "Not authenticated" });
+    try {
+      const deleted = await storage.deleteEmailImage(req.params.id, req.user.tenantId);
+      if (!deleted) return res.status(404).json({ error: "Image not found" });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
 
   // ========================================
   // APOLLO ENRICHMENT ROUTES

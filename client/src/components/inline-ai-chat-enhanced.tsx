@@ -57,6 +57,7 @@ import {
   Trash2,
   User as UserIcon,
   X,
+  Image as ImageIcon,
 } from "lucide-react";
 import type {
   Conversation,
@@ -262,6 +263,20 @@ function replaceSimpleTemplateVariables(
   result = result.replace(/\{\{currentDate\}\}/g, now.toLocaleDateString());
   result = result.replace(/\{\{currentTime\}\}/g, now.toLocaleTimeString());
 
+  result = result.replace(/\{\{image:(.*?)\}\}/g, (match, url) => {
+    let directUrl = url.trim();
+    const fileMatch = directUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileMatch) {
+      directUrl = `https://drive.google.com/thumbnail?id=${fileMatch[1]}&sz=w800`;
+    } else {
+      const idMatch = directUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (idMatch) {
+        directUrl = `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
+      }
+    }
+    return `<img src="${directUrl}" alt="" style="max-width: 100%; height: auto; display: block; margin: 10px 0;" />`;
+  });
+
   return result;
 }
 
@@ -323,6 +338,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const emailBodyRef = useRef<HTMLTextAreaElement>(null);
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ title: string; content: string } | null>(null);
+
+  // Image library state
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [newImageLabel, setNewImageLabel] = useState("");
+  const [imagePreviewError, setImagePreviewError] = useState(false);
 
   // Tag management state
   const [tagEditMode, setTagEditMode] = useState(false);
@@ -422,6 +442,31 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         textarea.focus();
         textarea.setSelectionRange(start + variable.length, start + variable.length);
       }, 0);
+    }
+  };
+
+  const insertImageAtCursor = (imageUrl: string, targetField?: 'body') => {
+    const placeholder = `{{image:${imageUrl}}}`;
+    const ref = emailBodyRef;
+    const el = ref?.current;
+    if (el) {
+      const start = el.selectionStart || 0;
+      const end = el.selectionEnd || 0;
+      const currentValue = builderType === "Email" ? emailBody : "";
+      const newValue = currentValue.substring(0, start) + placeholder + currentValue.substring(end);
+      if (builderType === "Email") {
+        setEmailBody(newValue);
+      }
+      setTimeout(() => {
+        const newPos = start + placeholder.length;
+        el.selectionStart = newPos;
+        el.selectionEnd = newPos;
+        el.focus();
+      }, 0);
+    } else {
+      if (builderType === "Email") {
+        setEmailBody((prev) => prev + placeholder);
+      }
     }
   };
 
@@ -794,6 +839,28 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
   const { data: userTags = [] } = useQuery<Array<{ id: string; userId: string; tag: string; createdAt: Date }>>({
     queryKey: ["/api/user-tags"],
+  });
+
+  const { data: savedEmailImages = [] } = useQuery<any[]>({
+    queryKey: ['/api/email-images'],
+  });
+
+  const deleteImageMutation = useMutation({
+    mutationFn: async (imageId: string) => {
+      return await apiRequest('DELETE', `/api/email-images/${imageId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/email-images'] });
+    },
+  });
+
+  const saveImageMutation = useMutation({
+    mutationFn: async (data: { url: string; label: string }) => {
+      return await apiRequest('POST', '/api/email-images', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/email-images'] });
+    },
   });
 
   const { data: messages = [], isLoading: messagesLoading } = useQuery<ChatMessageType[]>({
@@ -2324,7 +2391,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                     <div className="space-y-2 flex-1 flex flex-col min-h-0">
                       <div className="flex items-center justify-between">
                         <label className="text-sm font-semibold">Body</label>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           {/* Store Info Variables */}
                           <Popover>
                             <PopoverTrigger asChild>
@@ -2492,6 +2559,114 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                               </div>
                             </PopoverContent>
                           </Popover>
+
+                          {/* Image Library */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-image-body"
+                              >
+                                <ImageIcon className="h-4 w-4 mr-1" />
+                                Image
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80" align="end">
+                              <div className="space-y-3">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <ImageIcon className="h-4 w-4" />
+                                  Image Library
+                                </h4>
+                                {savedEmailImages.length > 0 ? (
+                                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                                    {savedEmailImages.map((img: any) => (
+                                      <div
+                                        key={img.id}
+                                        className="relative group rounded border p-1 hover-elevate cursor-pointer"
+                                        data-testid={`image-library-item-${img.id}`}
+                                      >
+                                        <button
+                                          onClick={() => insertImageAtCursor(img.url, 'body')}
+                                          className="w-full"
+                                          data-testid={`button-insert-image-${img.id}`}
+                                        >
+                                          <img
+                                            src={img.url}
+                                            alt={img.label}
+                                            className="w-full h-16 object-cover rounded"
+                                            onError={(e) => { (e.target as HTMLImageElement).src = ''; (e.target as HTMLImageElement).alt = 'Failed to load'; }}
+                                          />
+                                          <p className="text-xs truncate mt-1 text-muted-foreground">{img.label}</p>
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteImageMutation.mutate(img.id);
+                                          }}
+                                          className="absolute top-0 right-0 p-0.5 rounded-bl bg-destructive/80 text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                          data-testid={`button-delete-image-${img.id}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground text-center py-2">No saved images yet</p>
+                                )}
+                                <div className="border-t" />
+                                <div className="space-y-2">
+                                  <p className="text-xs font-medium">Add New Image</p>
+                                  <Input
+                                    placeholder="Paste image URL (Google Drive, etc.)"
+                                    value={newImageUrl}
+                                    onChange={(e) => { setNewImageUrl(e.target.value); setImagePreviewError(false); }}
+                                    className="text-xs"
+                                    data-testid="input-new-image-url"
+                                  />
+                                  <Input
+                                    placeholder="Label (e.g., Product Banner)"
+                                    value={newImageLabel}
+                                    onChange={(e) => setNewImageLabel(e.target.value)}
+                                    className="text-xs"
+                                    data-testid="input-new-image-label"
+                                  />
+                                  {newImageUrl && !imagePreviewError && (
+                                    <div className="rounded border p-1">
+                                      <img
+                                        src={newImageUrl}
+                                        alt="Preview"
+                                        className="w-full h-20 object-cover rounded"
+                                        onError={() => setImagePreviewError(true)}
+                                        data-testid="img-new-image-preview"
+                                      />
+                                    </div>
+                                  )}
+                                  {imagePreviewError && (
+                                    <p className="text-xs text-destructive">Could not load image preview. Check the URL.</p>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    className="w-full"
+                                    disabled={!newImageUrl || !newImageLabel || saveImageMutation.isPending}
+                                    onClick={async () => {
+                                      await saveImageMutation.mutateAsync({ url: newImageUrl, label: newImageLabel });
+                                      insertImageAtCursor(newImageUrl, 'body');
+                                      setNewImageUrl("");
+                                      setNewImageLabel("");
+                                      setImagePreviewError(false);
+                                    }}
+                                    data-testid="button-save-insert-image"
+                                  >
+                                    {saveImageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                                    Save & Insert
+                                  </Button>
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
                       <Textarea
@@ -2502,6 +2677,27 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                         className="flex-1 min-h-[200px] font-mono"
                         data-testid="textarea-email-body"
                       />
+                      {/* Inline image previews for {{image:...}} placeholders */}
+                      {(() => {
+                        const imageMatches = emailBody.match(/\{\{image:(.*?)\}\}/g);
+                        if (!imageMatches || imageMatches.length === 0) return null;
+                        const imageUrls = imageMatches.map(m => m.replace(/^\{\{image:/, '').replace(/\}\}$/, ''));
+                        return (
+                          <div className="flex gap-2 flex-wrap py-1" data-testid="inline-image-previews">
+                            {imageUrls.map((url, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 rounded border p-1 bg-muted/30">
+                                <img
+                                  src={url}
+                                  alt={`Image ${idx + 1}`}
+                                  className="h-10 w-10 object-cover rounded"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                                <span className="text-xs text-muted-foreground max-w-[120px] truncate">{url.split('/').pop() || 'Image'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <p className="text-xs text-muted-foreground">
                         Use variables like: {`{{storeName}}, {{pocName}}, {{pocEmail}}`}
                       </p>
@@ -2513,7 +2709,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                     <div className="space-y-2 flex-1 flex flex-col">
                       <div className="flex items-center justify-between gap-4">
                         <label className="text-sm font-semibold">Content</label>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           {/* Store Info Variables */}
                           <Popover>
                             <PopoverTrigger asChild>

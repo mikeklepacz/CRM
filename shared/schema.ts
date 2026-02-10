@@ -2666,3 +2666,22 @@ export const insertApolloSettingsSchema = createInsertSchema(apolloSettings).omi
 
 export type InsertApolloSettings = z.infer<typeof insertApolloSettingsSchema>;
 export type ApolloSettings = typeof apolloSettings.$inferSelect;
+
+// Email Image Library - Persistent image URLs for email templates
+export const emailImages = pgTable("email_images", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  url: text("url").notNull(),
+  label: varchar("label", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_email_images_tenant").on(table.tenantId),
+]);
+
+export const insertEmailImageSchema = createInsertSchema(emailImages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertEmailImage = z.infer<typeof insertEmailImageSchema>;
+export type EmailImage = typeof emailImages.$inferSelect;

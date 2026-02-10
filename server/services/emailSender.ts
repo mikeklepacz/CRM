@@ -1,4 +1,5 @@
 import { google, gmail_v1 } from "googleapis";
+import { replaceImagePlaceholders } from '../utils/imageUtils';
 import { storage } from "../storage";
 import type {
   SequenceRecipient,
@@ -151,7 +152,8 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
     if (options.inReplyTo) headers.push(`In-Reply-To: ${options.inReplyTo}`);
     if (options.references) headers.push(`References: ${options.references}`);
 
-    const email = [...headers, "", options.body].join("\r\n");
+    const processedBody = replaceImagePlaceholders(options.body);
+    const email = [...headers, "", processedBody].join("\r\n");
 
     const encodedEmail = Buffer.from(email)
       .toString("base64")
@@ -269,7 +271,8 @@ async function sendEmailWithGmailClient(
     if (options.inReplyTo) headers.push(`In-Reply-To: ${options.inReplyTo}`);
     if (options.references) headers.push(`References: ${options.references}`);
 
-    const email = [...headers, "", options.body].join("\r\n");
+    const processedBody = replaceImagePlaceholders(options.body);
+    const email = [...headers, "", processedBody].join("\r\n");
 
     const encodedEmail = Buffer.from(email)
       .toString("base64")
@@ -467,6 +470,8 @@ JSON FORMAT:
   if (settings.signature) {
     body += `\n\n${settings.signature}`;
   }
+
+  body = replaceImagePlaceholders(body);
 
   return { subject, body };
 }
