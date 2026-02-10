@@ -51,6 +51,7 @@ export default function Dashboard() {
     row: any;
     autoCallPhone?: string;
   } | null>(null);
+  const [storeDetailsLoading, setStoreDetailsLoading] = useState<string | null>(null);
 
   // AI Assistant context update trigger
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
@@ -483,10 +484,31 @@ export default function Dashboard() {
             clients={paginatedClients}
             currentUser={user}
             isLoading={clientsLoading}
-            onNotesClick={(clientId: string) => {
+            loadingClientId={storeDetailsLoading}
+            onNotesClick={async (clientId: string) => {
               const client = filteredClients.find(c => c.id === clientId);
-              if (client) {
+              if (!client) return;
+              const link = client.data?.Link || client.id;
+              if (!link) {
                 setStoreDetailsDialog({ open: true, row: client });
+                return;
+              }
+              setStoreDetailsLoading(clientId);
+              try {
+                const response = await fetch(`/api/stores/by-link?link=${encodeURIComponent(link)}`);
+                if (response.ok) {
+                  const { storeRow, meta } = await response.json();
+                  setStoreDetailsDialog({
+                    open: true,
+                    row: { ...storeRow, meta: { rowIndex: meta.rowIndex, storeSheetId: meta.storeSheetId } },
+                  });
+                } else {
+                  setStoreDetailsDialog({ open: true, row: client });
+                }
+              } catch {
+                setStoreDetailsDialog({ open: true, row: client });
+              } finally {
+                setStoreDetailsLoading(null);
               }
             }}
           />

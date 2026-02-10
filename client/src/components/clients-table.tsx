@@ -26,9 +26,10 @@ interface ClientsTableProps {
   currentUser: User;
   isLoading?: boolean;
   onNotesClick: (clientId: string) => void;
+  loadingClientId?: string | null;
 }
 
-export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: ClientsTableProps) {
+export function ClientsTable({ clients, currentUser, isLoading, onNotesClick, loadingClientId }: ClientsTableProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -198,6 +199,7 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                         <Button
                           variant="outline"
                           size="sm"
+                          disabled={loadingClientId === client.id}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (onNotesClick) {
@@ -211,8 +213,14 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                               : ''
                           }`}
                         >
-                          <span className="text-xs leading-tight">Notes</span>
-                          <span className="text-xs leading-tight">Follow up</span>
+                          {loadingClientId === client.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <span className="text-xs leading-tight">Notes</span>
+                              <span className="text-xs leading-tight">Follow up</span>
+                            </>
+                          )}
                         </Button>
                         {canClaim && (
                           <Button
