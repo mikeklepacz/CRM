@@ -8059,6 +8059,13 @@ IMPORTANT:
         return res.send('<script>alert("Authorization failed"); window.close();</script>');
       }
 
+      // Look up user's default tenant for the integration record
+      const tenantInfo = await storage.getUserDefaultTenant(userId as string);
+      if (!tenantInfo) {
+        console.error(`[Gmail Callback] Failed to find default tenant for user ${userId}`);
+        return res.send('<script>alert("User tenant not found"); window.close();</script>');
+      }
+
       // Use system-wide OAuth credentials
       const systemIntegration = await storage.getSystemIntegration('google_sheets');
       if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
@@ -8097,6 +8104,7 @@ IMPORTANT:
       // Store per-user Gmail/Calendar tokens (both fields for Gmail and Calendar)
       const expiryTimestamp = Date.now() + (tokens.expires_in * 1000);
       await storage.updateUserIntegration(userId as string, {
+        tenantId: tenantInfo.tenantId,
         googleClientId: systemIntegration.googleClientId,
         googleClientSecret: systemIntegration.googleClientSecret,
         // Gmail fields (used by getUserAccessToken)
