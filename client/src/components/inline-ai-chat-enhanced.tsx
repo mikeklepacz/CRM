@@ -344,6 +344,18 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const [newImageLabel, setNewImageLabel] = useState("");
   const [imagePreviewError, setImagePreviewError] = useState(false);
 
+  const convertToDirectImageUrl = (url: string): string => {
+    let fileId: string | null = null;
+    const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileMatch) fileId = fileMatch[1];
+    if (!fileId) {
+      const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (idMatch) fileId = idMatch[1];
+    }
+    if (fileId) return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+    return url;
+  };
+
   // Tag management state
   const [tagEditMode, setTagEditMode] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
@@ -2593,7 +2605,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                           data-testid={`button-insert-image-${img.id}`}
                                         >
                                           <img
-                                            src={img.url}
+                                            src={convertToDirectImageUrl(img.url)}
                                             alt={img.label}
                                             className="w-full h-16 object-cover rounded"
                                             onError={(e) => { (e.target as HTMLImageElement).src = ''; (e.target as HTMLImageElement).alt = 'Failed to load'; }}
@@ -2636,7 +2648,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                   {newImageUrl && !imagePreviewError && (
                                     <div className="rounded border p-1">
                                       <img
-                                        src={newImageUrl}
+                                        src={convertToDirectImageUrl(newImageUrl)}
                                         alt="Preview"
                                         className="w-full h-20 object-cover rounded"
                                         onError={() => setImagePreviewError(true)}
@@ -2687,7 +2699,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                             {imageUrls.map((url, idx) => (
                               <div key={idx} className="flex items-center gap-1.5 rounded border p-1 bg-muted/30">
                                 <img
-                                  src={url}
+                                  src={convertToDirectImageUrl(url)}
                                   alt={`Image ${idx + 1}`}
                                   className="h-10 w-10 object-cover rounded"
                                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
