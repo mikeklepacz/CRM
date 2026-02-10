@@ -1,0 +1,60 @@
+useTwilioVoip.ts:42 [TwilioVoice][AudioHelper] Warning: Unable to set audio output devices. InvalidArgumentError: Devices not found: default
+warn @ @twilio_voice-sdk.js?v=13065680:1826
+(anonymous) @ @twilio_voice-sdk.js?v=13065680:2622
+Promise.catch
+(anonymous) @ @twilio_voice-sdk.js?v=13065680:2621
+Promise.then
+_initializeEnumeration @ @twilio_voice-sdk.js?v=13065680:2614
+AudioHelper @ @twilio_voice-sdk.js?v=13065680:2204
+_setupAudioHelper @ @twilio_voice-sdk.js?v=13065680:7192
+updateOptions @ @twilio_voice-sdk.js?v=13065680:6835
+_Device @ @twilio_voice-sdk.js?v=13065680:6610
+(anonymous) @ useTwilioVoip.ts:42
+await in (anonymous)
+(anonymous) @ useTwilioVoip.ts:87
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=13065680:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=13065680:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=13065680:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=13065680:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=13065680:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=13065680:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=13065680:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=13065680:19416
+commitRoot @ chunk-NFC5BX5N.js?v=13065680:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=13065680:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=13065680:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=13065680:555
+flush @ @tanstack_react-query.js?v=13065680:569
+batch @ @tanstack_react-query.js?v=13065680:587
+dispatch_fn @ @tanstack_react-query.js?v=13065680:996
+setData @ @tanstack_react-query.js?v=13065680:696
+onSuccess @ @tanstack_react-query.js?v=13065680:897
+resolve @ @tanstack_react-query.js?v=13065680:456
+Promise.then
+run @ @tanstack_react-query.js?v=13065680:498
+start @ @tanstack_react-query.js?v=13065680:536
+fetch @ @tanstack_react-query.js?v=13065680:926
+executeFetch_fn @ @tanstack_react-query.js?v=13065680:2211
+onSubscribe @ @tanstack_react-query.js?v=13065680:1898
+subscribe @ @tanstack_react-query.js?v=13065680:24
+(anonymous) @ @tanstack_react-query.js?v=13065680:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=13065680:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=13065680:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=13065680:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=13065680:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=13065680:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=13065680:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=13065680:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=13065680:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=13065680:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=13065680:19432
+commitRoot @ chunk-NFC5BX5N.js?v=13065680:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=13065680:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18718
+workLoop @ chunk-NFC5BX5N.js?v=13065680:197
+flushWork @ chunk-NFC5BX5N.js?v=13065680:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=13065680:384Understand this warning
+30The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
