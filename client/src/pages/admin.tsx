@@ -17,10 +17,10 @@ const ADMIN_TAB_MODULE_MAP: Record<string, string | null> = {
   campaigns: "qualification",
   reports: null,
   calendar: null,
-  openai: "voice_kb",
-  aligner: "voice_kb",
+  openai: "call_manager",
+  aligner: "call_manager",
   docs: "docs",
-  sync: "crm",
+  sync: "sales",
 };
 
 // Admin components (tenant-level only - Webhooks, Voice, Google Sheets moved to Super Admin)

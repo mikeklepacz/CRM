@@ -22,9 +22,11 @@ The application features a client dashboard unifying data, transitioning from a 
   - `Admin` (roleInTenant='org_admin' in DB): Tenant administrator, has access to Admin page, Call Manager, E-Hub, Organization settings. Has all Agent capabilities plus admin features.
   - `Agent` (roleInTenant='agent' in DB): Standard user, can make sales calls, use CRM, but no admin access
   - Note: The database stores 'org_admin' but UI displays 'Admin'. The `canAccessAdminFeatures()` function grants admin access.
-- **Module Access**: Two-layer system:
-  - `allowedModules` (tenant level, Super Admin controls): What modules a tenant CAN use. `null/undefined` = all allowed, `[]` = none allowed.
-  - `visibleModules` (user preference): Personal choice to show/hide modules in navigation.
+- **Module Access**: Two-layer system enforced for ALL users (including agents):
+  - `allowedModules` (tenant level, Super Admin controls): What modules a tenant CAN use. `null/undefined` = all allowed, `[]` = none allowed. Fetched via public `GET /api/tenant/modules` endpoint (accessible to all authenticated users, not admin-only).
+  - `visibleModules` (user preference): Personal choice to show/hide modules in navigation (only shows modules the tenant has enabled).
+  - Module IDs are 1:1 with nav items: `clients`, `sales`, `follow_up`, `map_search`, `assistant`, `docs`, `label_designer`, `analytics`, `pipelines`, `qualification`, `call_manager`, `ehub`, `apollo`. Defined in `client/src/lib/modules.ts`.
+  - `MODULE_NAV_MAPPING` in `client/src/hooks/useModuleAccess.ts` maps nav route keys to module IDs.
 - **Authentication**: Replit Auth with session-based control and `req.user.tenantId` context. The `/api/auth/user` endpoint returns user data plus `tenantId` and `roleInTenant` from session.
 - **Google Sheets Integration**: System-wide OAuth for read/write, per-user Google accounts for personalized features (Gmail/Calendar).
 - **Inline Editing**: Dashboard data modification syncing to Google Sheets; role-based read-only access.

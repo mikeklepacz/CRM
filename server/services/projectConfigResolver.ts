@@ -123,7 +123,7 @@ export async function resolveProjectConfig(
     tenant: {
       name: tenant.name,
       timezone: tenantSettings.timezone ?? null,
-      enabledModules: tenantSettings.enabledModules ?? ['crm'],
+      enabledModules: tenantSettings.enabledModules ?? ['clients', 'sales'],
       branding: {
         primaryColor: tenantSettings.primaryColor ?? null,
         logoUrl: tenantSettings.logoUrl ?? null,
