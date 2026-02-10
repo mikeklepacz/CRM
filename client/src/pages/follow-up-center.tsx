@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Phone, Loader2, ChevronDown, ChevronUp, Target } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { StoreDetailsDialog } from "@/components/store-details-dialog";
+import { useTwilioVoip } from "@/hooks/useTwilioVoip";
 
 interface FollowUpClient {
   id: string;
@@ -27,6 +28,7 @@ interface FollowUpData {
 }
 
 export default function FollowUpCenter() {
+  const voip = useTwilioVoip();
   // Follow-up center filters
   const [claimedDays, setClaimedDays] = useState([7, 90]);
   const [interestedDays, setInterestedDays] = useState([14, 90]);
@@ -139,7 +141,7 @@ export default function FollowUpCenter() {
       storeLink,
     });
 
-    window.location.href = `tel:${phoneNumber}`;
+    voip.makeCall(phoneNumber);
   };
 
   const handleOpenStoreDetails = (client: FollowUpClient) => {

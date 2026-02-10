@@ -13,13 +13,14 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, ChevronLeft, ChevronRight, Plus, FileText, Check, ChevronsUpDown, Info, GripVertical } from "lucide-react";
+import { Loader2, Save, Phone, PhoneOff, ExternalLink, Sparkles, Search, ChevronDown, ChevronLeft, ChevronRight, Plus, FileText, Check, ChevronsUpDown, Info, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
 import { format } from "date-fns";
 import { QuickReminder } from "@/components/quick-reminder";
 import { normalizeLink } from "@shared/linkUtils";
+import { useTwilioVoip } from "@/hooks/useTwilioVoip";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 import { ParseLocationsDialog } from "@/components/parse-locations-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -144,6 +145,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: currentUser } = useQuery<{ id: string; email?: string; role?: string; agentName?: string }>({ queryKey: ['/api/auth/user'] });
+  const voip = useTwilioVoip();
 
   // Fetch user preferences for timezone and time format
   const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string; timeFormat?: string; autoLoadScript?: boolean }>({
@@ -1004,7 +1006,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
   // Handle calling the store from the details dialog
   const handleCallFromDetails = async () => {
-    // Use POC phone if available, fallback to regular phone
+    if (voip.isCallActive) {
+      voip.hangup();
+      return;
+    }
+
     const phoneNumber = formData.poc_phone || formData.phone;
 
     if (!phoneNumber) {
@@ -1027,7 +1033,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       return;
     }
 
-    // Log the call to history
     try {
       await apiRequest('POST', '/api/call-history', {
         storeLink,
@@ -1036,11 +1041,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       });
     } catch (error) {
       console.error('Failed to log call:', error);
-      // Don't block the call if logging fails
     }
 
-    // Dial the phone
-    window.location.href = `tel:${phoneNumber}`;
+    voip.makeCall(phoneNumber);
   };
 
   // AI Assistant toggle - global setting (applies to all stores)
@@ -2413,10 +2416,19 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                       <Button
                         onClick={handleCallFromDetails}
                         data-testid="button-call"
-                        variant="outline"
+                        variant={voip.isCallActive ? "destructive" : "outline"}
                       >
-                        <Phone className="h-4 w-4 mr-2" />
-                        Call
+                        {voip.isCallActive ? (
+                          <>
+                            <PhoneOff className="h-4 w-4 mr-2" />
+                            End{voip.status === "connected" ? ` (${Math.floor(voip.duration / 60)}:${(voip.duration % 60).toString().padStart(2, '0')})` : voip.status === "connecting" ? " (connecting...)" : voip.status === "ringing" ? " (ringing...)" : ""}
+                          </>
+                        ) : (
+                          <>
+                            <Phone className="h-4 w-4 mr-2" />
+                            Call
+                          </>
+                        )}
                       </Button>
                       <Button
                         onClick={handleSave}
@@ -2470,10 +2482,19 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
               <Button
                 onClick={handleCallFromDetails}
                 data-testid="button-call"
-                variant="outline"
+                variant={voip.isCallActive ? "destructive" : "outline"}
               >
-                <Phone className="h-4 w-4 mr-2" />
-                Call
+                {voip.isCallActive ? (
+                  <>
+                    <PhoneOff className="h-4 w-4 mr-2" />
+                    End{voip.status === "connected" ? ` (${Math.floor(voip.duration / 60)}:${(voip.duration % 60).toString().padStart(2, '0')})` : voip.status === "connecting" ? " (connecting...)" : voip.status === "ringing" ? " (ringing...)" : ""}
+                  </>
+                ) : (
+                  <>
+                    <Phone className="h-4 w-4 mr-2" />
+                    Call
+                  </>
+                )}
               </Button>
               <Button
                 onClick={handleSave}

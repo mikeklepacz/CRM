@@ -41,6 +41,7 @@ export const users = pgTable("users", {
   role: varchar("role", { length: 20 }).notNull().default('agent'), // 'admin' or 'agent'
   agentName: varchar("agent_name"), // Name used in WooCommerce and Google Sheets for matching
   phone: varchar("phone"), // Agent's phone number for templates
+  twilioPhoneNumber: varchar("twilio_phone_number", { length: 50 }), // Assigned Twilio number for VoIP outbound calls (E.164 format)
   meetingLink: text("meeting_link"), // Agent's meeting/calendar link (e.g., Calendly, Google Meet)
   referredBy: varchar("referred_by").references(() => users.id), // MLM: who referred this user
   isActive: boolean("is_active").notNull().default(true), // Active/Inactive status for deactivating agents

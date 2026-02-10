@@ -20,6 +20,7 @@ import { format } from "date-fns";
 import type { Client } from "@shared/schema";
 import type { DateRange } from "react-day-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTwilioVoip } from "@/hooks/useTwilioVoip";
 
 interface Status {
   id: string;
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const voip = useTwilioVoip();
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -107,7 +109,7 @@ export default function Dashboard() {
 
       // Trigger phone dialer after a delay so user sees the dialog first
       setTimeout(() => {
-        window.location.href = `tel:${phoneNumber}`;
+        voip.makeCall(phoneNumber);
       }, 800);
 
       // Clear the autoCallPhone flag so it doesn't trigger again

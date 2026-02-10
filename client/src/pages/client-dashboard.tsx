@@ -47,6 +47,7 @@ import { normalizeLink } from "@shared/linkUtils";
 import { StatusManagementDialog } from "@/components/status-management-dialog";
 import { CallHistoryDialog } from "@/components/call-history-dialog";
 import { StoreDetailsDialog } from "@/components/store-details-dialog";
+import { useTwilioVoip } from "@/hooks/useTwilioVoip";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -390,6 +391,7 @@ function StatusEditorPopover({
 export default function ClientDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const voip = useTwilioVoip();
   const { openPanel } = useChatPanel();
   const projectContext = useOptionalProject();
   const currentProject = projectContext?.currentProject;
@@ -1282,7 +1284,7 @@ export default function ClientDashboard() {
           }
           
           setTimeout(() => {
-            window.location.href = `tel:${phoneNumber}`;
+            voip.makeCall(phoneNumber);
           }, 800);
         }
 
@@ -4347,7 +4349,7 @@ export default function ClientDashboard() {
 
             // Trigger dial after a delay so user sees the dialog first
             setTimeout(() => {
-              window.location.href = `tel:${phoneNumber}`;
+              voip.makeCall(phoneNumber);
             }, 800);
           }
         }}

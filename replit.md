@@ -36,6 +36,7 @@ The application features a client dashboard unifying data, transitioning from a 
 - **AI Sales Assistant**: OpenAI-driven UI for sales scripts and objection handling.
 - **Document Browser**: Google Drive integration.
 - **ElevenLabs AI Voice Calling**: Automated outbound calling with multi-agent support, queue management, and ambient audio mixing. Uses a Fly.io voice-proxy for Twilio WebSocket handling.
+- **Twilio VoIP Browser Calling**: Agents with assigned Twilio phone numbers can make outbound calls directly from the browser using @twilio/voice-sdk. The `useTwilioVoip` hook handles device initialization, token management, and call lifecycle. Agents without a Twilio number assigned continue using tel: links. Admin Users tab has an Edit dialog for assigning Twilio numbers. Backend endpoints: GET /api/twilio/voip-token (access tokens), POST /api/twilio/voip-twiml (call routing), POST /api/twilio/voip-status (webhooks). Requires env vars: TWILIO_API_KEY, TWILIO_API_SECRET, TWILIO_TWIML_APP_SID.
 - **AI Insights**: OpenAI-powered call performance analysis (admin-only).
 - **Self-Evolving Knowledge Base**: Version-controlled KB with AI-powered improvements.
 - **E-Hub: Email Campaign System**: AI-powered cold outreach with automated sequences, reply detection, and CRM sync (admin-only). Integrated with Apollo.io for enriched contacts. Supports inline images in email templates via `{{image:URL}}` placeholders — users can paste Google Drive links or any image URL through the Image Library button in the Template Builder. Images are stored per-tenant in `email_images` table and converted to HTML `<img>` tags when emails are sent.
@@ -106,6 +107,6 @@ The application features a client dashboard unifying data, transitioning from a 
 - **Google Cloud Pub/Sub**: Gmail push notifications.
 - **Google Calendar API**: Calendar event creation.
 - **ElevenLabs API**: AI Voice Calling.
-- **Twilio API**: Outbound call origination.
+- **Twilio API**: Outbound call origination (AI voice via ElevenLabs) + browser-based VoIP calling for agents with assigned Twilio numbers.
 - **Fly.io Voice Proxy**: Standalone Node.js service for Twilio WebSocket handling (`wss://hemp-voice-proxy.fly.dev/media-stream`).
 - **Apollo.io API**: Lead enrichment for contact data (emails, phones, job titles, seniorities).

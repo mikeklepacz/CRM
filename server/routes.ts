@@ -21,6 +21,7 @@ import { analyzeTranscript as analyzeTranscriptQualification } from "./services/
 import { validateElevenLabsSignature } from "./webhook-validation";
 import { handleTwilioCallStatus } from "./twilio-webhook";
 import { validateTwilioSignature } from "./twilio-signature-validation";
+import twilio from 'twilio';
 import multer from "multer";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
@@ -2568,6 +2569,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  // GET /api/twilio/voip-token - Generate Twilio AccessToken for browser VoIP
+  app.get('/api/twilio/voip-token', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { AccessToken } = twilio.jwt;
+      const { VoiceGrant } = AccessToken;
+
+      const accessToken = new AccessToken(
+        process.env.TWILIO_ACCOUNT_SID!,
+        process.env.TWILIO_API_KEY!,
+        process.env.TWILIO_API_SECRET!,
+        { identity: req.user.id, ttl: 3600 }
+      );
+      const voiceGrant = new VoiceGrant({
+        outgoingApplicationSid: process.env.TWILIO_TWIML_APP_SID,
+        incomingAllow: false,
+      });
+      accessToken.addGrant(voiceGrant);
+
+      res.json({ token: accessToken.toJwt(), identity: req.user.id });
+    } catch (error: any) {
+      console.error('[VoIP Token] Error:', error);
+      res.status(500).json({ error: error.message || 'Failed to generate VoIP token' });
+    }
+  });
+
+  // POST /api/twilio/voip-twiml - TwiML endpoint for browser VoIP calls
+  app.post('/api/twilio/voip-twiml', async (req: any, res) => {
+    try {
+      const to = req.body.To;
+      const callerId = req.body.CallerId;
+
+      if (!to) {
+        const twiml = new twilio.twiml.VoiceResponse();
+        twiml.say('No destination number provided.');
+        res.type('text/xml');
+        return res.send(twiml.toString());
+      }
+
+      const twiml = new twilio.twiml.VoiceResponse();
+      const dial = twiml.dial({ callerId: callerId || undefined });
+      dial.number(to);
+
+      res.type('text/xml');
+      res.send(twiml.toString());
+    } catch (error: any) {
+      console.error('[VoIP TwiML] Error:', error);
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say('An error occurred.');
+      res.type('text/xml');
+      res.send(twiml.toString());
+    }
+  });
+
+  // POST /api/twilio/voip-status - VoIP call status webhook
+  app.post('/api/twilio/voip-status', async (req: any, res) => {
+    console.log('[VoIP Status]', req.body.CallSid, req.body.CallStatus);
+    res.sendStatus(200);
+  });
   // Initiate outbound call via ElevenLabs API
   app.post('/api/elevenlabs/initiate-call', isAuthenticatedCustom, async (req: any, res) => {
     try {
@@ -25715,6 +25775,39 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error updating user role:', error);
       res.status(500).json({ message: error.message || 'Failed to update user role' });
+    }
+  });
+
+  // PATCH /api/org-admin/users/:userId - Update user profile fields
+  app.patch('/api/org-admin/users/:userId', requireOrgAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const tenantId = req.user.tenantId;
+
+      const tenantUsers = await storage.listTenantUsers(tenantId);
+      const isMember = tenantUsers.some((u: any) => u.id === userId);
+      if (!isMember) {
+        return res.status(404).json({ message: 'User not found in your organization' });
+      }
+
+      const { firstName, lastName, agentName, phone, twilioPhoneNumber, meetingLink } = req.body;
+      const updates: Record<string, any> = {};
+      if (firstName !== undefined) updates.firstName = firstName;
+      if (lastName !== undefined) updates.lastName = lastName;
+      if (agentName !== undefined) updates.agentName = agentName;
+      if (phone !== undefined) updates.phone = phone;
+      if (twilioPhoneNumber !== undefined) updates.twilioPhoneNumber = twilioPhoneNumber;
+      if (meetingLink !== undefined) updates.meetingLink = meetingLink;
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: 'No valid fields provided to update' });
+      }
+
+      const updatedUser = await storage.updateUser(userId, updates);
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error('Error updating user profile:', error);
+      res.status(500).json({ message: error.message || 'Failed to update user profile' });
     }
   });
 

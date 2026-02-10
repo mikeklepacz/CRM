@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { canAccessAdminFeatures } from "@/lib/authUtils";
+import { useTwilioVoip } from "@/hooks/useTwilioVoip";
 
 interface CallHistoryDialogProps {
   open: boolean;
@@ -37,6 +38,7 @@ interface GroupedCall {
 
 export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHistoryDialogProps) {
   const { user } = useAuth();
+  const voip = useTwilioVoip();
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
   // Fetch all users (for admin agent filter)
@@ -116,7 +118,7 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
     if (onCallStore && group.storeLink) {
       onCallStore(group.storeLink, group.phoneNumber);
     } else {
-      window.location.href = `tel:${group.phoneNumber}`;
+      voip.makeCall(group.phoneNumber);
     }
   };
 

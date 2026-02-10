@@ -12,12 +12,14 @@ import { ArrowLeft, Save, Loader2, ExternalLink, Phone, X } from "lucide-react";
 import { QuickReminder } from "@/components/quick-reminder";
 import { formatDistanceToNow, format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTwilioVoip } from "@/hooks/useTwilioVoip";
 
 export default function StoreDetails() {
   const { storeId } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const voip = useTwilioVoip();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -251,7 +253,7 @@ export default function StoreDetails() {
     logCallMutation.mutate(phoneToCall);
 
     // Open phone dialer
-    window.location.href = `tel:${phoneToCall}`;
+    voip.makeCall(phoneToCall);
   };
 
   const handleCancel = () => {

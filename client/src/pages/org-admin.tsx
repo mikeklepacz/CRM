@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useOptionalProject } from "@/contexts/project-context";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
 
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,10 @@ interface TenantUser {
   lastName: string | null;
   roleInTenant: string;
   joinedAt: string | null;
+  agentName: string | null;
+  phone: string | null;
+  twilioPhoneNumber: string | null;
+  meetingLink: string | null;
 }
 
 interface Tenant {
@@ -313,6 +318,99 @@ function detectBrowserTimezone(): string {
   }
 }
 
+function EditUserForm({ user, onSave, onCancel, isPending }: { 
+  user: TenantUser; 
+  onSave: (data: Record<string, any>) => void; 
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const [formData, setFormData] = useState({
+    firstName: user.firstName || "",
+    lastName: user.lastName || "",
+    agentName: user.agentName || "",
+    phone: user.phone || "",
+    twilioPhoneNumber: user.twilioPhoneNumber || "",
+    meetingLink: user.meetingLink || "",
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="edit-firstName">First Name</Label>
+          <Input
+            id="edit-firstName"
+            value={formData.firstName}
+            onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+            data-testid="input-edit-firstName"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-lastName">Last Name</Label>
+          <Input
+            id="edit-lastName"
+            value={formData.lastName}
+            onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+            data-testid="input-edit-lastName"
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="edit-agentName">Agent Name</Label>
+        <Input
+          id="edit-agentName"
+          value={formData.agentName}
+          onChange={(e) => setFormData(prev => ({ ...prev, agentName: e.target.value }))}
+          placeholder="Name used in WooCommerce/Sheets matching"
+          data-testid="input-edit-agentName"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="edit-phone">Personal Phone</Label>
+        <Input
+          id="edit-phone"
+          value={formData.phone}
+          onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+          placeholder="Agent's personal phone number"
+          data-testid="input-edit-phone"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="edit-twilioPhoneNumber">Twilio VoIP Number</Label>
+        <Input
+          id="edit-twilioPhoneNumber"
+          value={formData.twilioPhoneNumber}
+          onChange={(e) => setFormData(prev => ({ ...prev, twilioPhoneNumber: e.target.value }))}
+          placeholder="+1XXXXXXXXXX (E.164 format)"
+          data-testid="input-edit-twilioPhoneNumber"
+        />
+        <p className="text-xs text-muted-foreground">
+          Assign a Twilio number for in-browser VoIP calling. Leave empty to use tel: links.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="edit-meetingLink">Meeting Link</Label>
+        <Input
+          id="edit-meetingLink"
+          value={formData.meetingLink}
+          onChange={(e) => setFormData(prev => ({ ...prev, meetingLink: e.target.value }))}
+          placeholder="Calendly, Google Meet, etc."
+          data-testid="input-edit-meetingLink"
+        />
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" onClick={onCancel} data-testid="button-cancel-edit">
+          Cancel
+        </Button>
+        <Button onClick={() => onSave(formData)} disabled={isPending} data-testid="button-save-edit">
+          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save Changes
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function OrgAdmin() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -323,6 +421,7 @@ export default function OrgAdmin() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false);
   const [userToRemove, setUserToRemove] = useState<TenantUser | null>(null);
+  const [editingUser, setEditingUser] = useState<TenantUser | null>(null);
   const [roleChangeUser, setRoleChangeUser] = useState<{ user: TenantUser; newRole: string } | null>(null);
   
   const [isPipelineDialogOpen, setIsPipelineDialogOpen] = useState(false);
@@ -612,6 +711,27 @@ export default function OrgAdmin() {
       toast({
         title: "Error",
         description: error.message || "Failed to update user role",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const editUserMutation = useMutation({
+    mutationFn: async ({ userId, data }: { userId: string; data: Record<string, any> }) => {
+      return await apiRequest("PATCH", `/api/org-admin/users/${userId}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/org-admin/users'] });
+      setEditingUser(null);
+      toast({
+        title: "User updated",
+        description: "User profile has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user",
         variant: "destructive",
       });
     },
@@ -1307,6 +1427,7 @@ export default function OrgAdmin() {
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
+                        <TableHead>Twilio Number</TableHead>
                         <TableHead>Joined</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -1314,7 +1435,7 @@ export default function OrgAdmin() {
                     <TableBody>
                       {usersData?.users?.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          <TableCell colSpan={6} className="text-center text-muted-foreground">
                             No team members found
                           </TableCell>
                         </TableRow>
@@ -1350,17 +1471,30 @@ export default function OrgAdmin() {
                                 </SelectContent>
                               </Select>
                             </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {u.twilioPhoneNumber || "—"}
+                            </TableCell>
                             <TableCell>{formatDate(u.joinedAt)}</TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => setUserToRemove(u)}
-                                disabled={u.id === user?.id}
-                                data-testid={`button-remove-user-${u.id}`}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setEditingUser(u)}
+                                  data-testid={`button-edit-user-${u.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setUserToRemove(u)}
+                                  disabled={u.id === user?.id}
+                                  data-testid={`button-remove-user-${u.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))
@@ -2165,6 +2299,25 @@ export default function OrgAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {editingUser && (
+        <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+              <DialogDescription>
+                Update details for {editingUser.firstName || editingUser.email || "this user"}
+              </DialogDescription>
+            </DialogHeader>
+            <EditUserForm
+              user={editingUser}
+              onSave={(data) => editUserMutation.mutate({ userId: editingUser.id, data })}
+              onCancel={() => setEditingUser(null)}
+              isPending={editUserMutation.isPending}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Dialog open={isPipelineDialogOpen} onOpenChange={(open) => {
         if (!open) {
