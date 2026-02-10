@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useOptionalProject } from "@/contexts/project-context";
+import { VoipCallButton } from "@/components/voip-call-button";
 import { 
   Loader2, 
   Search, 
@@ -2219,9 +2220,9 @@ function EnrichedCompaniesTab({ companies, isLoading }: { companies: ApolloCompa
                         </TableCell>
                         <TableCell>
                           {contact.phone ? (
-                            <a href={`tel:${contact.phone}`} className="text-sm">
+                            <VoipCallButton phoneNumber={contact.phone} className="text-sm cursor-pointer hover:underline">
                               {contact.phone}
-                            </a>
+                            </VoipCallButton>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}

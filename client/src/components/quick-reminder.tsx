@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { detectTimezoneFromAddress, formatTimezoneDisplay } from "@shared/timezoneUtils";
 import { TimeSpinner } from "@/components/time-spinner";
 import { useQuery } from "@tanstack/react-query";
+import { VoipCallButton } from "@/components/voip-call-button";
 
 interface QuickReminderProps {
   onSave: (data: {
@@ -318,13 +319,13 @@ export function QuickReminder({
             {displayPhone && (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Phone className="h-3.5 w-3.5 shrink-0" />
-                <a 
-                  href={`tel:${displayPhone}`}
-                  className="hover:text-foreground hover:underline"
+                <VoipCallButton
+                  phoneNumber={displayPhone}
+                  className="hover:text-foreground hover:underline cursor-pointer"
                   data-testid="link-contact-phone"
                 >
                   {displayPhone}
-                </a>
+                </VoipCallButton>
                 {!pocPhone && defaultPhone && (
                   <span className="text-xs opacity-70">(default)</span>
                 )}

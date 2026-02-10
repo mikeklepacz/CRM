@@ -48,6 +48,7 @@ import { StatusManagementDialog } from "@/components/status-management-dialog";
 import { CallHistoryDialog } from "@/components/call-history-dialog";
 import { StoreDetailsDialog } from "@/components/store-details-dialog";
 import { useTwilioVoip } from "@/hooks/useTwilioVoip";
+import { VoipCallButton } from "@/components/voip-call-button";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -3881,11 +3882,9 @@ export default function ClientDashboard() {
                                       ) : (
                                         <div className="flex items-center gap-2" style={{ justifyContent: textAlign === 'center' ? 'center' : textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
                                           {isPhoneColumn && cellValue ? (
-                                            <a
-                                              href={`tel:${cellValue}`}
-                                              onClick={(e) => {
-                                                // Don't prevent default - let tel: link work
-                                                // But also open the dialog
+                                            <VoipCallButton
+                                              phoneNumber={cellValue}
+                                              onClick={() => {
                                                 setStoreDetailsDialog({
                                                   open: true,
                                                   row: row,
@@ -3894,7 +3893,6 @@ export default function ClientDashboard() {
                                                     allLocations: selectedFranchise.locations
                                                   } : undefined
                                                 });
-                                                // Open AI Assistant with default script (only if autoLoadScript preference is enabled)
                                                 const autoLoadEnabled = userPreferences?.autoLoadScript ?? true;
                                                 if (autoLoadEnabled) {
                                                   const saved = localStorage.getItem(`storeDetailsShowAssistant`);
@@ -3904,13 +3902,13 @@ export default function ClientDashboard() {
                                                   setLoadDefaultScriptTrigger(prev => prev + 1);
                                                 }
                                               }}
-                                              className="flex items-center gap-1 hover:underline flex-shrink-0"
+                                              className="flex items-center gap-1 hover:underline flex-shrink-0 cursor-pointer"
                                               style={{ color: customColors.primary }}
                                               data-testid={`link-phone-${rowKey}-${header}`}
                                             >
                                               <Phone className="h-4 w-4 flex-shrink-0" />
                                               <span>{displayValue}</span>
-                                            </a>
+                                            </VoipCallButton>
                                           ) : isEmailColumn && cellValue ? (
                                             <button
                                               onClick={() => setStoreDetailsDialog({

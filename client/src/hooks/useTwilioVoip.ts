@@ -127,24 +127,27 @@ export function useTwilioVoip() {
 
   const makeCall = useCallback(
     async (phoneNumber: string) => {
-      if (!hasTwilioNumber) {
-        window.location.href = `tel:${phoneNumber}`;
-        return;
-      }
+      console.log(`[VoIP] makeCall called - sharedDevice: ${!!sharedDevice}, hasTwilioNumber: ${hasTwilioNumber}`);
 
       let device = sharedDevice;
-      if (!device) {
+
+      if (!device && hasTwilioNumber) {
         device = await initSharedDevice();
       }
 
       if (!device) {
-        console.error("[VoIP] Device not ready, falling back to tel:");
+        console.log("[VoIP] No device available, using tel: link");
+        window.location.href = `tel:${phoneNumber}`;
+        return;
+      }
+
+      const callerId = user?.twilioPhoneNumber;
+      if (!callerId) {
         toast({
-          title: "VoIP unavailable",
-          description: "Using phone dialer instead. Check your Twilio configuration.",
+          title: "VoIP error",
+          description: "No caller ID available. Please reload and try again.",
           variant: "destructive",
         });
-        window.location.href = `tel:${phoneNumber}`;
         return;
       }
 
@@ -163,7 +166,7 @@ export function useTwilioVoip() {
         const call = await device.connect({
           params: {
             To: phoneNumber,
-            CallerId: user!.twilioPhoneNumber!,
+            CallerId: callerId,
           },
         });
 

@@ -9,6 +9,7 @@ import { Link } from "wouter";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { formatTimezoneDisplay } from "@shared/timezoneUtils";
 import { useAgentFilter } from '@/contexts/agent-filter-context';
+import { VoipCallButton } from "@/components/voip-call-button";
 
 interface Reminder {
   id: string;
@@ -310,15 +311,13 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                         {reminder.storeMetadata.pocPhone && (
                           <div className="flex items-center gap-1.5 text-muted-foreground">
                             <Phone className="h-3 w-3 shrink-0" />
-                            <a 
-                              href={`tel:${reminder.storeMetadata.pocPhone}`}
-                              className="hover:text-primary hover:underline"
+                            <VoipCallButton
+                              phoneNumber={reminder.storeMetadata.pocPhone}
+                              className="hover:text-primary hover:underline cursor-pointer"
                               data-testid={`link-phone-${reminder.id}`}
-                              onClick={(e) => {
+                              skipCall={!!onPhoneClick}
+                              onClick={() => {
                                 console.log('[RemindersWidget] Phone clicked:', reminder.storeMetadata.pocPhone);
-                                // Prevent immediate dial to avoid interrupting navigation
-                                e.preventDefault();
-                                // Navigate to store details, phone will dial after delay
                                 if (onPhoneClick && reminder.storeMetadata.uniqueIdentifier) {
                                   console.log('[RemindersWidget] Calling onPhoneClick with store:', reminder.storeMetadata.uniqueIdentifier);
                                   onPhoneClick(reminder.storeMetadata.uniqueIdentifier, reminder.storeMetadata.pocPhone);
@@ -326,7 +325,7 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                               }}
                             >
                               {reminder.storeMetadata.pocPhone}
-                            </a>
+                            </VoipCallButton>
                           </div>
                         )}
                       </div>
