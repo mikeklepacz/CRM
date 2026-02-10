@@ -1,0 +1,260 @@
+client:536 WebSocket connection to 'wss://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/?token=XrIlyp4vsb3m' failed: 
+setupWebSocket @ client:536
+(anonymous) @ client:531
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=XrIlyp4vsb3m' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+setupWebSocket @ client:536
+fallback @ client:509
+(anonymous) @ client:555
+chunk-NFC5BX5N.js?v=13065680:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+useTwilioVoip.ts:38 [VoIP] Initializing device...
+useTwilioVoip.ts:40 [VoIP] Token received, creating Device...
+useTwilioVoip.ts:42 [TwilioVoice][Device] Set logger default level to 1
+useTwilioVoip.ts:42 [TwilioVoice][Device] .constructor {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+useTwilioVoip.ts:42 [TwilioVoice][Device] .updateToken
+useTwilioVoip.ts:42 [TwilioVoice][Device] .updateOptions {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+useTwilioVoip.ts:42 [TwilioVoice][Device] Set logger default level to 1
+useTwilioVoip.ts:42 [TwilioVoice][AudioProcessorEventObserver] Creating AudioProcessorEventObserver instance
+useTwilioVoip.ts:69 [TwilioVoice][Device] .register
+useTwilioVoip.ts:69 [TwilioVoice][Device] #registering
+useTwilioVoip.ts:69 [TwilioVoice][Device] Setting up VSP
+useTwilioVoip.ts:69 [TwilioVoice][WSTransport] WSTransport.open() called...
+useTwilioVoip.ts:69 [TwilioVoice][WSTransport] Attempting to connect...
+useTwilioVoip.ts:69 [TwilioVoice][WSTransport] Closing and cleaning up WebSocket...
+useTwilioVoip.ts:69 [TwilioVoice][WSTransport] No WebSocket to clean up.
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][AudioHelper] #deviceChange []
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][AudioHelper] #deviceChange []
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][OutputDeviceCollection] .set 
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][OutputDeviceCollection] .set 
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][OutputDeviceCollection] .set default
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][OutputDeviceCollection] .set default
+useTwilioVoip.ts:42 [TwilioVoice][AudioHelper] Warning: Unable to set audio output devices. InvalidArgumentError: Devices not found: default
+warn @ @twilio_voice-sdk.js?v=13065680:1826
+(anonymous) @ @twilio_voice-sdk.js?v=13065680:2622
+Promise.catch
+(anonymous) @ @twilio_voice-sdk.js?v=13065680:2621
+Promise.then
+_initializeEnumeration @ @twilio_voice-sdk.js?v=13065680:2614
+AudioHelper @ @twilio_voice-sdk.js?v=13065680:2204
+_setupAudioHelper @ @twilio_voice-sdk.js?v=13065680:7192
+updateOptions @ @twilio_voice-sdk.js?v=13065680:6835
+_Device @ @twilio_voice-sdk.js?v=13065680:6610
+(anonymous) @ useTwilioVoip.ts:42
+await in (anonymous)
+(anonymous) @ useTwilioVoip.ts:87
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=13065680:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=13065680:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=13065680:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=13065680:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=13065680:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=13065680:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=13065680:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=13065680:19416
+commitRoot @ chunk-NFC5BX5N.js?v=13065680:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=13065680:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=13065680:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=13065680:555
+flush @ @tanstack_react-query.js?v=13065680:569
+batch @ @tanstack_react-query.js?v=13065680:587
+dispatch_fn @ @tanstack_react-query.js?v=13065680:996
+setData @ @tanstack_react-query.js?v=13065680:696
+onSuccess @ @tanstack_react-query.js?v=13065680:897
+resolve @ @tanstack_react-query.js?v=13065680:456
+Promise.then
+run @ @tanstack_react-query.js?v=13065680:498
+start @ @tanstack_react-query.js?v=13065680:536
+fetch @ @tanstack_react-query.js?v=13065680:926
+executeFetch_fn @ @tanstack_react-query.js?v=13065680:2211
+onSubscribe @ @tanstack_react-query.js?v=13065680:1898
+subscribe @ @tanstack_react-query.js?v=13065680:24
+(anonymous) @ @tanstack_react-query.js?v=13065680:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=13065680:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=13065680:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=13065680:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=13065680:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=13065680:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=13065680:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=13065680:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=13065680:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=13065680:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=13065680:19432
+commitRoot @ chunk-NFC5BX5N.js?v=13065680:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=13065680:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18718
+workLoop @ chunk-NFC5BX5N.js?v=13065680:197
+flushWork @ chunk-NFC5BX5N.js?v=13065680:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=13065680:384
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. <URL>
+@twilio_voice-sdk.js?v=13065680:1809 [TwilioVoice][WSTransport] WebSocket opened successfully.
+@twilio_voice-sdk.js?v=13065680:1809 [TwilioVoice][PStream] Setting token and publishing listen
+@twilio_voice-sdk.js?v=13065680:1809 [TwilioVoice][PStream] maxPreferredDurationMs:0
+@twilio_voice-sdk.js?v=13065680:1809 [TwilioVoice][PStream] reconnectTimeout:0
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][WSTransport] Sending: {"payload":{"browserinfo":{"browser":{"platform":"MacIntel","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"},"p":"browser","plugin":"rtc","v":"2.18.0"},"reconnectTimeout":0,"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImN0eSI6InR3aWxpby1mcGE7dj0xIn0.eyJqdGkiOiJBUGFlMWUyYjk1ZDYxZGYxNDVhNmQyMzM4MDBhNTRkZDQxLTE3NzA3NDc2MjAiLCJncmFudHMiOnsiaWRlbnRpdHkiOiI0ZGYzNTg3Ni1hYjg5LTQ4NjAtODY1Ni0wNDQwYWNjZmVhMTQiLCJ2b2ljZSI6eyJvdXRnb2luZyI6eyJhcHBsaWNhdGlvbl9zaWQiOiJTS2E0MmI4MzYzYjI0MWJiNDNiMTU4ZTJhOTI0YzlhOTdmIn19fSwiaWF0IjoxNzcwNzQ3NjIwLCJleHAiOjE3NzA3NTEyMjAsImlzcyI6IkFQYWUxZTJiOTVkNjFkZjE0NWE2ZDIzMzgwMGE1NGRkNDEiLCJzdWIiOiJBQzkyOTcwNzBkYTQ0NmFhY2YwYjNjZGMyYjE5ZjI1OTk0In0.GyfA_Jn-E3DVV6ANdTuXubbTH57HRH3oA8CUrovsEkA"},"type":"listen","version":"1.6"}
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][WSTransport] Received: {"payload":{"error":{"code":31204,"message":"JWT is invalid"}},"type":"error","version":""}
+@twilio_voice-sdk.js?v=13065680:1826 [TwilioVoice][PStream] Unexpected error handled in pstream
+warn @ @twilio_voice-sdk.js?v=13065680:1826
+(anonymous) @ @twilio_voice-sdk.js?v=13065680:4375
+emit @ @twilio_voice-sdk.js?v=13065680:114
+PStream._handleTransportMessage @ @twilio_voice-sdk.js?v=13065680:4438
+emit @ @twilio_voice-sdk.js?v=13065680:109
+_onSocketMessage @ @twilio_voice-sdk.js?v=13065680:4023
+@twilio_voice-sdk.js?v=13065680:1802 [TwilioVoice][Device] Received error:  AccessTokenInvalid: AccessTokenInvalid (20101): Twilio was unable to validate your Access Token
+    at _PStream._onSignalingError (@twilio_voice-sdk.js?v=13065680:6471:25)
+    at _PStream.emit (@twilio_voice-sdk.js?v=13065680:114:11)
+    at PStream._handleTransportMessage (@twilio_voice-sdk.js?v=13065680:4438:8)
+    at _WSTransport.emit (@twilio_voice-sdk.js?v=13065680:109:9)
+    at WebSocket._onSocketMessage (@twilio_voice-sdk.js?v=13065680:4023:12)
+error @ @twilio_voice-sdk.js?v=13065680:1802
+_onSignalingError @ @twilio_voice-sdk.js?v=13065680:6486
+emit @ @twilio_voice-sdk.js?v=13065680:114
+PStream._handleTransportMessage @ @twilio_voice-sdk.js?v=13065680:4438
+emit @ @twilio_voice-sdk.js?v=13065680:109
+_onSocketMessage @ @twilio_voice-sdk.js?v=13065680:4023
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][Device] #error {code: 31204, message: 'JWT is invalid', twilioError: ConnectionError: ConnectionError (53000): Raised whenever a signaling connection error occurs that …}
+useTwilioVoip.ts:56 [VoIP] Device error: AccessTokenInvalid (20101): Twilio was unable to validate your Access Token AccessTokenInvalid: AccessTokenInvalid (20101): Twilio was unable to validate your Access Token
+    at _PStream._onSignalingError (@twilio_voice-sdk.js?v=13065680:6471:25)
+    at _PStream.emit (@twilio_voice-sdk.js?v=13065680:114:11)
+    at PStream._handleTransportMessage (@twilio_voice-sdk.js?v=13065680:4438:8)
+    at _WSTransport.emit (@twilio_voice-sdk.js?v=13065680:109:9)
+    at WebSocket._onSocketMessage (@twilio_voice-sdk.js?v=13065680:4023:12)
+(anonymous) @ useTwilioVoip.ts:56
+emit @ @twilio_voice-sdk.js?v=13065680:109
+_onSignalingError @ @twilio_voice-sdk.js?v=13065680:6488
+emit @ @twilio_voice-sdk.js?v=13065680:114
+PStream._handleTransportMessage @ @twilio_voice-sdk.js?v=13065680:4438
+emit @ @twilio_voice-sdk.js?v=13065680:109
+_onSocketMessage @ @twilio_voice-sdk.js?v=13065680:4023
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][WSTransport] Received: {"payload":{},"type":"close","version":""}
+@twilio_voice-sdk.js?v=13065680:1809 [TwilioVoice][PStream] Received "close" from server. Destroying PStream...
+@twilio_voice-sdk.js?v=13065680:1809 [TwilioVoice][WSTransport] WSTransport.close() called...
+@twilio_voice-sdk.js?v=13065680:1809 [TwilioVoice][WSTransport] Closing and cleaning up WebSocket...
+@twilio_voice-sdk.js?v=13065680:1809 [TwilioVoice][Device] Stream is offline
+@twilio_voice-sdk.js?v=13065680:1795 [TwilioVoice][Device] #unregistered
+useTwilioVoip.ts:52 [VoIP] Device unregistered
+useTwilioVoip.ts:74 [VoIP] Failed to initialize device: undefined undefined
+(anonymous) @ useTwilioVoip.ts:74
+await in (anonymous)
+(anonymous) @ useTwilioVoip.ts:87
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=13065680:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=13065680:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=13065680:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=13065680:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=13065680:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=13065680:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=13065680:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=13065680:19416
+commitRoot @ chunk-NFC5BX5N.js?v=13065680:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=13065680:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=13065680:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=13065680:555
+flush @ @tanstack_react-query.js?v=13065680:569
+batch @ @tanstack_react-query.js?v=13065680:587
+dispatch_fn @ @tanstack_react-query.js?v=13065680:996
+setData @ @tanstack_react-query.js?v=13065680:696
+onSuccess @ @tanstack_react-query.js?v=13065680:897
+resolve @ @tanstack_react-query.js?v=13065680:456
+Promise.then
+run @ @tanstack_react-query.js?v=13065680:498
+start @ @tanstack_react-query.js?v=13065680:536
+fetch @ @tanstack_react-query.js?v=13065680:926
+executeFetch_fn @ @tanstack_react-query.js?v=13065680:2211
+onSubscribe @ @tanstack_react-query.js?v=13065680:1898
+subscribe @ @tanstack_react-query.js?v=13065680:24
+(anonymous) @ @tanstack_react-query.js?v=13065680:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=13065680:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=13065680:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=13065680:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=13065680:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=13065680:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=13065680:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=13065680:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=13065680:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=13065680:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=13065680:19432
+commitRoot @ chunk-NFC5BX5N.js?v=13065680:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=13065680:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18718
+workLoop @ chunk-NFC5BX5N.js?v=13065680:197
+flushWork @ chunk-NFC5BX5N.js?v=13065680:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=13065680:384
+useTwilioVoip.ts:38 [VoIP] Initializing device...
+useTwilioVoip.ts:40 [VoIP] Token received, creating Device...
+ [TwilioVoice][Device] Set logger default level to 1
+ [TwilioVoice][Device] .constructor {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+ [TwilioVoice][Device] .updateToken
+ [TwilioVoice][Device] .updateOptions {"logLevel":1,"codecPreferences":["opus","pcmu"]}
+ [TwilioVoice][Device] Set logger default level to 1
+ [TwilioVoice][AudioProcessorEventObserver] Creating AudioProcessorEventObserver instance
+ [TwilioVoice][Device] .register
+ [TwilioVoice][Device] #registering
+ [TwilioVoice][Device] Setting up VSP
+ [TwilioVoice][WSTransport] WSTransport.open() called...
+ [TwilioVoice][WSTransport] Attempting to connect...
+ [TwilioVoice][WSTransport] Closing and cleaning up WebSocket...
+ [TwilioVoice][WSTransport] No WebSocket to clean up.
+ [TwilioVoice][AudioHelper] #deviceChange []
+ [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+ [TwilioVoice][AudioHelper] #deviceChange []
+ [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+ [TwilioVoice][OutputDeviceCollection] .set 
+ [TwilioVoice][OutputDeviceCollection] .set 
+ [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+ [TwilioVoice][EventPublisher] Publishing cancelled {"isEnabled":true}
+ [TwilioVoice][OutputDeviceCollection] .set default
+ [TwilioVoice][OutputDeviceCollection] .set default
+ [TwilioVoice][AudioHelper] Warning: Unable to set audio output devices. InvalidArgumentError: Devices not found: default
+warn @ @twilio_voice-sdk.js?v=13065680:1826
+(anonymous) @ @twilio_voice-sdk.js?v=13065680:2622
+Promise.catch
+(anonymous) @ @twilio_voice-sdk.js?v=13065680:2621
+Promise.then
+_initializeEnumeration @ @twilio_voice-sdk.js?v=13065680:2614
+AudioHelper @ @twilio_voice-sdk.js?v=13065680:2204
+_setupAudioHelper @ @twilio_voice-sdk.js?v=13065680:7192
+updateOptions @ @twilio_voice-sdk.js?v=13065680:6835
+_Device @ @twilio_voice-sdk.js?v=13065680:6610
+(anonymous) @ useTwilioVoip.ts:27
+await in (anonymous)
+(anonymous) @ useTwilioVoip.ts:66
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=13065680:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=13065680:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=13065680:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=13065680:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=13065680:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=13065680:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=13065680:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=13065680:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=13065680:19432
+commitRoot @ chunk-NFC5BX5N.js?v=13065680:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=13065680:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=13065680:18718
+workLoop @ chunk-NFC5BX5N.js?v=13065680:197
+flushWork @ chunk-NFC5BX5N.js?v=13065680:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=13065680:384
