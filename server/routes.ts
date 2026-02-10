@@ -8291,14 +8291,18 @@ IMPORTANT:
 
       // Process image placeholders and create RFC 2822 formatted HTML email
       const processedBody = replaceImagePlaceholders(body);
-      const isHtml = processedBody !== body;
+      const hasHtmlTags = /<[a-z][\s\S]*>/i.test(processedBody);
+      const isHtml = processedBody !== body || hasHtmlTags;
+      const htmlBody = isHtml
+        ? processedBody.replace(/\n/g, '<br>\n')
+        : processedBody;
       const emailContent = [
         `MIME-Version: 1.0`,
         `Content-Type: ${isHtml ? "text/html" : "text/plain"}; charset=UTF-8`,
         `To: ${to}`,
         `Subject: ${subject}`,
         "",
-        processedBody
+        htmlBody
       ].join("\r\n");
       // Base64 encode for Gmail API
       const encodedMessage = Buffer.from(emailContent)
@@ -21282,6 +21286,7 @@ Use this store information to provide context-aware responses. When helping draf
                 .insert(sequenceRecipientMessages)
                 .values({
                   recipientId: newRecipient.id,
+                  tenantId: req.user.tenantId,
                   stepNumber: 1,
                   subject: subject || '(No subject)',
                   body: body || '',
