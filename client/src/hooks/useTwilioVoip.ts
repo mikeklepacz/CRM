@@ -18,6 +18,7 @@ export function useTwilioVoip() {
   const deviceRef = useRef<Device | null>(null);
   const callRef = useRef<Call | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const initializingRef = useRef(false);
 
   const [state, setState] = useState<VoipState>({
     status: "idle",
@@ -30,11 +31,14 @@ export function useTwilioVoip() {
   const hasTwilioNumber = !!user?.twilioPhoneNumber;
 
   const initDevice = useCallback(async () => {
-    if (deviceRef.current || !hasTwilioNumber) return;
+    if (deviceRef.current || !hasTwilioNumber || initializingRef.current) return;
+    initializingRef.current = true;
 
     try {
+      console.log("[VoIP] Initializing device...");
       const res = await apiRequest("GET", "/api/twilio/voip-token");
       const data = await res.json();
+      console.log("[VoIP] Token received, creating Device...");
 
       const device = new Device(data.token, {
         logLevel: 1,
@@ -58,8 +62,16 @@ export function useTwilioVoip() {
 
       await device.register();
       deviceRef.current = device;
+      console.log("[VoIP] Device registered successfully");
     } catch (err) {
       console.error("[VoIP] Failed to initialize device:", err);
+      toast({
+        title: "VoIP setup failed",
+        description: "Browser calling could not initialize. Calls will use your phone dialer.",
+        variant: "destructive",
+      });
+    } finally {
+      initializingRef.current = false;
     }
   }, [hasTwilioNumber]);
 
@@ -75,6 +87,7 @@ export function useTwilioVoip() {
         deviceRef.current.destroy();
         deviceRef.current = null;
       }
+      initializingRef.current = false;
     };
   }, [hasTwilioNumber, initDevice]);
 

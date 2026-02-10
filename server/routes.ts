@@ -21190,6 +21190,10 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/call-history', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tenantId = req.user.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'Tenant context required' });
+      }
       const { storeName, phoneNumber, storeLink } = req.body;
 
       if (!storeName || !phoneNumber) {
@@ -21198,6 +21202,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       const callData = {
         agentId: userId,
+        tenantId,
         storeName,
         phoneNumber,
         storeLink: storeLink || null,
