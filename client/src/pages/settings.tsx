@@ -158,7 +158,6 @@ export default function Settings() {
     analytics: true,
     pipelines: true,
     qualification: true,
-    apollo: true,
   };
   const [visibleModules, setVisibleModules] = useState<Record<string, boolean>>(defaultModules);
 
@@ -176,7 +175,6 @@ export default function Settings() {
     callManager: "call-manager",
     ehub: "ehub",
     qualification: "qualification",
-    apollo: "apollo",
   };
 
   // Helper to check if a module should be shown in visibility settings (based on tenant access)
@@ -1168,7 +1166,7 @@ export default function Settings() {
                     <Label htmlFor="module-labelDesigner" className="font-normal cursor-pointer">Label Designer</Label>
                   </div>
                 )}
-                {shouldShowModuleOption('analytics') && (
+                {canAccessAdminFeatures(user) && shouldShowModuleOption('analytics') && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-analytics"
@@ -1179,7 +1177,7 @@ export default function Settings() {
                     <Label htmlFor="module-analytics" className="font-normal cursor-pointer">Analytics</Label>
                   </div>
                 )}
-                {shouldShowModuleOption('pipelines') && (
+                {canAccessAdminFeatures(user) && shouldShowModuleOption('pipelines') && (
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="module-pipelines"
@@ -1221,17 +1219,6 @@ export default function Settings() {
                       data-testid="checkbox-module-qualification"
                     />
                     <Label htmlFor="module-qualification" className="font-normal cursor-pointer">Qualification</Label>
-                  </div>
-                )}
-                {canAccessAdminFeatures(user) && shouldShowModuleOption('apollo') && (
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id="module-apollo"
-                      checked={visibleModules.apollo}
-                      onCheckedChange={(checked) => handleModuleToggle('apollo', !!checked)}
-                      data-testid="checkbox-module-apollo"
-                    />
-                    <Label htmlFor="module-apollo" className="font-normal cursor-pointer">Apollo</Label>
                   </div>
                 )}
               </div>

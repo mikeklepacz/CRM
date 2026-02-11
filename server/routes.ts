@@ -978,27 +978,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     emailPreference: z.enum(["gmail_draft", "mailto"]).optional(),
   });
 
-  // GET /api/tenant/modules - Get allowed modules for current user's tenant
-  app.get('/api/tenant/modules', isAuthenticated, async (req: any, res) => {
-    try {
-      if (req.user?.isSuperAdmin) {
-        return res.json({ allowedModules: null });
-      }
-      const tenantId = req.user?.tenantId;
-      if (!tenantId) {
-        return res.json({ allowedModules: null });
-      }
-      const tenant = await storage.getTenantById(tenantId);
-      if (!tenant) {
-        return res.json({ allowedModules: null });
-      }
-      res.json({ allowedModules: tenant.settings?.allowedModules || null });
-    } catch (error: any) {
-      console.error('Error getting tenant modules:', error);
-      res.status(500).json({ message: error.message || 'Failed to get tenant modules' });
-    }
-  });
-
   // User settings endpoints
   app.put('/api/user/profile', isAuthenticatedCustom, async (req: any, res) => {
     try {
@@ -4046,16 +4025,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get sheets configuration
-      const tenantId = (req.user as any).tenantId;
-      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
+      const configuredSheets = await storage.getSheets();
+      const storeSheet = configuredSheets.find((s: any) => s.sheetPurpose === "Store Database");
       
       if (!storeSheet) {
         return res.status(404).json({ error: 'Store Database sheet not configured' });
       }
 
       // Fetch all rows from Store Database
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const sheetData = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      const sheetData = await googleSheets.readSheetData(storeSheet.id, 'A:ZZ');
       
       if (!sheetData || sheetData.length === 0) {
         return res.status(404).json({ error: 'No data found in Store Database' });
@@ -24677,56 +24655,6 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error updating user role in tenant:', error);
       res.status(500).json({ message: error.message || 'Failed to update user role in tenant' });
-    }
-  });
-
-
-
-  // POST /api/super-admin/migrate-modules - One-time migration from old module IDs to new 1:1 IDs
-  app.post('/api/super-admin/migrate-modules', requireSuperAdmin, async (req: any, res) => {
-    try {
-      const tenants = await storage.listTenants();
-      const results: Array<{ tenantId: string; tenantName: string; before: string[]; after: string[] }> = [];
-      const validModuleIds = ["clients","sales","follow_up","map_search","assistant","docs","label_designer","analytics","pipelines","qualification","call_manager","ehub","apollo"];
-
-      for (const tenant of tenants) {
-        const currentAllowed = tenant.settings?.allowedModules;
-        if (!currentAllowed || currentAllowed.length === 0) continue;
-
-        const newModules: string[] = [];
-        for (const moduleId of currentAllowed) {
-          if (moduleId === 'crm') {
-            if (!newModules.includes('clients')) newModules.push('clients');
-            if (!newModules.includes('sales')) newModules.push('sales');
-          } else if (moduleId === 'voice_kb') {
-            if (!newModules.includes('call_manager')) newModules.push('call_manager');
-          } else if (moduleId === 'followup') {
-            if (!newModules.includes('follow_up')) newModules.push('follow_up');
-          } else if (validModuleIds.includes(moduleId)) {
-            if (!newModules.includes(moduleId)) newModules.push(moduleId);
-          }
-        }
-
-        if (JSON.stringify(currentAllowed.sort()) !== JSON.stringify(newModules.sort())) {
-          await storage.updateTenantSettings(tenant.id, { allowedModules: newModules });
-          results.push({
-            tenantId: tenant.id,
-            tenantName: tenant.name,
-            before: currentAllowed,
-            after: newModules,
-          });
-        }
-      }
-
-      res.json({
-        message: 'Module migration completed',
-        migratedCount: results.length,
-        totalTenants: tenants.length,
-        results,
-      });
-    } catch (error: any) {
-      console.error('Error migrating modules:', error);
-      res.status(500).json({ message: error.message || 'Failed to migrate modules' });
     }
   });
 

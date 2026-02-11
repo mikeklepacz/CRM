@@ -13,7 +13,7 @@ export default function Voice() {
   const { isModuleEnabled, isLoading: moduleAccessLoading } = useModuleAccess();
 
   // Check if module is enabled for the tenant
-  const moduleEnabled = isModuleEnabled("call_manager");
+  const moduleEnabled = isModuleEnabled("voice_kb");
 
   // Redirect if user doesn't have voice access or module is disabled
   useEffect(() => {

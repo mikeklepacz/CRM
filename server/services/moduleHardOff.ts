@@ -35,7 +35,7 @@ export async function handleModuleHardOff(
       result.emailsRemoved = await cancelEhubQueue(tenantId);
     }
 
-    if (module === 'call_manager') {
+    if (module === 'voice_kb') {
       result.callsCancelled = await cancelVoiceQueue(tenantId);
     }
 

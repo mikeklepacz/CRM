@@ -5,18 +5,17 @@ export interface ModuleDefinition {
 }
 
 export const AVAILABLE_MODULES: ModuleDefinition[] = [
-  { id: "clients", label: "Clients", description: "Client database and management" },
-  { id: "sales", label: "Sales", description: "Commission tracker and sales tools" },
-  { id: "follow_up", label: "Follow-up", description: "Manual follow-up tracking" },
-  { id: "map_search", label: "Map Search", description: "Geographic store search" },
+  { id: "voice_kb", label: "Voice & Knowledge Base", description: "AI voice calling with knowledge base" },
+  { id: "ehub", label: "E-Hub", description: "Email campaigns and sequences" },
+  { id: "crm", label: "Sales CRM", description: "Store Database & Commission Tracker" },
   { id: "assistant", label: "AI Assistant", description: "Sales scripts and objection handling" },
   { id: "docs", label: "Documents", description: "Google Drive document browser" },
-  { id: "label_designer", label: "Label Designer", description: "Custom label creation" },
+  { id: "map_search", label: "Map Search", description: "Geographic store search" },
   { id: "analytics", label: "Sales Analytics", description: "Performance dashboards" },
+  { id: "label_designer", label: "Label Designer", description: "Custom label creation" },
+  { id: "followup", label: "Follow-up", description: "Manual follow-up tracking" },
   { id: "pipelines", label: "Pipelines", description: "Workflow automation" },
   { id: "qualification", label: "Qualification", description: "Lead qualification campaigns and scoring" },
-  { id: "call_manager", label: "Call Manager", description: "AI voice calling with knowledge base" },
-  { id: "ehub", label: "E-Hub", description: "Email campaigns and sequences" },
   { id: "apollo", label: "Apollo Enrichment", description: "Enrich leads with contact data from Apollo.io" },
 ];
 
