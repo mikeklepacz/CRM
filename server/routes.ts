@@ -4024,8 +4024,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Link parameter is required' });
       }
 
+      const tenantId = (req.user as any).tenantId;
       // Get sheets configuration
-      const configuredSheets = await storage.getSheets();
+      const configuredSheets = await storage.getAllActiveGoogleSheets(tenantId);
       const storeSheet = configuredSheets.find((s: any) => s.sheetPurpose === "Store Database");
       
       if (!storeSheet) {
