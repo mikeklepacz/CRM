@@ -11,10 +11,8 @@ export const AVAILABLE_MODULES: ModuleDefinition[] = [
   { id: "assistant", label: "AI Assistant", description: "Sales scripts and objection handling" },
   { id: "docs", label: "Documents", description: "Google Drive document browser" },
   { id: "map_search", label: "Map Search", description: "Geographic store search" },
-  { id: "analytics", label: "Sales Analytics", description: "Performance dashboards" },
   { id: "label_designer", label: "Label Designer", description: "Custom label creation" },
   { id: "followup", label: "Follow-up", description: "Manual follow-up tracking" },
-  { id: "pipelines", label: "Pipelines", description: "Workflow automation" },
   { id: "qualification", label: "Qualification", description: "Lead qualification campaigns and scoring" },
   { id: "apollo", label: "Apollo Enrichment", description: "Enrich leads with contact data from Apollo.io" },
 ];

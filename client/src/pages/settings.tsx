@@ -155,8 +155,6 @@ export default function Settings() {
     labelDesigner: true,
     callManager: true,
     ehub: true,
-    analytics: true,
-    pipelines: true,
     qualification: true,
   };
   const [visibleModules, setVisibleModules] = useState<Record<string, boolean>>(defaultModules);
@@ -170,8 +168,6 @@ export default function Settings() {
     assistant: "assistant",
     docs: "documents",
     labelDesigner: "product-mockup",
-    analytics: "analytics",
-    pipelines: "pipelines",
     callManager: "call-manager",
     ehub: "ehub",
     qualification: "qualification",
@@ -1164,28 +1160,6 @@ export default function Settings() {
                       data-testid="checkbox-module-labelDesigner"
                     />
                     <Label htmlFor="module-labelDesigner" className="font-normal cursor-pointer">Label Designer</Label>
-                  </div>
-                )}
-                {canAccessAdminFeatures(user) && shouldShowModuleOption('analytics') && (
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id="module-analytics"
-                      checked={visibleModules.analytics}
-                      onCheckedChange={(checked) => handleModuleToggle('analytics', !!checked)}
-                      data-testid="checkbox-module-analytics"
-                    />
-                    <Label htmlFor="module-analytics" className="font-normal cursor-pointer">Analytics</Label>
-                  </div>
-                )}
-                {canAccessAdminFeatures(user) && shouldShowModuleOption('pipelines') && (
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id="module-pipelines"
-                      checked={visibleModules.pipelines}
-                      onCheckedChange={(checked) => handleModuleToggle('pipelines', !!checked)}
-                      data-testid="checkbox-module-pipelines"
-                    />
-                    <Label htmlFor="module-pipelines" className="font-normal cursor-pointer">Pipelines</Label>
                   </div>
                 )}
                 {(canAccessAdminFeatures(user) || user.hasVoiceAccess) && shouldShowModuleOption('callManager') && (

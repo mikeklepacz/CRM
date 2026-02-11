@@ -33,8 +33,6 @@ import EHub from "@/pages/ehub";
 import ProductMockup from "@/pages/product-mockup";
 import SuperAdmin from "@/pages/super-admin";
 import OrgAdmin from "@/pages/org-admin";
-import Analytics from "@/pages/analytics";
-import Pipelines from "@/pages/pipelines";
 import Qualification from "@/pages/qualification";
 import Apollo from "@/pages/apollo";
 
@@ -99,12 +97,6 @@ function Router() {
               </Route>
               <Route path="/ehub">
                 {canAccessAdminFeatures(user) ? <EHub /> : <NotFound />}
-              </Route>
-              <Route path="/analytics">
-                {canAccessAdminFeatures(user) ? <Analytics /> : <NotFound />}
-              </Route>
-              <Route path="/pipelines">
-                {canAccessAdminFeatures(user) ? <Pipelines /> : <NotFound />}
               </Route>
               <Route path="/qualification" component={Qualification} />
               <Route path="/apollo">

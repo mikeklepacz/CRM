@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check, PieChart, GitBranch, ClipboardList, Sparkles } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target, Palette, Globe, Building2, ChevronDown, FolderKanban, Check, ClipboardList, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -36,8 +36,6 @@ type VisibleModules = {
   callManager?: boolean;
   ehub?: boolean;
   apollo?: boolean;
-  analytics?: boolean;
-  pipelines?: boolean;
   qualification?: boolean;
 };
 
@@ -83,8 +81,6 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
       callManager: true,
       ehub: true,
       apollo: true,
-      analytics: true,
-      pipelines: true,
       qualification: true,
     };
     return { ...defaults, ...userPreferences?.visibleModules };
@@ -278,22 +274,6 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               </Button>
             </Link>
           )}
-          {shouldShowNavItem("analytics", "analytics") && (
-            <Link href="/analytics">
-              <Button variant="ghost" size="sm" data-testid="nav-analytics">
-                <PieChart className="hidden xl:mr-2 xl:inline h-4 w-4" />
-                Analytics
-              </Button>
-            </Link>
-          )}
-          {shouldShowNavItem("pipelines", "pipelines") && (
-            <Link href="/pipelines">
-              <Button variant="ghost" size="sm" data-testid="nav-pipelines">
-                <GitBranch className="hidden xl:mr-2 xl:inline h-4 w-4" />
-                Pipelines
-              </Button>
-            </Link>
-          )}
           {shouldShowNavItem("qualification", "qualification") && (
             <Link href="/qualification">
               <Button variant="ghost" size="sm" data-testid="nav-qualification">
@@ -402,18 +382,6 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <DropdownMenuItem onClick={() => { setLocation('/product-mockup'); setMobileMenuOpen(false); }}>
                   <Palette className="mr-2 h-4 w-4" />
                   Label Designer
-                </DropdownMenuItem>
-              )}
-              {shouldShowNavItem("analytics", "analytics") && (
-                <DropdownMenuItem onClick={() => { setLocation('/analytics'); setMobileMenuOpen(false); }}>
-                  <PieChart className="mr-2 h-4 w-4" />
-                  Analytics
-                </DropdownMenuItem>
-              )}
-              {shouldShowNavItem("pipelines", "pipelines") && (
-                <DropdownMenuItem onClick={() => { setLocation('/pipelines'); setMobileMenuOpen(false); }}>
-                  <GitBranch className="mr-2 h-4 w-4" />
-                  Pipelines
                 </DropdownMenuItem>
               )}
               {shouldShowNavItem("qualification", "qualification") && (

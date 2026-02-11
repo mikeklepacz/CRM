@@ -41,12 +41,10 @@ export const MODULE_NAV_MAPPING: Record<string, string> = {
   documents: "docs",
   docs: "docs",
   "map-search": "map_search",
-  analytics: "analytics",
   "label-designer": "label_designer",
   "product-mockup": "label_designer",
   "follow-up": "followup",
   "follow-up-center": "followup",
-  pipelines: "pipelines",
   qualification: "qualification",
 };
 
