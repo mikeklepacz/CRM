@@ -110,3 +110,10 @@ The application features a client dashboard unifying data, transitioning from a 
 - **Twilio API**: Outbound call origination (AI voice via ElevenLabs) + browser-based VoIP calling for agents with assigned Twilio numbers.
 - **Fly.io Voice Proxy**: Standalone Node.js service for Twilio WebSocket handling (`wss://hemp-voice-proxy.fly.dev/media-stream`).
 - **Apollo.io API**: Lead enrichment for contact data (emails, phones, job titles, seniorities).
+
+## Embeddable Label Designer
+- **Route**: `/label-designer` — standalone, public (no login required), iframe-embeddable.
+- **File**: `client/src/pages/label-designer-embed.tsx` wraps `ProductMockup` with its own providers (no CRM chrome).
+- **App.tsx**: `useRoute("/label-designer")` intercepts before auth-gated Router.
+- **Server headers**: `Content-Security-Policy: frame-ancestors *` on `/label-designer`; CORS headers on `/api/label-projects` for cross-origin export.
+- **WordPress embed**: `<iframe src="https://<published-url>/label-designer" width="100%" height="900" style="border:none;"></iframe>`
