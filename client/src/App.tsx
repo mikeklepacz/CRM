@@ -35,6 +35,8 @@ import SuperAdmin from "@/pages/super-admin";
 import OrgAdmin from "@/pages/org-admin";
 import Qualification from "@/pages/qualification";
 import Apollo from "@/pages/apollo";
+import { useRoute } from "wouter";
+import LabelDesignerEmbed from "@/pages/label-designer-embed";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -116,6 +118,12 @@ function Router() {
 }
 
 function App() {
+  const [isLabelDesigner] = useRoute("/label-designer");
+
+  if (isLabelDesigner) {
+    return <LabelDesignerEmbed />;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="auto">

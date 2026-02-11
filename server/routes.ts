@@ -674,6 +674,24 @@ function columnIndexToLetter(index: number): string {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
+  app.use('/label-designer', (_req, res, next) => {
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', "frame-ancestors *");
+    next();
+  });
+
+  app.use('/api/label-projects', (_req, res, next) => {
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Drive-Folder-Url');
+    if (_req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   await setupAuth(app);
 
   // Username/Password Authentication Routes
