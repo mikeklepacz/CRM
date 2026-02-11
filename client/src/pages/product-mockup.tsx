@@ -1585,7 +1585,7 @@ export default function ProductMockup() {
           )}
         </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2020,7 +2020,7 @@ export default function ProductMockup() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="self-start">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-base">Product Preview</CardTitle>
