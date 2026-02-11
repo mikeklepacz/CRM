@@ -2043,29 +2043,30 @@ export default function ProductMockup() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="w-full flex justify-center">
-              <div 
-                ref={productPreviewRef}
-                className="relative flex items-center justify-center rounded-lg overflow-hidden"
-                style={{ 
-                  background: '#e8dcc8',
-                  width: '300px',
-                  height: '500px',
-                }}
-                data-testid="container-preview"
+            <div 
+              ref={productPreviewRef}
+              className="relative w-full flex items-center justify-center rounded-lg overflow-hidden"
+              style={{ 
+                background: '#e8dcc8',
+                aspectRatio: '1 / 1',
+              }}
+              data-testid="container-preview"
+            >
+              <div
+                className="absolute pointer-events-none"
+                style={{ width: '300px', height: '500px', zIndex: 1 }}
               >
                 <img 
                   src={hempClearUrl}
                   alt="Hemp wick overlay"
-                  className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                  style={{ zIndex: 1 }}
-                />
-                <div 
-                  ref={threeContainerRef}
-                  className="absolute inset-0"
-                  style={{ zIndex: 2 }}
+                  className="w-full h-full object-contain"
                 />
               </div>
+              <div 
+                ref={threeContainerRef}
+                className="absolute"
+                style={{ width: '300px', height: '500px', zIndex: 2 }}
+              />
             </div>
             
             <div className="space-y-1">
