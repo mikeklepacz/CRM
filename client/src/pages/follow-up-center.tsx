@@ -110,24 +110,6 @@ export default function FollowUpCenter() {
   const trackerSheetId = trackerSheet?.id;
   const storeSheetId = storeSheet?.id;
 
-  // Log call mutation
-  const logCallMutation = useMutation({
-    mutationFn: async ({ storeName, phoneNumber, storeLink }: { storeName: string; phoneNumber: string; storeLink: string | null }) => {
-      return await apiRequest("POST", "/api/call-history", {
-        storeName,
-        phoneNumber,
-        storeLink,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/follow-up-center'] });
-    },
-    onError: (error: Error) => {
-      console.error('Failed to log call:', error);
-    },
-  });
-
   const handleFollowUpCall = (client: FollowUpClient) => {
     const storeName = client.data?.Name || client.data?.name || 'Unknown';
     const phoneNumber = client.data?.Phone || client.data?.phone || '';
@@ -135,13 +117,7 @@ export default function FollowUpCenter() {
 
     if (!phoneNumber) return;
 
-    logCallMutation.mutate({
-      storeName,
-      phoneNumber,
-      storeLink,
-    });
-
-    voip.makeCall(phoneNumber);
+    voip.makeCall(phoneNumber, { storeName, storeLink: storeLink || undefined });
   };
 
   const handleOpenStoreDetails = (client: FollowUpClient) => {

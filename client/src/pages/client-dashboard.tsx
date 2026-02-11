@@ -3887,6 +3887,8 @@ export default function ClientDashboard() {
                                           {isPhoneColumn && cellValue ? (
                                             <VoipCallButton
                                               phoneNumber={cellValue}
+                                              storeName={row.name || row.Name || row.Company || 'Unknown Store'}
+                                              storeLink={row.link || row.Link || row.id}
                                               onClick={() => {
                                                 setStoreDetailsDialog({
                                                   open: true,

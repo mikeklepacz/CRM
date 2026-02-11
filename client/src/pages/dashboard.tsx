@@ -95,22 +95,12 @@ export default function Dashboard() {
       const storeLink = row.link || row.Link;
       const storeName = row.name || row.Name || row.Company || 'Unknown Store';
 
-      // Log the call to database
-      apiRequest('POST', '/api/call-history', {
-        storeLink: storeLink,
-        phoneNumber: phoneNumber,
-        storeName: storeName,
-      }).catch(error => {
-        console.error('Failed to log call:', error);
-        // Don't block the call if logging fails
-      });
-
       // Trigger default script loading in AI assistant
       setLoadDefaultScriptTrigger(prev => prev + 1);
 
       // Trigger phone dialer after a delay so user sees the dialog first
       setTimeout(() => {
-        voip.makeCall(phoneNumber);
+        voip.makeCall(phoneNumber, { storeName, storeLink: storeLink || undefined });
       }, 800);
 
       // Clear the autoCallPhone flag so it doesn't trigger again

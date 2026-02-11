@@ -336,6 +336,8 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                             <Phone className="h-3 w-3 shrink-0" />
                             <VoipCallButton
                               phoneNumber={reminder.storeMetadata.pocPhone}
+                              storeName={reminder.storeName || undefined}
+                              storeLink={reminder.storeMetadata.uniqueIdentifier || undefined}
                               className="hover:text-primary hover:underline cursor-pointer"
                               data-testid={`link-phone-${reminder.id}`}
                               skipCall={!!onPhoneClick}

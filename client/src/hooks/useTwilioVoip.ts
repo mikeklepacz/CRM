@@ -2,9 +2,14 @@ import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import { Device, Call } from "@twilio/voice-sdk";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export type VoipCallStatus = "idle" | "connecting" | "ringing" | "connected" | "disconnected";
+
+export interface CallContext {
+  storeName?: string;
+  storeLink?: string;
+}
 
 interface VoipState {
   status: VoipCallStatus;
@@ -126,8 +131,23 @@ export function useTwilioVoip() {
   }, [hasTwilioNumber]);
 
   const makeCall = useCallback(
-    async (phoneNumber: string) => {
+    async (phoneNumber: string, context?: CallContext) => {
       console.log(`[VoIP] makeCall called - sharedDevice: ${!!sharedDevice}, hasTwilioNumber: ${hasTwilioNumber}`);
+
+      const logCallHistory = (phone: string, ctx?: CallContext) => {
+        if (ctx?.storeName || ctx?.storeLink) {
+          apiRequest("POST", "/api/call-history", {
+            storeName: ctx.storeName || "Unknown Store",
+            phoneNumber: phone,
+            storeLink: ctx.storeLink || null,
+          }).then(() => {
+            queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/follow-up-center'] });
+          }).catch((err: any) => {
+            console.error("[VoIP] Failed to log call history:", err);
+          });
+        }
+      };
 
       let device = sharedDevice;
 
@@ -137,6 +157,7 @@ export function useTwilioVoip() {
 
       if (!device) {
         console.log("[VoIP] No device available, using tel: link");
+        logCallHistory(phoneNumber, context);
         window.location.href = `tel:${phoneNumber}`;
         return;
       }
@@ -174,6 +195,8 @@ export function useTwilioVoip() {
         });
 
         sharedCall = call;
+
+        logCallHistory(phoneNumber, context);
 
         call.on("ringing", () => {
           updateState({ status: "ringing" });

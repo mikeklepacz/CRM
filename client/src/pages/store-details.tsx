@@ -193,23 +193,6 @@ export default function StoreDetails() {
     },
   });
 
-  // Log call mutation
-  const logCallMutation = useMutation({
-    mutationFn: async (phoneNumber: string) => {
-      return await apiRequest("POST", "/api/call-history", {
-        storeName: formData.name,
-        phoneNumber,
-        storeLink: formData.link || null,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
-    },
-    onError: (error: Error) => {
-      console.error('Failed to log call:', error);
-    },
-  });
-
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -249,11 +232,7 @@ export default function StoreDetails() {
       return;
     }
 
-    // Log the call
-    logCallMutation.mutate(phoneToCall);
-
-    // Open phone dialer
-    voip.makeCall(phoneToCall);
+    voip.makeCall(phoneToCall, { storeName: formData.name || 'Unknown Store', storeLink: formData.link || undefined });
   };
 
   const handleCancel = () => {

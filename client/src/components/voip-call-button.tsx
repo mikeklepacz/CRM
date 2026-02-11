@@ -3,6 +3,8 @@ import { useTwilioVoip } from "@/hooks/useTwilioVoip";
 
 interface VoipCallButtonProps {
   phoneNumber: string;
+  storeName?: string;
+  storeLink?: string;
   className?: string;
   children?: ReactNode;
   "data-testid"?: string;
@@ -11,7 +13,7 @@ interface VoipCallButtonProps {
   skipCall?: boolean;
 }
 
-export function VoipCallButton({ phoneNumber, className, children, style, onClick, skipCall, ...props }: VoipCallButtonProps) {
+export function VoipCallButton({ phoneNumber, storeName, storeLink, className, children, style, onClick, skipCall, ...props }: VoipCallButtonProps) {
   const { makeCall } = useTwilioVoip();
 
   if (!phoneNumber) {
@@ -27,7 +29,7 @@ export function VoipCallButton({ phoneNumber, className, children, style, onClic
       onClick={(e) => {
         onClick?.(e);
         if (!e.defaultPrevented && !skipCall) {
-          makeCall(phoneNumber);
+          makeCall(phoneNumber, { storeName, storeLink });
         }
       }}
     >

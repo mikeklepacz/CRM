@@ -2220,7 +2220,7 @@ function EnrichedCompaniesTab({ companies, isLoading }: { companies: ApolloCompa
                         </TableCell>
                         <TableCell>
                           {contact.phone ? (
-                            <VoipCallButton phoneNumber={contact.phone} className="text-sm cursor-pointer hover:underline">
+                            <VoipCallButton phoneNumber={contact.phone} storeName={`${contact.firstName || ''} ${contact.lastName || ''}`.trim() || undefined} storeLink={contact.googleSheetLink || undefined} className="text-sm cursor-pointer hover:underline">
                               {contact.phone}
                             </VoipCallButton>
                           ) : (

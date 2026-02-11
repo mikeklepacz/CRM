@@ -326,6 +326,7 @@ export function QuickReminder({
                 >
                   {displayPhone}
                 </VoipCallButton>
+
                 {!pocPhone && defaultPhone && (
                   <span className="text-xs opacity-70">(default)</span>
                 )}

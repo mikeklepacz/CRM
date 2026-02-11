@@ -1024,26 +1024,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
     const storeLink = formData.link;
 
-    if (!storeLink) {
-      toast({
-        title: "Error",
-        description: "Unable to identify store for call logging",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      await apiRequest('POST', '/api/call-history', {
-        storeLink,
-        phoneNumber,
-        storeName: formData.name || 'Unknown Store',
-      });
-    } catch (error) {
-      console.error('Failed to log call:', error);
-    }
-
-    voip.makeCall(phoneNumber);
+    voip.makeCall(phoneNumber, { storeName: formData.name || 'Unknown Store', storeLink: storeLink || undefined });
   };
 
   // AI Assistant toggle - global setting (applies to all stores)
