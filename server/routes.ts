@@ -4034,7 +4034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all rows from Store Database
-      const sheetData = await googleSheets.readSheetData(storeSheet.id, 'A:ZZ');
+      const sheetData = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
       
       if (!sheetData || sheetData.length === 0) {
         return res.status(404).json({ error: 'No data found in Store Database' });
