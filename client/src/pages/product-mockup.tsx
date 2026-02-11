@@ -661,7 +661,7 @@ export default function ProductMockup() {
     const container = threeContainerRef.current;
     if (!container) return;
 
-    const width = 300;
+    const width = 500;
     const height = 500;
 
     const scene = new THREE.Scene();
@@ -1316,12 +1316,12 @@ export default function ProductMockup() {
     if (!container) return;
     
     const downloadCanvas = document.createElement('canvas');
-    downloadCanvas.width = 300;
+    downloadCanvas.width = 500;
     downloadCanvas.height = 500;
     const downloadCtx = downloadCanvas.getContext('2d')!;
     
     downloadCtx.fillStyle = '#e8dcc8';
-    downloadCtx.fillRect(0, 0, 300, 500);
+    downloadCtx.fillRect(0, 0, 500, 500);
     
     const threeCanvas = container.querySelector('canvas');
     if (threeCanvas) {
@@ -1331,7 +1331,7 @@ export default function ProductMockup() {
     const overlayImg = new window.Image();
     overlayImg.crossOrigin = 'anonymous';
     overlayImg.onload = () => {
-      downloadCtx.drawImage(overlayImg, 0, 0, 300, 500);
+      downloadCtx.drawImage(overlayImg, 0, 0, 500, 500);
       const link = document.createElement('a');
       link.download = 'hemp-wick-mockup.png';
       link.href = downloadCanvas.toDataURL('image/png');
@@ -2043,30 +2043,29 @@ export default function ProductMockup() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div 
-              ref={productPreviewRef}
-              className="relative w-full flex items-center justify-center rounded-lg overflow-hidden"
-              style={{ 
-                background: '#e8dcc8',
-                aspectRatio: '1 / 1',
-              }}
-              data-testid="container-preview"
-            >
-              <div
-                className="absolute pointer-events-none"
-                style={{ width: '300px', height: '500px', zIndex: 1 }}
+            <div className="w-full flex justify-center">
+              <div 
+                ref={productPreviewRef}
+                className="relative flex items-center justify-center rounded-lg overflow-hidden"
+                style={{ 
+                  background: '#e8dcc8',
+                  width: '500px',
+                  height: '500px',
+                }}
+                data-testid="container-preview"
               >
                 <img 
                   src={hempClearUrl}
                   alt="Hemp wick overlay"
-                  className="w-full h-full object-contain"
+                  className="absolute pointer-events-none"
+                  style={{ width: '500px', height: '500px', objectFit: 'contain', zIndex: 1 }}
+                />
+                <div 
+                  ref={threeContainerRef}
+                  className="absolute"
+                  style={{ width: '500px', height: '500px', zIndex: 2 }}
                 />
               </div>
-              <div 
-                ref={threeContainerRef}
-                className="absolute"
-                style={{ width: '300px', height: '500px', zIndex: 2 }}
-              />
             </div>
             
             <div className="space-y-1">
