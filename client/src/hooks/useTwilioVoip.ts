@@ -163,10 +163,13 @@ export function useTwilioVoip() {
           activePhoneNumber: phoneNumber,
         });
 
+        const toNormalized = phoneNumber.replace(/[\s()\-\.]/g, '');
+        const callerIdNormalized = callerId.replace(/[\s()\-\.]/g, '');
+
         const call = await device.connect({
           params: {
-            To: phoneNumber,
-            CallerId: callerId,
+            To: toNormalized,
+            CallerId: callerIdNormalized,
           },
         });
 

@@ -2618,8 +2618,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/twilio/voip-twiml - TwiML endpoint for browser VoIP calls
   app.post('/api/twilio/voip-twiml', async (req: any, res) => {
     try {
-      const to = req.body.To;
-      const callerId = req.body.CallerId;
+      const rawTo = req.body.To;
+      const rawCallerId = req.body.CallerId;
+
+      const to = rawTo ? rawTo.replace(/[\s()\-\.]/g, '') : '';
+      const callerId = rawCallerId ? rawCallerId.replace(/[\s()\-\.]/g, '') : '';
 
       if (!to) {
         const twiml = new twilio.twiml.VoiceResponse();
