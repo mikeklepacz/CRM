@@ -20,14 +20,14 @@ export function registerDbaRoutes(
         pocPhone, 
         notes, 
         agentName,
-        status, // Default status for new parent (e.g., 'claimed')
-        // Corporate office location data
+        status,
         address,
         city,
         state,
         phone,
         email,
-        childLinks // Array of child store links to get category from
+        childLinks,
+        liveCardData
       } = req.body;
 
       if (!dbaName || !dbaName.trim()) {
@@ -92,49 +92,52 @@ export function registerDbaRoutes(
             });
           }
 
-          // Update POC info if provided
-          if (pocName && pocNameIndex !== -1) {
+          const finalPocName = pocName || (liveCardData?.pointOfContact) || '';
+          const finalPocEmail = pocEmail || (liveCardData?.pocEmail) || '';
+          const finalPocPhone = pocPhone || (liveCardData?.pocPhone) || '';
+
+          if (finalPocName && pocNameIndex !== -1) {
             const colLetter = String.fromCharCode(65 + pocNameIndex);
             updates.push({
               range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
-              values: [[pocName]]
+              values: [[finalPocName]]
             });
           }
 
-          if (pocEmail && pocEmailIndex !== -1) {
+          if (finalPocEmail && pocEmailIndex !== -1) {
             const colLetter = String.fromCharCode(65 + pocEmailIndex);
             updates.push({
               range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
-              values: [[pocEmail]]
+              values: [[finalPocEmail]]
             });
           }
 
-          if (pocPhone && pocPhoneIndex !== -1) {
+          if (finalPocPhone && pocPhoneIndex !== -1) {
             const colLetter = String.fromCharCode(65 + pocPhoneIndex);
             updates.push({
               range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
-              values: [[pocPhone]]
+              values: [[finalPocPhone]]
             });
           }
 
           if (notesIndex !== -1) {
             const existingNotes = (trackerRows[foundRowIndex - 1][notesIndex] || '').toString().trim();
+            let aggregatedNotes = existingNotes;
+
             if (notes) {
-              const mergedNotes = existingNotes
-                ? `${existingNotes}\n\n${notes}`
+              aggregatedNotes = aggregatedNotes
+                ? `${aggregatedNotes}\n\n${notes}`
                 : notes;
-              const colLetter = String.fromCharCode(65 + notesIndex);
-              updates.push({
-                range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
-                values: [[mergedNotes]]
-              });
+            }
+
+            if (liveCardData?.notes) {
+              const liveLabel = liveCardData.storeName || 'Open Card';
+              aggregatedNotes = aggregatedNotes
+                ? `${aggregatedNotes}\n\n[From ${liveLabel}]: ${liveCardData.notes}`
+                : liveCardData.notes;
             }
 
             if (childLinks && Array.isArray(childLinks) && childLinks.length > 0) {
-              let aggregatedNotes = notes
-                ? (existingNotes ? `${existingNotes}\n\n${notes}` : notes)
-                : existingNotes;
-
               const nameIdx = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'name' || h.toLowerCase() === 'store name');
 
               for (const childLink of childLinks) {
@@ -149,21 +152,21 @@ export function registerDbaRoutes(
                         : childNotes;
                     }
 
-                    if (!pocName && pocNameIndex !== -1) {
+                    if (!finalPocName && pocNameIndex !== -1) {
                       const val = (trackerRows[i][pocNameIndex] || '').toString().trim();
                       if (val) {
                         const col = String.fromCharCode(65 + pocNameIndex);
                         updates.push({ range: `${trackerSheet.sheetName}!${col}${foundRowIndex}`, values: [[val]] });
                       }
                     }
-                    if (!pocEmail && pocEmailIndex !== -1) {
+                    if (!finalPocEmail && pocEmailIndex !== -1) {
                       const val = (trackerRows[i][pocEmailIndex] || '').toString().trim();
                       if (val) {
                         const col = String.fromCharCode(65 + pocEmailIndex);
                         updates.push({ range: `${trackerSheet.sheetName}!${col}${foundRowIndex}`, values: [[val]] });
                       }
                     }
-                    if (!pocPhone && pocPhoneIndex !== -1) {
+                    if (!finalPocPhone && pocPhoneIndex !== -1) {
                       const val = (trackerRows[i][pocPhoneIndex] || '').toString().trim();
                       if (val) {
                         const col = String.fromCharCode(65 + pocPhoneIndex);
@@ -174,18 +177,18 @@ export function registerDbaRoutes(
                   }
                 }
               }
+            }
 
-              if (aggregatedNotes !== existingNotes) {
-                const colLetter = String.fromCharCode(65 + notesIndex);
-                const existingUpdate = updates.findIndex(u => u.range === `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`);
-                if (existingUpdate !== -1) {
-                  updates[existingUpdate].values = [[aggregatedNotes]];
-                } else {
-                  updates.push({
-                    range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
-                    values: [[aggregatedNotes]]
-                  });
-                }
+            if (aggregatedNotes !== existingNotes) {
+              const colLetter = String.fromCharCode(65 + notesIndex);
+              const existingUpdate = updates.findIndex(u => u.range === `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`);
+              if (existingUpdate !== -1) {
+                updates[existingUpdate].values = [[aggregatedNotes]];
+              } else {
+                updates.push({
+                  range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+                  values: [[aggregatedNotes]]
+                });
               }
             }
           }
@@ -268,9 +271,12 @@ export function registerDbaRoutes(
       if (linkIndex !== -1) trackerRow[linkIndex] = corporateUuid;
       if (dbaIndex !== -1) trackerRow[dbaIndex] = dbaName;
       if (isParentIndex !== -1) trackerRow[isParentIndex] = 'TRUE';
-      if (pocNameIndex !== -1 && pocName) trackerRow[pocNameIndex] = pocName;
-      if (pocEmailIndex !== -1 && pocEmail) trackerRow[pocEmailIndex] = pocEmail;
-      if (pocPhoneIndex !== -1 && pocPhone) trackerRow[pocPhoneIndex] = pocPhone;
+      const newPocName = pocName || liveCardData?.pointOfContact || '';
+      const newPocEmail = pocEmail || liveCardData?.pocEmail || '';
+      const newPocPhone = pocPhone || liveCardData?.pocPhone || '';
+      if (pocNameIndex !== -1 && newPocName) trackerRow[pocNameIndex] = newPocName;
+      if (pocEmailIndex !== -1 && newPocEmail) trackerRow[pocEmailIndex] = newPocEmail;
+      if (pocPhoneIndex !== -1 && newPocPhone) trackerRow[pocPhoneIndex] = newPocPhone;
       if (notesIndex !== -1 && notes) trackerRow[notesIndex] = notes;
       if (agentIndex !== -1 && agentName) trackerRow[agentIndex] = agentName;
 
@@ -296,7 +302,7 @@ export function registerDbaRoutes(
   app.post('/api/dba/link-children', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { parentLink, childLinks } = req.body;
+      const { parentLink, childLinks, liveCardData } = req.body;
 
       if (!parentLink || !childLinks || !Array.isArray(childLinks) || childLinks.length === 0) {
         return res.status(400).json({ message: "Parent link and child links array are required" });
@@ -393,6 +399,25 @@ export function registerDbaRoutes(
       }
 
       if (parentRowIndex !== -1) {
+        if (liveCardData) {
+          if (liveCardData.pointOfContact && pocNameIndex !== -1) {
+            trackerRows[parentRowIndex][pocNameIndex] = liveCardData.pointOfContact;
+          }
+          if (liveCardData.pocEmail && pocEmailIndex !== -1) {
+            trackerRows[parentRowIndex][pocEmailIndex] = liveCardData.pocEmail;
+          }
+          if (liveCardData.pocPhone && pocPhoneIndex !== -1) {
+            trackerRows[parentRowIndex][pocPhoneIndex] = liveCardData.pocPhone;
+          }
+          if (liveCardData.notes && notesIndex !== -1) {
+            const liveLabel = liveCardData.storeName || 'Open Card';
+            const current = (trackerRows[parentRowIndex][notesIndex] || '').toString().trim();
+            trackerRows[parentRowIndex][notesIndex] = current
+              ? `${current}\n\n[From ${liveLabel}]: ${liveCardData.notes}`
+              : liveCardData.notes;
+          }
+        }
+
         const parentSheetRow = parentRowIndex + 1;
         if (notesIndex !== -1) {
           const notesCol = String.fromCharCode(65 + notesIndex);

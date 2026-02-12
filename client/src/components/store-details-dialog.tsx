@@ -1776,24 +1776,32 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         });
                                         let parentLink: string;
                                         
+                                        const liveCardData = {
+                                          notes: formData.notes || '',
+                                          pointOfContact: formData.point_of_contact || '',
+                                          pocEmail: formData.poc_email || '',
+                                          pocPhone: formData.poc_phone || '',
+                                          storeName: formData.name || store?.Name || '',
+                                        };
+
                                         if (parentCreationType === 'new') {
-                                          // Create new parent (corporate office)
                                           const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
                                             dbaName: dbaName.trim(),
-                                            pocName: parentPocName || '',
-                                            pocEmail: parentPocEmail || '',
-                                            pocPhone: parentPocPhone || '',
-                                            notes: `Corporate parent for ${dbaName.trim()}`,
+                                            pocName: parentPocName || liveCardData.pointOfContact,
+                                            pocEmail: parentPocEmail || liveCardData.pocEmail,
+                                            pocPhone: parentPocPhone || liveCardData.pocPhone,
+                                            notes: liveCardData.notes
+                                              ? `Corporate parent for ${dbaName.trim()}\n\n[From ${liveCardData.storeName}]: ${liveCardData.notes}`
+                                              : `Corporate parent for ${dbaName.trim()}`,
                                             agentName: currentUser?.agentName || '',
-                                            status: 'claimed', // Default status for new DBA parent
-                                            // Corporate office location data
+                                            status: 'claimed',
                                             address: corporateAddress || '',
                                             city: corporateCity || '',
                                             state: corporateState || '',
                                             phone: corporatePhone || '',
                                             email: corporateEmail || '',
-                                            // Category will be copied from first child location
-                                            childLinks: storeLinks
+                                            childLinks: storeLinks,
+                                            liveCardData,
                                           });
                                           
                                           // Defensive check: Ensure parent was created
@@ -1802,10 +1810,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           }
                                           parentLink = parentResponse.parentLink;
                                         } else {
-                                          // Use existing location as parent
                                           const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
                                             dbaName: dbaName.trim(),
-                                            parentLink: selectedParentLink
+                                            parentLink: selectedParentLink,
+                                            liveCardData,
                                           });
                                           
                                           // Defensive check
@@ -1824,7 +1832,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         if (childLinks.length > 0) {
                                           await apiRequest('POST', '/api/dba/link-children', {
                                             parentLink,
-                                            childLinks
+                                            childLinks,
+                                            liveCardData,
                                           });
                                         }
 
