@@ -117,15 +117,79 @@ export function registerDbaRoutes(
             });
           }
 
-          if (notes && notesIndex !== -1) {
-            const colLetter = String.fromCharCode(65 + notesIndex);
-            updates.push({
-              range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
-              values: [[notes]]
-            });
+          if (notesIndex !== -1) {
+            const existingNotes = (trackerRows[foundRowIndex - 1][notesIndex] || '').toString().trim();
+            if (notes) {
+              const mergedNotes = existingNotes
+                ? `${existingNotes}\n\n${notes}`
+                : notes;
+              const colLetter = String.fromCharCode(65 + notesIndex);
+              updates.push({
+                range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+                values: [[mergedNotes]]
+              });
+            }
+
+            if (childLinks && Array.isArray(childLinks) && childLinks.length > 0) {
+              let aggregatedNotes = notes
+                ? (existingNotes ? `${existingNotes}\n\n${notes}` : notes)
+                : existingNotes;
+
+              const nameIdx = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'name' || h.toLowerCase() === 'store name');
+
+              for (const childLink of childLinks) {
+                const normalizedChild = normalizeLink(childLink);
+                for (let i = 1; i < trackerRows.length; i++) {
+                  if (normalizeLink(trackerRows[i][linkIndex] || '') === normalizedChild) {
+                    const childNotes = (trackerRows[i][notesIndex] || '').toString().trim();
+                    const childName = (nameIdx !== -1 ? trackerRows[i][nameIdx] : '') || childLink || 'Child Location';
+                    if (childNotes) {
+                      aggregatedNotes = aggregatedNotes
+                        ? `${aggregatedNotes}\n\n[From ${childName}]: ${childNotes}`
+                        : childNotes;
+                    }
+
+                    if (!pocName && pocNameIndex !== -1) {
+                      const val = (trackerRows[i][pocNameIndex] || '').toString().trim();
+                      if (val) {
+                        const col = String.fromCharCode(65 + pocNameIndex);
+                        updates.push({ range: `${trackerSheet.sheetName}!${col}${foundRowIndex}`, values: [[val]] });
+                      }
+                    }
+                    if (!pocEmail && pocEmailIndex !== -1) {
+                      const val = (trackerRows[i][pocEmailIndex] || '').toString().trim();
+                      if (val) {
+                        const col = String.fromCharCode(65 + pocEmailIndex);
+                        updates.push({ range: `${trackerSheet.sheetName}!${col}${foundRowIndex}`, values: [[val]] });
+                      }
+                    }
+                    if (!pocPhone && pocPhoneIndex !== -1) {
+                      const val = (trackerRows[i][pocPhoneIndex] || '').toString().trim();
+                      if (val) {
+                        const col = String.fromCharCode(65 + pocPhoneIndex);
+                        updates.push({ range: `${trackerSheet.sheetName}!${col}${foundRowIndex}`, values: [[val]] });
+                      }
+                    }
+                    break;
+                  }
+                }
+              }
+
+              if (aggregatedNotes !== existingNotes) {
+                const colLetter = String.fromCharCode(65 + notesIndex);
+                const existingUpdate = updates.findIndex(u => u.range === `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`);
+                if (existingUpdate !== -1) {
+                  updates[existingUpdate].values = [[aggregatedNotes]];
+                } else {
+                  updates.push({
+                    range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+                    values: [[aggregatedNotes]]
+                  });
+                }
+              }
+            }
           }
 
-          // Execute all updates
           for (const update of updates) {
             await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
           }
@@ -255,6 +319,11 @@ export function registerDbaRoutes(
       const trackerHeaders = trackerRows[0];
       const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const parentLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'parent link');
+      const notesIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'notes');
+      const pocNameIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'point of contact');
+      const pocEmailIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'poc email');
+      const pocPhoneIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'poc phone');
+      const nameIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'name' || h.toLowerCase() === 'store name');
 
       if (linkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found' });
@@ -268,26 +337,93 @@ export function registerDbaRoutes(
       const updates: { range: string; values: any[][] }[] = [];
       let linkedCount = 0;
 
-      // Link each child to the parent
+      let parentRowIndex = -1;
+      for (let i = 1; i < trackerRows.length; i++) {
+        if (normalizeLink(trackerRows[i][linkIndex] || '') === normalizedParentLink) {
+          parentRowIndex = i;
+          break;
+        }
+      }
+
       for (const childLink of childLinks) {
         const normalizedChildLink = normalizeLink(childLink);
         
         for (let i = 1; i < trackerRows.length; i++) {
           if (normalizeLink(trackerRows[i][linkIndex] || '') === normalizedChildLink) {
-            const rowIndex = i + 1; // 1-indexed
+            const rowIndex = i + 1;
             const colLetter = String.fromCharCode(65 + parentLinkIndex);
             
             updates.push({
               range: `${trackerSheet.sheetName}!${colLetter}${rowIndex}`,
               values: [[parentLink]]
             });
+
+            if (parentRowIndex !== -1) {
+              const childRow = trackerRows[i];
+              const childName = (nameIndex !== -1 ? childRow[nameIndex] : '') || childLink || 'Child Location';
+
+              if (notesIndex !== -1) {
+                const childNotes = (childRow[notesIndex] || '').toString().trim();
+                if (childNotes) {
+                  const existingParentNotes = (trackerRows[parentRowIndex][notesIndex] || '').toString().trim();
+                  trackerRows[parentRowIndex][notesIndex] = existingParentNotes
+                    ? `${existingParentNotes}\n\n[From ${childName}]: ${childNotes}`
+                    : childNotes;
+                }
+              }
+
+              if (pocNameIndex !== -1) {
+                const val = (childRow[pocNameIndex] || '').toString().trim();
+                if (val) trackerRows[parentRowIndex][pocNameIndex] = val;
+              }
+              if (pocEmailIndex !== -1) {
+                const val = (childRow[pocEmailIndex] || '').toString().trim();
+                if (val) trackerRows[parentRowIndex][pocEmailIndex] = val;
+              }
+              if (pocPhoneIndex !== -1) {
+                const val = (childRow[pocPhoneIndex] || '').toString().trim();
+                if (val) trackerRows[parentRowIndex][pocPhoneIndex] = val;
+              }
+            }
+
             linkedCount++;
             break;
           }
         }
       }
 
-      // Execute all updates
+      if (parentRowIndex !== -1) {
+        const parentSheetRow = parentRowIndex + 1;
+        if (notesIndex !== -1) {
+          const notesCol = String.fromCharCode(65 + notesIndex);
+          updates.push({
+            range: `${trackerSheet.sheetName}!${notesCol}${parentSheetRow}`,
+            values: [[trackerRows[parentRowIndex][notesIndex] || '']]
+          });
+        }
+        if (pocNameIndex !== -1) {
+          const col = String.fromCharCode(65 + pocNameIndex);
+          updates.push({
+            range: `${trackerSheet.sheetName}!${col}${parentSheetRow}`,
+            values: [[trackerRows[parentRowIndex][pocNameIndex] || '']]
+          });
+        }
+        if (pocEmailIndex !== -1) {
+          const col = String.fromCharCode(65 + pocEmailIndex);
+          updates.push({
+            range: `${trackerSheet.sheetName}!${col}${parentSheetRow}`,
+            values: [[trackerRows[parentRowIndex][pocEmailIndex] || '']]
+          });
+        }
+        if (pocPhoneIndex !== -1) {
+          const col = String.fromCharCode(65 + pocPhoneIndex);
+          updates.push({
+            range: `${trackerSheet.sheetName}!${col}${parentSheetRow}`,
+            values: [[trackerRows[parentRowIndex][pocPhoneIndex] || '']]
+          });
+        }
+      }
+
       for (const update of updates) {
         await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
       }

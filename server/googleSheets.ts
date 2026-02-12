@@ -618,7 +618,8 @@ export function convertObjectsToSheetRows(headers: string[], objects: Array<Reco
 }
 
 /**
- * Update all Commission Tracker rows that reference oldLink to use newLink instead
+ * Update all Commission Tracker rows that reference oldLink to use newLink instead.
+ * Also merges Notes (append) and POC fields (overwrite) from source rows into the keeper row.
  */
 export async function updateCommissionTrackerLinks(oldLink: string, newLink: string, tenantId: string) {
   const sheets = await getSystemGoogleSheetClient();
@@ -628,7 +629,6 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
     throw new Error('Commission Tracker sheet ID not configured');
   }
 
-  // Read all Commission Tracker data
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: trackerSheet.spreadsheetId,
     range: trackerSheet.sheetName,
@@ -636,7 +636,7 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
 
   const rows = response.data.values || [];
   if (rows.length === 0) {
-    return; // Empty tracker, nothing to update
+    return;
   }
 
   const headers = rows[0];
@@ -647,23 +647,89 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
     throw new Error('Link column not found in Commission Tracker');
   }
 
-  // Find all rows with oldLink and update them
-  const updatedRows: Array<{ range: string; values: any[][] }> = [];
-  
+  const notesIndex = headers.findIndex((h: string) => h.toLowerCase() === 'notes');
+  const pocNameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'point of contact');
+  const pocEmailIndex = headers.findIndex((h: string) => h.toLowerCase() === 'poc email');
+  const pocPhoneIndex = headers.findIndex((h: string) => h.toLowerCase() === 'poc phone');
+  const nameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'name' || h.toLowerCase() === 'store name');
+
+  let keeperRowIndex = -1;
+  const sourceRowIndices: number[] = [];
+
   dataRows.forEach((row: any[], index: number) => {
+    if (row[linkIndex] === newLink && keeperRowIndex === -1) {
+      keeperRowIndex = index;
+    }
     if (row[linkIndex] === oldLink) {
-      const updatedRow = [...row];
-      updatedRow[linkIndex] = newLink;
-      
-      const rowNumber = index + 2; // +1 for header, +1 for 1-indexed
-      updatedRows.push({
-        range: `${trackerSheet.sheetName}!A${rowNumber}`,
-        values: [updatedRow],
-      });
+      sourceRowIndices.push(index);
     }
   });
 
-  // Batch update all rows
+  const updatedRows: Array<{ range: string; values: any[][] }> = [];
+
+  if (sourceRowIndices.length > 0) {
+    let effectiveKeeperIdx = keeperRowIndex;
+    let keeperRow: any[];
+
+    if (effectiveKeeperIdx !== -1) {
+      keeperRow = [...dataRows[effectiveKeeperIdx]];
+    } else {
+      effectiveKeeperIdx = sourceRowIndices[0];
+      keeperRow = [...dataRows[effectiveKeeperIdx]];
+      keeperRow[linkIndex] = newLink;
+    }
+
+    const indicesToMerge = sourceRowIndices.filter(idx => idx !== effectiveKeeperIdx);
+
+    for (const srcIdx of indicesToMerge) {
+      const sourceRow = dataRows[srcIdx];
+      const sourceName = (nameIndex !== -1 ? sourceRow[nameIndex] : '') || sourceRow[linkIndex] || 'Merged Location';
+
+      if (notesIndex !== -1) {
+        const sourceNotes = (sourceRow[notesIndex] || '').toString().trim();
+        if (sourceNotes) {
+          const existingNotes = (keeperRow[notesIndex] || '').toString().trim();
+          keeperRow[notesIndex] = existingNotes
+            ? `${existingNotes}\n\n[Merged from ${sourceName}]: ${sourceNotes}`
+            : sourceNotes;
+        }
+      }
+
+      if (pocNameIndex !== -1) {
+        const srcPoc = (sourceRow[pocNameIndex] || '').toString().trim();
+        if (srcPoc) keeperRow[pocNameIndex] = srcPoc;
+      }
+      if (pocEmailIndex !== -1) {
+        const srcPocEmail = (sourceRow[pocEmailIndex] || '').toString().trim();
+        if (srcPocEmail) keeperRow[pocEmailIndex] = srcPocEmail;
+      }
+      if (pocPhoneIndex !== -1) {
+        const srcPocPhone = (sourceRow[pocPhoneIndex] || '').toString().trim();
+        if (srcPocPhone) keeperRow[pocPhoneIndex] = srcPocPhone;
+      }
+    }
+
+    const keeperRowNumber = effectiveKeeperIdx + 2;
+    updatedRows.push({
+      range: `${trackerSheet.sheetName}!A${keeperRowNumber}`,
+      values: [keeperRow],
+    });
+  }
+
+  for (const srcIdx of sourceRowIndices) {
+    if (keeperRowIndex === -1 && srcIdx === sourceRowIndices[0]) {
+      continue;
+    }
+    const updatedRow = [...dataRows[srcIdx]];
+    updatedRow[linkIndex] = newLink;
+    
+    const rowNumber = srcIdx + 2;
+    updatedRows.push({
+      range: `${trackerSheet.sheetName}!A${rowNumber}`,
+      values: [updatedRow],
+    });
+  }
+
   if (updatedRows.length > 0) {
     await batchUpdateSheetData(trackerSheet.spreadsheetId, updatedRows);
   }

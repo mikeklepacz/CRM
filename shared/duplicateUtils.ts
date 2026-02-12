@@ -432,29 +432,48 @@ export function mergeStoreData(
 ): StoreRecord {
   const merged = { ...target };
   
-  // All possible fields to merge (excluding Link which is the key)
+  const POC_FIELDS = new Set([
+    'point of contact',
+    'poc email',
+    'poc phone',
+  ]);
+  
+  const NOTES_FIELDS = new Set(['notes']);
+  
   const fieldsToCheck = Object.keys(source).filter(key => key !== 'Link');
   
   for (const field of fieldsToCheck) {
     const sourceValue = source[field];
     const targetValue = target[field];
+    const fieldLower = field.toLowerCase();
     
-    // Skip if source has no value
     if (sourceValue === null || sourceValue === undefined || sourceValue === '') {
       continue;
     }
     
-    // Special handling for Status field
     if (field === 'Status') {
       const statusCompare = compareStatuses(sourceValue, targetValue, statusHierarchy);
-      // Only upgrade to better status
       if (statusCompare > 0) {
         merged[field] = sourceValue;
       }
       continue;
     }
     
-    // For all other fields, copy if target is empty
+    if (NOTES_FIELDS.has(fieldLower)) {
+      const sourceName = source['Name'] || source['Link'] || 'Merged Location';
+      if (targetValue && typeof targetValue === 'string' && targetValue.trim() !== '') {
+        merged[field] = `${targetValue}\n\n[Merged from ${sourceName}]: ${sourceValue}`;
+      } else {
+        merged[field] = sourceValue;
+      }
+      continue;
+    }
+    
+    if (POC_FIELDS.has(fieldLower)) {
+      merged[field] = sourceValue;
+      continue;
+    }
+    
     if (targetValue === null || targetValue === undefined || targetValue === '') {
       merged[field] = sourceValue;
     }
