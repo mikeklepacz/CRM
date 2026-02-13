@@ -60,6 +60,7 @@ export function ClientMapPins({
   const { actualTheme } = useTheme();
   const [hoveredPin, setHoveredPin] = useState<string | null>(null);
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
+  const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
 
   const { data: pinsData, isLoading, error } = useQuery<{ pins: ClientPin[] }>({
     queryKey: ['/api/maps/client-pins', storeSheetId, trackerSheetId, state, city, projectId],
@@ -78,7 +79,27 @@ export function ClientMapPins({
     staleTime: 5 * 60 * 1000,
   });
 
-  const pins = pinsData?.pins || [];
+  const allPins = pinsData?.pins || [];
+
+  const toggleStatus = useCallback((status: string) => {
+    setHiddenStatuses(prev => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  }, []);
+
+  const pins = useMemo(() => {
+    if (hiddenStatuses.size === 0) return allPins;
+    return allPins.filter(pin => {
+      const status = pin.status || 'Unknown';
+      return !hiddenStatuses.has(status);
+    });
+  }, [allPins, hiddenStatuses]);
 
   const getStatusColor = useCallback((status: string): string => {
     const normalizedStatus = status?.toLowerCase().trim() || '';
@@ -107,12 +128,12 @@ export function ClientMapPins({
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    pins.forEach(pin => {
+    allPins.forEach(pin => {
       const status = pin.status || 'Unknown';
       counts[status] = (counts[status] || 0) + 1;
     });
     return counts;
-  }, [pins]);
+  }, [allPins]);
 
   if (!state) return null;
 
@@ -127,32 +148,46 @@ export function ClientMapPins({
         </div>
       )}
 
-      {!isLoading && pins.length > 0 && (
+      {!isLoading && allPins.length > 0 && (
         <div className="absolute bottom-4 left-4 z-20" data-testid="pin-legend">
           <div className="backdrop-blur-md bg-background/80 rounded-md p-3 shadow-lg space-y-1">
             <div className="text-xs font-medium text-muted-foreground mb-1">
-              {pins.length} locations in {state}{city ? `, ${city}` : ''}
+              {pins.length}{hiddenStatuses.size > 0 ? ` of ${allPins.length}` : ''} locations in {state}{city ? `, ${city}` : ''}
             </div>
             {Object.entries(statusCounts)
               .sort((a, b) => b[1] - a[1])
-              .map(([status, count]) => (
-                <div key={status} className="flex items-center gap-2 text-xs">
+              .map(([status, count]) => {
+                const isHidden = hiddenStatuses.has(status);
+                return (
                   <div
-                    className="w-3 h-3 rounded-full border"
-                    style={{ backgroundColor: getStatusColor(status), borderColor: 'rgba(0,0,0,0.2)' }}
-                  />
-                  <span className="text-foreground">{status || 'Unclaimed'}</span>
-                  <Badge variant="secondary" className="text-[10px] leading-none">
-                    {count}
-                  </Badge>
-                </div>
-              ))
+                    key={status}
+                    className="flex items-center gap-2 text-xs cursor-pointer select-none hover-elevate rounded px-1 py-0.5"
+                    onClick={() => toggleStatus(status)}
+                    data-testid={`legend-toggle-${status || 'unclaimed'}`}
+                  >
+                    <div
+                      className="w-3 h-3 rounded-full border flex-shrink-0"
+                      style={{
+                        backgroundColor: isHidden ? 'transparent' : getStatusColor(status),
+                        borderColor: isHidden ? 'rgba(128,128,128,0.4)' : 'rgba(0,0,0,0.2)',
+                        opacity: isHidden ? 0.4 : 1,
+                      }}
+                    />
+                    <span className={isHidden ? 'text-muted-foreground line-through' : 'text-foreground'}>
+                      {status || 'Unclaimed'}
+                    </span>
+                    <Badge variant="secondary" className="text-[10px] leading-none">
+                      {count}
+                    </Badge>
+                  </div>
+                );
+              })
             }
           </div>
         </div>
       )}
 
-      {!isLoading && pins.length === 0 && state && (
+      {!isLoading && allPins.length === 0 && state && (
         <div className="absolute bottom-4 left-4 z-20">
           <div className="backdrop-blur-md bg-background/80 rounded-md p-3 flex items-center gap-2 shadow-lg">
             <MapPin className="h-4 w-4 text-muted-foreground" />

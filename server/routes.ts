@@ -20293,6 +20293,17 @@ Use this store information to provide context-aware responses. When helping draf
 
       const tenantId = (req.user as any).tenantId;
 
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims?.sub;
+      const currentUser = userId ? await storage.getUser(userId) : null;
+      const isAdminUser = currentUser?.isSuperAdmin || currentUser?.role === 'admin';
+      let isOrgAdmin = false;
+      if (!isAdminUser && tenantId && userId) {
+        const roleInTenant = await storage.getUserTenantRole(userId, tenantId);
+        isOrgAdmin = roleInTenant === 'org_admin';
+      }
+      const canSeeAll = isAdminUser || isOrgAdmin;
+      const currentAgentName = currentUser?.agentName || '';
+
       const storeSheet = await storage.getGoogleSheetById(storeSheetId, tenantId);
       const trackerSheet = await storage.getGoogleSheetById(trackerSheetId, tenantId);
 
@@ -20363,6 +20374,14 @@ Use this store information to provide context-aware responses. When helping draf
         filtered = filtered.filter(row => {
           const rowCity = getField(row, 'city');
           return rowCity.toLowerCase().includes(cityLower);
+        });
+      }
+
+      if (!canSeeAll) {
+        filtered = filtered.filter(row => {
+          const rowAgentName = getField(row, 'agent name');
+          if (!rowAgentName) return true;
+          return currentAgentName && rowAgentName.toLowerCase() === currentAgentName.toLowerCase();
         });
       }
 
