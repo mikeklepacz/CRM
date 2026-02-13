@@ -47,7 +47,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
+import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { Switch } from "@/components/ui/switch";
 import { ClientMapPins } from "@/components/client-map-pins";
 import { StoreDetailsDialog } from "@/components/store-details-dialog";
@@ -134,7 +134,24 @@ const BASE_COUNTRIES = [
 ];
 
 // Dark mode styles for Google Maps
+const POI_HIDDEN_STYLES = [
+  {
+    featureType: "poi",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "poi.park",
+    elementType: "geometry",
+    stylers: [{ visibility: "on" }],
+  },
+];
+
+const LIGHT_MAP_STYLES = [
+  ...POI_HIDDEN_STYLES,
+];
+
 const DARK_MAP_STYLES = [
+  ...POI_HIDDEN_STYLES,
   { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
@@ -144,19 +161,9 @@ const DARK_MAP_STYLES = [
     stylers: [{ color: "#d59563" }],
   },
   {
-    featureType: "poi",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#d59563" }],
-  },
-  {
     featureType: "poi.park",
     elementType: "geometry",
     stylers: [{ color: "#263c3f" }],
-  },
-  {
-    featureType: "poi.park",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#6b9a76" }],
   },
   {
     featureType: "road",
@@ -302,6 +309,7 @@ export default function MapSearch() {
   const [mapCenter, setMapCenter] = useState({ lat: 39.8283, lng: -98.5795 }); // Center of USA
   const [mapZoom, setMapZoom] = useState(4);
   const [selectedLocation, setSelectedLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [hoveredSearchPin, setHoveredSearchPin] = useState<string | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const [mapViewLoaded, setMapViewLoaded] = useState(false);
   const MAP_SESSION_KEY = 'mapSearchViewState';
@@ -1159,10 +1167,45 @@ export default function MapSearch() {
             disableDefaultUI: false, 
             zoomControl: true,
             fullscreenControl: false,
-            styles: actualTheme === 'dark' ? DARK_MAP_STYLES : undefined
+            styles: actualTheme === 'dark' ? DARK_MAP_STYLES : LIGHT_MAP_STYLES
           }}
         >
           {selectedLocation && !showBusinessesMode && <Marker position={selectedLocation} />}
+          {!showBusinessesMode && searchResults.length > 0 && filteredResults.map((place) => (
+            <Marker
+              key={place.place_id}
+              position={{ lat: place.geometry.location.lat, lng: place.geometry.location.lng }}
+              icon={{
+                url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="42" viewBox="0 0 28 42"><path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 28 14 28s14-17.5 14-28C28 6.268 21.732 0 14 0z" fill="${place.business_status === 'CLOSED_TEMPORARILY' || place.business_status === 'CLOSED_PERMANENTLY' ? '%23EF4444' : '%233B82F6'}"/><circle cx="14" cy="14" r="6" fill="white"/></svg>`)}`,
+                scaledSize: new google.maps.Size(28, 42),
+                anchor: new google.maps.Point(14, 42),
+              }}
+              onMouseOver={() => setHoveredSearchPin(place.place_id)}
+              onMouseOut={() => setHoveredSearchPin(null)}
+              data-testid={`pin-search-${place.place_id}`}
+            >
+              {hoveredSearchPin === place.place_id && (
+                <InfoWindow
+                  position={{ lat: place.geometry.location.lat, lng: place.geometry.location.lng }}
+                  onCloseClick={() => setHoveredSearchPin(null)}
+                >
+                  <div style={{ padding: '4px 8px', minWidth: '150px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px', color: '#111' }}>
+                      {place.name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#555', marginBottom: '2px' }}>
+                      {place.formatted_address}
+                    </div>
+                    {place.rating && (
+                      <div style={{ fontSize: '11px', color: '#555' }}>
+                        Rating: {place.rating} ({place.user_ratings_total} reviews)
+                      </div>
+                    )}
+                  </div>
+                </InfoWindow>
+              )}
+            </Marker>
+          ))}
           {showBusinessesMode && storeSheetId && trackerSheetId && state && (
             <ClientMapPins
               storeSheetId={storeSheetId}

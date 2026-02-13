@@ -95,7 +95,7 @@ export function ClientMapPins({
       case 'unassigned':
       case 'unclaimed':
       case '':
-        return '#9CA3AF';
+        return '#FFFFFF';
       case 'claimed':
         return '#3B82F6';
       case 'active':
