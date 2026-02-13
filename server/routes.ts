@@ -19672,9 +19672,13 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Create status (admin only)
-  app.post('/api/statuses', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.post('/api/statuses', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const validation = insertStatusSchema.safeParse(req.body);
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
+      const validation = insertStatusSchema.safeParse({ ...req.body, tenantId });
       if (!validation.success) {
         return res.status(400).json({ 
           message: 'Validation failed',
@@ -19691,11 +19695,15 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Update status (admin only)
-  app.put('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.put('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: 'No tenant associated with user' });
+      }
       // Require all fields when updating - all 4 color fields must be provided
-      const validation = insertStatusSchema.safeParse(req.body);
+      const validation = insertStatusSchema.safeParse({ ...req.body, tenantId });
       if (!validation.success) {
         return res.status(400).json({ 
           message: 'Validation failed',
