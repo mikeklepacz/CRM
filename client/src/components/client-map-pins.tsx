@@ -151,7 +151,7 @@ export function ClientMapPins({
                     className="w-3 h-3 rounded-full border"
                     style={{ backgroundColor: getStatusColor(status), borderColor: 'rgba(0,0,0,0.2)' }}
                   />
-                  <span>{status || 'Unknown'}</span>
+                  <span>{status || 'Unclaimed'}</span>
                   <Badge variant="secondary" className="text-[10px] leading-none">
                     {count}
                   </Badge>
@@ -213,11 +213,12 @@ export function ClientMapPins({
                     borderRadius: '9999px',
                     fontSize: '10px',
                     fontWeight: 500,
-                    backgroundColor: color,
-                    color: '#fff',
-                    textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                    backgroundColor: pin.status ? color : '#ffffff',
+                    color: pin.status ? '#fff' : '#333',
+                    textShadow: pin.status ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
+                    border: pin.status ? 'none' : '1px solid #ccc',
                   }}>
-                    {pin.status || 'Unknown'}
+                    {pin.status || 'Unclaimed'}
                   </div>
                   <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
                     Click to view details
