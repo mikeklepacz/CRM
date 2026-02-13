@@ -2686,3 +2686,11 @@ export const insertEmailImageSchema = createInsertSchema(emailImages).omit({
 
 export type InsertEmailImage = z.infer<typeof insertEmailImageSchema>;
 export type EmailImage = typeof emailImages.$inferSelect;
+
+export const geocodeCache = pgTable("geocode_cache", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  address: text("address").notNull().unique(),
+  lat: decimal("lat", { precision: 10, scale: 7 }).notNull(),
+  lng: decimal("lng", { precision: 10, scale: 7 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});

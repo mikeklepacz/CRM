@@ -151,7 +151,7 @@ export function ClientMapPins({
                     className="w-3 h-3 rounded-full border"
                     style={{ backgroundColor: getStatusColor(status), borderColor: 'rgba(0,0,0,0.2)' }}
                   />
-                  <span>{status || 'Unclaimed'}</span>
+                  <span className="text-foreground">{status || 'Unclaimed'}</span>
                   <Badge variant="secondary" className="text-[10px] leading-none">
                     {count}
                   </Badge>

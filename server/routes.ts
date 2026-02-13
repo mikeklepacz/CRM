@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray, and, or, desc, isNotNull, isNull, ne } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants, categories, tenantProjects, apolloCompanies, qualificationLeads } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, sequences, emailBlacklist, dailySendSlots, userPreferences, userTenants, categories, tenantProjects, apolloCompanies, qualificationLeads, geocodeCache as geocodeCacheTable } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -564,12 +564,22 @@ function clearUserCache(userId: string): void {
 }
 
 // ============================================================================
-// In-Memory Cache for Geocoding Results (address -> lat/lng)
+// Geocoding with Database-backed Cache
 // ============================================================================
-const geocodeCache = new Map<string, {lat: number, lng: number} | null>();
+const memoryGeocodeCache = new Map<string, {lat: number, lng: number} | null>();
 
 async function geocodeAddress(address: string): Promise<{lat: number, lng: number} | null> {
-  if (geocodeCache.has(address)) return geocodeCache.get(address)!;
+  if (memoryGeocodeCache.has(address)) return memoryGeocodeCache.get(address)!;
+
+  try {
+    const dbResult = await db.select().from(geocodeCacheTable).where(eq(geocodeCacheTable.address, address)).limit(1);
+    if (dbResult.length > 0) {
+      const cached = { lat: parseFloat(dbResult[0].lat), lng: parseFloat(dbResult[0].lng) };
+      memoryGeocodeCache.set(address, cached);
+      return cached;
+    }
+  } catch (e) {
+  }
 
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
@@ -579,15 +589,25 @@ async function geocodeAddress(address: string): Promise<{lat: number, lng: numbe
     if (data.results && data.results.length > 0) {
       const location = data.results[0].geometry.location;
       const result = { lat: location.lat, lng: location.lng };
-      geocodeCache.set(address, result);
+      memoryGeocodeCache.set(address, result);
+
+      try {
+        await db.insert(geocodeCacheTable).values({
+          address,
+          lat: result.lat.toString(),
+          lng: result.lng.toString(),
+        }).onConflictDoNothing();
+      } catch (e) {
+      }
+
       return result;
     }
 
-    geocodeCache.set(address, null);
+    memoryGeocodeCache.set(address, null);
     return null;
   } catch (error) {
     console.error('Geocoding failed for:', address, error);
-    geocodeCache.set(address, null);
+    memoryGeocodeCache.set(address, null);
     return null;
   }
 }
@@ -20347,7 +20367,24 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       const totalMatched = filtered.length;
-      const toGeocode = filtered.slice(0, 100);
+      const toGeocode = filtered.slice(0, 500);
+
+      const allAddresses = [...new Set(toGeocode.map(row => {
+        const rowAddress = getField(row, 'address');
+        const rowCity = getField(row, 'city');
+        const rowState = getField(row, 'state');
+        return [rowAddress, rowCity, rowState].filter(Boolean).join(', ');
+      }).filter(Boolean))];
+
+      if (allAddresses.length > 0) {
+        try {
+          const cachedRows = await db.select().from(geocodeCacheTable).where(inArray(geocodeCacheTable.address, allAddresses));
+          for (const cached of cachedRows) {
+            memoryGeocodeCache.set(cached.address, { lat: parseFloat(cached.lat), lng: parseFloat(cached.lng) });
+          }
+        } catch (e) {
+        }
+      }
 
       const BATCH_SIZE = 10;
       const results: Array<{ name: string; address: string; city: string; state: string; status: string; lat: number; lng: number; row: any }> = [];
@@ -20382,7 +20419,7 @@ Use this store information to provide context-aware responses. When helping draf
         }
       }
 
-      res.json({ pins: results, totalMatched, truncated: totalMatched > 100 });
+      res.json({ pins: results, totalMatched, truncated: totalMatched > 500 });
     } catch (error: any) {
       console.error('Error fetching client pins:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch client pins' });
