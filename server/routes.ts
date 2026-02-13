@@ -563,6 +563,35 @@ function clearUserCache(userId: string): void {
   }
 }
 
+// ============================================================================
+// In-Memory Cache for Geocoding Results (address -> lat/lng)
+// ============================================================================
+const geocodeCache = new Map<string, {lat: number, lng: number} | null>();
+
+async function geocodeAddress(address: string): Promise<{lat: number, lng: number} | null> {
+  if (geocodeCache.has(address)) return geocodeCache.get(address)!;
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.results && data.results.length > 0) {
+      const location = data.results[0].geometry.location;
+      const result = { lat: location.lat, lng: location.lng };
+      geocodeCache.set(address, result);
+      return result;
+    }
+
+    geocodeCache.set(address, null);
+    return null;
+  } catch (error) {
+    console.error('Geocoding failed for:', address, error);
+    geocodeCache.set(address, null);
+    return null;
+  }
+}
+
 // Helper function for fuzzy string matching (Levenshtein distance)
 function stringSimilarity(str1: string, str2: string): number {
   if (!str1 || !str2) return 0;
@@ -20231,6 +20260,132 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error reverse geocoding:', error);
       res.status(500).json({ message: error.message || 'Failed to reverse geocode location' });
+    }
+  });
+
+  app.post('/api/maps/client-pins', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { storeSheetId, trackerSheetId, joinColumn, state, city, projectId } = req.body;
+
+      if (!storeSheetId || !trackerSheetId || !joinColumn || !state) {
+        return res.status(400).json({ message: "storeSheetId, trackerSheetId, joinColumn, and state are required" });
+      }
+
+      const tenantId = (req.user as any).tenantId;
+
+      const storeSheet = await storage.getGoogleSheetById(storeSheetId, tenantId);
+      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId, tenantId);
+
+      if (!storeSheet || !trackerSheet) {
+        return res.status(404).json({ message: "One or both sheets not found" });
+      }
+
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      if (storeRows.length === 0) {
+        return res.json({ pins: [] });
+      }
+
+      const storeHeaders = storeRows[0];
+      const storeData = storeRows.slice(1).map((row, index) => {
+        const obj: any = { _storeRowIndex: index + 2, _storeSheetId: storeSheetId };
+        storeHeaders.forEach((header, i) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      });
+
+      const trackerHeaders = trackerRows.length > 0 ? trackerRows[0] : [];
+      const trackerData = trackerRows.length > 1 ? trackerRows.slice(1).map((row, index) => {
+        const obj: any = { _trackerRowIndex: index + 2, _trackerSheetId: trackerSheetId };
+        trackerHeaders.forEach((header, i) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      }) : [];
+
+      const actualStoreJoinColumn = storeHeaders.find(h =>
+        h.toLowerCase() === joinColumn.toLowerCase()
+      ) || joinColumn;
+
+      const actualTrackerJoinColumn = trackerHeaders.find(h =>
+        h.toLowerCase() === joinColumn.toLowerCase()
+      ) || joinColumn;
+
+      const trackerMap = new Map<string, any>();
+      trackerData.forEach(row => {
+        const key = (row[actualTrackerJoinColumn] || '').toString().trim().toLowerCase();
+        if (key) trackerMap.set(key, row);
+      });
+
+      const mergedData = storeData.map(storeRow => {
+        const joinValue = (storeRow[actualStoreJoinColumn] || '').toString().trim().toLowerCase();
+        const trackerRow = joinValue ? trackerMap.get(joinValue) : undefined;
+        return trackerRow ? { ...storeRow, ...trackerRow } : storeRow;
+      });
+
+      const getField = (row: any, fieldName: string): string => {
+        const key = Object.keys(row).find(k => k.toLowerCase() === fieldName.toLowerCase());
+        return key ? (row[key] || '').toString().trim() : '';
+      };
+
+      let filtered = mergedData.filter(row => {
+        const rowState = getField(row, 'state') || getField(row, 'province') || getField(row, 'region');
+        return rowState.toLowerCase() === state.toLowerCase();
+      });
+
+      if (city) {
+        const cityLower = city.toLowerCase();
+        filtered = filtered.filter(row => {
+          const rowCity = getField(row, 'city');
+          return rowCity.toLowerCase().includes(cityLower);
+        });
+      }
+
+      const totalMatched = filtered.length;
+      const toGeocode = filtered.slice(0, 100);
+
+      const BATCH_SIZE = 10;
+      const results: Array<{ name: string; address: string; city: string; state: string; status: string; lat: number; lng: number; row: any }> = [];
+
+      for (let i = 0; i < toGeocode.length; i += BATCH_SIZE) {
+        const batch = toGeocode.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(batch.map(async (row) => {
+          const rowAddress = getField(row, 'address');
+          const rowCity = getField(row, 'city');
+          const rowState = getField(row, 'state');
+          const fullAddress = [rowAddress, rowCity, rowState].filter(Boolean).join(', ');
+
+          if (!fullAddress) return null;
+
+          const coords = await geocodeAddress(fullAddress);
+          if (!coords) return null;
+
+          return {
+            name: getField(row, 'name') || getField(row, 'company') || getField(row, 'business name') || 'Unknown',
+            address: rowAddress,
+            city: rowCity,
+            state: rowState,
+            status: getField(row, 'status'),
+            lat: coords.lat,
+            lng: coords.lng,
+            row,
+          };
+        }));
+
+        for (const r of batchResults) {
+          if (r) results.push(r);
+        }
+      }
+
+      res.json({ pins: results, totalMatched, truncated: totalMatched > 100 });
+    } catch (error: any) {
+      console.error('Error fetching client pins:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch client pins' });
     }
   });
 

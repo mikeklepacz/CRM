@@ -48,6 +48,17 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
+import { Switch } from "@/components/ui/switch";
+import { ClientMapPins } from "@/components/client-map-pins";
+import { StoreDetailsDialog } from "@/components/store-details-dialog";
+import { useCustomTheme } from "@/hooks/use-custom-theme";
+
+const CANADIAN_PROVINCES = [
+  "Alberta", "British Columbia", "Manitoba", "New Brunswick",
+  "Newfoundland and Labrador", "Northwest Territories", "Nova Scotia",
+  "Nunavut", "Ontario", "Prince Edward Island", "Quebec",
+  "Saskatchewan", "Yukon"
+];
 
 interface PlaceResult {
   place_id: string;
@@ -242,6 +253,16 @@ export default function MapSearch() {
     if (!sheetsData?.sheets) return false;
     return sheetsData.sheets.some(s => s.sheetPurpose === "Store Database");
   }, [sheetsData]);
+
+  // Auto-detect sheet IDs for Show Businesses mode
+  useEffect(() => {
+    if (sheetsData?.sheets) {
+      const storeSheet = sheetsData.sheets.find(s => s.sheetPurpose === 'Store Database');
+      const trackerSheet = sheetsData.sheets.find(s => s.sheetPurpose === 'commissions');
+      if (storeSheet) setStoreSheetId(storeSheet.id);
+      if (trackerSheet) setTrackerSheetId(trackerSheet.id);
+    }
+  }, [sheetsData]);
   
   // Determine if we should use SQL (qualification) mode:
   // - If URL says qualification mode, use SQL
@@ -314,6 +335,18 @@ export default function MapSearch() {
     failed: number;
   } | null>(null);
 
+  // Show Businesses mode state
+  const [showBusinessesMode, setShowBusinessesMode] = useState(false);
+  const [storeSheetId, setStoreSheetId] = useState<string>("");
+  const [trackerSheetId, setTrackerSheetId] = useState<string>("");
+  const joinColumn = "link";
+  const { currentColors, statusColors, statusOptions } = useCustomTheme();
+  const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
+  const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
+  const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
+    open: boolean;
+    row: any;
+  } | null>(null);
 
   const isProjectContextLoading = projectContext?.isLoading ?? false;
   const categoriesUrl = currentProject?.id 
@@ -509,6 +542,7 @@ export default function MapSearch() {
 
   // Map click handler
   const handleMapClick = (e: google.maps.MapMouseEvent) => {
+    if (showBusinessesMode) return;
     if (e.latLng) {
       const lat = e.latLng.lat();
       const lng = e.latLng.lng();
@@ -1128,7 +1162,22 @@ export default function MapSearch() {
             styles: actualTheme === 'dark' ? DARK_MAP_STYLES : undefined
           }}
         >
-          {selectedLocation && <Marker position={selectedLocation} />}
+          {selectedLocation && !showBusinessesMode && <Marker position={selectedLocation} />}
+          {showBusinessesMode && storeSheetId && trackerSheetId && state && (
+            <ClientMapPins
+              storeSheetId={storeSheetId}
+              trackerSheetId={trackerSheetId}
+              joinColumn={joinColumn}
+              state={state}
+              city={city}
+              country={country}
+              projectId={currentProject?.id}
+              statusColors={statusColors}
+              onPinClick={(row) => {
+                setStoreDetailsDialog({ open: true, row });
+              }}
+            />
+          )}
         </GoogleMap>
       </LoadScript>
 
@@ -1139,30 +1188,140 @@ export default function MapSearch() {
           <CardHeader className="flex-shrink-0 p-4 pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-lg">
-                {isQualificationMode ? 'Find Qualification Leads' : 'Search Businesses'}
+                {showBusinessesMode 
+                  ? 'Show Businesses' 
+                  : (isQualificationMode ? 'Find Qualification Leads' : 'Search Businesses')
+                }
               </CardTitle>
-              {isQualificationMode && (
-                <Link href="/qualification">
-                  <Button variant="outline" size="sm" data-testid="button-back-qualification">
-                    <ArrowLeft className="h-4 w-4 mr-1" />
-                    Back
-                  </Button>
-                </Link>
-              )}
+              <div className="flex items-center gap-2">
+                {hasStoreDatabase && !isQualificationMode && (
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="show-businesses-toggle" className="text-xs text-muted-foreground cursor-pointer">
+                      {showBusinessesMode ? 'Map View' : 'Map View'}
+                    </Label>
+                    <Switch
+                      id="show-businesses-toggle"
+                      checked={showBusinessesMode}
+                      onCheckedChange={setShowBusinessesMode}
+                      data-testid="switch-show-businesses"
+                    />
+                  </div>
+                )}
+                {isQualificationMode && (
+                  <Link href="/qualification">
+                    <Button variant="outline" size="sm" data-testid="button-back-qualification">
+                      <ArrowLeft className="h-4 w-4 mr-1" />
+                      Back
+                    </Button>
+                  </Link>
+                )}
+              </div>
             </div>
             <CardDescription className="text-sm">
-              {isQualificationMode 
-                ? 'Search Google Maps for businesses to add as qualification leads'
-                : 'Find local businesses using Google Maps and add them to your database'
+              {showBusinessesMode
+                ? 'View your existing businesses on the map with color-coded status pins'
+                : (isQualificationMode 
+                  ? 'Search Google Maps for businesses to add as qualification leads'
+                  : 'Find local businesses using Google Maps and add them to your database'
+                )
               }
             </CardDescription>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={hasStoreDatabase ? "default" : "secondary"} className="text-xs" data-testid="badge-save-destination">
-                {sheetsLoading ? 'Checking destination...' : (hasStoreDatabase ? 'Saving to: Google Sheet' : 'Saving to: SQL Database')}
-              </Badge>
-            </div>
+            {!showBusinessesMode && (
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant={hasStoreDatabase ? "default" : "secondary"} className="text-xs" data-testid="badge-save-destination">
+                  {sheetsLoading ? 'Checking destination...' : (hasStoreDatabase ? 'Saving to: Google Sheet' : 'Saving to: SQL Database')}
+                </Badge>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="overflow-y-auto flex-1 p-4 pt-2">
+            {showBusinessesMode ? (
+              <div className="space-y-3">
+                {/* Country toggle and State/City filters for Show Businesses mode */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="show-biz-country">Country</Label>
+                    <Select value={country} onValueChange={(val) => { setCountry(val); setState(""); setCity(""); }}>
+                      <SelectTrigger data-testid="select-show-biz-country">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="United States">United States</SelectItem>
+                        <SelectItem value="Canada">Canada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>State / Province *</Label>
+                    <Popover open={stateOpen} onOpenChange={setStateOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={stateOpen}
+                          className="w-full justify-between"
+                          data-testid="button-show-biz-state-select"
+                        >
+                          <span className="truncate">{state || "Select state..."}</span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0">
+                        <Command
+                          filter={(value, search) => {
+                            if (value.toLowerCase().startsWith(search.toLowerCase())) return 1;
+                            return 0;
+                          }}
+                        >
+                          <CommandInput placeholder={country === "Canada" ? "Search province..." : "Search state..."} />
+                          <CommandList>
+                            <CommandEmpty>No results found.</CommandEmpty>
+                            <CommandGroup>
+                              {(country === "Canada" ? CANADIAN_PROVINCES : US_STATES).map((stateName) => (
+                                <CommandItem
+                                  key={stateName}
+                                  value={stateName}
+                                  onSelect={(currentValue) => {
+                                    setState(currentValue);
+                                    setStateOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      state === stateName ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {stateName}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="show-biz-city">City (optional)</Label>
+                    <Input
+                      id="show-biz-city"
+                      placeholder="Filter by city..."
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      data-testid="input-show-biz-city"
+                    />
+                  </div>
+                </div>
+
+                {!storeSheetId || !trackerSheetId ? (
+                  <p className="text-sm text-destructive">Store Database and Commission Tracker sheets are required to display business pins</p>
+                ) : !state ? (
+                  <p className="text-sm text-muted-foreground">Select a state to view business pins on the map</p>
+                ) : null}
+              </div>
+            ) : (
             <form onSubmit={handleSearch} className="space-y-3">
               {/* Row 1: Business Type, and Category if no project selected */}
               <div className={`grid gap-3 ${currentProject ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
@@ -1702,12 +1861,13 @@ export default function MapSearch() {
                 )}
               </Button>
             </form>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Slide-in Results Panel (Right) - only visible when searchResults exist */}
-      {searchResults.length > 0 && (
+      {/* Slide-in Results Panel (Right) - only visible when searchResults exist and NOT in show businesses mode */}
+      {!showBusinessesMode && searchResults.length > 0 && (
         <div className="absolute top-0 right-0 bottom-0 w-1/3 min-w-[500px] z-20 bg-background shadow-2xl overflow-y-auto" ref={resultsContainerRef}>
           <div className="p-6">
             <div className="mb-4">
@@ -1933,7 +2093,7 @@ export default function MapSearch() {
       )}
 
       {/* No results message */}
-      {searchMutation.isSuccess && searchResults.length === 0 && (
+      {!showBusinessesMode && searchMutation.isSuccess && searchResults.length === 0 && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
           <Card className="backdrop-blur-md bg-background/80">
             <CardContent className="py-12 px-8 text-center">
@@ -1945,6 +2105,31 @@ export default function MapSearch() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Store Details Dialog for Show Businesses mode */}
+      {storeDetailsDialog && (
+        <StoreDetailsDialog
+          open={storeDetailsDialog.open}
+          onOpenChange={(open) => {
+            if (!open) {
+              setStoreDetailsDialog(null);
+              setLoadDefaultScriptTrigger(0);
+            }
+          }}
+          row={storeDetailsDialog.row}
+          trackerSheetId={trackerSheetId}
+          storeSheetId={storeSheetId}
+          refetch={async () => {
+            queryClient.invalidateQueries({ queryKey: ['/api/maps/client-pins'] });
+          }}
+          currentColors={currentColors}
+          statusOptions={statusOptions}
+          statusColors={statusColors}
+          contextUpdateTrigger={contextUpdateTrigger}
+          setContextUpdateTrigger={setContextUpdateTrigger}
+          loadDefaultScriptTrigger={loadDefaultScriptTrigger}
+        />
       )}
     </div>
   );
