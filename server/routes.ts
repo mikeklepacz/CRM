@@ -20366,8 +20366,7 @@ Use this store information to provide context-aware responses. When helping draf
         });
       }
 
-      const totalMatched = filtered.length;
-      const toGeocode = filtered.slice(0, 500);
+      const toGeocode = filtered;
 
       const allAddresses = [...new Set(toGeocode.map(row => {
         const rowAddress = getField(row, 'address');
@@ -20419,7 +20418,7 @@ Use this store information to provide context-aware responses. When helping draf
         }
       }
 
-      res.json({ pins: results, totalMatched, truncated: totalMatched > 500 });
+      res.json({ pins: results });
     } catch (error: any) {
       console.error('Error fetching client pins:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch client pins' });

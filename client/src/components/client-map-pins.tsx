@@ -61,7 +61,7 @@ export function ClientMapPins({
   const [hoveredPin, setHoveredPin] = useState<string | null>(null);
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
 
-  const { data: pinsData, isLoading, error } = useQuery<{ pins: ClientPin[]; totalMatched?: number; truncated?: boolean }>({
+  const { data: pinsData, isLoading, error } = useQuery<{ pins: ClientPin[] }>({
     queryKey: ['/api/maps/client-pins', storeSheetId, trackerSheetId, state, city, projectId],
     queryFn: async () => {
       const response = await apiRequest("POST", "/api/maps/client-pins", {
@@ -79,8 +79,6 @@ export function ClientMapPins({
   });
 
   const pins = pinsData?.pins || [];
-  const truncated = pinsData?.truncated || false;
-  const totalMatched = pinsData?.totalMatched || pins.length;
 
   const getStatusColor = useCallback((status: string): string => {
     const normalizedStatus = status?.toLowerCase().trim() || '';
@@ -133,16 +131,8 @@ export function ClientMapPins({
         <div className="absolute bottom-4 left-4 z-20" data-testid="pin-legend">
           <div className="backdrop-blur-md bg-background/80 rounded-md p-3 shadow-lg space-y-1">
             <div className="text-xs font-medium text-muted-foreground mb-1">
-              {truncated 
-                ? `Showing ${pins.length} of ${totalMatched} locations in ${state}${city ? `, ${city}` : ''}`
-                : `${pins.length} locations in ${state}${city ? `, ${city}` : ''}`
-              }
+              {pins.length} locations in {state}{city ? `, ${city}` : ''}
             </div>
-            {truncated && (
-              <div className="text-[10px] text-orange-500">
-                Use the city filter to narrow results
-              </div>
-            )}
             {Object.entries(statusCounts)
               .sort((a, b) => b[1] - a[1])
               .map(([status, count]) => (
