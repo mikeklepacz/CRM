@@ -712,7 +712,7 @@ export interface IStorage {
   getSequenceSteps(sequenceId: string): Promise<SequenceStep[]>;
   updateSequenceStep(id: string, updates: Partial<InsertSequenceStep>): Promise<SequenceStep>;
   deleteSequenceStep(id: string): Promise<boolean>;
-  replaceSequenceSteps(sequenceId: string, stepDelays: number[]): Promise<SequenceStep[]>;
+  replaceSequenceSteps(sequenceId: string, stepDelays: number[], tenantId: string): Promise<SequenceStep[]>;
 
   // E-Hub Sequence Recipient Messages operations
   createRecipientMessage(message: InsertSequenceRecipientMessage): Promise<SequenceRecipientMessage>;
@@ -5462,7 +5462,7 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async replaceSequenceSteps(sequenceId: string, stepDelays: number[]): Promise<SequenceStep[]> {
+  async replaceSequenceSteps(sequenceId: string, stepDelays: number[], tenantId: string): Promise<SequenceStep[]> {
     // Validate stepDelays: non-negative and ascending
     for (let i = 0; i < stepDelays.length; i++) {
       if (stepDelays[i] < 0) {
@@ -5487,6 +5487,7 @@ export class DatabaseStorage implements IStorage {
         sequenceId,
         stepNumber: index + 1,
         delayDays,
+        tenantId,
       }));
 
       const created = await tx.insert(sequenceSteps).values(newSteps).returning();

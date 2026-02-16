@@ -23521,7 +23521,7 @@ ${conversationContext}`;
       await storage.updateSequence(id, req.user.tenantId, { repeatLastStep });
 
       // Replace sequence steps
-      const createdSteps = await storage.replaceSequenceSteps(id, stepDelays);
+      const createdSteps = await storage.replaceSequenceSteps(id, stepDelays, req.user.tenantId);
       
       // Get updated sequence
       const updatedSequence = await storage.getSequence(id, req.user.tenantId);
