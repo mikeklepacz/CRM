@@ -238,12 +238,19 @@ export function useTwilioVoip() {
     }
   }, []);
 
+  const sendDigits = useCallback((digits: string) => {
+    if (sharedCall) {
+      sharedCall.sendDigits(digits);
+    }
+  }, []);
+
   return {
     ...state,
     hasTwilioNumber,
     makeCall,
     hangup,
     toggleMute,
+    sendDigits,
     isCallActive: state.status !== "idle",
   };
 }

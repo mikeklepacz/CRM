@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { QuickReminder } from "@/components/quick-reminder";
 import { normalizeLink } from "@shared/linkUtils";
 import { useTwilioVoip } from "@/hooks/useTwilioVoip";
+import { DtmfDialpad } from "@/components/dtmf-dialpad";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 import { ParseLocationsDialog } from "@/components/parse-locations-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -2524,6 +2525,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
               </Button>
             </DialogFooter>
           )}
+          <DtmfDialpad />
         </DialogContent>
       </Dialog>
 
