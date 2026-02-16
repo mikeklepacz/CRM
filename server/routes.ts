@@ -1285,7 +1285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wooUrl: url,
         wooConsumerKey: consumerKey,
         wooConsumerSecret: consumerSecret
-      });
+      }, req.user.tenantId);
 
       res.json({ message: "WooCommerce settings updated successfully" });
     } catch (error: any) {
@@ -8269,7 +8269,7 @@ IMPORTANT:
         googleCalendarTokenExpiry: expiryTimestamp,
         googleCalendarEmail: userinfo.email,
         googleCalendarConnectedAt: new Date()
-      });
+      }, tenantInfo.tenantId);
 
       // Set up Google Calendar watch channel for push notifications  
       setImmediate(async () => {
@@ -15894,7 +15894,7 @@ ${rawText}`;
         return res.status(400).json({ message: 'Cannot mark a store as non-duplicate with itself' });
       }
 
-      await storage.markAsNotDuplicate(link1, link2, userId);
+      await storage.markAsNotDuplicate(link1, link2, userId, req.user.tenantId);
 
       res.json({ 
         success: true,
@@ -19292,7 +19292,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: 'Tag is required' });
       }
 
-      const newTag = await storage.addUserTag(userId, tag);
+      const newTag = await storage.addUserTag(userId, tag, req.user.tenantId);
       res.json(newTag);
     } catch (error: any) {
       console.error('Error adding user tag:', error);
@@ -19965,7 +19965,7 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { activeKeywords = [], activeTypes = [] } = req.body;
-      const prefs = await storage.updateUserActiveExclusions(userId, activeKeywords, activeTypes);
+      const prefs = await storage.updateUserActiveExclusions(userId, req.user.tenantId, activeKeywords, activeTypes);
       res.json({ preferences: prefs });
     } catch (error: any) {
       console.error('Error updating active exclusions:', error);
@@ -24425,7 +24425,7 @@ ${conversationContext}`;
       const { emailPattern } = req.body;
 
       // Execute transactional deletion
-      const result = await storage.nukeTestData(userId, emailPattern);
+      const result = await storage.nukeTestData(userId, req.user.tenantId, emailPattern);
 
       res.json({
         success: true,

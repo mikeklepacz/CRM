@@ -303,7 +303,7 @@ export interface IStorage {
   getUserIntegration(userId: string): Promise<UserIntegration | undefined>;
   getAllUserIntegrations(): Promise<UserIntegration[]>;
   getUserIntegrationsWithGmailByTenant(tenantId: string): Promise<UserIntegration[]>;
-  updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration>;
+  updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>, tenantId?: string): Promise<UserIntegration>;
 
   // User preferences operations
   getUserPreferences(userId: string, tenantId: string): Promise<UserPreferences | undefined>;
@@ -424,7 +424,7 @@ export interface IStorage {
 
   // User Tag operations
   getUserTags(userId: string): Promise<UserTag[]>;
-  addUserTag(userId: string, tag: string): Promise<UserTag>;
+  addUserTag(userId: string, tag: string, tenantId: string): Promise<UserTag>;
   removeUserTag(userId: string, tag: string): Promise<void>;
   removeUserTagById(userId: string, id: string): Promise<void>;
 
@@ -452,7 +452,7 @@ export interface IStorage {
   getSavedExclusionsByType(tenantId: string, projectId: string | undefined, type: 'keyword' | 'place_type'): Promise<SavedExclusion[]>;
   createSavedExclusion(exclusion: InsertSavedExclusion): Promise<SavedExclusion>;
   deleteSavedExclusion(id: string): Promise<void>;
-  updateUserActiveExclusions(userId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences>;
+  updateUserActiveExclusions(userId: string, tenantId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences>;
 
   // Status operations
   getAllStatuses(tenantId: string): Promise<Status[]>;
@@ -609,7 +609,7 @@ export interface IStorage {
   deleteAssistantFileByAssistantId(fileId: string, assistantId: string): Promise<boolean>;
 
   // Non-duplicate operations
-  markAsNotDuplicate(link1: string, link2: string, userId: string): Promise<NonDuplicate>;
+  markAsNotDuplicate(link1: string, link2: string, userId: string, tenantId: string): Promise<NonDuplicate>;
   isMarkedAsNotDuplicate(link1: string, link2: string): Promise<boolean>;
   getAllNonDuplicates(): Promise<NonDuplicate[]>;
   removeNonDuplicateMark(link1: string, link2: string): Promise<void>;
@@ -736,7 +736,7 @@ export interface IStorage {
     testEmailsCount: number;
     slotsCount: number;
   }>;
-  nukeTestData(userId: string, emailPattern?: string): Promise<{
+  nukeTestData(userId: string, tenantId: string, emailPattern?: string): Promise<{
     recipientsDeleted: number;
     messagesDeleted: number;
     testEmailsDeleted: number;
@@ -1629,7 +1629,7 @@ export class DatabaseStorage implements IStorage {
     return results.map(r => r.integration);
   }
 
-  async updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration> {
+  async updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>, tenantId?: string): Promise<UserIntegration> {
     // First check if integration exists
     const existing = await this.getUserIntegration(userId);
 
@@ -1641,9 +1641,12 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return updated;
     } else {
+      if (!tenantId) {
+        throw new Error('tenantId is required when creating a new user integration record');
+      }
       const [created] = await db
         .insert(userIntegrations)
-        .values({ userId, ...updates })
+        .values({ userId, tenantId, ...updates })
         .returning();
       return created;
     }
@@ -2539,7 +2542,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(userTags.tag);
   }
 
-  async addUserTag(userId: string, tag: string): Promise<UserTag> {
+  async addUserTag(userId: string, tag: string, tenantId: string): Promise<UserTag> {
     const trimmedTag = tag.trim().toLowerCase();
 
     const existing = await db
@@ -2554,7 +2557,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newTag] = await db
       .insert(userTags)
-      .values({ userId, tag: trimmedTag })
+      .values({ userId, tag: trimmedTag, tenantId })
       .returning();
     return newTag;
   }
@@ -2860,7 +2863,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(savedExclusions).where(eq(savedExclusions.id, id));
   }
 
-  async updateUserActiveExclusions(userId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences> {
+  async updateUserActiveExclusions(userId: string, tenantId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences> {
     const [prefs] = await db
       .update(userPreferences)
       .set({
@@ -2876,6 +2879,7 @@ export class DatabaseStorage implements IStorage {
         .insert(userPreferences)
         .values({
           userId,
+          tenantId,
           activeExcludedKeywords: activeKeywords,
           activeExcludedTypes: activeTypes,
         })
@@ -4027,7 +4031,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Non-duplicate operations
-  async markAsNotDuplicate(link1: string, link2: string, userId: string): Promise<NonDuplicate> {
+  async markAsNotDuplicate(link1: string, link2: string, userId: string, tenantId: string): Promise<NonDuplicate> {
     // Normalize order: always store smaller link first
     const [first, second] = link1 < link2 ? [link1, link2] : [link2, link1];
 
@@ -4037,6 +4041,7 @@ export class DatabaseStorage implements IStorage {
         link1: first,
         link2: second,
         markedByUserId: userId,
+        tenantId,
       })
       .onConflictDoNothing()
       .returning();
@@ -5678,7 +5683,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async nukeTestData(userId: string, emailPattern?: string): Promise<{
+  async nukeTestData(userId: string, tenantId: string, emailPattern?: string): Promise<{
     recipientsDeleted: number;
     messagesDeleted: number;
     testEmailsDeleted: number;
@@ -5820,6 +5825,7 @@ export class DatabaseStorage implements IStorage {
       // Step 6: Log the nuke operation (in-transaction)
       await tx.insert(testDataNukeLog).values({
         executedBy: userId,
+        tenantId,
         emailPattern: emailPattern || null,
         recipientsDeleted,
         messagesDeleted,
