@@ -2421,6 +2421,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                           </>
                         )}
                       </Button>
+                      <DtmfDialpad />
                       <Button
                         onClick={handleSave}
                         disabled={saveMutation.isPending}
@@ -2487,6 +2488,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                   </>
                 )}
               </Button>
+              <DtmfDialpad />
               <Button
                 onClick={handleSave}
                 disabled={saveMutation.isPending}
@@ -2525,7 +2527,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
               </Button>
             </DialogFooter>
           )}
-          <DtmfDialpad />
         </DialogContent>
       </Dialog>
 
