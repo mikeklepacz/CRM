@@ -46,8 +46,10 @@
 // server/services/Matrix2/slotGenerator.ts
 import { storage } from "../../storage";
 import { getSlotsForDateAndAccount, createSlots } from "./slotDb";
-import { addMinutes, addDays, parseISO } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
+import { getInUseSenderAccountIds } from "./senderAccountScope";
+import { assignRecipientsToSlots } from "./slotAssigner";
+import { addMinutes, addDays } from "date-fns";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { randomInt } from "crypto";
 import { eventGateway } from "../events/gateway";
 
@@ -86,9 +88,9 @@ export async function generateSlotsForDayAndAccount(
 
   const slots: Date[] = [];
   
-  // Start time: dateIso at sendingHoursStart in admin timezone → convert to UTC
-  const startTimeStr = `${dateIso}T${String(sendingHoursStart).padStart(2, '0')}:00:00`;
-  let cursor = new Date(formatInTimeZone(startTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
+  // Start time: local admin datetime -> UTC for storage
+  const startTimeStr = `${dateIso}T${String(sendingHoursStart).padStart(2, "0")}:00:00`;
+  let cursor = fromZonedTime(startTimeStr, adminTz);
   
   // If generating for today and we're already past the window start, start from NOW instead
   const now = new Date();
@@ -97,11 +99,13 @@ export async function generateSlotsForDayAndAccount(
     cursor = now;
   }
   
-  // End time boundary
-  const endDate = needsNextDay ? addDays(parseISO(dateIso), 1) : parseISO(dateIso);
-  const endDateIso = formatInTimeZone(endDate, adminTz, 'yyyy-MM-dd');
-  const endTimeStr = `${endDateIso}T${String(endHourCalculated).padStart(2, '0')}:00:00`;
-  const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
+  // End boundary: local admin datetime -> UTC for storage
+  const localMidnightUtc = fromZonedTime(`${dateIso}T00:00:00`, adminTz);
+  const endDateIso = needsNextDay
+    ? formatInTimeZone(addDays(localMidnightUtc, 1), adminTz, "yyyy-MM-dd")
+    : dateIso;
+  const endTimeStr = `${endDateIso}T${String(endHourCalculated).padStart(2, "0")}:00:00`;
+  const endBoundary = fromZonedTime(endTimeStr, adminTz);
   
   let previousJitter: number | null = null;
   
@@ -179,10 +183,17 @@ export async function ensureDailySlots() {
   if (!emailAccounts || emailAccounts.length === 0) {
     return;
   }
+  const inUseSenderAccountIds = await getInUseSenderAccountIds(tenantId);
+  if (inUseSenderAccountIds.size === 0) {
+    return;
+  }
+  const scopedEmailAccounts = emailAccounts.filter((account) => inUseSenderAccountIds.has(account.id));
+  if (scopedEmailAccounts.length === 0) {
+    return;
+  }
 
-  // Get admin timezone from user preferences
-  const adminUser = await storage.getAdminUser();
-  const adminTz = adminUser?.timezone || 'America/New_York';
+  // Use admin profile timezone from user preferences.
+  const adminTz = await getAdminTimezone(tenantId);
 
   const now = new Date();
   const dailyLimit = settings.dailyEmailLimit || 20;
@@ -212,7 +223,7 @@ export async function ensureDailySlots() {
     }
 
     // Generate slots for EACH email account
-    for (const account of emailAccounts) {
+    for (const account of scopedEmailAccounts) {
       // Check if slots already exist for this account + day
       const existing = await getSlotsForDateAndAccount(dateIso, account.id);
       if (existing.length >= dailyLimit) {
@@ -241,40 +252,34 @@ export async function ensureDailySlots() {
   if (totalSlotsGenerated > 0) {
     eventGateway.emit('matrix:slotsChanged', {
       totalSlotsGenerated,
-      accountCount: emailAccounts.length,
+      accountCount: scopedEmailAccounts.length,
     });
+
+    // Fill newly generated slots immediately so rebuild/generate actions reflect in UI
+    // without waiting for the periodic queue processor cycle.
+    try {
+      await assignRecipientsToSlots();
+    } catch {
+      // Keep slot generation successful even if immediate assignment fails.
+    }
   }
 }
 
 /**
- * Helper to get admin user preferences (including timezone)
- * Finds the first user with a timezone set in their preferences
+ * Resolve admin timezone from user preferences.
  */
-async function getAdminUser() {
-  const users = await storage.getAllUsers();
-  if (!users || users.length === 0) {
-    return null;
+async function getAdminTimezone(tenantId: string): Promise<string> {
+  const adminUser = await storage.getAdminUser();
+  if (!adminUser?.id) {
+    throw new Error("E-Hub slot generation aborted: no admin user found");
   }
-  
-  // Try to find the first user with a timezone set
-  for (const user of users) {
-    const preferences = await storage.getUserPreferences(user.id);
-    if (preferences?.timezone) {
-      return preferences;
-    }
-  }
-  
-  // Fallback: return first user's preferences even if no timezone
-  const preferences = await storage.getUserPreferences(users[0].id);
-  return preferences;
-}
 
-// Extend storage interface with helper method
-declare module '../../storage' {
-  interface IStorage {
-    getAdminUser(): Promise<{ timezone: string } | null>;
+  const adminPreferences = await storage.getUserPreferences(adminUser.id, tenantId);
+  if (!adminPreferences?.timezone) {
+    throw new Error(
+      `E-Hub slot generation aborted: timezone missing for admin user ${adminUser.id} in tenant ${tenantId}`
+    );
   }
-}
 
-// Add to storage implementation
-storage.getAdminUser = getAdminUser;
+  return adminPreferences.timezone;
+}

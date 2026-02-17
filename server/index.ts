@@ -28,6 +28,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 app.use((req, res, next) => {
+  const quietApiLogs = process.env.QUIET_API_LOGS === "1";
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
@@ -39,6 +40,9 @@ app.use((req, res, next) => {
   };
 
   res.on("finish", () => {
+    if (quietApiLogs) {
+      return;
+    }
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
@@ -94,7 +98,7 @@ app.use((req, res, next) => {
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
+    ...(process.platform === "linux" ? { reusePort: true } : {}),
   }, () => {
     // Start background job processor for AI analysis
     startJobProcessor();
@@ -107,13 +111,17 @@ app.use((req, res, next) => {
 
     console.log(`${new Date().toLocaleTimeString()} [express] serving on port ${port}`);
 
-    setInterval(() => {
-      callDispatcher.processQueuedCalls().catch(err => {
-        console.error('[CallDispatcher] Error in background worker:', err);
-      });
-    }, 30000);
+    if (process.env.DISABLE_CALL_DISPATCHER !== "1") {
+      setInterval(() => {
+        callDispatcher.processQueuedCalls().catch(err => {
+          console.error('[CallDispatcher] Error in background worker:', err);
+        });
+      }, 30000);
 
-    log('[CallDispatcher] Background worker started (runs every 30s)');
+      log('[CallDispatcher] Background worker started (runs every 30s)');
+    } else {
+      log('[CallDispatcher] Background worker disabled via DISABLE_CALL_DISPATCHER=1');
+    }
 
     // Start ElevenLabs call reconciliation worker (matches orphaned sessions to conversations)
     startReconciliationWorker(10 * 60 * 1000); // Every 10 minutes

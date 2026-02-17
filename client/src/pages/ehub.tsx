@@ -31,6 +31,7 @@ import { useOptionalProject } from "@/contexts/project-context";
 import { useModuleAccess } from "@/hooks/useModuleAccess";
 import { useLocation } from "wouter";
 import { canAccessAdminFeatures } from "@/lib/authUtils";
+import { EhubStepBadge, EhubStatusBadge } from "@/components/ehub-queue-badges";
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
@@ -1233,9 +1234,7 @@ function QueueView() {
                       {item.sequenceName}
                     </TableCell>
                     <TableCell data-testid={`text-queue-step-${item.recipientId}-${item.stepNumber}`}>
-                      <Badge variant={item.stepNumber === 1 ? 'default' : 'secondary'}>
-                        Step {item.stepNumber}
-                      </Badge>
+                      <EhubStepBadge stepNumber={item.stepNumber} />
                     </TableCell>
                     <TableCell data-testid={`text-queue-scheduled-${item.recipientId}-${item.stepNumber}`}>
                       {item.status === 'sent' 
@@ -1264,16 +1263,7 @@ function QueueView() {
                           })()}
                         </span>
                       ) : (
-                        <Badge 
-                          variant={
-                            item.status === 'sent' ? 'default' : 
-                            item.status === 'overdue' ? 'destructive' :
-                            item.status === 'open' ? 'secondary' :
-                            'outline'
-                          }
-                        >
-                          {item.status}
-                        </Badge>
+                        <EhubStatusBadge status={item.status} />
                       )}
                     </TableCell>
                     <TableCell data-testid={`actions-${item.recipientId}-${item.stepNumber}`}>

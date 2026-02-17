@@ -2,6 +2,8 @@
 import { storage } from "../../storage";
 import { generateSlotsForDayAndAccount } from "./slotGenerator";
 import { fillSlot, getEmptySlotsForAccount } from "./slotDb";
+import { getInUseSenderAccountIds } from "./senderAccountScope";
+import { assignRecipientsToSlots } from "./slotAssigner";
 import { parseBusinessHours } from "../timezoneHours";
 import { toZonedTime } from "date-fns-tz";
 import { addDays } from "date-fns";
@@ -110,6 +112,14 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   if (!emailAccounts || emailAccounts.length === 0) {
     return; // No email accounts to generate slots for
   }
+  const inUseSenderAccountIds = await getInUseSenderAccountIds(tenantId);
+  if (inUseSenderAccountIds.size === 0) {
+    return;
+  }
+  const scopedEmailAccounts = emailAccounts.filter((account) => inUseSenderAccountIds.has(account.id));
+  if (scopedEmailAccounts.length === 0) {
+    return;
+  }
   
   // 6. Regenerate 3 days worth of fresh slots PER ACCOUNT with new settings
   for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
@@ -117,7 +127,7 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     const targetDateIso = targetDate.toISOString().slice(0, 10);
     
     // Generate slots for each email account
-    for (const account of emailAccounts) {
+    for (const account of scopedEmailAccounts) {
       await generateSlotsForDayAndAccount(targetDateIso, adminTz, tenantId, account.id, {
         dailyEmailLimit: settings.dailyEmailLimit,
         sendingHoursStart: settings.sendingHoursStart,
@@ -192,6 +202,14 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     if (!assigned) {
       skippedCount++;
     }
+  }
+
+  // Final immediate assignment pass to pick up any remaining eligible recipients
+  // without waiting for the periodic queue cycle.
+  try {
+    await assignRecipientsToSlots();
+  } catch {
+    // Keep rebuild successful even if the final assignment pass fails.
   }
 }
 
