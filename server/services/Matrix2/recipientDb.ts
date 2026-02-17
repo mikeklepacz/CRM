@@ -3,6 +3,21 @@ import { db } from "../../db";
 import { sql } from "drizzle-orm";
 
 /**
+ * Step delay semantics:
+ * - current_step = 0 means no email has been sent yet (Step 1 is next)
+ * - delay[0] applies AFTER Step 1 is sent (before Step 2)
+ * - delay[1] applies AFTER Step 2 is sent (before Step 3), etc.
+ */
+function getDelayForCurrentProgress(stepDelays: any[], currentStep: number): number {
+  if (!Array.isArray(stepDelays) || stepDelays.length === 0) return 0;
+  if (currentStep <= 0) return 0;
+
+  const delayIndex = currentStep - 1;
+  const raw = stepDelays[delayIndex];
+  return raw !== undefined && raw !== null ? parseFloat(raw) || 0 : 0;
+}
+
+/**
  * Get all recipients that are eligible for slot assignment
  * 
  * Eligibility criteria:
@@ -49,8 +64,7 @@ export async function getEligibleRecipientsForAssignment() {
   return rows.map((r: any) => {
     const stepDelays = r.step_delays || [];
     const currentStep = r.current_step || 0;
-    const nextStepIndex = currentStep; // Next step is currentStep + 1, array is 0-indexed
-    const stepDelay = stepDelays[nextStepIndex] ? parseFloat(stepDelays[nextStepIndex]) : 0;
+    const stepDelay = getDelayForCurrentProgress(stepDelays, currentStep);
     
     return {
       ...r,
@@ -105,8 +119,7 @@ export async function getScheduledRecipientsFromDate(dateIso: string) {
   return rows.map((r: any) => {
     const stepDelays = r.step_delays || [];
     const currentStep = r.current_step || 0;
-    const nextStepIndex = currentStep;
-    const stepDelay = stepDelays[nextStepIndex] ? parseFloat(stepDelays[nextStepIndex]) : 0;
+    const stepDelay = getDelayForCurrentProgress(stepDelays, currentStep);
     
     return {
       ...r,

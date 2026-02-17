@@ -26,9 +26,8 @@ export async function processEmailQueue() {
     return;
   }
 
-  // Check if we're within sending hours (admin timezone)
-  const adminUser = await storage.getAdminUser();
-  const adminTz = adminUser?.timezone || 'America/New_York';
+  // Check if we're within sending hours (admin timezone from user preferences)
+  const adminTz = await getAdminTimezone(tenantId);
   const now = new Date();
   const currentHour = parseInt(formatInTimeZone(now, adminTz, 'HH'));
   const sendingHoursStart = settings.sendingHoursStart || 6;
@@ -171,6 +170,22 @@ export async function processEmailQueue() {
       await db.delete(dailySendSlots).where(eq(dailySendSlots.id, slot.id));
     }
   }
+}
+
+async function getAdminTimezone(tenantId: string): Promise<string> {
+  const adminUser = await storage.getAdminUser();
+  if (!adminUser?.id) {
+    throw new Error("E-Hub queue processing aborted: no admin user found");
+  }
+
+  const adminPreferences = await storage.getUserPreferences(adminUser.id, tenantId);
+  if (!adminPreferences?.timezone) {
+    throw new Error(
+      `E-Hub queue processing aborted: timezone missing for admin user ${adminUser.id} in tenant ${tenantId}`
+    );
+  }
+
+  return adminPreferences.timezone;
 }
 
 /**
