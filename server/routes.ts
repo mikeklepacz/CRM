@@ -23460,6 +23460,7 @@ ${conversationContext}`;
             sentAt: new Date(),
             threadId: null,
             messageId: null,
+            tenantId: req.user.tenantId,
           });
           
           // Add to results
