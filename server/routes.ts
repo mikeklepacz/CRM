@@ -4764,6 +4764,7 @@ Ready to receive calls?`;
       // Save insights to database for historical tracking
       try {
         const insightRecord = {
+          tenantId: req.user.tenantId,
           dateRangeStart: startDate ? new Date(startDate) : null,
           dateRangeEnd: endDate ? new Date(endDate) : null,
           agentId: agentId || null,
@@ -23392,11 +23393,13 @@ ${conversationContext}`;
       
       // Create a temporary test recipient with REAL store data but FAKE email
       // CRITICAL: Use a proper UUID for test recipient ID (database column requires UUID type)
+      const tenantId = req.user.tenantId;
       const testRecipientId = uuidv4(); // Generate proper UUID for test recipient
       const testEmail = `synthetic-test-${Date.now()}@test.local`; // Unique fake email
       
       const testRecipient = {
         id: testRecipientId,
+        tenantId,
         sequenceId: id,
         email: testEmail, // FAKE email - safe from accidental sends
         name: realName, // REAL name
@@ -23749,6 +23752,7 @@ ${conversationContext}`;
 
           seenEmails.add(email);
           recipients.push({
+            tenantId: req.user.tenantId,
             sequenceId: id,
             email,
             name,

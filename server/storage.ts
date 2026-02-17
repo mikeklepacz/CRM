@@ -3718,19 +3718,19 @@ export class DatabaseStorage implements IStorage {
 
     if (objections.length > 0) {
       await db.insert(aiInsightObjections).values(
-        objections.map(obj => ({ ...obj, insightId: savedInsight.id }))
+        objections.map(obj => ({ ...obj, insightId: savedInsight.id, tenantId: savedInsight.tenantId }))
       );
     }
 
     if (patterns.length > 0) {
       await db.insert(aiInsightPatterns).values(
-        patterns.map(pat => ({ ...pat, insightId: savedInsight.id }))
+        patterns.map(pat => ({ ...pat, insightId: savedInsight.id, tenantId: savedInsight.tenantId }))
       );
     }
 
     if (recommendations.length > 0) {
       await db.insert(aiInsightRecommendations).values(
-        recommendations.map(rec => ({ ...rec, insightId: savedInsight.id }))
+        recommendations.map(rec => ({ ...rec, insightId: savedInsight.id, tenantId: savedInsight.tenantId }))
       );
     }
 
