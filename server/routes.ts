@@ -23446,7 +23446,8 @@ ${conversationContext}`;
               signature: '', // Use default signature
             },
             stepNumber,
-            (sequence as any).finalizedStrategy || null
+            (sequence as any).finalizedStrategy || null,
+            req.user.tenantId,
           );
           
           // Store this email so next step can reference it

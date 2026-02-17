@@ -333,14 +333,17 @@ export async function personalizeEmailWithAI(
   },
   stepNumber: number = 1,
   finalizedStrategy?: string | null,
+  tenantId?: string,
 ): Promise<{ subject: string; body: string }> {
   // -------------------------
   // VALIDATION
   // -------------------------
-  const openaiSettings = await storage.getOpenaiSettings();
+  const effectiveTenantId = tenantId || recipient.tenantId;
+  if (!effectiveTenantId) throw new Error("No tenant ID available for OpenAI settings lookup.");
+  const openaiSettings = await storage.getOpenaiSettings(effectiveTenantId);
   if (!openaiSettings?.apiKey) throw new Error("No OpenAI API key.");
 
-  const alignerAssistant = await storage.getAssistantBySlug("aligner");
+  const alignerAssistant = await storage.getAssistantBySlug("aligner", effectiveTenantId);
   if (!alignerAssistant?.assistantId)
     throw new Error("Aligner assistant missing.");
 
@@ -618,7 +621,8 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
         signature: settings.signature || undefined,
       },
       currentStep,
-      sequence.finalizedStrategy
+      sequence.finalizedStrategy,
+      sequence.tenantId,
     );
 
     // 3.5 Look up threading info from previous emails (for follow-ups)
