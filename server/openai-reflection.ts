@@ -69,7 +69,7 @@ Return ONLY the JSON object - no markdown code fences, no explanations.`;
     });
 
     // Poll for completion (2.5s interval, max 2 minutes)
-    let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
     let pollCount = 0;
     const maxPolls = 48; // 2 minutes max (48 * 2.5s)
     const POLL_INTERVAL = 2500;
@@ -82,7 +82,7 @@ Return ONLY the JSON object - no markdown code fences, no explanations.`;
       }
 
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
     }
 
     if (runStatus.status !== 'completed') {

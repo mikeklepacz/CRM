@@ -196,7 +196,7 @@ ${recommendations || '(none)'}`;
       });
 
       // Poll for completion with respectful 2.5s interval
-      let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
       let pollCount = 0;
       const maxPolls = 120; // 5 minutes max (120 * 2.5s)
 
@@ -207,7 +207,7 @@ ${recommendations || '(none)'}`;
         }
 
         await new Promise(resolve => setTimeout(resolve, OPENAI_POLL_INTERVAL));
-        runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+        runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
       }
 
       if (runStatus.status !== 'completed') {

@@ -437,10 +437,10 @@ JSON FORMAT:
     response_format: { type: "json_object" },
   });
 
-  let status = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+  let status = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
   while (status.status === "queued" || status.status === "in_progress") {
     await new Promise((r) => setTimeout(r, 2500));
-    status = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    status = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id });
   }
 
   if (status.status !== "completed") {
