@@ -245,7 +245,19 @@ async function processEmailQueueWithOptions(options: { ignoreSendingWindow: bool
 }
 
 async function getAdminTimezone(tenantId: string): Promise<string> {
-  return resolveTenantTimezone(tenantId);
+  const adminUser = await storage.getAdminUser();
+  if (!adminUser?.id) {
+    throw new Error("E-Hub queue processing aborted: no admin user found");
+  }
+
+  const adminPreferences = await storage.getUserPreferences(adminUser.id, tenantId);
+  if (!adminPreferences?.timezone) {
+    throw new Error(
+      `E-Hub queue processing aborted: timezone missing for admin user ${adminUser.id} in tenant ${tenantId}`
+    );
+  }
+
+  return adminPreferences.timezone;
 }
 
 /**
