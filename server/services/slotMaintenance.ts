@@ -2,6 +2,7 @@
 import { ensureDailySlots } from "./Matrix2/slotGenerator";
 import { storage } from "../storage";
 import { formatInTimeZone } from "date-fns-tz";
+import { resolveTenantTimezone } from "./tenantTimezone";
 
 let maintenanceInterval: NodeJS.Timeout | null = null;
 let lastRunHour: number | null = null;
@@ -22,8 +23,7 @@ async function checkAndRunMaintenance() {
       return;
     }
 
-    const adminUser = await storage.getAdminUser();
-    const adminTz = adminUser?.timezone || 'America/New_York';
+    const adminTz = await resolveTenantTimezone(tenantId);
     const now = new Date();
     const currentHour = parseInt(formatInTimeZone(now, adminTz, 'HH'));
     

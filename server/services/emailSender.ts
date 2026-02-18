@@ -748,6 +748,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
     // 6. Record message in history
     await storage.insertRecipientMessage({
       id: crypto.randomUUID(),
+      tenantId: sequence.tenantId,
       recipientId: recipient.id,
       stepNumber: currentStep,
       subject,
@@ -761,7 +762,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
     // 7. POST-SEND BOOKKEEPING (critical fixes for broken system)
     // Increment sequence sentCount (atomic operation to prevent race conditions)
     try {
-      await storage.incrementSequenceSentCount(sequence.id);
+      await storage.incrementSequenceSentCount(sequence.id, sequence.tenantId);
     } catch (error) {
       // Silent failure - don't break email sending for bookkeeping errors
     }

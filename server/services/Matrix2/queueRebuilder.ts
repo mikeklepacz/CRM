@@ -7,6 +7,7 @@ import { assignRecipientsToSlots } from "./slotAssigner";
 import { parseBusinessHours } from "../timezoneHours";
 import { toZonedTime } from "date-fns-tz";
 import { addDays } from "date-fns";
+import { resolveTenantTimezone } from "../tenantTimezone";
 
 
 /**
@@ -46,15 +47,13 @@ function getNextBusinessDay(fromDate: Date, adminTz: string, skipWeekends: boole
  * @param adminUserId - User ID to fetch timezone preferences
  */
 export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
-  
-  // 1. Get admin timezone and E-Hub settings
-  const userPrefs = await storage.getUserPreferences(adminUserId);
-  const adminTz = userPrefs?.timezone || 'America/New_York';
-  
   const tenantId = await storage.getAdminTenantId();
   if (!tenantId) {
     return;
   }
+
+  // 1. Get tenant scheduling timezone
+  const adminTz = await resolveTenantTimezone(tenantId, { adminUserId });
   
   const settings = await storage.getEhubSettings(tenantId);
   if (!settings) {

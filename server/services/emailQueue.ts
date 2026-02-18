@@ -10,19 +10,36 @@ import { sql, eq } from "drizzle-orm";
 import { dailySendSlots, sequenceRecipients } from "../../shared/schema";
 import { formatInTimeZone } from "date-fns-tz";
 import { shouldSendEmail } from "./replyGuard";
+import { resolveTenantTimezone } from "./tenantTimezone";
 
 // Queue state
 let isProcessing = false;
 let queueInterval: NodeJS.Timeout | null = null;
+const EHUB_DEBUG = process.env.E_HUB_DEBUG === "1";
+
+function debugLog(message: string, data?: Record<string, unknown>) {
+  if (!EHUB_DEBUG) return;
+  if (data) {
+    console.log(`[EHubQueue] ${message}`, data);
+    return;
+  }
+  console.log(`[EHubQueue] ${message}`);
+}
 
 export async function processEmailQueue() {
+  return processEmailQueueWithOptions({ ignoreSendingWindow: false });
+}
+
+async function processEmailQueueWithOptions(options: { ignoreSendingWindow: boolean }) {
   const tenantId = await storage.getAdminTenantId();
   if (!tenantId) {
+    debugLog("Skipping cycle: no admin tenant");
     return;
   }
   
   const settings = await storage.getEhubSettings(tenantId);
   if (!settings) {
+    debugLog("Skipping cycle: no E-Hub settings", { tenantId });
     return;
   }
 
@@ -44,8 +61,27 @@ export async function processEmailQueue() {
       ? currentHour >= sendingHoursStart && currentHour < sendingHoursEnd
       : currentHour >= sendingHoursStart || currentHour < sendingHoursEnd;
   
-  if (!inSendingWindow) {
+  if (!options.ignoreSendingWindow && !inSendingWindow) {
+    debugLog("Skipping cycle: outside sending window", {
+      tenantId,
+      adminTz,
+      currentHour,
+      sendingHoursStart,
+      sendingHoursEnd,
+      duration,
+    });
     return;
+  }
+
+  if (options.ignoreSendingWindow && !inSendingWindow) {
+    debugLog("Bypassing sending window for immediate/manual send", {
+      tenantId,
+      adminTz,
+      currentHour,
+      sendingHoursStart,
+      sendingHoursEnd,
+      duration,
+    });
   }
 
   // ALWAYS run slot assignment on every cycle (not just after sends)
@@ -53,7 +89,7 @@ export async function processEmailQueue() {
   try {
     await assignRecipientsToSlots();
   } catch (assignError) {
-    // Don't fail the queue - continue to send ready emails
+    console.error("[EHubQueue] Slot assignment failed before send cycle:", assignError);
   }
 
   // Reuse 'now' from sending hours check above
@@ -103,8 +139,11 @@ export async function processEmailQueue() {
   const slots = (result as any).rows || [];
 
   if (slots.length === 0) {
+    debugLog("No due slots in current window", { tenantId, nowUtcIso, tenMinutesAgoIso });
     return;
   }
+
+  debugLog("Processing due slots", { tenantId, dueCount: slots.length });
 
   for (const slot of slots) {
     try {
@@ -120,6 +159,11 @@ export async function processEmailQueue() {
         });
         
         if (!canSend) {
+          debugLog("Blocked by reply guard; marking replied", {
+            recipientId: slot.recipient_id,
+            slotId: slot.id,
+            threadId: slot.thread_id,
+          });
           // Mark recipient as replied and cancel slot
           await db.update(sequenceRecipients)
             .set({ 
@@ -146,6 +190,11 @@ export async function processEmailQueue() {
       
       const ok = await sendEmailToRecipient(slot.recipient_id);
       if (ok) {
+        debugLog("Email sent successfully", {
+          recipientId: slot.recipient_id,
+          slotId: slot.id,
+          slotTimeUtc: slot.slot_time_utc,
+        });
         await markSlotSent(slot.id);
         // Note: Recipient metadata is updated inside sendEmailToRecipient()
         
@@ -159,13 +208,36 @@ export async function processEmailQueue() {
           const { assignSingleRecipient } = await import('./Matrix2/slotAssigner');
           await assignSingleRecipient(slot.recipient_id);
         } catch (assignError) {
-          // Don't rethrow - continue processing other slots even if assignment fails
+          console.error("[EHubQueue] Post-send slot assignment failed:", assignError);
         }
       } else {
+        console.error("[EHubQueue] sendEmailToRecipient returned false; deleting slot", {
+          recipientId: slot.recipient_id,
+          slotId: slot.id,
+          slotTimeUtc: slot.slot_time_utc,
+        });
+        await db.update(sequenceRecipients)
+          .set({
+            status: 'in_sequence',
+            errorLog: `Send failed at ${new Date().toISOString()} (slot ${slot.id})`,
+          })
+          .where(eq(sequenceRecipients.id, slot.recipient_id));
         // DELETE the slot - recipient returns to bin for next assignment cycle
         await db.delete(dailySendSlots).where(eq(dailySendSlots.id, slot.id));
       }
     } catch (error) {
+      console.error("[EHubQueue] Error while processing slot; deleting slot", {
+        recipientId: slot.recipient_id,
+        slotId: slot.id,
+        slotTimeUtc: slot.slot_time_utc,
+        error,
+      });
+      await db.update(sequenceRecipients)
+        .set({
+          status: 'in_sequence',
+          errorLog: `Queue exception at ${new Date().toISOString()} (slot ${slot.id})`,
+        })
+        .where(eq(sequenceRecipients.id, slot.recipient_id));
       // DELETE the slot - recipient returns to bin for next assignment cycle
       await db.delete(dailySendSlots).where(eq(dailySendSlots.id, slot.id));
     }
@@ -173,19 +245,7 @@ export async function processEmailQueue() {
 }
 
 async function getAdminTimezone(tenantId: string): Promise<string> {
-  const adminUser = await storage.getAdminUser();
-  if (!adminUser?.id) {
-    throw new Error("E-Hub queue processing aborted: no admin user found");
-  }
-
-  const adminPreferences = await storage.getUserPreferences(adminUser.id, tenantId);
-  if (!adminPreferences?.timezone) {
-    throw new Error(
-      `E-Hub queue processing aborted: timezone missing for admin user ${adminUser.id} in tenant ${tenantId}`
-    );
-  }
-
-  return adminPreferences.timezone;
+  return resolveTenantTimezone(tenantId);
 }
 
 /**
@@ -194,16 +254,19 @@ async function getAdminTimezone(tenantId: string): Promise<string> {
  */
 export async function triggerImmediateQueueProcess() {
   if (isProcessing) {
+    debugLog("Immediate queue trigger skipped: already processing");
     return;
   }
 
   isProcessing = true;
   try {
-    await processEmailQueue();
+    debugLog("Immediate queue trigger started");
+    await processEmailQueueWithOptions({ ignoreSendingWindow: true });
   } catch (error) {
-    // Error handling without logging
+    console.error("[EHubQueue] Immediate queue processing failed:", error);
   } finally {
     isProcessing = false;
+    debugLog("Immediate queue trigger completed");
   }
 }
 
@@ -214,7 +277,7 @@ export async function triggerImmediateQueueProcess() {
 export function startEmailQueueProcessor() {
   // Run immediately on startup
   processEmailQueue().catch(err => {
-    // Error handling without logging
+    console.error("[EHubQueue] Initial startup cycle failed:", err);
   });
 
   // Then run every 60 seconds
@@ -227,7 +290,7 @@ export function startEmailQueueProcessor() {
     try {
       await processEmailQueue();
     } catch (error) {
-      // Error handling without logging
+      console.error("[EHubQueue] Scheduled cycle failed:", error);
     } finally {
       isProcessing = false;
     }

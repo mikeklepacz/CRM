@@ -52,6 +52,7 @@ import { addMinutes, addDays } from "date-fns";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { randomInt } from "crypto";
 import { eventGateway } from "../events/gateway";
+import { resolveTenantTimezone } from "../tenantTimezone";
 
 /**
  * Generate slots for a single day for a specific email account
@@ -269,17 +270,5 @@ export async function ensureDailySlots() {
  * Resolve admin timezone from user preferences.
  */
 async function getAdminTimezone(tenantId: string): Promise<string> {
-  const adminUser = await storage.getAdminUser();
-  if (!adminUser?.id) {
-    throw new Error("E-Hub slot generation aborted: no admin user found");
-  }
-
-  const adminPreferences = await storage.getUserPreferences(adminUser.id, tenantId);
-  if (!adminPreferences?.timezone) {
-    throw new Error(
-      `E-Hub slot generation aborted: timezone missing for admin user ${adminUser.id} in tenant ${tenantId}`
-    );
-  }
-
-  return adminPreferences.timezone;
+  return resolveTenantTimezone(tenantId);
 }

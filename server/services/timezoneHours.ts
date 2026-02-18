@@ -64,9 +64,10 @@ export const STATE_TIMEZONES: Record<string, string> = {
  * Resolves a state/province to its timezone
  */
 export function resolveTimezone(state: string | null | undefined): string {
-  if (!state) return 'America/New_York'; // Default timezone
+  const runtimeTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  if (!state) return runtimeTimezone;
 
-  return STATE_TIMEZONES[state] || STATE_TIMEZONES[state.toUpperCase()] || 'America/New_York';
+  return STATE_TIMEZONES[state] || STATE_TIMEZONES[state.toUpperCase()] || runtimeTimezone;
 }
 
 // Detect timezone from state abbreviation (exported for E-Hub)

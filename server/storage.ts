@@ -5888,6 +5888,7 @@ export class DatabaseStorage implements IStorage {
           name,
           tenant_id as "tenantId",
           created_by as "createdBy",
+          sender_email_account_id as "senderEmailAccountId",
           strategy_transcript as "strategyTranscript",
           finalized_strategy as "finalizedStrategy",
           step_delays as "stepDelays",
@@ -5978,6 +5979,7 @@ export class DatabaseStorage implements IStorage {
       const result = await db.execute(sql`
         INSERT INTO sequence_recipient_messages (
           id,
+          tenant_id,
           recipient_id,
           step_number,
           subject,
@@ -5988,10 +5990,11 @@ export class DatabaseStorage implements IStorage {
         )
         VALUES (
           ${message.id},
+          ${message.tenantId},
           ${message.recipientId},
           ${message.stepNumber},
-          ${message.subject || null},
-          ${message.body || null},
+          ${message.subject || ''},
+          ${message.body || ''},
           ${message.sentAt || sql`NOW()`},
           ${messageIdToStore},
           ${message.gmailThreadId || null}
