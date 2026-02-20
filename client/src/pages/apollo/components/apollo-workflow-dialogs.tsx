@@ -10,7 +10,7 @@ type ApolloWorkflowDialogsProps = {
   selectedContact: StoreContact | null;
   previewResult: PreviewResult | null;
   previewLoading: boolean;
-  onEnrichPreview: () => void;
+  onEnrichPreview: (selectedPersonIds: string[]) => void;
   previewEnriching: boolean;
   bulkPreviewOpen: boolean;
   onBulkPreviewOpenChange: (open: boolean) => void;
@@ -78,70 +78,76 @@ export function ApolloWorkflowDialogs({
   return (
     <>
       <Dialog open={previewOpen} onOpenChange={onPreviewOpenChange}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Preview Apollo Data</DialogTitle>
             <DialogDescription>
               Review available contacts before enriching
             </DialogDescription>
           </DialogHeader>
-          <PreviewDialog
-            contact={selectedContact}
-            preview={previewResult}
-            isLoading={previewLoading}
-            onEnrich={onEnrichPreview}
-            isEnriching={previewEnriching}
-          />
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <PreviewDialog
+              contact={selectedContact}
+              preview={previewResult}
+              isLoading={previewLoading}
+              onEnrich={onEnrichPreview}
+              isEnriching={previewEnriching}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={bulkPreviewOpen} onOpenChange={onBulkPreviewOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[85vh]">
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Preview Available Contacts</DialogTitle>
             <DialogDescription>
               Select which people you want to enrich from {selectedLinksSize} {selectedLinksSize === 1 ? "company" : "companies"}
             </DialogDescription>
           </DialogHeader>
-          <BulkPreviewDialog
-            data={bulkPreviewData}
-            isLoading={bulkPreviewLoading}
-            totalCompanies={selectedLinksSize}
-            selectedPeople={selectedPeople}
-            onTogglePerson={onToggleBulkPerson}
-            onSelectAll={onSelectAllBulkPeople}
-            onDeselectAll={onDeselectAllBulkPeople}
-            onEnrich={onBulkEnrichSelected}
-            isEnriching={isEnriching}
-          />
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <BulkPreviewDialog
+              data={bulkPreviewData}
+              isLoading={bulkPreviewLoading}
+              totalCompanies={selectedLinksSize}
+              selectedPeople={selectedPeople}
+              onTogglePerson={onToggleBulkPerson}
+              onSelectAll={onSelectAllBulkPeople}
+              onDeselectAll={onDeselectAllBulkPeople}
+              onEnrich={onBulkEnrichSelected}
+              isEnriching={isEnriching}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={reviewQueueOpen} onOpenChange={onReviewQueueOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[85vh]">
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Lead Review Queue</DialogTitle>
             <DialogDescription>
               Review companies one at a time, enrich the right ones, reject the wrong ones
             </DialogDescription>
           </DialogHeader>
-          <LeadReviewQueue
-            data={reviewQueueData}
-            currentIndex={reviewQueueIndex}
-            onIndexChange={onReviewQueueIndexChange}
-            isLoading={reviewQueueLoading}
-            totalCompanies={selectedLinksSize}
-            selectedPeople={reviewSelectedPeople}
-            onTogglePerson={onReviewTogglePerson}
-            onSelectAll={onReviewSelectAll}
-            onDeselectAll={onReviewDeselectAll}
-            onEnrich={onReviewEnrich}
-            onSkip={onReviewSkip}
-            onReject={onReviewReject}
-            isEnriching={isEnriching}
-            keywordsExpanded={keywordsExpanded}
-            onToggleKeywords={onToggleKeywords}
-          />
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <LeadReviewQueue
+              data={reviewQueueData}
+              currentIndex={reviewQueueIndex}
+              onIndexChange={onReviewQueueIndexChange}
+              isLoading={reviewQueueLoading}
+              totalCompanies={selectedLinksSize}
+              selectedPeople={reviewSelectedPeople}
+              onTogglePerson={onReviewTogglePerson}
+              onSelectAll={onReviewSelectAll}
+              onDeselectAll={onReviewDeselectAll}
+              onEnrich={onReviewEnrich}
+              onSkip={onReviewSkip}
+              onReject={onReviewReject}
+              isEnriching={isEnriching}
+              keywordsExpanded={keywordsExpanded}
+              onToggleKeywords={onToggleKeywords}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </>

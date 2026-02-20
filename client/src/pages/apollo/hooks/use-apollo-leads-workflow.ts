@@ -52,7 +52,10 @@ export function useApolloLeadsWorkflow({
   const notEnrichedContacts = useMemo(() => filteredContacts.filter((c) => {
     const status = enrichmentStatus?.[c.link];
     if (failedEnrichmentLinks.has(c.link)) return true;
-    return !status || (status !== "enriched" && status !== "not_found");
+    if (!status) return true;
+    const normalizedStatus = status.toLowerCase();
+    const blockedStatuses = new Set(["enriched", "not_found", "archived", "retired"]);
+    return !blockedStatuses.has(normalizedStatus);
   }), [filteredContacts, enrichmentStatus, failedEnrichmentLinks]);
 
   const contactsNeedingPrescreen = useMemo(() => notEnrichedContacts.filter((c) => {

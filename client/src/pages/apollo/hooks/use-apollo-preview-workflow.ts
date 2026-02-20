@@ -29,8 +29,24 @@ export function useApolloPreviewWorkflow({ currentProjectId, toast }: UseApolloP
   });
 
   const enrichMutation = useMutation({
-    mutationFn: async ({ googleSheetLink, domain, companyName }: { googleSheetLink: string; domain?: string; companyName?: string }) => (
-      apiRequest("POST", "/api/apollo/enrich", { googleSheetLink, domain, companyName, projectId: currentProjectId })
+    mutationFn: async ({
+      googleSheetLink,
+      domain,
+      companyName,
+      selectedPersonIds,
+    }: {
+      googleSheetLink: string;
+      domain?: string;
+      companyName?: string;
+      selectedPersonIds?: string[];
+    }) => (
+      apiRequest("POST", "/api/apollo/enrich", {
+        googleSheetLink,
+        domain,
+        companyName,
+        selectedPersonIds,
+        projectId: currentProjectId,
+      })
     ),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies"] });
@@ -59,7 +75,7 @@ export function useApolloPreviewWorkflow({ currentProjectId, toast }: UseApolloP
     });
   };
 
-  const handleEnrich = () => {
+  const handleEnrich = (selectedPersonIds: string[]) => {
     if (!selectedContact) return;
 
     const domain = extractDomain(selectedContact.website);
@@ -67,6 +83,7 @@ export function useApolloPreviewWorkflow({ currentProjectId, toast }: UseApolloP
       googleSheetLink: selectedContact.link,
       domain: domain || undefined,
       companyName: !domain ? selectedContact.name : undefined,
+      selectedPersonIds,
     });
   };
 

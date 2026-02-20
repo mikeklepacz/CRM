@@ -65,6 +65,36 @@ export async function hideApolloCompanyById(tenantId: string, companyId: string)
   return updated.length > 0;
 }
 
+export async function listRetiredApolloCompanies(tenantId: string, projectId?: string) {
+  const whereParts = [
+    eq(apolloCompanies.tenantId, tenantId),
+    or(eq(apolloCompanies.enrichmentStatus, "archived"), eq(apolloCompanies.enrichmentStatus, "retired")),
+  ];
+
+  if (projectId) {
+    whereParts.push(eq(apolloCompanies.projectId, projectId));
+  }
+
+  return db
+    .select()
+    .from(apolloCompanies)
+    .where(and(...whereParts))
+    .orderBy(apolloCompanies.enrichedAt);
+}
+
+export async function restoreApolloCompanyToNotFound(tenantId: string, companyId: string): Promise<boolean> {
+  const updated = await db
+    .update(apolloCompanies)
+    .set({
+      enrichmentStatus: "not_found",
+      updatedAt: new Date(),
+    })
+    .where(and(eq(apolloCompanies.tenantId, tenantId), eq(apolloCompanies.id, companyId)))
+    .returning({ id: apolloCompanies.id });
+
+  return updated.length > 0;
+}
+
 export async function deleteApolloCompanyById(tenantId: string, companyId: string): Promise<boolean> {
   const deleted = await db
     .delete(apolloCompanies)
