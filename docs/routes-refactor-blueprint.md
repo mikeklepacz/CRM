@@ -230,6 +230,8 @@ Use this checklist for each batch:
 
 ## Progress Tracker
 - [ ] Batch 1: `ehub` + `sequences` + `test-email` + `no-send-dates` + `holidays`
+- [x] Batch 1A complete: extracted `ehub` core endpoints (`/api/ehub/settings`, queue, recipients, contacts/history/failures/scan, blacklist) into `server/routes/ehub/*`
+- [ ] Batch 1B pending: extract `sequences` + `test-email` + `no-send-dates` + `holidays`
 - [ ] Batch 2: `org-admin` + `qualification`
 - [ ] Batch 3: `super-admin`
 - [ ] Batch 4: `maps` + `stores` + `clients`

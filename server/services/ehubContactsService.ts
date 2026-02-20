@@ -2,9 +2,10 @@ import { eq, sql, and, or, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import * as googleSheets from '../googleSheets';
 import { storage } from '../storage';
-import { sequenceRecipients, sequences, categories, apolloContacts, apolloCompanies, tenantProjects } from '../../shared/schema';
+import { sequenceRecipients, sequences, apolloContacts, apolloCompanies } from '../../shared/schema';
 import type { EhubContact, AllContactsResponse } from '../../shared/schema';
 import { detectTimezone } from './timezoneHours';
+import { getAllowedEhubCategoryNames } from './ehubProjectScope';
 
 interface TenantCache {
   contacts: EhubContact[];
@@ -150,24 +151,16 @@ async function fetchAndEnrichContacts(tenantId: string, projectId?: string): Pro
     salesSummary?: string;
   }> = [];
 
-  // If projectId is provided, use the project name directly for filtering Google Sheet Category column
+  // If projectId is provided, filter using categories assigned to that project
+  // plus legacy fallback to project name.
   let allowedCategoryNames: Set<string> | null = null;
   if (projectId) {
-    // Look up the project to get its name
-    const project = await db
-      .select({ name: tenantProjects.name })
-      .from(tenantProjects)
-      .where(eq(tenantProjects.id, projectId))
-      .limit(1);
-    
-    if (project.length === 0) {
+    allowedCategoryNames = await getAllowedEhubCategoryNames(tenantId, projectId);
+    if (allowedCategoryNames.size === 0) {
       console.log(`[E-Hub] Project ${projectId} not found - returning empty contacts`);
       return [];
     }
-    
-    // Use the project name as the allowed category (Maps Search writes project name to Category column)
-    allowedCategoryNames = new Set([project[0].name.toLowerCase().trim()]);
-    
+
     console.log(`[E-Hub] Project filter: allowed categories = ${Array.from(allowedCategoryNames).join(', ')}`);
   }
 

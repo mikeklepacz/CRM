@@ -302,6 +302,7 @@ export async function enrichPeople(details: Array<{
 export async function previewContactsForCompany(options: {
   domain?: string;
   companyName?: string;
+  organizationId?: string;
   tenantId: string;
 }): Promise<{
   company: ApolloOrganization | null;
@@ -315,7 +316,11 @@ export async function previewContactsForCompany(options: {
   const settings = await getOrCreateSettings(options.tenantId);
   console.log(`[Apollo Preview] Settings:`, JSON.stringify({ targetSeniorities: settings.targetSeniorities, targetTitles: settings.targetTitles, maxContactsPerCompany: settings.maxContactsPerCompany }, null, 2));
   
-  if (options.domain) {
+  if (options.organizationId) {
+    console.log(`[Apollo Preview] Enriching by organizationId: ${options.organizationId}`);
+    company = await enrichOrganization({ organizationId: options.organizationId });
+    console.log(`[Apollo Preview] Organization enrichment by ID found: ${company?.name || 'none'}`);
+  } else if (options.domain) {
     console.log(`[Apollo Preview] Enriching by domain: ${options.domain}`);
     company = await enrichOrganization({ domain: options.domain });
     console.log(`[Apollo Preview] Organization enrichment by domain found: ${company?.name || 'none'}`);
@@ -331,23 +336,31 @@ export async function previewContactsForCompany(options: {
     }
   } else if (options.companyName) {
     console.log(`[Apollo Preview] Searching by company name: ${options.companyName}`);
-    const orgResult = await searchOrganizations({
-      name: options.companyName,
-      perPage: 1,
-    });
-    console.log(`[Apollo Preview] Organization search by name found ${orgResult.organizations?.length || 0} orgs`);
-    const searchedCompany = orgResult.organizations[0] || null;
-    
-    if (searchedCompany?.primary_domain) {
-      console.log(`[Apollo Preview] Enriching found company by domain: ${searchedCompany.primary_domain}`);
-      company = await enrichOrganization({ domain: searchedCompany.primary_domain });
-    } else if (searchedCompany?.id) {
-      console.log(`[Apollo Preview] Enriching found company by id: ${searchedCompany.id}`);
-      company = await enrichOrganization({ organizationId: searchedCompany.id });
-    }
-    
-    if (!company) {
-      company = searchedCompany;
+    const nameCandidates = [options.companyName, options.companyName.split(/\s[-|,]\s/)[0]]
+      .map((n) => n.trim())
+      .filter((n, idx, arr) => n.length > 0 && arr.indexOf(n) === idx);
+
+    for (const candidate of nameCandidates) {
+      const orgResult = await searchOrganizations({
+        name: candidate,
+        perPage: 1,
+      });
+      console.log(`[Apollo Preview] Organization search by name "${candidate}" found ${orgResult.organizations?.length || 0} orgs`);
+      const searchedCompany = orgResult.organizations[0] || null;
+      if (!searchedCompany) continue;
+
+      if (searchedCompany.primary_domain) {
+        console.log(`[Apollo Preview] Enriching found company by domain: ${searchedCompany.primary_domain}`);
+        company = await enrichOrganization({ domain: searchedCompany.primary_domain });
+      } else if (searchedCompany.id) {
+        console.log(`[Apollo Preview] Enriching found company by id: ${searchedCompany.id}`);
+        company = await enrichOrganization({ organizationId: searchedCompany.id });
+      }
+
+      if (!company) {
+        company = searchedCompany;
+      }
+      if (company) break;
     }
   } else {
     console.log(`[Apollo Preview] No domain or companyName provided!`);
@@ -384,6 +397,7 @@ export async function enrichAndStoreCompany(options: {
   googleSheetLink: string;
   domain?: string;
   companyName?: string;
+  organizationId?: string;
   selectedPersonIds?: string[];
 }): Promise<{
   company: ApolloCompany | null;
@@ -410,7 +424,8 @@ export async function enrichAndStoreCompany(options: {
     // If company exists but has no contacts and was previously enriched/prescreened, delete it to allow retry
     const canRetry = existingContacts.length === 0 && 
       (existingCompany[0].enrichmentStatus === 'enriched' || existingCompany[0].enrichmentStatus === 'prescreened');
-    if (canRetry) {
+    const canRetryNotFound = existingCompany[0].enrichmentStatus === 'not_found';
+    if (canRetry || canRetryNotFound) {
       console.log(`[Apollo Enrich] Company ${existingCompany[0].name} (status: ${existingCompany[0].enrichmentStatus}) has 0 contacts, deleting for retry`);
       await db.delete(apolloCompanies).where(eq(apolloCompanies.id, existingCompany[0].id));
       // Continue to re-enrich below
@@ -426,6 +441,7 @@ export async function enrichAndStoreCompany(options: {
   const preview = await previewContactsForCompany({
     domain: options.domain,
     companyName: options.companyName,
+    organizationId: options.organizationId,
     tenantId: options.tenantId,
   });
 
@@ -433,6 +449,7 @@ export async function enrichAndStoreCompany(options: {
     // Mark as not found so we don't try again
     await db.insert(apolloCompanies).values({
       tenantId: options.tenantId,
+      projectId: options.projectId || null,
       googleSheetLink: options.googleSheetLink,
       enrichmentStatus: 'not_found',
       creditsUsed: 0,
@@ -444,6 +461,7 @@ export async function enrichAndStoreCompany(options: {
   
   const [insertedCompany] = await db.insert(apolloCompanies).values({
     tenantId: options.tenantId,
+    projectId: options.projectId || null,
     googleSheetLink: options.googleSheetLink,
     apolloOrgId: apolloCompany.id,
     domain: apolloCompany.primary_domain,
@@ -768,4 +786,3 @@ export async function getPrescreenedCompanies(tenantId: string, projectId?: stri
     .where(and(...conditions))
     .orderBy(apolloCompanies.enrichedAt);
 }
-

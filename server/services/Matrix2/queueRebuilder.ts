@@ -4,36 +4,9 @@ import { generateSlotsForDayAndAccount } from "./slotGenerator";
 import { fillSlot, getEmptySlotsForAccount } from "./slotDb";
 import { getInUseSenderAccountIds } from "./senderAccountScope";
 import { assignRecipientsToSlots } from "./slotAssigner";
-import { parseBusinessHours } from "../timezoneHours";
-import { toZonedTime } from "date-fns-tz";
-import { addDays } from "date-fns";
 import { resolveTenantTimezone } from "../tenantTimezone";
-
-
-/**
- * Calculate the next business day from a given date
- * Respects skip_weekends setting and admin timezone
- */
-function getNextBusinessDay(fromDate: Date, adminTz: string, skipWeekends: boolean): Date {
-  let nextDay = addDays(fromDate, 1);
-  
-  if (skipWeekends) {
-    // Convert to admin timezone to check day of week
-    const zonedDate = toZonedTime(nextDay, adminTz);
-    const dayOfWeek = zonedDate.getDay(); // 0 = Sunday, 6 = Saturday
-    
-    // If Saturday, jump to Monday
-    if (dayOfWeek === 6) {
-      nextDay = addDays(nextDay, 2);
-    }
-    // If Sunday, jump to Monday
-    else if (dayOfWeek === 0) {
-      nextDay = addDays(nextDay, 1);
-    }
-  }
-  
-  return nextDay;
-}
+import { isRecipientEligibleForRebuildSlot } from "./rebuildEligibility";
+import { getNextEligibleDateIsos } from "./eligibleDays";
 
 /**
  * Manually rebuild the ENTIRE queue with new settings
@@ -64,12 +37,8 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   const sendingHoursDuration = settings.sendingHoursDuration || 
     (settings.sendingHoursEnd === settings.sendingHoursStart ? 24 : 
      ((settings.sendingHoursEnd! - settings.sendingHoursStart + 24) % 24));
-  const endHourCalculated = (settings.sendingHoursStart + sendingHoursDuration) % 24;
-  
   // For COMPLETE rebuild, delete ALL slots and start fresh from today
   const now = new Date();
-  const rebuildStartDate = now;
-  const rebuildStartDateIso = now.toISOString().slice(0, 10);
   
   // 3. FETCH RECIPIENTS FIRST (before deleting slots!)
   // Get all active recipients that are currently in the sequence_recipients table
@@ -94,7 +63,7 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       s.sender_email_account_id
     FROM sequence_recipients sr
     LEFT JOIN sequences s ON sr.sequence_id = s.id
-    WHERE sr.status NOT IN ('bounced')
+    WHERE sr.status = 'in_sequence'
       AND s.status = 'active'
       AND s.sender_email_account_id IS NOT NULL
     ORDER BY 
@@ -120,11 +89,13 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     return;
   }
   
-  // 6. Regenerate 3 days worth of fresh slots PER ACCOUNT with new settings
-  for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
-    const targetDate = addDays(rebuildStartDate, dayOffset);
-    const targetDateIso = targetDate.toISOString().slice(0, 10);
-    
+  // 6. Regenerate fresh slots for next 3 eligible send days PER ACCOUNT
+  const eligibleDateIsos = await getNextEligibleDateIsos(now, 3, adminTz, {
+    excludedDays: settings.excludedDays || [],
+    tenantId,
+    maxLookaheadDays: 45,
+  });
+  for (const targetDateIso of eligibleDateIsos) {
     // Generate slots for each email account
     for (const account of scopedEmailAccounts) {
       await generateSlotsForDayAndAccount(targetDateIso, adminTz, tenantId, account.id, {
@@ -163,13 +134,10 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     const recipientTz = recipient.timezone || adminTz;
     const recipientWithDefaults = { ...recipient, timezone: recipientTz };
     
-    // Get the next available empty slot FOR THIS ACCOUNT across all 3 days
+    // Get the next available empty slot FOR THIS ACCOUNT across eligible send days
     let assigned = false;
     
-    for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
-      const targetDate = addDays(rebuildStartDate, dayOffset);
-      const targetDateIso = targetDate.toISOString().slice(0, 10);
-      
+    for (const targetDateIso of eligibleDateIsos) {
       // Only get slots for THIS recipient's email account
       const emptySlots = await getEmptySlotsForAccount(targetDateIso, recipient.sender_email_account_id);
       
@@ -187,7 +155,7 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
           continue;
         }
         
-        if (isRecipientEligibleForSlot(recipientWithDefaults, slotUtc, settings)) {
+        if (await isRecipientEligibleForRebuildSlot(recipientWithDefaults, slotUtc, settings)) {
           await fillSlot(slot.id, recipient.id);
           assignedCount++;
           assigned = true;
@@ -209,49 +177,5 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     await assignRecipientsToSlots();
   } catch {
     // Keep rebuild successful even if the final assignment pass fails.
-  }
-}
-
-/**
- * Check if a recipient is eligible for a specific slot
- * For rebuild: we're lenient and just assign to available slots
- */
-function isRecipientEligibleForSlot(
-  recipient: any,
-  slotUtc: Date,
-  settings: any
-): boolean {
-  // For a manual rebuild, be lenient - just assign to available slots
-  // The business hours and step delay validation will kick in during normal operation
-  try {
-    // Only require recipient has a timezone
-    if (!recipient.timezone) {
-      return false;
-    }
-    
-    // Try to parse business hours but don't fail if missing
-    if (recipient.business_hours) {
-      const businessHours = parseBusinessHours(recipient.business_hours);
-      if (businessHours) {
-        // Convert slot time to recipient's local timezone
-        const recipientLocalTime = toZonedTime(slotUtc, recipient.timezone);
-        const recipientHour = recipientLocalTime.getHours();
-        const recipientMinute = recipientLocalTime.getMinutes();
-        const recipientLocalMinutes = recipientHour * 60 + recipientMinute;
-        
-        // Check if within business hours window
-        const businessStart = businessHours.opens_at + (settings.clientStartOffsetHours || 0) * 60;
-        const businessEnd = (settings.clientCutoffHour || 14) * 60;
-        
-        if (recipientLocalMinutes < businessStart || recipientLocalMinutes >= businessEnd) {
-          // Outside business hours, but for rebuild we still allow it
-        }
-      }
-    }
-    
-    return true;
-  } catch (error: any) {
-    // For rebuild, if we can't validate, still allow it
-    return true;
   }
 }

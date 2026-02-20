@@ -53,6 +53,7 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { randomInt } from "crypto";
 import { eventGateway } from "../events/gateway";
 import { resolveTenantTimezone } from "../tenantTimezone";
+import { getNextEligibleDateIsos } from "./eligibleDays";
 
 /**
  * Generate slots for a single day for a specific email account
@@ -210,18 +211,14 @@ export async function ensureDailySlots() {
 
   let totalSlotsGenerated = 0;
 
-  // Check next 3 calendar days
-  for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
-    const targetDate = new Date(now);
-    targetDate.setDate(targetDate.getDate() + dayOffset);
-    const dateIso = formatInTimeZone(targetDate, adminTz, 'yyyy-MM-dd');
-    
-    // Skip excluded days if configured
-    const dayOfWeek = parseInt(formatInTimeZone(targetDate, adminTz, 'i')); // 1=Mon, 7=Sun
-    const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
-    if (excludedDays.includes(jsDay)) {
-      continue;
-    }
+  // Generate slots for the next 3 eligible sending days, not literal calendar days.
+  const eligibleDateIsos = await getNextEligibleDateIsos(now, 3, adminTz, {
+    excludedDays,
+    tenantId,
+    maxLookaheadDays: 45,
+  });
+
+  for (const dateIso of eligibleDateIsos) {
 
     // Generate slots for EACH email account
     for (const account of scopedEmailAccounts) {

@@ -4,15 +4,16 @@ import { sql } from "drizzle-orm";
 
 /**
  * Step delay semantics:
- * - current_step = 0 means no email has been sent yet (Step 1 is next)
- * - delay[0] applies AFTER Step 1 is sent (before Step 2)
- * - delay[1] applies AFTER Step 2 is sent (before Step 3), etc.
+ * - current_step = 0 means no email has been sent yet (Email 1 is next)
+ * - step_delays is stored as "delay before Email N" (UI semantics)
+ * - When current_step = X, next email is (X + 1), so use delay index X
+ *   Example: current_step=1 (Email 2 next) -> use step_delays[1]
  */
 function getDelayForCurrentProgress(stepDelays: any[], currentStep: number): number {
   if (!Array.isArray(stepDelays) || stepDelays.length === 0) return 0;
   if (currentStep <= 0) return 0;
 
-  const delayIndex = currentStep - 1;
+  const delayIndex = currentStep;
   const raw = stepDelays[delayIndex];
   return raw !== undefined && raw !== null ? parseFloat(raw) || 0 : 0;
 }
