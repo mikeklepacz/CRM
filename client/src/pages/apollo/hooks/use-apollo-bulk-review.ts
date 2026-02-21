@@ -71,16 +71,20 @@ export function useApolloBulkReview({
 
     setIsEnriching(true);
 
-    const companyLinks = new Set<string>();
+    const selectedPersonIdsByLink = new Map<string, string[]>();
     selectedPeople.forEach((key) => {
-      const [link] = key.split("::");
-      companyLinks.add(link);
+      const [link, personId] = key.split("::");
+      if (!link || !personId) return;
+      const existing = selectedPersonIdsByLink.get(link) || [];
+      existing.push(personId);
+      selectedPersonIdsByLink.set(link, existing);
     });
 
-    let successCount = 0;
+    let successCompanyCount = 0;
+    let successPeopleCount = 0;
     let errorCount = 0;
 
-    for (const link of Array.from(companyLinks)) {
+    for (const [link, selectedPersonIds] of Array.from(selectedPersonIdsByLink.entries())) {
       const contactData = contacts.find((c) => c.link === link);
       if (!contactData) continue;
 
@@ -90,9 +94,11 @@ export function useApolloBulkReview({
           googleSheetLink: contactData.link,
           domain: domain || undefined,
           companyName: !domain ? contactData.name : undefined,
+          selectedPersonIds,
           projectId: currentProjectId,
         });
-        successCount++;
+        successCompanyCount++;
+        successPeopleCount += selectedPersonIds.length;
       } catch {
         errorCount++;
       }
@@ -107,7 +113,7 @@ export function useApolloBulkReview({
 
     toast({
       title: "Bulk enrichment complete",
-      description: `Enriched ${successCount} companies. ${errorCount > 0 ? `${errorCount} failed.` : ""}`,
+      description: `Enriched ${successPeopleCount} selected contact${successPeopleCount === 1 ? "" : "s"} across ${successCompanyCount} compan${successCompanyCount === 1 ? "y" : "ies"}.${errorCount > 0 ? ` ${errorCount} failed.` : ""}`,
     });
   };
 
