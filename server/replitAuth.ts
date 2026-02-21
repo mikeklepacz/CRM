@@ -8,13 +8,13 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
-
-if (!process.env.REPLIT_DOMAINS) {
-  throw new Error("Environment variable REPLIT_DOMAINS not provided");
-}
+import { buildAppUrl, getAuthStrategyDomains } from "./runtimeConfig";
 
 export const getOidcConfig = memoize(
   async () => {
+    if (!process.env.REPL_ID) {
+      throw new Error("REPL_ID is required for Replit OIDC authentication");
+    }
     return await client.discovery(
       new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
       process.env.REPL_ID!
@@ -94,30 +94,40 @@ export async function setupAuth(app: Express) {
     next();
   });
 
-  const config = await getOidcConfig();
+  let oidcConfig: Awaited<ReturnType<typeof getOidcConfig>> | null = null;
+  const hasReplitOidc = Boolean(process.env.REPL_ID);
+  if (hasReplitOidc) {
+    oidcConfig = await getOidcConfig();
 
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-    verified: passport.AuthenticateCallback
-  ) => {
-    const user = {};
-    updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
-    verified(null, user);
-  };
+    const verify: VerifyFunction = async (
+      tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
+      verified: passport.AuthenticateCallback
+    ) => {
+      const user = {};
+      updateUserSession(user, tokens);
+      await upsertUser(tokens.claims());
+      verified(null, user);
+    };
 
-  for (const domain of process.env
-    .REPLIT_DOMAINS!.split(",")) {
-    const strategy = new Strategy(
-      {
-        name: `replitauth:${domain}`,
-        config,
-        scope: "openid email profile offline_access",
-        callbackURL: `https://${domain}/api/callback`,
-      },
-      verify,
-    );
-    passport.use(strategy);
+    const strategyDomains = getAuthStrategyDomains();
+    for (const domain of strategyDomains) {
+      const isLocalHost = domain === "localhost" || domain === "127.0.0.1";
+      const callbackUrl = isLocalHost
+        ? buildAppUrl("/api/callback")
+        : `https://${domain}/api/callback`;
+      const strategy = new Strategy(
+        {
+          name: `replitauth:${domain}`,
+          config: oidcConfig,
+          scope: "openid email profile offline_access",
+          callbackURL: callbackUrl,
+        },
+        verify,
+      );
+      passport.use(strategy);
+    }
+  } else {
+    console.warn("[Auth] REPL_ID not set. Replit OIDC login routes are disabled.");
   }
 
   passport.serializeUser((user: any, cb) => {
@@ -177,23 +187,46 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/login", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    const strategyName = hasReplitOidc ? `replitauth:${req.hostname}` : null;
+    const strategyExists = strategyName
+      ? Boolean((passport as any)._strategy(strategyName))
+      : false;
+    if (!strategyExists) {
+      return res.status(503).json({
+        message: "Replit OIDC login is not configured. Use username/password login.",
+      });
+    }
+    passport.authenticate(strategyName, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    const strategyName = hasReplitOidc ? `replitauth:${req.hostname}` : null;
+    const strategyExists = strategyName
+      ? Boolean((passport as any)._strategy(strategyName))
+      : false;
+    if (!strategyExists) {
+      return res.status(503).json({
+        message: "Replit OIDC callback is not configured on this deployment.",
+      });
+    }
+    passport.authenticate(strategyName, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);
   });
 
   app.get("/api/logout", (req, res) => {
+    if (!oidcConfig) {
+      return req.logout(() => {
+        res.redirect("/");
+      });
+    }
     req.logout(() => {
       res.redirect(
-        client.buildEndSessionUrl(config, {
+        client.buildEndSessionUrl(oidcConfig!, {
           client_id: process.env.REPL_ID!,
           post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
         }).href

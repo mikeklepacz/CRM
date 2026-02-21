@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import { eventGateway } from './services/events/gateway';
+import { buildAppUrl, getWebSocketOriginHost } from './runtimeConfig';
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -32,8 +33,7 @@ const FLY_VOICE_PROXY_URL = process.env.FLY_VOICE_PROXY_URL || 'wss://hemp-voice
 
 // Internal Replit proxy URL - use this to bypass Fly.io for testing audio quality
 const USE_INTERNAL_PROXY = process.env.USE_INTERNAL_PROXY === 'true';
-const REPLIT_DOMAIN = process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
-const INTERNAL_PROXY_URL = `wss://${REPLIT_DOMAIN}/media-stream`;
+const INTERNAL_PROXY_URL = `wss://${getWebSocketOriginHost()}/media-stream`;
 
 // Direct ElevenLabs WebSocket URL (bypass proxy for testing)
 const ELEVENLABS_DIRECT_WS_BASE = 'wss://api.elevenlabs.io/v1/convai/conversation';
@@ -170,9 +170,9 @@ export async function initiateOutboundCall(params: InitiateCallParams): Promise<
     throw new Error('Twilio client not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN environment variables.');
   }
   
-  const statusCallbackUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}/api/twilio/call-status`;
+  const statusCallbackUrl = buildAppUrl('/api/twilio/call-status');
   console.log('[Twilio][DEBUG] Status callback URL:', statusCallbackUrl);
-  console.log('[Twilio][DEBUG] REPLIT_DOMAINS:', process.env.REPLIT_DOMAINS);
+  console.log('[Twilio][DEBUG] APP_URL:', process.env.APP_URL || 'not set (auto-inferred)');
   
   try {
     console.log('[Twilio][DEBUG] Calling Twilio API...');
