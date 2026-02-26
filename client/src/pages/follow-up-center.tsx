@@ -28,6 +28,7 @@ interface FollowUpData {
 }
 
 export default function FollowUpCenter() {
+  const StoreDetailsDialogCompat = StoreDetailsDialog as any;
   const voip = useTwilioVoip();
   // Follow-up center filters
   const [claimedDays, setClaimedDays] = useState([7, 90]);
@@ -428,7 +429,7 @@ export default function FollowUpCenter() {
 
       {/* Store Details Dialog */}
       {selectedStore && (
-        <StoreDetailsDialog
+        <StoreDetailsDialogCompat
           open={storeDialogOpen}
           onOpenChange={setStoreDialogOpen}
           row={selectedStore.data}

@@ -127,7 +127,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
   const handleResetColors = () => {
     resetColors();
     const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
-    setCustomColors(defaultColors);
+    setCustomColors(defaultColors as any);
   };
 
   // Reset individual field to default

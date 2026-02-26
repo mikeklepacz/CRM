@@ -664,8 +664,8 @@ export default function MapSearch() {
         setCheckingDuplicates(true);
         try {
           const websites = results
-            .map(r => r.website)
-            .filter((w): w is string => !!w);
+            .map((r: any) => r.website)
+            .filter((w: string | undefined): w is string => !!w);
           
           if (websites.length > 0) {
             const dupResponse = await apiRequest("POST", "/api/maps/check-duplicates", { websites });

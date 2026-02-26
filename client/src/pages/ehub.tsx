@@ -1279,7 +1279,7 @@ function QueueView() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {statusFilter === 'paused' ? (
+                            {(statusFilter as any) === 'paused' ? (
                               <DropdownMenuItem
                                 onClick={() => resumeMutation.mutate(item.recipientId)}
                                 disabled={resumeMutation.isPending}
@@ -1434,7 +1434,7 @@ function QueueView() {
                   setDelayDialog({ ...delayDialog, hours: parsed });
                 }}
                 onBlur={() => {
-                  if (delayDialog.hours === '' || delayDialog.hours === '.' || delayDialog.hours === null as any) {
+                  if ((delayDialog.hours as any) === '' || (delayDialog.hours as any) === '.' || delayDialog.hours === null as any) {
                     setDelayDialog({ ...delayDialog, hours: 1 });
                   } else {
                     const val = typeof delayDialog.hours === 'string' ? parseFloat(delayDialog.hours) : delayDialog.hours;
@@ -3569,7 +3569,7 @@ export default function EHub() {
                                   }}
                                   onBlur={() => {
                                     const newDelays = [...stepDelays];
-                                    if (delay === '' || delay === '.' || delay === null as any) {
+                                    if ((delay as any) === '' || (delay as any) === '.' || delay === null as any) {
                                       newDelays[index] = 0;
                                       setStepDelays(newDelays);
                                     } else {
@@ -4112,7 +4112,7 @@ export default function EHub() {
                       }}
                       onBlur={() => {
                         const duration = settingsForm.sendingHoursDuration || 5;
-                        if (settingsForm.sendingHoursStart === '' || settingsForm.sendingHoursStart === null as any) {
+                        if ((settingsForm.sendingHoursStart as any) === '' || settingsForm.sendingHoursStart === null as any) {
                           const optimal = calculateOptimalDelays(9, duration, settingsForm.dailyEmailLimit, settingsForm.jitterPercentage);
                           setSettingsForm({ ...settingsForm, sendingHoursStart: 9, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
                         } else if (settingsForm.sendingHoursStart < 0) {
@@ -4212,7 +4212,7 @@ export default function EHub() {
                       }}
                       onBlur={() => {
                         const duration = settingsForm.sendingHoursDuration || 5;
-                        if (settingsForm.dailyEmailLimit === '' || settingsForm.dailyEmailLimit === null as any) {
+                        if ((settingsForm.dailyEmailLimit as any) === '' || settingsForm.dailyEmailLimit === null as any) {
                           const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, duration, 200, settingsForm.jitterPercentage);
                           setSettingsForm({ ...settingsForm, dailyEmailLimit: 200, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
                         } else if (settingsForm.dailyEmailLimit < 1) {
@@ -4244,8 +4244,8 @@ export default function EHub() {
                     <div className="text-right">
                       <p className="text-2xl font-bold">
                         {(() => {
-                          const companyWindowHours = settingsForm.sendingHoursDuration || 
-                            ((settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart + 24) % 24) || 1;
+                          const companyWindowHours = settingsForm.sendingHoursDuration ||
+                            (((settingsForm.sendingHoursEnd ?? settingsForm.sendingHoursStart) - settingsForm.sendingHoursStart + 24) % 24) || 1;
                           const companyWindowMinutes = companyWindowHours * 60;
                           const averageSpacing = settingsForm.dailyEmailLimit > 0 
                             ? companyWindowMinutes / settingsForm.dailyEmailLimit 
@@ -4255,7 +4255,7 @@ export default function EHub() {
                         <span className="text-sm font-normal text-muted-foreground ml-1">min</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {settingsForm.sendingHoursDuration || ((settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart + 24) % 24) || 1}hr window ÷ {settingsForm.dailyEmailLimit} emails
+                        {settingsForm.sendingHoursDuration || (((settingsForm.sendingHoursEnd ?? settingsForm.sendingHoursStart) - settingsForm.sendingHoursStart + 24) % 24) || 1}hr window ÷ {settingsForm.dailyEmailLimit} emails
                       </p>
                     </div>
                   </div>
@@ -4280,7 +4280,7 @@ export default function EHub() {
                             const newJitter = parseInt(val, 10);
                             if (isNaN(newJitter)) return;
                             
-                            const duration = settingsForm.sendingHoursDuration || ((settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart + 24) % 24) || 1;
+                            const duration = settingsForm.sendingHoursDuration || (((settingsForm.sendingHoursEnd ?? settingsForm.sendingHoursStart) - settingsForm.sendingHoursStart + 24) % 24) || 1;
                             const optimal = calculateOptimalDelays(
                               settingsForm.sendingHoursStart,
                               duration,
@@ -4295,8 +4295,8 @@ export default function EHub() {
                             });
                           }}
                           onBlur={() => {
-                            const duration = settingsForm.sendingHoursDuration || ((settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart + 24) % 24) || 1;
-                            if (settingsForm.jitterPercentage === '' || settingsForm.jitterPercentage === null as any) {
+                            const duration = settingsForm.sendingHoursDuration || (((settingsForm.sendingHoursEnd ?? settingsForm.sendingHoursStart) - settingsForm.sendingHoursStart + 24) % 24) || 1;
+                            if ((settingsForm.jitterPercentage as any) === '' || settingsForm.jitterPercentage === null as any) {
                               const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, duration, settingsForm.dailyEmailLimit, 50);
                               setSettingsForm({ ...settingsForm, jitterPercentage: 50, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
                             } else if (settingsForm.jitterPercentage < 1) {
@@ -4357,7 +4357,7 @@ export default function EHub() {
                           });
                         }}
                         onBlur={() => {
-                          if (settingsForm.clientWindowStartOffset === '' || settingsForm.clientWindowStartOffset === '.' || settingsForm.clientWindowStartOffset === null as any) {
+                          if ((settingsForm.clientWindowStartOffset as any) === '' || (settingsForm.clientWindowStartOffset as any) === '.' || settingsForm.clientWindowStartOffset === null as any) {
                             setSettingsForm({ ...settingsForm, clientWindowStartOffset: 1.0 });
                           } else {
                             const val = typeof settingsForm.clientWindowStartOffset === 'string' 
@@ -4399,7 +4399,7 @@ export default function EHub() {
                           });
                         }}
                         onBlur={() => {
-                          if (settingsForm.clientWindowEndHour === '' || settingsForm.clientWindowEndHour === null as any) {
+                          if ((settingsForm.clientWindowEndHour as any) === '' || settingsForm.clientWindowEndHour === null as any) {
                             setSettingsForm({ ...settingsForm, clientWindowEndHour: 14 });
                           } else if (settingsForm.clientWindowEndHour < 0) {
                             setSettingsForm({ ...settingsForm, clientWindowEndHour: 0 });

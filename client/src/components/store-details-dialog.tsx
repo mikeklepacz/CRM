@@ -238,7 +238,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
   // Child locations management
   const currentStoreLink = getLinkValue(row);
-  const { data: childLocations, refetch: refetchChildren } = useQuery({
+  const { data: childLocations, refetch: refetchChildren } = useQuery<any>({
     queryKey: ['/api/dba/children', currentStoreLink],
     enabled: !!currentStoreLink && open,
   });
@@ -1782,7 +1782,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           pointOfContact: formData.point_of_contact || '',
                                           pocEmail: formData.poc_email || '',
                                           pocPhone: formData.poc_phone || '',
-                                          storeName: formData.name || store?.Name || '',
+                                          storeName: formData.name || (row as any)?.Name || '',
                                         };
 
                                         if (parentCreationType === 'new') {

@@ -36,7 +36,7 @@ export function registerDbaRoutes(
 
       // Find Commission Tracker sheet
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const trackerSheet = sheets.find((s: any) => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
@@ -211,7 +211,7 @@ export function registerDbaRoutes(
       const corporateUuid = uuidv4();
       
       // Find Store Database sheet
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+      const storeSheet = sheets.find((s: any) => s.sheetPurpose === 'Store Database');
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store Database sheet not found' });
       }
@@ -309,7 +309,7 @@ export function registerDbaRoutes(
       }
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const trackerSheet = sheets.find((s: any) => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
@@ -476,7 +476,7 @@ export function registerDbaRoutes(
       }
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const trackerSheet = sheets.find((s: any) => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
@@ -543,7 +543,7 @@ export function registerDbaRoutes(
       }
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const trackerSheet = sheets.find((s: any) => s.sheetPurpose === 'commissions');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
@@ -575,7 +575,7 @@ export function registerDbaRoutes(
         if (rowLink === normalizedHeadOfficeLink) {
           headOfficeRowIndex = i + 1;
           // Store head office data
-          trackerHeaders.forEach((header, idx) => {
+          trackerHeaders.forEach((header: any, idx: number) => {
             headOfficeData[header] = trackerRows[i][idx] || '';
           });
         }
@@ -665,8 +665,8 @@ export function registerDbaRoutes(
       const { parentLink } = req.params;
 
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-      const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+      const trackerSheet = sheets.find((s: any) => s.sheetPurpose === 'commissions');
+      const storeDbSheet = sheets.find((s: any) => s.sheetPurpose === 'Store Database');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
@@ -711,7 +711,7 @@ export function registerDbaRoutes(
         
         if (normalizeLink(rowParentLink) === normalizedParentLink) {
           const childData: any = {};
-          trackerHeaders.forEach((header, idx) => {
+          trackerHeaders.forEach((header: any, idx: number) => {
             childData[header] = trackerRows[i][idx] || '';
           });
           

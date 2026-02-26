@@ -124,7 +124,7 @@ Return ONLY the JSON object - no markdown code fences, no explanations.`;
     }
 
     // Update the call session with AI analysis
-    await storage.updateCallSessionByConversationId(conversationId, {
+    await storage.updateCallSessionByConversationId(conversationId, tenantId, {
       aiAnalysis: analysis,
     });
 

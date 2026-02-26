@@ -1,14 +1,5 @@
 import { useLocation } from 'wouter';
 
-export function usePageContext() {
-  const [location, setLocation] = useLocation();
-  
-  return {
-    location,
-    navigate: setLocation,
-  };
-}
-
 interface PageContextData {
   storeName?: string;
   pocName?: string;

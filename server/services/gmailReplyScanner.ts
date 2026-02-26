@@ -356,7 +356,7 @@ export class GmailReplyScanner {
   /**
    * Ensure Manual Follow-Ups system sequence exists
    */
-  private async ensureSystemSequence(adminUserId: string): Promise<typeof sequences.$inferSelect | null> {
+  private async ensureSystemSequence(adminUserId: string, tenantId: string): Promise<typeof sequences.$inferSelect | null> {
     try {
       const [existingSequence] = await db
         .select()
@@ -369,9 +369,10 @@ export class GmailReplyScanner {
       }
 
       // Create the system sequence
-      const [newSequence] = await db
-        .insert(sequences)
+      const [newSequence] = await (db
+        .insert(sequences as any) as any)
         .values({
+          tenantId,
           createdBy: adminUserId,
           name: 'Manual Follow-Ups',
           description: 'Protected system sequence for contacts created via Gmail drafts',
@@ -437,7 +438,7 @@ export class GmailReplyScanner {
         const [systemIntegration] = await db
           .select()
           .from(systemIntegrations)
-          .where(eq(systemIntegrations.serviceName, 'google_sheets'))
+          .where(eq(systemIntegrations.provider, 'google_sheets'))
           .limit(1);
 
         if (systemIntegration?.googleClientId && systemIntegration?.googleClientSecret) {
@@ -461,8 +462,8 @@ export class GmailReplyScanner {
       }
 
       // Fetch POC Emails from Commission Tracker
-      // Use provided tenantId or fall back to admin user's tenant
-      const effectiveTenantId = tenantId || adminUser.tenantId;
+      // Use provided tenantId or fall back to admin tenant lookup
+      const effectiveTenantId = tenantId || await storage.getAdminTenantId();
       if (!effectiveTenantId) {
         console.error('[ReplyScanner] No tenantId available');
         return result;
@@ -515,7 +516,7 @@ export class GmailReplyScanner {
 
 
       // Ensure system sequence exists
-      const systemSequence = await this.ensureSystemSequence(adminUser.id);
+      const systemSequence = await this.ensureSystemSequence(adminUser.id, effectiveTenantId);
       if (!systemSequence) {
         console.error('[ReplyScanner] Failed to create/find system sequence');
         return result;
@@ -637,6 +638,7 @@ export class GmailReplyScanner {
                 const [newRecipient] = await db
                   .insert(sequenceRecipients)
                   .values({
+                    tenantId: effectiveTenantId,
                     sequenceId: systemSequence.id,
                     name: message.to,
                     email: message.to,
@@ -652,6 +654,7 @@ export class GmailReplyScanner {
                 await db
                   .insert(sequenceRecipientMessages)
                   .values({
+                    tenantId: effectiveTenantId,
                     recipientId: newRecipient.id,
                     stepNumber: 1,
                     messageId: message.id,

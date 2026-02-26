@@ -6,7 +6,6 @@ import { callDispatcher } from "./call_dispatcher";
 import { voiceProxyServer } from "./voice-proxy.js";
 import { startJobProcessor } from "./analysis-job-processor";
 import { eventGateway } from "./services/events/gateway";
-import { renewCalendarWatchOnStartup } from "./calendarSync";
 import { startEmailQueueProcessor } from "./services/emailQueue";
 import { startSlotMaintenance } from "./services/slotMaintenance";
 import { gmailWatchManager } from "./services/gmailWatchManager";
@@ -124,8 +123,12 @@ app.use((req, res, next) => {
     }
 
     // Start ElevenLabs call reconciliation worker (matches orphaned sessions to conversations)
-    startReconciliationWorker(10 * 60 * 1000); // Every 10 minutes
-    log('[Reconciliation] ElevenLabs reconciliation worker started (runs every 10 min)');
+    if (process.env.DISABLE_RECONCILIATION_WORKER !== "1") {
+      startReconciliationWorker(10 * 60 * 1000); // Every 10 minutes
+      log('[Reconciliation] ElevenLabs reconciliation worker started (runs every 10 min)');
+    } else {
+      log('[Reconciliation] Worker disabled via DISABLE_RECONCILIATION_WORKER=1');
+    }
 
     // Start Gmail Push Notification watch (for E-Hub reply detection)
     setTimeout(async () => {

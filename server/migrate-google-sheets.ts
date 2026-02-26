@@ -27,11 +27,11 @@ async function migrateGoogleSheetsToSystemIntegration() {
           userRole: user.role,
           googleClientId: integration?.googleClientId,
           googleClientSecret: integration?.googleClientSecret,
-          googleAccessToken: integration?.googleAccessToken,
-          googleRefreshToken: integration?.googleRefreshToken,
-          googleTokenExpiry: integration?.googleTokenExpiry,
-          googleEmail: integration?.googleEmail,
-          googleConnectedAt: integration?.googleConnectedAt,
+          googleAccessToken: integration?.googleCalendarAccessToken,
+          googleRefreshToken: integration?.googleCalendarRefreshToken,
+          googleTokenExpiry: integration?.googleCalendarTokenExpiry,
+          googleEmail: integration?.googleCalendarEmail,
+          googleConnectedAt: integration?.googleCalendarConnectedAt,
         };
       })
     );
@@ -71,8 +71,7 @@ async function migrateGoogleSheetsToSystemIntegration() {
       googleRefreshToken: primaryAdmin.googleRefreshToken || '',
       googleTokenExpiry: primaryAdmin.googleTokenExpiry || 0,
       googleEmail: primaryAdmin.googleEmail || '',
-      connectedByUserId: primaryAdmin.userId,
-      connectedByEmail: primaryAdmin.userEmail || '',
+      connectedBy: primaryAdmin.userId,
     });
 
     console.log('✅ Successfully migrated Google Sheets credentials to system-wide integration!\n');

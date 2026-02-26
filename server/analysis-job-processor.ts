@@ -59,7 +59,7 @@ async function processJob(jobId: string) {
     }
 
     // Get OpenAI API key
-    const openaiSettings = await storage.getOpenAISettings();
+    const openaiSettings = await storage.getOpenaiSettings(job.tenantId);
     if (!openaiSettings?.apiKey) {
       throw new Error('OpenAI API key not configured');
     }
@@ -68,7 +68,7 @@ async function processJob(jobId: string) {
 
     // Get KB files for this agent
     const isAllAgents = job.agentId === 'all' || !job.agentId;
-    const allKbFiles = await storage.getAllKbFiles();
+    const allKbFiles = await storage.getAllKbFiles(job.tenantId);
     const kbFiles = isAllAgents
       ? allKbFiles.filter(file => file.agentId == null)
       : allKbFiles.filter(file => file.agentId === job.agentId || file.agentId == null);
@@ -79,7 +79,7 @@ async function processJob(jobId: string) {
 
     // Get calls to analyze
     const callsData = await storage.getCallsWithTranscripts({
-      agentId: isAllAgents ? undefined : job.agentId,
+      agentId: isAllAgents ? undefined : (job.agentId || undefined),
       onlyUnanalyzed: true,
       limit: job.totalCalls,
     });
@@ -248,7 +248,7 @@ ${recommendations || '(none)'}`;
         }
 
         // Get latest version for optimistic locking
-        const versions = await storage.getKbFileVersions(kbFile.id);
+        const versions = await storage.getKbFileVersions(kbFile.id, job.tenantId);
         const latestVersion = versions.sort((a, b) => 
           new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
         )[0];
@@ -286,6 +286,7 @@ ${recommendations || '(none)'}`;
 
         // Create proposal
         await storage.createKbProposal({
+          tenantId: job.tenantId,
           kbFileId: kbFile.id,
           baseVersionId: latestVersion.id,
           proposedContent,
@@ -299,7 +300,7 @@ ${recommendations || '(none)'}`;
 
       // Mark calls as analyzed
       for (const call of batchCalls) {
-        await storage.updateCallSession(call.session.id, {
+        await storage.updateCallSession(call.session.id, call.session.tenantId, {
           lastAnalyzedAt: new Date(),
         });
       }

@@ -335,21 +335,21 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                           <div className="flex items-center gap-1.5 text-muted-foreground">
                             <Phone className="h-3 w-3 shrink-0" />
                             <VoipCallButton
-                              phoneNumber={reminder.storeMetadata.pocPhone}
-                              storeName={reminder.storeName || undefined}
-                              storeLink={reminder.storeMetadata.uniqueIdentifier || undefined}
+                              phoneNumber={reminder.storeMetadata?.pocPhone}
+                              storeName={reminder.storeMetadata?.storeName || undefined}
+                              storeLink={reminder.storeMetadata?.uniqueIdentifier || undefined}
                               className="hover:text-primary hover:underline cursor-pointer"
                               data-testid={`link-phone-${reminder.id}`}
                               skipCall={!!onPhoneClick}
                               onClick={() => {
-                                console.log('[RemindersWidget] Phone clicked:', reminder.storeMetadata.pocPhone);
-                                if (onPhoneClick && reminder.storeMetadata.uniqueIdentifier) {
+                                console.log('[RemindersWidget] Phone clicked:', reminder.storeMetadata?.pocPhone);
+                                if (onPhoneClick && reminder.storeMetadata?.uniqueIdentifier) {
                                   console.log('[RemindersWidget] Calling onPhoneClick with store:', reminder.storeMetadata.uniqueIdentifier);
-                                  onPhoneClick(reminder.storeMetadata.uniqueIdentifier, reminder.storeMetadata.pocPhone);
+                                  onPhoneClick(reminder.storeMetadata.uniqueIdentifier, reminder.storeMetadata?.pocPhone);
                                 }
                               }}
                             >
-                              {reminder.storeMetadata.pocPhone}
+                              {reminder.storeMetadata?.pocPhone}
                             </VoipCallButton>
                           </div>
                         )}

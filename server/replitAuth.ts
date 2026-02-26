@@ -196,7 +196,7 @@ export async function setupAuth(app: Express) {
         message: "Replit OIDC login is not configured. Use username/password login.",
       });
     }
-    passport.authenticate(strategyName, {
+    passport.authenticate(strategyName as string, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
@@ -212,7 +212,7 @@ export async function setupAuth(app: Express) {
         message: "Replit OIDC callback is not configured on this deployment.",
       });
     }
-    passport.authenticate(strategyName, {
+    passport.authenticate(strategyName as string, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);

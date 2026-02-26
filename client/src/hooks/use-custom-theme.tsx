@@ -290,7 +290,7 @@ export function useCustomTheme() {
   // Then use those stable strings as dependencies for the merged objects
   const lightColors = useMemo(
     () => {
-      const userLightColors = userPreferences?.lightModeColors || {};
+      const userLightColors: Partial<ThemeColors> = userPreferences?.lightModeColors || {};
       const migratedUserStatusColors = migrateStatusColors(userLightColors.statusColors);
       
       return {
@@ -308,7 +308,7 @@ export function useCustomTheme() {
 
   const darkColors = useMemo(
     () => {
-      const userDarkColors = userPreferences?.darkModeColors || {};
+      const userDarkColors: Partial<ThemeColors> = userPreferences?.darkModeColors || {};
       const migratedUserStatusColors = migrateStatusColors(userDarkColors.statusColors);
       
       return {

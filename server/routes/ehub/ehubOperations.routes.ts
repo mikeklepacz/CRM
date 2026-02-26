@@ -20,13 +20,13 @@ export function registerEhubOperationsRoutes(
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
-      const oldSettings = await storage.getEhubSettings(req.user.tenantId);
+      const oldSettings: any = await storage.getEhubSettings(req.user.tenantId);
       const updates = updateEhubSettingsSchema.parse({
         ...req.body,
         updatedBy: userId,
       });
 
-      const newSettings = await storage.updateEhubSettings(req.user.tenantId, updates);
+      const newSettings: any = await storage.updateEhubSettings(req.user.tenantId, updates);
 
       const schedulingSettingsChanged = oldSettings && (
         oldSettings.sendingHoursStart !== newSettings.sendingHoursStart ||
@@ -94,7 +94,7 @@ export function registerEhubOperationsRoutes(
 
       console.log('[SENT-HISTORY] Fetching with params:', { sequenceId, statusFilter, limit, offset });
 
-      let query = db
+      let query: any = db
         .select({
           messageId: sequenceRecipientMessages.id,
           recipientId: sequenceRecipients.id,
@@ -173,7 +173,7 @@ export function registerEhubOperationsRoutes(
         };
       });
 
-      let countQuery = db
+      let countQuery: any = db
         .select({ count: sql<number>`count(*)` })
         .from(sequenceRecipientMessages)
         .leftJoin(sequenceRecipients, eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id))
@@ -230,7 +230,7 @@ export function registerEhubOperationsRoutes(
           status: sequenceRecipients.status,
           currentStep: sequenceRecipients.currentStep,
           lastAttempt: sequenceRecipientMessages.sentAt,
-          failureDetails: sequenceRecipients.failureDetails,
+          failureDetails: (sequenceRecipients as any).failureDetails,
         })
         .from(sequenceRecipients)
         .innerJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))

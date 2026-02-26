@@ -671,15 +671,15 @@ export interface IStorage {
   }>>;
   updateRecipientStatus(id: string, updates: Partial<InsertSequenceRecipient>): Promise<SequenceRecipient>;
   findRecipientByEmail(sequenceId: string, email: string): Promise<SequenceRecipient | undefined>;
-  pauseRecipient(id: string): Promise<SequenceRecipient>;
-  resumeRecipient(id: string): Promise<SequenceRecipient>; // Added this method to resume paused recipients
-  getPausedRecipientsCount(): Promise<number>;
+  pauseRecipient(id: string, tenantId?: string): Promise<SequenceRecipient>;
+  resumeRecipient(id: string, tenantId?: string): Promise<SequenceRecipient>; // Added this method to resume paused recipients
+  getPausedRecipientsCount(tenantId?: string): Promise<number>;
   getQueueTail(options?: { excludeRecipientId?: string }): Promise<Date | null>;
   getDailyScheduledCount(options?: { date?: Date; excludeRecipientId?: string }): Promise<number>;
-  removeRecipient(id: string): Promise<SequenceRecipient>;
-  sendRecipientNow(id: string): Promise<SequenceRecipient>;
-  delayRecipient(id: string, hours: number): Promise<SequenceRecipient>;
-  skipRecipientStep(id: string): Promise<SequenceRecipient>;
+  removeRecipient(id: string, tenantId?: string): Promise<SequenceRecipient>;
+  sendRecipientNow(id: string, tenantId?: string): Promise<SequenceRecipient>;
+  delayRecipient(id: string, hours: number, tenantId?: string): Promise<SequenceRecipient>;
+  skipRecipientStep(id: string, tenantId?: string): Promise<SequenceRecipient>;
 
   // E-Hub Sequence Scheduled Sends operations
   insertScheduledSends(sends: InsertSequenceScheduledSend[]): Promise<SequenceScheduledSend[]>;
@@ -943,7 +943,7 @@ export class DatabaseStorage implements IStorage {
         ...data,
         slug,
         status: data.status || 'active',
-      })
+      } as any)
       .returning();
     return tenant;
   }
@@ -962,7 +962,7 @@ export class DatabaseStorage implements IStorage {
       .set({
         ...updates,
         updatedAt: new Date(),
-      })
+      } as any)
       .where(eq(tenants.id, tenantId))
       .returning();
     return tenant;
@@ -1253,7 +1253,7 @@ export class DatabaseStorage implements IStorage {
   async createPipeline(data: InsertPipeline): Promise<Pipeline> {
     const [pipeline] = await db
       .insert(pipelines)
-      .values(data)
+      .values(data as any)
       .returning();
     return pipeline;
   }
@@ -1261,7 +1261,7 @@ export class DatabaseStorage implements IStorage {
   async updatePipeline(pipelineId: string, tenantId: string, updates: Partial<InsertPipeline>): Promise<Pipeline> {
     const [updated] = await db
       .update(pipelines)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(pipelines.id, pipelineId), eq(pipelines.tenantId, tenantId)))
       .returning();
     return updated;
@@ -1293,7 +1293,7 @@ export class DatabaseStorage implements IStorage {
   async createPipelineStage(data: InsertPipelineStage): Promise<PipelineStage> {
     const [stage] = await db
       .insert(pipelineStages)
-      .values(data)
+      .values(data as any)
       .returning();
     return stage;
   }
@@ -1301,7 +1301,7 @@ export class DatabaseStorage implements IStorage {
   async updatePipelineStage(stageId: string, tenantId: string, updates: Partial<InsertPipelineStage>): Promise<PipelineStage> {
     const [updated] = await db
       .update(pipelineStages)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(pipelineStages.id, stageId), eq(pipelineStages.tenantId, tenantId)))
       .returning();
     return updated;
@@ -1375,7 +1375,7 @@ export class DatabaseStorage implements IStorage {
         ...data,
         slug,
         status: data.status || 'active',
-      })
+      } as any)
       .returning();
     return project;
   }
@@ -1383,7 +1383,7 @@ export class DatabaseStorage implements IStorage {
   async updateTenantProject(projectId: string, tenantId: string, updates: Partial<InsertTenantProject>): Promise<TenantProject> {
     const [project] = await db
       .update(tenantProjects)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(tenantProjects.id, projectId), eq(tenantProjects.tenantId, tenantId)))
       .returning();
     return project;
@@ -1470,7 +1470,7 @@ export class DatabaseStorage implements IStorage {
       .values({
         ...data,
         slug,
-      })
+      } as any)
       .returning();
     return blueprint;
   }
@@ -1478,7 +1478,7 @@ export class DatabaseStorage implements IStorage {
   async updateAssistantBlueprint(blueprintId: string, tenantId: string, updates: Partial<InsertAssistantBlueprint>): Promise<AssistantBlueprint> {
     const [blueprint] = await db
       .update(assistantBlueprints)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(assistantBlueprints.id, blueprintId), eq(assistantBlueprints.tenantId, tenantId)))
       .returning();
     return blueprint;
@@ -1757,7 +1757,7 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    let query = db.select().from(clients);
+    let query: any = db.select().from(clients);
     const conditions: any[] = [eq(clients.tenantId, tenantId)];
 
     // Filter by agent (for agents seeing only their clients or when showMyStoresOnly is enabled)
@@ -1999,7 +1999,7 @@ export class DatabaseStorage implements IStorage {
 
   // CSV Upload operations
   async createCsvUpload(upload: InsertCsvUpload): Promise<CsvUpload> {
-    const [newUpload] = await db.insert(csvUploads).values(upload).returning();
+    const [newUpload] = await db.insert(csvUploads).values(upload as any).returning();
     return newUpload;
   }
 
@@ -2077,7 +2077,7 @@ export class DatabaseStorage implements IStorage {
     const cards = await db
       .select()
       .from(dashboardCards)
-      .where(eq(dashboardCards.role, role));
+      .where(sql`${dashboardCards.visibleToRoles} @> ARRAY[${role}]::text[]`);
     return cards;
   }
 
@@ -2102,7 +2102,8 @@ export class DatabaseStorage implements IStorage {
       const agentOrders = await db
         .select()
         .from(orders)
-        .where(eq(orders.agentId, userId));
+        .leftJoin(clients, eq(orders.clientId, clients.id))
+        .where(eq(clients.assignedAgent, userId));
 
       return {
         myClients: agentClients.length,
@@ -2155,7 +2156,7 @@ export class DatabaseStorage implements IStorage {
   async createReminder(reminder: InsertReminder): Promise<Reminder> {
     const [newReminder] = await db
       .insert(reminders)
-      .values(reminder)
+      .values(reminder as any)
       .returning();
     return newReminder;
   }
@@ -2163,7 +2164,7 @@ export class DatabaseStorage implements IStorage {
   async updateReminder(id: string, tenantId: string, updates: Partial<InsertReminder>): Promise<Reminder> {
     const [updated] = await db
       .update(reminders)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(reminders.id, id), eq(reminders.tenantId, tenantId)))
       .returning();
     return updated;
@@ -2257,7 +2258,7 @@ export class DatabaseStorage implements IStorage {
       // Update existing layout
       const [updated] = await db
         .update(widgetLayouts)
-        .set({ ...layout, updatedAt: new Date() })
+        .set({ ...layout, updatedAt: new Date() } as any)
         .where(eq(widgetLayouts.id, existing.id))
         .returning();
       return updated;
@@ -2265,7 +2266,7 @@ export class DatabaseStorage implements IStorage {
       // Create new layout
       const [newLayout] = await db
         .insert(widgetLayouts)
-        .values(layout)
+        .values(layout as any)
         .returning();
       return newLayout;
     }
@@ -2376,7 +2377,7 @@ export class DatabaseStorage implements IStorage {
   async saveChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
     const [newMessage] = await db
       .insert(chatMessages)
-      .values(message)
+      .values(message as any)
       .returning();
     return newMessage;
   }
@@ -2447,7 +2448,7 @@ export class DatabaseStorage implements IStorage {
   async createConversation(conversation: InsertConversation): Promise<Conversation> {
     const [newConversation] = await db
       .insert(conversations)
-      .values(conversation)
+      .values(conversation as any)
       .returning();
     return newConversation;
   }
@@ -2455,7 +2456,7 @@ export class DatabaseStorage implements IStorage {
   async updateConversation(id: string, tenantId: string, updates: Partial<InsertConversation>): Promise<Conversation> {
     const [updated] = await db
       .update(conversations)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(conversations.id, id), eq(conversations.tenantId, tenantId)))
       .returning();
     return updated;
@@ -3394,7 +3395,7 @@ export class DatabaseStorage implements IStorage {
 
   // Voice AI Call Sessions operations
   async createCallSession(session: InsertCallSession): Promise<CallSession> {
-    const [newSession] = await db.insert(callSessions).values(session).returning();
+    const [newSession] = await db.insert(callSessions).values(session as any).returning();
     return newSession;
   }
 
@@ -3452,7 +3453,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateCallSession(id: string, tenantId: string, updates: Partial<InsertCallSession>): Promise<CallSession> {
     const [updated] = await db.update(callSessions)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(callSessions.id, id), eq(callSessions.tenantId, tenantId)))
       .returning();
     return updated;
@@ -3460,7 +3461,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateCallSessionByConversationId(conversationId: string, tenantId: string, updates: Partial<InsertCallSession>): Promise<CallSession> {
     const [updated] = await db.update(callSessions)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(callSessions.conversationId, conversationId), eq(callSessions.tenantId, tenantId)))
       .returning();
     return updated;
@@ -3534,7 +3535,7 @@ export class DatabaseStorage implements IStorage {
     const results = await Promise.all(
       sessions.map(async (session) => {
         const transcripts = await this.getCallTranscripts(session.conversationId!);
-        const client = await this.getClient(session.clientId);
+        const client = await this.getClient(session.clientId as string, session.tenantId);
 
         return {
           session,
@@ -3908,7 +3909,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteKbProposal(id: string, tenantId: string): Promise<boolean> {
     const result = await db.delete(kbChangeProposals).where(and(eq(kbChangeProposals.id, id), eq(kbChangeProposals.tenantId, tenantId))).returning();
-    return (result.rowCount ?? 0) > 0;
+    return result.length > 0;
   }
 
   async deleteAllKbProposals(tenantId: string): Promise<number> {
@@ -4042,7 +4043,7 @@ export class DatabaseStorage implements IStorage {
         link2: second,
         markedByUserId: userId,
         tenantId,
-      })
+      } as any)
       .onConflictDoNothing()
       .returning();
 
@@ -4217,7 +4218,7 @@ export class DatabaseStorage implements IStorage {
       clientWindowStartOffset: typeof settings.clientWindowStartOffset === 'string'
         ? parseFloat(settings.clientWindowStartOffset)
         : settings.clientWindowStartOffset,
-    };
+    } as any;
   }
 
   async getEhubSettings(tenantId: string): Promise<EhubSettings | undefined> {
@@ -4256,7 +4257,7 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       const [updated] = await db
         .update(ehubSettings)
-        .set({ ...updates, updatedAt: new Date() })
+        .set({ ...updates, updatedAt: new Date() } as any)
         .where(and(eq(ehubSettings.id, existing.id), eq(ehubSettings.tenantId, tenantId)))
         .returning();
       return this.normalizeEhubSettings(updated);
@@ -4275,7 +4276,7 @@ export class DatabaseStorage implements IStorage {
           clientWindowEndHour: 14,
           excludedDays: [],
           ...updates,
-        })
+        } as any)
         .returning();
       return this.normalizeEhubSettings(created);
     }
@@ -4285,7 +4286,7 @@ export class DatabaseStorage implements IStorage {
   async createSequence(sequence: InsertSequence): Promise<Sequence> {
     const [created] = await db
       .insert(sequences)
-      .values(sequence)
+      .values(sequence as any)
       .returning();
     return created;
   }
@@ -4317,7 +4318,7 @@ export class DatabaseStorage implements IStorage {
   async updateSequence(id: string, tenantId: string, updates: Partial<InsertSequence>): Promise<Sequence | undefined> {
     const [updated] = await db
       .update(sequences)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(sequences.id, id), eq(sequences.tenantId, tenantId)))
       .returning();
     return updated;
@@ -4368,7 +4369,12 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(eq(users.role, 'admin'))
       .limit(1);
-    return adminUsers[0];
+    const admin = adminUsers[0];
+    if (!admin) return undefined;
+    return {
+      id: admin.id,
+      name: [admin.firstName, admin.lastName].filter(Boolean).join(' ') || admin.email || 'Admin',
+    };
   }
 
   async updateSequenceStats(id: string, tenantId: string, stats: { sentCount?: number; failedCount?: number; repliedCount?: number; lastSentAt?: Date }): Promise<Sequence> {
@@ -4469,7 +4475,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRecipients(sequenceId: string, filters?: { status?: string; limit?: number }): Promise<SequenceRecipient[]> {
-    let query = db
+    let query: any = db
       .select()
       .from(sequenceRecipients)
       .where(eq(sequenceRecipients.sequenceId, sequenceId));
@@ -4770,7 +4776,7 @@ export class DatabaseStorage implements IStorage {
     return individualSends.slice(0, 50);
   }
 
-  async getPausedRecipients(): Promise<Array<{
+  async getPausedRecipients(tenantId?: string): Promise<Array<{
     recipientId: string;
     recipientEmail: string;
     recipientName: string;
@@ -4803,7 +4809,14 @@ export class DatabaseStorage implements IStorage {
       })
       .from(sequenceRecipients)
       .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
-      .where(eq(sequenceRecipients.status, 'paused'));
+      .where(
+        tenantId
+          ? and(
+              eq(sequenceRecipients.status, 'paused'),
+              eq(sequenceRecipients.tenantId, tenantId)
+            )
+          : eq(sequenceRecipients.status, 'paused')
+      );
 
     // Build result with message history
     const result = [];
@@ -4872,24 +4885,46 @@ export class DatabaseStorage implements IStorage {
     return recipient;
   }
 
-  async pauseRecipient(id: string): Promise<SequenceRecipient> {
+  async pauseRecipient(id: string, tenantId?: string): Promise<SequenceRecipient> {
+    const [existing] = await db
+      .select({ id: sequenceRecipients.id })
+      .from(sequenceRecipients)
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new Error('Recipient not found');
+    }
+
     // Release any Matrix2 slots before pausing
     const { releaseAllRecipientSlots } = await import('./services/Matrix2/matrix2Helper');
     await releaseAllRecipientSlots(id);
 
     const [updated] = await db
       .update(sequenceRecipients)
-      .set({ 
+      .set({
         status: 'paused',
         nextSendAt: null,
         updatedAt: new Date()
       })
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .returning();
+
+    if (!updated) {
+      throw new Error('Recipient not found');
+    }
     return updated;
   }
 
-  async resumeRecipient(id: string): Promise<SequenceRecipient> {
+  async resumeRecipient(id: string, tenantId?: string): Promise<SequenceRecipient> {
     // Get recipient with sequence info for validation
     const [result] = await db
       .select({
@@ -4898,7 +4933,11 @@ export class DatabaseStorage implements IStorage {
       })
       .from(sequenceRecipients)
       .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .limit(1);
 
     if (!result || !result.sequence) {
@@ -4925,16 +4964,30 @@ export class DatabaseStorage implements IStorage {
         nextSendAt: null, // Matrix2 slotAssigner will assign slot
         updatedAt: new Date()
       })
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .returning();
+    if (!updated) {
+      throw new Error(`Recipient ${id} not found`);
+    }
     return updated;
   }
 
-  async getPausedRecipientsCount(): Promise<number> {
+  async getPausedRecipientsCount(tenantId?: string): Promise<number> {
     const result = await db
       .select({ count: sql<number>`count(*)` })
       .from(sequenceRecipients)
-      .where(eq(sequenceRecipients.status, 'paused'));
+      .where(
+        tenantId
+          ? and(
+              eq(sequenceRecipients.status, 'paused'),
+              eq(sequenceRecipients.tenantId, tenantId)
+            )
+          : eq(sequenceRecipients.status, 'paused')
+      );
 
     return Number(result[0]?.count || 0);
   }
@@ -4994,12 +5047,16 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async removeRecipient(id: string): Promise<SequenceRecipient> {
+  async removeRecipient(id: string, tenantId?: string): Promise<SequenceRecipient> {
     // Get the recipient first to know which sequence to update
     const [recipient] = await db
       .select()
       .from(sequenceRecipients)
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .limit(1);
 
     if (!recipient) {
@@ -5013,12 +5070,23 @@ export class DatabaseStorage implements IStorage {
     // Delete all messages for this recipient
     await db
       .delete(sequenceRecipientMessages)
-      .where(eq(sequenceRecipientMessages.recipientId, id));
+      .where(
+        tenantId
+          ? and(
+              eq(sequenceRecipientMessages.recipientId, id),
+              eq(sequenceRecipientMessages.tenantId, tenantId)
+            )
+          : eq(sequenceRecipientMessages.recipientId, id)
+      );
 
     // Delete the recipient itself (hard delete, not soft delete)
     await db
       .delete(sequenceRecipients)
-      .where(eq(sequenceRecipients.id, id));
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      );
     
     // Decrement totalRecipients counter
     await db
@@ -5032,12 +5100,16 @@ export class DatabaseStorage implements IStorage {
     return recipient;
   }
 
-  async sendRecipientNow(id: string): Promise<SequenceRecipient> {
+  async sendRecipientNow(id: string, tenantId?: string): Promise<SequenceRecipient> {
     // Get current recipient to validate
     const [recipient] = await db
       .select()
       .from(sequenceRecipients)
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .limit(1);
 
     if (!recipient) {
@@ -5070,13 +5142,17 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .select()
       .from(sequenceRecipients)
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .limit(1);
 
     return updated!;
   }
 
-  async delayRecipient(id: string, hours: number): Promise<SequenceRecipient> {
+  async delayRecipient(id: string, hours: number, tenantId?: string): Promise<SequenceRecipient> {
     // Validate hours input
     if (!Number.isFinite(hours) || hours <= 0 || hours > 720) {
       throw new Error('Hours must be a finite number between 0 and 720 (30 days)');
@@ -5086,7 +5162,11 @@ export class DatabaseStorage implements IStorage {
     const [recipient] = await db
       .select()
       .from(sequenceRecipients)
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .limit(1);
 
     if (!recipient) {
@@ -5117,13 +5197,17 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .select()
       .from(sequenceRecipients)
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .limit(1);
 
     return updated!;
   }
 
-  async skipRecipientStep(id: string): Promise<SequenceRecipient> {
+  async skipRecipientStep(id: string, tenantId?: string): Promise<SequenceRecipient> {
     // Get recipient with sequence info
     const [recipientData] = await db
       .select({
@@ -5133,7 +5217,11 @@ export class DatabaseStorage implements IStorage {
       })
       .from(sequenceRecipients)
       .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .limit(1);
 
     if (!recipientData) {
@@ -5165,7 +5253,11 @@ export class DatabaseStorage implements IStorage {
         status: recipientStatus,
         updatedAt: now
       })
-      .where(eq(sequenceRecipients.id, id))
+      .where(
+        tenantId
+          ? and(eq(sequenceRecipients.id, id), eq(sequenceRecipients.tenantId, tenantId))
+          : eq(sequenceRecipients.id, id)
+      )
       .returning();
 
     return updated;
@@ -5208,7 +5300,7 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(limit);
 
-    return results.map(row => row.sequenceScheduledSends);
+    return results.map(row => row.sequence_scheduled_sends);
   }
 
   async getUpcomingScheduledSends(limit: number): Promise<SequenceScheduledSend[]> {
@@ -5237,7 +5329,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(sequenceScheduledSends.scheduledAt))
       .limit(1);
 
-    return results.length > 0 ? results[0].sequenceScheduledSends : null;
+    return results.length > 0 ? results[0].sequence_scheduled_sends : null;
   }
 
   async clearScheduledAtForPendingSends(imminentThreshold: Date): Promise<number> {
@@ -5415,7 +5507,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sequenceScheduledSends.scheduledAt)
       .limit(limit);
 
-    const results = await db.execute(query);
+    const results = await query;
 
     // Transform to expected format with status calculation
     return results.map((row: any) => ({
@@ -5491,16 +5583,16 @@ export class DatabaseStorage implements IStorage {
       const newSteps = stepDelays.map((delayDays, index) => ({
         sequenceId,
         stepNumber: index + 1,
-        delayDays,
+        delayDays: delayDays.toString(),
         tenantId,
       }));
 
-      const created = await tx.insert(sequenceSteps).values(newSteps).returning();
+      const created = await tx.insert(sequenceSteps).values(newSteps as any).returning();
 
       // Update sequence with new stepDelays array
       await tx
         .update(sequences)
-        .set({ stepDelays, updatedAt: new Date() })
+        .set({ stepDelays: stepDelays.map((d) => d.toString()), updatedAt: new Date() } as any)
         .where(eq(sequences.id, sequenceId));
 
       return created;
@@ -6079,13 +6171,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQualificationCampaign(data: InsertQualificationCampaign): Promise<QualificationCampaign> {
-    const [created] = await db.insert(qualificationCampaigns).values(data).returning();
+    const [created] = await db.insert(qualificationCampaigns).values(data as any).returning();
     return created;
   }
 
   async updateQualificationCampaign(id: string, tenantId: string, updates: Partial<InsertQualificationCampaign>): Promise<QualificationCampaign> {
     const [updated] = await db.update(qualificationCampaigns)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(qualificationCampaigns.id, id), eq(qualificationCampaigns.tenantId, tenantId)))
       .returning();
     return updated;
@@ -6132,7 +6224,7 @@ export class DatabaseStorage implements IStorage {
             isNull(qualificationLeads.projectId),
             inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames)
           )
-        ));
+        ) as any);
       } else {
         // No categories for project - only match leads with direct projectId
         conditions.push(eq(qualificationLeads.projectId, filters.projectId));
@@ -6174,18 +6266,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQualificationLead(data: InsertQualificationLead): Promise<QualificationLead> {
-    const [created] = await db.insert(qualificationLeads).values(data).returning();
+    const [created] = await db.insert(qualificationLeads).values(data as any).returning();
     return created;
   }
 
   async createQualificationLeads(leads: InsertQualificationLead[]): Promise<QualificationLead[]> {
     if (leads.length === 0) return [];
-    return await db.insert(qualificationLeads).values(leads).returning();
+    return await db.insert(qualificationLeads).values(leads as any).returning();
   }
 
   async updateQualificationLead(id: string, tenantId: string, updates: Partial<InsertQualificationLead>): Promise<QualificationLead> {
     const [updated] = await db.update(qualificationLeads)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(and(eq(qualificationLeads.id, id), eq(qualificationLeads.tenantId, tenantId)))
       .returning();
     return updated;
@@ -6230,7 +6322,7 @@ export class DatabaseStorage implements IStorage {
             isNull(qualificationLeads.projectId),
             inArray(sql`LOWER(${qualificationLeads.category})`, categoryNames)
           )
-        ));
+        ) as any);
       } else {
         // No categories for project - only match leads with direct projectId
         conditions.push(eq(qualificationLeads.projectId, projectId));
@@ -6401,13 +6493,13 @@ export class DatabaseStorage implements IStorage {
   ): Promise<void> {
     // Always update the session
     await db.update(callSessions)
-      .set({ ...sessionUpdates, updatedAt: new Date() })
+      .set({ ...sessionUpdates, updatedAt: new Date() } as any)
       .where(and(eq(callSessions.id, sessionId), eq(callSessions.tenantId, tenantId)));
 
     // Only update lead if leadId is provided
     if (leadId) {
       await db.update(qualificationLeads)
-        .set({ ...leadUpdates, updatedAt: new Date() })
+        .set({ ...leadUpdates, updatedAt: new Date() } as any)
         .where(and(eq(qualificationLeads.id, leadId), eq(qualificationLeads.tenantId, tenantId)));
     }
   }

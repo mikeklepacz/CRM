@@ -229,7 +229,7 @@ function KBLibraryTab() {
     queryKey: ['/api/kb/proposals'],
   });
 
-  const proposals = proposalsData?.proposals || [];
+  const proposals = (proposalsData as any)?.proposals || [];
   const pendingProposals = proposals.filter((p: any) => p.status === 'pending');
 
   // Sync mutation
@@ -439,7 +439,7 @@ function KBLibraryTab() {
   // Toggle all proposals (only selects visible proposals in table)
   const toggleAllProposals = () => {
     const visibleProposalIds = proposals.map((p: any) => p.id);
-    const allVisibleSelected = visibleProposalIds.every(id => selectedProposalIds.includes(id));
+    const allVisibleSelected = visibleProposalIds.every((id: any) => selectedProposalIds.includes(id));
     
     if (allVisibleSelected) {
       // Deselect all visible proposals
@@ -483,7 +483,7 @@ function KBLibraryTab() {
     enabled: !!selectedFileId && isVersionDialogOpen,
   });
 
-  const versions = versionsData?.versions || [];
+  const versions = (versionsData as any)?.versions || [];
 
   // Find file for selected proposal
   const selectedFile = selectedProposal 
@@ -2369,8 +2369,8 @@ export default function CallManager() {
                                 <div key={agent} className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`agent-${agent}`}
-                                    checked={selectedAgentFilters.has(agent)}
-                                    onCheckedChange={() => handleToggleAgentFilter(agent)}
+                                    checked={selectedAgentFilters.has(agent as string)}
+                                    onCheckedChange={() => handleToggleAgentFilter(agent as string)}
                                     data-testid={`checkbox-agent-${agent}`}
                                   />
                                   <Label htmlFor={`agent-${agent}`} className="cursor-pointer">
@@ -3786,7 +3786,7 @@ export default function CallManager() {
                   // Transform analytics data into call history format
                   const transformedData: CallHistoryComplete[] = (analyticsData?.calls || []).map((call) => {
                     const clientData = call.client.data || {};
-                    const storeSnapshot = call.session.storeSnapshot || {};
+                    const storeSnapshot = (call.session as any).storeSnapshot || {};
                     
                     return {
                       id: call.session.id,

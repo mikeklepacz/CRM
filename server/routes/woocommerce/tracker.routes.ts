@@ -50,7 +50,7 @@ export function registerWooCommerceTrackerRoutes(
         const order = await storage.getOrderById(orderId, tenantId);
         if (!order) continue;
 
-        const client = await storage.getClient(order.clientId, tenantId);
+        const client = order.clientId ? await storage.getClient(order.clientId, tenantId) : null;
         if (!client) continue;
 
         const linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
@@ -81,7 +81,7 @@ export function registerWooCommerceTrackerRoutes(
           const existingAgent = row[columnMap['agent name']];
           return normalizeLink(existingLink) === normalizeLink(linkValue) &&
             existingAgent &&
-            existingAgent.toLowerCase().trim() !== order.salesAgentName.toLowerCase().trim();
+            existingAgent.toLowerCase().trim() !== (order.salesAgentName || "").toLowerCase().trim();
         });
 
         if (conflictingRow) {

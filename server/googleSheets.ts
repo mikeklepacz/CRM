@@ -11,7 +11,7 @@ let systemTokenCache: TokenCache | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 async function getSystemAccessToken() {
-  const integration = await storage.getSystemIntegration('google_sheets');
+  const integration = (await storage.getSystemIntegration('google_sheets')) as any;
   
   if (!integration?.googleAccessToken || !integration?.googleRefreshToken) {
     throw new Error('Google Sheets not configured. Admin must connect Google Sheets in Admin Dashboard.');
@@ -94,7 +94,7 @@ export async function isSystemGoogleSheetsConfigured(): Promise<boolean> {
 
 // Get system integration status (for admin UI)
 export async function getSystemGoogleSheetsStatus() {
-  const integration = await storage.getSystemIntegration('google_sheets');
+  const integration = (await storage.getSystemIntegration('google_sheets')) as any;
   
   if (!integration?.googleAccessToken) {
     return {
@@ -342,13 +342,13 @@ export async function syncCommissionTrackerToPostgres(trackerSheetId: string, te
 
       if (client) {
         // Update existing client
-        await storage.updateClient(client.id, {
+        await (storage as any).updateClient(client.id, {
           commissionTotal: data.totalCommission.toString(),
           lastSyncedAt: new Date(),
         });
       } else {
         // Create new client (this shouldn't happen often, but handle it)
-        await storage.createClient({
+        await (storage as any).createClient({
           data: { Link: link },
           uniqueIdentifier: link,
           googleSheetId: trackerSheetId,
@@ -372,7 +372,7 @@ export async function syncCommissionTrackerToPostgres(trackerSheetId: string, te
 // --- Legacy per-user functions (for Gmail/Calendar that remain per-user) ---
 
 async function getUserAccessToken(userId: string) {
-  const integration = await storage.getUserIntegration(userId);
+  const integration = (await storage.getUserIntegration(userId)) as any;
   
   if (!integration?.googleAccessToken || !integration?.googleRefreshToken) {
     throw new Error('Google OAuth not configured. Please connect Google in Settings.');
@@ -400,7 +400,7 @@ async function getUserAccessToken(userId: string) {
       const newExpiryTime = credentials.expiry_date || (Date.now() + 3600000);
       
       // Update tokens in database (both Gmail and Calendar fields)
-      await storage.updateUserIntegration(userId, {
+      await (storage as any).updateUserIntegration(userId, {
         googleAccessToken: credentials.access_token!,
         googleTokenExpiry: newExpiryTime,
         googleCalendarAccessToken: credentials.access_token!,

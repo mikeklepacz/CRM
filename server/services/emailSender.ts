@@ -191,8 +191,8 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
 
     return {
       success: true,
-      messageId: gmailMessageId,
-      threadId: gmailThreadId,
+      messageId: gmailMessageId ?? undefined,
+      threadId: gmailThreadId ?? undefined,
       rfc822MessageId,
     };
   } catch (error: any) {
@@ -310,8 +310,8 @@ async function sendEmailWithGmailClient(
 
     return {
       success: true,
-      messageId: gmailMessageId,
-      threadId: gmailThreadId,
+      messageId: gmailMessageId ?? undefined,
+      threadId: gmailThreadId ?? undefined,
       rfc822MessageId,
     };
   } catch (error: any) {
@@ -510,7 +510,7 @@ async function sendFailureNotification(params: FailureNotificationParams): Promi
     const notificationTitle = 'Email Send Failed';
     const notificationMessage = `Failed to send email to ${recipientEmail} from sequence "${sequenceName}". Reason: ${errorReason}`;
     
-    await storage.createNotification({
+    await (storage as any).createNotification({
       tenantId: adminTenantId || tenantId,
       userId: adminUser.id,
       notificationType: 'email_failure',
@@ -618,7 +618,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       {
         promptInjection: settings.promptInjection || undefined,
         keywordBin: settings.keywordBin || undefined,
-        signature: settings.signature || undefined,
+        signature: (settings as any).signature || undefined,
       },
       currentStep,
       sequence.finalizedStrategy,
@@ -636,13 +636,13 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       if (previousMessages.length > 0) {
         // Sort by step number to get the first email
         // Handle both camelCase (Drizzle) and snake_case (raw SQL) field names
-        previousMessages.sort((a, b) => {
+        previousMessages.sort((a: any, b: any) => {
           const aStep = a.stepNumber ?? a.step_number ?? 0;
           const bStep = b.stepNumber ?? b.step_number ?? 0;
           return aStep - bStep;
         });
-        const firstMessage = previousMessages[0];
-        const lastMessage = previousMessages[previousMessages.length - 1];
+        const firstMessage = previousMessages[0] as any;
+        const lastMessage = previousMessages[previousMessages.length - 1] as any;
         
         // Use the first email's threadId for Gmail threading
         // Handle both camelCase and snake_case field names
@@ -653,7 +653,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
         inReplyTo = lastMessage.messageId || lastMessage.message_id || undefined;
         
         // Build References chain from all previous emails
-        const rfc822Ids = previousMessages
+        const rfc822Ids = (previousMessages as any[])
           .map(m => m.messageId || m.message_id)
           .filter((id): id is string => !!id);
         if (rfc822Ids.length > 0) {

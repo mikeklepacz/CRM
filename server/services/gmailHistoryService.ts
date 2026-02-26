@@ -84,7 +84,7 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
         const senderEmail = (emailMatch[1] || fromValue).toLowerCase().trim();
 
         if (senderEmail === ourEmail.toLowerCase()) {
-          await db.insert(processedGmailMessages).values({
+          await (db.insert(processedGmailMessages as any) as any).values({
             gmailMessageId: messageId,
             userId: GMAIL_ADMIN_USER_ID,
             action: 'ignored_own_email',
@@ -102,13 +102,13 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
           result.repliesDetected++;
           result.recipientsUpdated.push(recipientMatch.id);
 
-          await db.insert(processedGmailMessages).values({
+          await (db.insert(processedGmailMessages as any) as any).values({
             gmailMessageId: messageId,
             userId: GMAIL_ADMIN_USER_ID,
             action: 'reply_detected',
           });
         } else {
-          await db.insert(processedGmailMessages).values({
+          await (db.insert(processedGmailMessages as any) as any).values({
             gmailMessageId: messageId,
             userId: GMAIL_ADMIN_USER_ID,
             action: 'no_recipient_match',

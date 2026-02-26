@@ -76,7 +76,7 @@ export async function assignSingleRecipient(recipientId: string) {
 
   // Get the specific recipient
   const recipients = await getEligibleRecipientsForAssignment();
-  const recipient = recipients.find(r => r.id === recipientId);
+  const recipient = recipients.find((r: any) => r.id === recipientId);
   
   if (!recipient) {
     return;
@@ -175,7 +175,7 @@ export async function assignRecipientsToSlots() {
   // Tier 1: Manual Follow-Ups at step 1+ (human handoffs getting AI follow-ups)
   // Tier 2: Active follow-ups at step 2+ (all other sequences)
   // Tier 3: Cold outreach at step 0 (first email in any sequence)
-  const sortedRecipients = recipients.sort((a, b) => {
+  const sortedRecipients = recipients.sort((a: any, b: any) => {
     const tierA = getPriorityTier(a);
     const tierB = getPriorityTier(b);
     

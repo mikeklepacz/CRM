@@ -30,12 +30,12 @@ export function OpenAIManagement() {
   const [selectedAgentId, setSelectedAgentId] = useState<string>("none");
 
   // Fetch OpenAI settings
-  const { data: settings, isLoading: settingsLoading } = useQuery({
+  const { data: settings, isLoading: settingsLoading } = useQuery<any>({
     queryKey: ['/api/openai/settings'],
   });
 
   // Fetch knowledge base files
-  const { data: files = [], isLoading: filesLoading } = useQuery({
+  const { data: files = [] as any[], isLoading: filesLoading } = useQuery<any>({
     queryKey: ['/api/openai/files'],
   });
 
@@ -46,17 +46,17 @@ export function OpenAIManagement() {
   const categories = categoriesData?.categories || [];
 
   // Fetch agents list for KB file assignment
-  const { data: agentsData } = useQuery({
+  const { data: agentsData } = useQuery<any>({
     queryKey: ['/api/elevenlabs/agents'],
   });
-  const agents = agentsData || [];
+  const agents = (agentsData as any[]) || [];
 
   useEffect(() => {
     if (settings) {
       if (!showApiKey) {
         setApiKey("");
       }
-      setAiInstructions(settings.aiInstructions || "");
+      setAiInstructions((settings as any).aiInstructions || "");
     }
   }, [settings, showApiKey]);
 

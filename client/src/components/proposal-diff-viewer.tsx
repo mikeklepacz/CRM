@@ -314,7 +314,7 @@ export function ProposalDiffViewer({
       // Check if this is a 422 error with detailed edit failures
       if (error.failedEdits && Array.isArray(error.failedEdits)) {
         // Extract failed edit numbers (1-indexed from backend, convert to 0-indexed)
-        const failedIndices = new Set(
+        const failedIndices = new Set<number>(
           error.failedEdits.map((f: any) => f.editNumber - 1)
         );
         

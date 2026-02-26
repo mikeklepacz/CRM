@@ -37,25 +37,25 @@ export function KBEditor({ className }: KBEditorProps) {
   const preserveFindOnSelectRef = useRef(false);
 
   // Fetch KB files
-  const { data: kbData, isLoading: kbLoading } = useQuery({
+  const { data: kbData, isLoading: kbLoading } = useQuery<any>({
     queryKey: ['/api/kb/files'],
   });
   const kbFiles = kbData?.files || [];
 
   // Fetch agents
-  const { data: agentsData, isLoading: agentsLoading } = useQuery({
+  const { data: agentsData, isLoading: agentsLoading } = useQuery<any>({
     queryKey: ['/api/elevenlabs/agents'],
   });
   const agents = agentsData?.agents || agentsData || [];
 
   // Fetch selected KB file content
-  const { data: fileData, isLoading: fileLoading } = useQuery({
+  const { data: fileData, isLoading: fileLoading } = useQuery<any>({
     queryKey: ['/api/kb/files', selectedItemId],
     enabled: editorMode === 'file' && !!selectedItemId,
   });
 
   // Fetch selected agent details
-  const { data: agentData, isLoading: agentLoading } = useQuery({
+  const { data: agentData, isLoading: agentLoading } = useQuery<any>({
     queryKey: ['/api/elevenlabs/agents', selectedItemId, 'details'],
     enabled: editorMode === 'agent' && !!selectedItemId,
   });

@@ -112,7 +112,7 @@ export function registerWooCommerceWebhookRoutes(app: Express): void {
 
         if (client.assignedAgent && commission > 0) {
           try {
-            const sheetsConfig = await storage.getSheetsConfig();
+            const sheetsConfig = await (storage as any).getSheetsConfig();
             if (sheetsConfig?.spreadsheetId && sheetsConfig?.commissionTrackerSheetName) {
               const existingData = await googleSheets.readSheetData(
                 sheetsConfig.spreadsheetId,
@@ -125,7 +125,7 @@ export function registerWooCommerceWebhookRoutes(app: Express): void {
               else if (order.status === 'refunded' || order.status === 'cancelled') orderStatus = '6 – Closed Lost';
 
               const rowData = [
-                client.link || '',
+                (client as any).link || '',
                 order.transaction_id || '',
                 format(orderDate, 'MM/dd/yyyy'),
                 client.assignedAgent,
@@ -136,9 +136,9 @@ export function registerWooCommerceWebhookRoutes(app: Express): void {
                 '',
                 '',
                 `WooCommerce order #${order.number || order.id} - $${orderTotal.toFixed(2)}`,
-                client.pocName || '',
-                client.pocEmail || email || '',
-                client.pocPhone || ''
+                (client as any).pocName || '',
+                (client as any).pocEmail || email || '',
+                (client as any).pocPhone || ''
               ];
 
               await googleSheets.writeSheetData(

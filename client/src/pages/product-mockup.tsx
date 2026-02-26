@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, Type, Check, ChevronsUpDown, Loader2, Save, X, Sun } from 'lucide-react';
 import ColorPicker, { useColorPicker } from '@/vendor/react-best-gradient-color-picker';
 import { useToast } from '@/hooks/use-toast';
+import { configureLabelCanvasTexture, configureLabelPreviewRenderer } from '@/lib/label-designer-render-color';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Red Bleed_1764176822191.png';
 
@@ -325,16 +326,7 @@ export default function ProductMockup() {
   const [isAltPressed, setIsAltPressed] = useState(false); // Track Alt/Option key for duplicate cursor
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null); // Track which resize handle is hovered
   // Resize state - all values captured at resize start and held constant during drag
-  const resizeStateRef = useRef<{
-    anchorWorld: { x: number; y: number };
-    rotation0: number; // radians
-    baseHx: number; // unscaled half-width
-    baseHy: number; // unscaled half-height  
-    cornerSignX: number; // +1 or -1 based on corner
-    cornerSignY: number;
-    halfDiag0: number; // sqrt(hx^2 + hy^2)
-    centerToAnchor: { x: number; y: number }; // vector from center to anchor
-  } | null>(null);
+  const resizeStateRef = useRef<any>(null);
   const [cylinderLoaded, setCylinderLoaded] = useState(false);
   
   // Use hardcoded defaults directly - these are "in stone"
@@ -637,7 +629,7 @@ export default function ProductMockup() {
     texCtx.rotate(-Math.PI / 2);
     texCtx.drawImage(flatCanvas, 0, 0);
 
-    const texture = new THREE.CanvasTexture(textureCanvas);
+    const texture = configureLabelCanvasTexture(new THREE.CanvasTexture(textureCanvas));
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     
@@ -675,6 +667,7 @@ export default function ProductMockup() {
       alpha: true,
       preserveDrawingBuffer: true,
     });
+    configureLabelPreviewRenderer(renderer);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
@@ -783,7 +776,7 @@ export default function ProductMockup() {
       }
     );
 
-    let animationId: number;
+    let animationId = 0;
     const animate = () => {
       animationId = requestAnimationFrame(animate);
       renderer.render(scene, camera);

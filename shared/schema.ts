@@ -14,6 +14,7 @@ import {
   bigint,
   date,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -43,7 +44,7 @@ export const users = pgTable("users", {
   phone: varchar("phone"), // Agent's phone number for templates
   twilioPhoneNumber: varchar("twilio_phone_number", { length: 50 }), // Assigned Twilio number for VoIP outbound calls (E.164 format)
   meetingLink: text("meeting_link"), // Agent's meeting/calendar link (e.g., Calendly, Google Meet)
-  referredBy: varchar("referred_by").references(() => users.id), // MLM: who referred this user
+  referredBy: varchar("referred_by").references((): AnyPgColumn => users.id), // MLM: who referred this user
   isActive: boolean("is_active").notNull().default(true), // Active/Inactive status for deactivating agents
   hasVoiceAccess: boolean("has_voice_access").notNull().default(false), // Access to Voice AI calling features (admins always have access)
   isSuperAdmin: boolean("is_super_admin").notNull().default(false), // Platform-wide super admin (can access all tenants)
@@ -1790,7 +1791,12 @@ export const insertVoiceProxySessionSchema = createInsertSchema(voiceProxySessio
 
 // Types
 export type UpsertUser = typeof users.$inferInsert;
-export type User = typeof users.$inferSelect;
+export type User = typeof users.$inferSelect & {
+  tenantId?: string | null;
+  roleInTenant?: 'org_admin' | 'agent' | string | null;
+  isPasswordAuth?: boolean;
+  claims?: { sub?: string };
+};
 // Extended user type that includes tenant context from session
 export type AuthUser = User & {
   tenantId?: string;
@@ -1808,9 +1814,21 @@ export type CsvUpload = typeof csvUploads.$inferSelect;
 export type InsertCsvUpload = z.infer<typeof insertCsvUploadSchema>;
 export type GoogleSheet = typeof googleSheets.$inferSelect;
 export type InsertGoogleSheet = z.infer<typeof insertGoogleSheetSchema>;
-export type SystemIntegration = typeof systemIntegrations.$inferSelect;
+export type SystemIntegration = typeof systemIntegrations.$inferSelect & {
+  connectedByUserId?: string | null;
+  connectedByEmail?: string | null;
+};
 export type InsertSystemIntegration = z.infer<typeof insertSystemIntegrationSchema>;
-export type UserIntegration = typeof userIntegrations.$inferSelect;
+export type UserIntegration = typeof userIntegrations.$inferSelect & {
+  googleAccessToken?: string | null;
+  googleRefreshToken?: string | null;
+  googleTokenExpiry?: number | null;
+  googleClientId?: string | null;
+  googleClientSecret?: string | null;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  expiresAt?: number | null;
+};
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
 export type DashboardCard = typeof dashboardCards.$inferSelect;
 export type InsertDashboardCard = z.infer<typeof insertDashboardCardSchema>;

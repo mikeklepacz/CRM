@@ -40,7 +40,7 @@ async function backfillContactDates() {
       }
       
       matchedCalls++;
-      const callDate = new Date(call.calledAt);
+      const callDate = new Date(call.calledAt as Date);
       const existingDate = clientCallsMap.get(client.id);
       
       // Keep only the most recent call date

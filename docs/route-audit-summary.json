@@ -1,0 +1,158 @@
+{
+  "generatedAt": "2026-02-26T16:10:21.282Z",
+  "sourceFilesCount": 147,
+  "totals": {
+    "routes": 471,
+    "domains": 62,
+    "apiRoutesMissingAuthGuard": 34
+  },
+  "domainSummary": [
+    {
+      "domain": "super-admin",
+      "total": 50,
+      "fileCount": 7
+    },
+    {
+      "domain": "org-admin",
+      "total": 34,
+      "fileCount": 4
+    },
+    {
+      "domain": "elevenlabs",
+      "total": 30,
+      "fileCount": 9
+    },
+    {
+      "domain": "ehub",
+      "total": 24,
+      "fileCount": 5
+    },
+    {
+      "domain": "apollo",
+      "total": 21,
+      "fileCount": 4
+    },
+    {
+      "domain": "sequences",
+      "total": 19,
+      "fileCount": 6
+    },
+    {
+      "domain": "sheets",
+      "total": 18,
+      "fileCount": 8
+    },
+    {
+      "domain": "kb",
+      "total": 14,
+      "fileCount": 6
+    },
+    {
+      "domain": "aligner",
+      "total": 13,
+      "fileCount": 4
+    },
+    {
+      "domain": "stores",
+      "total": 13,
+      "fileCount": 8
+    },
+    {
+      "domain": "qualification",
+      "total": 13,
+      "fileCount": 2
+    },
+    {
+      "domain": "maps",
+      "total": 12,
+      "fileCount": 4
+    },
+    {
+      "domain": "conversations",
+      "total": 9,
+      "fileCount": 1
+    },
+    {
+      "domain": "openai",
+      "total": 9,
+      "fileCount": 6
+    },
+    {
+      "domain": "voice-proxy",
+      "total": 9,
+      "fileCount": 2
+    }
+  ],
+  "missingAuthCandidates": [
+    {
+      "method": "GET",
+      "path": "/api/email-accounts/callback",
+      "file": "server/routes/admin/emailAccounts.routes.ts",
+      "line": 100,
+      "middlewares": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/twilio/call-status",
+      "file": "server/routes/callManager/twilioVoip.routes.ts",
+      "line": 10,
+      "middlewares": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/twilio/voip-check",
+      "file": "server/routes/callManager/twilioVoip.routes.ts",
+      "line": 69,
+      "middlewares": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/twilio/voip-twiml",
+      "file": "server/routes/callManager/twilioVoip.routes.ts",
+      "line": 84,
+      "middlewares": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/twilio/voip-status",
+      "file": "server/routes/callManager/twilioVoip.routes.ts",
+      "line": 114,
+      "middlewares": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/voice-proxy/background-audio/public",
+      "file": "server/routes/callManager/voiceProxyAudio.routes.ts",
+      "line": 130,
+      "middlewares": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/voice-proxy/background-audio/settings-public",
+      "file": "server/routes/callManager/voiceProxyAudio.routes.ts",
+      "line": 154,
+      "middlewares": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/analytics/commission-breakdown",
+      "file": "server/routes/dashboard/analyticsCommissionBreakdown.routes.ts",
+      "line": 6,
+      "middlewares": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/analytics/dashboard-summary",
+      "file": "server/routes/dashboard/analyticsDashboardSummary.routes.ts",
+      "line": 6,
+      "middlewares": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/analytics/portfolio-metrics",
+      "file": "server/routes/dashboard/analyticsPortfolioMetrics.routes.ts",
+      "line": 6,
+      "middlewares": []
+    }
+  ]
+}

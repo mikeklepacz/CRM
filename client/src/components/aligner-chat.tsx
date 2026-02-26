@@ -145,7 +145,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check if API key is configured
-  const { data: settings, isLoading: settingsLoading } = useQuery({
+  const { data: settings, isLoading: settingsLoading } = useQuery<{ hasApiKey?: boolean }>({
     queryKey: ['/api/openai/settings'],
   });
 
@@ -155,7 +155,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
   });
 
   // Load messages for selected conversation
-  const { data: conversationMessages = [], isLoading: messagesLoading } = useQuery({
+  const { data: conversationMessages = [], isLoading: messagesLoading } = useQuery<any[]>({
     queryKey: ['/api/aligner/conversations', selectedConversationId, 'messages'],
     enabled: !!selectedConversationId,
   });

@@ -181,7 +181,7 @@ export class CallDispatcher {
       }
 
       // Cache configs and holiday checks by tenant to avoid redundant lookups
-      const configCache: Map<string, { apiKey: string; twilioNumber?: string } | null> = new Map();
+      const configCache: Map<string, { apiKey: string; twilioNumber?: string; useDirectElevenLabs?: boolean } | null> = new Map();
       const holidayCache: Map<string, { blocked: boolean; reason?: string }> = new Map();
 
       for (let i = 0; i < targets.length; i++) {

@@ -29,6 +29,7 @@ interface Status {
 }
 
 export default function Dashboard() {
+  const RemindersWidgetCompat = RemindersWidget as any;
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -534,7 +535,7 @@ export default function Dashboard() {
 
       {/* Right Column - Reminders Widget */}
       <div className="w-80 border-l flex-shrink-0 overflow-auto">
-        <RemindersWidget
+        <RemindersWidgetCompat
           trackerSheetId={trackerSheet?.id}
           storeDbSheetId={storeDbSheet?.id}
           userPreferences={userPreferences}

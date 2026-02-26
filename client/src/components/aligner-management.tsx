@@ -32,7 +32,7 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
 
   // Fetch Aligner assistant - include tenantId in query key for cache invalidation, but use custom queryFn
   // because the default fetcher joins queryKey parts with "/" which would create wrong URL /api/aligner/tenantId
-  const { data: alignerData, isLoading: alignerLoading } = useQuery({
+  const { data: alignerData, isLoading: alignerLoading } = useQuery<any>({
     queryKey: ['/api/aligner', tenantId],
     queryFn: async () => {
       const res = await fetch('/api/aligner', { credentials: 'include' });
@@ -46,7 +46,7 @@ export function AlignerManagement({ tenantId }: AlignerManagementProps) {
   });
 
   // Fetch OpenAI settings to check if API key is configured
-  const { data: settings } = useQuery({
+  const { data: settings } = useQuery<{ hasApiKey?: boolean }>({
     queryKey: ['/api/openai/settings'],
   });
 

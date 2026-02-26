@@ -192,7 +192,7 @@ class VoiceProxyServer {
 
 
     // Create session in database
-    await storage.createVoiceProxySession({
+    await (storage as any).createVoiceProxySession({
       streamSid,
       callSid,
       agentId,
@@ -240,7 +240,7 @@ class VoiceProxyServer {
         hasBasePrompt: !!basePrompt,
         basePromptLength: basePrompt?.length || 0,
       }, 'error');
-      await storage.createVoiceProxySession({
+      await (storage as any).createVoiceProxySession({
         streamSid,
         callSid,
         agentId,
@@ -327,7 +327,7 @@ class VoiceProxyServer {
       });
       
       // Fetch API key from database (consistent with rest of codebase)
-      const elevenLabsConfig = await storage.getElevenLabsConfig();
+      const elevenLabsConfig = await (storage as any).getElevenLabsConfig();
       if (!elevenLabsConfig?.apiKey) {
         emitDebug('elevenlabs', 'ElevenLabs API key not configured in settings', {}, 'error');
         return { ws: null, conversationId: null };

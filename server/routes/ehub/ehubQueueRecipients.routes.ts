@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { dailySendSlots } from "@shared/schema";
 import { ensureDailySlots } from "../../services/Matrix2/slotGenerator";
 import { assignSingleRecipient } from "../../services/Matrix2/slotAssigner";
@@ -72,7 +72,8 @@ export function registerEhubQueueRecipientsRoutes(
         LEFT JOIN sequence_recipients sr ON sr.id = dss.recipient_id::varchar
         LEFT JOIN sequences s ON sr.sequence_id = s.id
         LEFT JOIN email_accounts ea ON dss.email_account_id = ea.id
-        WHERE dss.slot_time_utc >= ${now.toISOString()}
+        WHERE dss.tenant_id = ${req.user.tenantId}
+          AND dss.slot_time_utc >= ${now.toISOString()}
         ORDER BY dss.slot_time_utc ASC
         LIMIT 500
       `);
@@ -130,7 +131,7 @@ export function registerEhubQueueRecipientsRoutes(
 
   app.get('/api/ehub/paused-recipients', deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
-      const pausedRecipients = await storage.getPausedRecipients();
+      const pausedRecipients = await storage.getPausedRecipients(req.user.tenantId);
       res.json(pausedRecipients);
     } catch (error: any) {
       console.error('Error fetching paused recipients:', error);
@@ -140,7 +141,7 @@ export function registerEhubQueueRecipientsRoutes(
 
   app.get('/api/ehub/queue/paused-count', deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
-      const count = await storage.getPausedRecipientsCount();
+      const count = await storage.getPausedRecipientsCount(req.user.tenantId);
       res.json({ count });
     } catch (error: any) {
       console.error('Error fetching paused count:', error);
@@ -151,11 +152,14 @@ export function registerEhubQueueRecipientsRoutes(
   app.patch('/api/ehub/recipients/:id/pause', deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const recipient = await storage.pauseRecipient(id);
+      const recipient = await storage.pauseRecipient(id, req.user.tenantId);
 
       await db
         .delete(dailySendSlots)
-        .where(eq(dailySendSlots.recipientId, id));
+        .where(and(
+          eq(dailySendSlots.recipientId, id),
+          eq(dailySendSlots.tenantId, req.user.tenantId)
+        ));
 
       res.json(recipient);
     } catch (error: any) {
@@ -167,7 +171,7 @@ export function registerEhubQueueRecipientsRoutes(
   app.patch('/api/ehub/recipients/:id/resume', deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const recipient = await storage.resumeRecipient(id);
+      const recipient = await storage.resumeRecipient(id, req.user.tenantId);
       await assignSingleRecipient(id);
       res.json(recipient);
     } catch (error: any) {
@@ -179,11 +183,14 @@ export function registerEhubQueueRecipientsRoutes(
   app.patch('/api/ehub/recipients/:id/skip-step', deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const recipient = await storage.skipRecipientStep(id);
+      const recipient = await storage.skipRecipientStep(id, req.user.tenantId);
 
       await db
         .delete(dailySendSlots)
-        .where(eq(dailySendSlots.recipientId, id));
+        .where(and(
+          eq(dailySendSlots.recipientId, id),
+          eq(dailySendSlots.tenantId, req.user.tenantId)
+        ));
 
       res.json(recipient);
     } catch (error: any) {
@@ -195,7 +202,7 @@ export function registerEhubQueueRecipientsRoutes(
   app.post('/api/ehub/recipients/:id/send-now', deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const recipient = await storage.sendRecipientNow(id);
+      const recipient = await storage.sendRecipientNow(id, req.user.tenantId);
       res.json(recipient);
     } catch (error: any) {
       console.error('Error sending email now:', error);
@@ -212,7 +219,7 @@ export function registerEhubQueueRecipientsRoutes(
         return res.status(400).json({ message: 'Invalid hours value' });
       }
 
-      const recipient = await storage.delayRecipient(id, hours);
+      const recipient = await storage.delayRecipient(id, hours, req.user.tenantId);
       res.json(recipient);
     } catch (error: any) {
       console.error('Error delaying recipient:', error);
@@ -223,7 +230,7 @@ export function registerEhubQueueRecipientsRoutes(
   app.delete('/api/ehub/recipients/:id', deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const recipient = await storage.removeRecipient(id);
+      const recipient = await storage.removeRecipient(id, req.user.tenantId);
 
       const { clearSlotsForRecipient } = await import('../../services/Matrix2/slotDb');
       await clearSlotsForRecipient(id);
@@ -252,7 +259,7 @@ export function registerEhubQueueRecipientsRoutes(
       const results = [];
       for (const recipientId of recipientIds) {
         try {
-          await storage.removeRecipient(recipientId);
+          await storage.removeRecipient(recipientId, req.user.tenantId);
           await clearSlotsForRecipient(recipientId);
           results.push({ id: recipientId, success: true });
         } catch (err) {

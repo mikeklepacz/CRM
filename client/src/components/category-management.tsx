@@ -353,7 +353,7 @@ export function CategoryManagement() {
                   }}
                   onBlur={() => {
                     // Parse and validate only on blur
-                    const val = formData.displayOrder;
+                    const val: any = formData.displayOrder;
                     if (val === '' || val === null || val === undefined) {
                       setFormData({ ...formData, displayOrder: 0 });
                     } else {

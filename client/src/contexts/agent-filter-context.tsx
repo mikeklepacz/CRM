@@ -50,7 +50,7 @@ export function AgentFilterProvider({ children }: { children: React.ReactNode })
         setSelectedAgentIds,
         availableAgents,
         isLoadingAgents,
-        currentUser,
+        currentUser: currentUser ?? null,
       }}
     >
       {children}

@@ -117,12 +117,12 @@ export function AIChat({ className }: AIChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Check if API key is configured
-  const { data: settings, isLoading: settingsLoading } = useQuery({
+  const { data: settings, isLoading: settingsLoading } = useQuery<any>({
     queryKey: ['/api/openai/settings'],
   });
 
   // Load chat history
-  const { data: history = [], isLoading: historyLoading } = useQuery({
+  const { data: history = [] as any[], isLoading: historyLoading } = useQuery<any>({
     queryKey: ['/api/openai/chat/history'],
   });
 

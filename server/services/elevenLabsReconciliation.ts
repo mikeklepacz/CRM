@@ -192,6 +192,7 @@ export async function reconcileOrphanedCallSessions(tenantId: string): Promise<R
             const details = await fetchConversationDetails(config.apiKey, match.conversation_id);
             if (details?.transcript && details.transcript.length > 0) {
               const transcriptsToInsert = details.transcript.map(turn => ({
+                tenantId,
                 conversationId: match.conversation_id,
                 role: turn.role as 'agent' | 'user',
                 message: turn.message,

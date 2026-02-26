@@ -48,7 +48,7 @@ export function registerTestEmailRoutes(
         lastCheckedAt: null,
         replyDetectedAt: null,
         followUpCount: 0,
-      });
+      } as any);
 
       res.json({
         success: true,
@@ -157,7 +157,7 @@ export function registerTestEmailRoutes(
       await storage.updateTestEmailSendStatus(id, {
         followUpCount: (testSend.followUpCount || 0) + 1,
         lastCheckedAt: new Date(),
-      });
+      } as any);
 
       res.json({
         success: true,

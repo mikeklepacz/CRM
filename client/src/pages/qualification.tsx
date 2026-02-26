@@ -1350,19 +1350,19 @@ export default function Qualification() {
                 if (editingLead) {
                   updateLeadMutation.mutate({ 
                     id: editingLead.id, 
-                    data: {
+                    data: ({
                       company: editingLead.company,
-                      website: editingLead.website,
-                      pocName: editingLead.pocName,
-                      pocEmail: editingLead.pocEmail,
-                      pocPhone: editingLead.pocPhone,
-                      city: editingLead.city,
-                      state: editingLead.state,
-                      country: editingLead.country,
-                      campaignId: editingLead.campaignId,
+                      website: editingLead.website ?? undefined,
+                      pocName: editingLead.pocName ?? undefined,
+                      pocEmail: editingLead.pocEmail ?? undefined,
+                      pocPhone: editingLead.pocPhone ?? undefined,
+                      city: editingLead.city ?? undefined,
+                      state: editingLead.state ?? undefined,
+                      country: editingLead.country ?? undefined,
+                      campaignId: editingLead.campaignId ?? undefined,
                       status: editingLead.status,
-                      notes: editingLead.notes,
-                    }
+                      notes: editingLead.notes ?? undefined,
+                    } as any)
                   });
                 }
               }} 

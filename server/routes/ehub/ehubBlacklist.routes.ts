@@ -44,7 +44,7 @@ export function registerEhubBlacklistRoutes(
         .values({
           email: email.toLowerCase().trim(),
           reason: reason || null,
-        })
+        } as any)
         .returning();
 
       res.json(newEntry);

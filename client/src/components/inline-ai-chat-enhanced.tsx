@@ -909,7 +909,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
   // Merge server messages with timeline items and sort chronologically
   const mergedTimeline = useMemo(() => {
-    const serverMessageItems: TimelineItem[] = messages.map(msg => ({
+    const serverMessageItems: Array<Extract<TimelineItem, { type: 'message' }>> = messages.map(msg => ({
       type: 'message' as const,
       id: msg.id,
       role: msg.role as 'user' | 'assistant',

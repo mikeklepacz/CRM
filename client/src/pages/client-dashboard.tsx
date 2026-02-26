@@ -645,7 +645,7 @@ export default function ClientDashboard() {
                 if (rowLink && normalizeLink(rowLink) === normalizeLink(variables.linkValue!)) {
                   return { 
                     ...row, 
-                    Agent: currentUser?.name || '',  // Mark as claimed by current user
+                    Agent: (currentUser as any)?.name || '',  // Mark as claimed by current user
                     _hasTrackerData: true,  // Mark as having tracker data
                   };
                 }
@@ -724,7 +724,7 @@ export default function ClientDashboard() {
               return { 
                 ...row, 
                 [variables.column]: variables.value,
-                Agent: currentUser?.name || '',  // Mark as claimed by current user
+                Agent: (currentUser as any)?.name || '',  // Mark as claimed by current user
               };
             }
             return row;
@@ -818,7 +818,7 @@ export default function ClientDashboard() {
                 if (rowLink && normalizeLink(rowLink) === normalizeLink(variables.link)) {
                   return { 
                     ...row, 
-                    Agent: currentUser?.name || '',  // Mark as claimed by current user
+                    Agent: (currentUser as any)?.name || '',  // Mark as claimed by current user
                     _hasTrackerData: true,  // Mark as having tracker data
                   };
                 }
@@ -1175,13 +1175,14 @@ export default function ClientDashboard() {
         if (userPreferences?.showMyStoresOnly !== undefined) {
           setShowMyStoresOnly(userPreferences.showMyStoresOnly);
         }
-        if (userPreferences && 'showUnclaimedOnly' in userPreferences && userPreferences.showUnclaimedOnly !== undefined) {
-          setShowUnclaimedOnly(userPreferences.showUnclaimedOnly);
-        } else if (!userPreferences?.showMyStoresOnly) {
+        const userPrefsAny = userPreferences as any;
+        if (userPrefsAny && userPrefsAny.showUnclaimedOnly !== undefined) {
+          setShowUnclaimedOnly(userPrefsAny.showUnclaimedOnly);
+        } else if (!userPrefsAny?.showMyStoresOnly) {
           setShowUnclaimedOnly(true);
         }
-        if (userPreferences?.showStateless !== undefined) {
-          setShowStateless(userPreferences.showStateless);
+        if (userPrefsAny?.showStateless !== undefined) {
+          setShowStateless(userPrefsAny.showStateless);
         }
         if (userPreferences?.viewAsAgent !== undefined) {
           setViewAsAgent(userPreferences.viewAsAgent);
@@ -4362,4 +4363,3 @@ export default function ClientDashboard() {
     </div>
   );
 }
-

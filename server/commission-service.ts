@@ -45,7 +45,7 @@ export async function applyCommissions(orderId: string): Promise<void> {
 
   const calculations: CommissionCalculation[] = [];
 
-  const rate = calculateCommissionRate(order.commissionType, order.orderDate, client);
+  const rate = calculateCommissionRate(order.commissionType, order.orderDate, client || null);
   const primaryAmount = calculateCommissionAmount(order.total, rate, order.commissionType, order.commissionAmount);
 
   calculations.push({
@@ -82,6 +82,7 @@ export async function applyCommissions(orderId: string): Promise<void> {
 
   for (const calc of calculations) {
     const commissionRecord: InsertCommission = {
+      tenantId: order.tenantId,
       orderId,
       agentId: calc.agentId,
       commissionKind: calc.kind,

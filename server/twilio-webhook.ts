@@ -28,7 +28,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
   
   // Validate Twilio signature if provided (production only)
   if (signature && url && process.env.TWILIO_AUTH_TOKEN) {
-    const isValid = validateTwilioSignature(url, payload, signature);
+    const isValid = validateTwilioSignature(signature, url, payload);
     if (!isValid) {
       console.error('[Twilio Webhook][DEBUG] SIGNATURE VALIDATION FAILED');
       console.error('[Twilio Webhook][DEBUG] URL used:', url);
