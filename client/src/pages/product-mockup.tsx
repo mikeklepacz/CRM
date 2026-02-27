@@ -11,298 +11,31 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, Type, Check, ChevronsUpDown, Loader2, Save, X, Sun } from 'lucide-react';
-import ColorPicker, { useColorPicker } from '@/vendor/react-best-gradient-color-picker';
+import { Download, Upload, RotateCcw, Move, Palette, Plus, Minus, Trash2, Eye, EyeOff, Layers, ChevronUp, ChevronDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine, Type, Check, ChevronsUpDown, Loader2, Save, Sun } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { configureLabelCanvasTexture, configureLabelPreviewRenderer } from '@/lib/label-designer-render-color';
 import hempClearUrl from '@assets/Hemp-Clear_1764119084551.png';
 import bleedOverlayUrl from '@assets/Red Bleed_1764176822191.png';
-
-// Simple line icons for center alignment
-const CenterVerticalLine = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <line x1="8" y1="2" x2="8" y2="14" />
-  </svg>
-);
-
-const CenterHorizontalLine = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <line x1="2" y1="8" x2="14" y2="8" />
-  </svg>
-);
-
-// Saved color swatch interface
-interface ColorSwatch {
-  id: string;
-  color: string;
-  cmyk: string;
-}
-
-// Original asset data for export
-interface OriginalAsset {
-  name: string;
-  data: string; // base64
-  mimeType: string;
-}
-
-interface CylinderPos {
-  x: number;
-  y: number;
-  z: number;
-  scale: number;
-  cameraZ: number;
-  rotX: number;
-  rotY: number;
-}
-
-interface TextureMapping {
-  offsetX: number;
-  offsetY: number;
-  rotation: number;
-  scaleX: number;
-  scaleY: number;
-  centerX: number;
-  centerY: number;
-}
-
-const LABEL_WIDTH = 450;  // 3:4 ratio (60mm wide)
-const LABEL_HEIGHT = 600; // 3:4 ratio (80mm tall)
-const OVERLAP_HEIGHT = 60;
-
-// CMYK Color Picker Component
-function CMYKColorPicker({ 
-  color, 
-  onChange,
-  savedSwatches = [],
-  onSaveSwatch,
-  onUseSwatch,
-  onRemoveSwatch
-}: { 
-  color: string; 
-  onChange: (color: string) => void;
-  savedSwatches?: ColorSwatch[];
-  onSaveSwatch?: (color: string, cmyk: string) => void;
-  onUseSwatch?: (color: string) => void;
-  onRemoveSwatch?: (id: string) => void;
-}) {
-  const [localColor, setLocalColor] = useState(color);
-  const { valueToCmyk } = useColorPicker(localColor, setLocalColor);
-  
-  useEffect(() => {
-    setLocalColor(color);
-  }, [color]);
-  
-  const handleChange = (newColor: string) => {
-    setLocalColor(newColor);
-    onChange(newColor);
-  };
-  
-  // Parse CMYK values and convert to clean percentages
-  const cmykRaw = valueToCmyk();
-  const cmykMatch = cmykRaw.match(/cmyk\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)/);
-  const formatCmyk = () => {
-    if (!cmykMatch) return 'C: 0%  M: 0%  Y: 0%  K: 0%';
-    const c = Math.round(parseFloat(cmykMatch[1]) * 100);
-    const m = Math.round(parseFloat(cmykMatch[2]) * 100);
-    const y = Math.round(parseFloat(cmykMatch[3]) * 100);
-    const k = Math.round(parseFloat(cmykMatch[4]) * 100);
-    return `C: ${c}%  M: ${m}%  Y: ${y}%  K: ${k}%`;
-  };
-  
-  const cmykString = formatCmyk();
-  
-  return (
-    <div className="space-y-3">
-      <ColorPicker
-        value={localColor}
-        onChange={handleChange}
-        hideColorTypeBtns
-        hideAdvancedSliders
-        hidePresets
-        hideOpacity
-        width={220}
-        height={150}
-      />
-      <div className="p-2 bg-muted rounded text-xs font-mono">
-        <div className="text-muted-foreground mb-1">CMYK for Print:</div>
-        <div className="text-foreground font-medium">{cmykString}</div>
-      </div>
-      
-      {onSaveSwatch && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full"
-          onClick={() => onSaveSwatch(localColor, cmykString)}
-          data-testid="button-save-swatch"
-        >
-          <Plus className="w-3 h-3 mr-1" />
-          Save to Swatches
-        </Button>
-      )}
-      
-      {savedSwatches.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">Saved Swatches:</div>
-          <div className="flex flex-wrap gap-1">
-            {savedSwatches.map((swatch) => (
-              <div key={swatch.id} className="relative group">
-                <button
-                  className="w-6 h-6 rounded border border-border cursor-pointer hover:ring-2 hover:ring-primary"
-                  style={{ backgroundColor: swatch.color }}
-                  onClick={() => onUseSwatch?.(swatch.color)}
-                  title={swatch.cmyk}
-                  data-testid={`swatch-${swatch.id}`}
-                />
-                {onRemoveSwatch && (
-                  <button
-                    className="absolute -top-1 -right-1 w-3 h-3 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveSwatch(swatch.id);
-                    }}
-                  >
-                    <X className="w-2 h-2" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Popular Google Fonts for print and web - comprehensive list
-const GOOGLE_FONTS = [
-  // Sans-Serif
-  'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Inter', 'Nunito', 'Raleway',
-  'Ubuntu', 'Rubik', 'Work Sans', 'Noto Sans', 'Quicksand', 'Karla', 'Mulish', 'Josefin Sans',
-  'Source Sans Pro', 'Barlow', 'DM Sans', 'Manrope', 'Outfit', 'Plus Jakarta Sans',
-  'Public Sans', 'Be Vietnam Pro', 'Figtree', 'Lexend', 'Sora', 'Space Grotesk',
-  'Albert Sans', 'Urbanist', 'Geologica', 'Instrument Sans',
-  // Serif
-  'Playfair Display', 'Merriweather', 'Lora', 'PT Serif', 'Libre Baskerville',
-  'Crimson Text', 'Cormorant Garamond', 'EB Garamond', 'Spectral', 'Source Serif Pro',
-  'Noto Serif', 'Bitter', 'Vollkorn', 'Cardo', 'Libre Caslon Text', 'DM Serif Display',
-  'Fraunces', 'Bodoni Moda', 'Newsreader', 'Literata',
-  // Display
-  'Oswald', 'Bebas Neue', 'Anton', 'Archivo Black', 'Russo One', 'Righteous',
-  'Alfa Slab One', 'Abril Fatface', 'Lobster', 'Pacifico', 'Permanent Marker',
-  'Bangers', 'Fredoka One', 'Passion One', 'Bungee', 'Titan One', 'Black Ops One',
-  'Monoton', 'Audiowide', 'Orbitron', 'Staatliches', 'Teko', 'Chakra Petch',
-  // Handwritten
-  'Dancing Script', 'Great Vibes', 'Parisienne', 'Sacramento', 'Satisfy', 'Allura',
-  'Cookie', 'Kaushan Script', 'Alex Brush', 'Tangerine', 'Mr Dafoe', 'Pinyon Script',
-  'Yellowtail', 'Courgette', 'Caveat', 'Indie Flower', 'Shadows Into Light',
-  // Monospace
-  'Roboto Mono', 'Source Code Pro', 'Fira Code', 'JetBrains Mono', 'IBM Plex Mono',
-  'Space Mono', 'Inconsolata', 'Ubuntu Mono', 'Overpass Mono',
-  // System Fallbacks
-  'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New',
-].sort();
-
-// System fonts that don't need loading
-const SYSTEM_FONTS = ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New'];
-
-// Track loaded fonts globally
-const loadedFonts = new Set<string>(SYSTEM_FONTS);
-let fontsPreloaded = false;
-
-// Preload all Google Fonts at once using a single request
-function preloadAllFonts(): Promise<void> {
-  if (fontsPreloaded) return Promise.resolve();
-  
-  const googleFonts = GOOGLE_FONTS.filter(f => !SYSTEM_FONTS.includes(f));
-  const fontFamilies = googleFonts.map(f => `family=${encodeURIComponent(f.replace(/ /g, '+'))}:wght@400;700`).join('&');
-  
-  return new Promise((resolve) => {
-    const link = document.createElement('link');
-    link.href = `https://fonts.googleapis.com/css2?${fontFamilies}&display=swap`;
-    link.rel = 'stylesheet';
-    link.onload = () => {
-      googleFonts.forEach(f => loadedFonts.add(f));
-      fontsPreloaded = true;
-      resolve();
-    };
-    link.onerror = () => {
-      // Even if there's an error, mark as loaded to prevent blocking
-      fontsPreloaded = true;
-      resolve();
-    };
-    document.head.appendChild(link);
-  });
-}
-
-interface LabelElement {
-  id: string;
-  type: 'logo' | 'text';
-  x: number;
-  y: number;
-  rotation: number;
-  scale: number;
-  content: string;
-  font?: string;
-  fontSize?: number;
-  color?: string;
-  visible?: boolean;
-  image?: HTMLImageElement;
-  originalAsset?: OriginalAsset; // Store original upload for export
-}
-
-interface ThreeContext {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  renderer: THREE.WebGLRenderer;
-  cylinder: THREE.Mesh | null;
-  geometry: THREE.BufferGeometry | null;
-  material: THREE.MeshStandardMaterial | null;
-  animationId: number;
-  ambientLight: THREE.AmbientLight | null;
-  frontLight: THREE.DirectionalLight | null;
-  topLight: THREE.DirectionalLight | null;
-}
-
-interface LightingSettings {
-  ambient: number;
-  front: number;
-  top: number;
-  warmth: number; // -1 = cool (blue tint), 0 = neutral, 1 = warm (yellow tint)
-  keyAngle: number; // Horizontal angle of key light (0-360 degrees)
-  keyHeight: number; // Vertical angle/height of key light (-90 to 90 degrees)
-  keyDistance: number; // Distance of key light from center
-}
-
-const DEFAULT_LIGHTING: LightingSettings = {
-  ambient: 0.4,
-  front: 3.2,
-  top: 0.8,
-  warmth: 0.15,
-  keyAngle: 325,
-  keyHeight: 30,
-  keyDistance: 2.5,
-};
-
-// PERMANENT DEFAULTS - These are the "in stone" settings for the 3D product mockup
-const DEFAULT_CYLINDER_POS: CylinderPos = { 
-  x: 0.0013, 
-  y: -0.0083, 
-  z: 0, 
-  scale: 1.02, 
-  cameraZ: 0.134, 
-  rotX: 180, 
-  rotY: -3.1 
-};
-const DEFAULT_TEXTURE_MAPPING: TextureMapping = { 
-  offsetX: 0.131, 
-  offsetY: -0.502, 
-  rotation: 90, 
-  scaleX: 1, 
-  scaleY: 2.01, 
-  centerX: 0.499, 
-  centerY: 0.5 
-};
+import { CenterHorizontalLine, CenterVerticalLine } from '@/components/product-mockup/alignment-icons';
+import { CMYKColorPicker } from '@/components/product-mockup/cmyk-color-picker';
+import {
+  DEFAULT_CYLINDER_POS,
+  DEFAULT_LIGHTING,
+  DEFAULT_TEXTURE_MAPPING,
+  LABEL_HEIGHT,
+  LABEL_WIDTH,
+  OVERLAP_HEIGHT,
+} from '@/components/product-mockup/product-mockup-constants';
+import { areProductMockupFontsPreloaded, GOOGLE_FONTS, preloadAllFonts } from '@/components/product-mockup/product-mockup-fonts';
+import type {
+  ColorSwatch,
+  CylinderPos,
+  LabelElement,
+  LightingSettings,
+  OriginalAsset,
+  TextureMapping,
+  ThreeContext,
+} from '@/components/product-mockup/product-mockup.types';
 
 export default function ProductMockup() {
   const { toast } = useToast();
@@ -338,7 +71,7 @@ export default function ProductMockup() {
   const [bleedOverlayLoaded, setBleedOverlayLoaded] = useState(false);
   const bleedOverlayRef = useRef<HTMLImageElement | null>(null);
   const [showKraftEffect, setShowKraftEffect] = useState(true);
-  const [fontsLoaded, setFontsLoaded] = useState(fontsPreloaded);
+  const [fontsLoaded, setFontsLoaded] = useState(areProductMockupFontsPreloaded());
   
   // Project info state (required before using designer)
   const [projectName, setProjectName] = useState<string>(() => {

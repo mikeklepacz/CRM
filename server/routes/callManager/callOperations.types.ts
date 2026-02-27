@@ -1,0 +1,4 @@
+export type CallOperationsDeps = {
+  isAuthenticatedCustom: any;
+  checkAdminAccess: (user: any, tenantId: string | undefined) => Promise<boolean>;
+};

@@ -52,175 +52,21 @@ import { Switch } from "@/components/ui/switch";
 import { ClientMapPins } from "@/components/client-map-pins";
 import { StoreDetailsDialog } from "@/components/store-details-dialog";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
-
-const CANADIAN_PROVINCES = [
-  "Alberta", "British Columbia", "Manitoba", "New Brunswick",
-  "Newfoundland and Labrador", "Northwest Territories", "Nova Scotia",
-  "Nunavut", "Ontario", "Prince Edward Island", "Quebec",
-  "Saskatchewan", "Yukon"
-];
-
-interface PlaceResult {
-  place_id: string;
-  name: string;
-  formatted_address: string;
-  geometry: {
-    location: {
-      lat: number;
-      lng: number;
-    };
-  };
-  types: string[];
-  business_status?: string;
-  rating?: number;
-  user_ratings_total?: number;
-  website?: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  description: string | null;
-  isActive: boolean;
-}
-
-interface SavedExclusion {
-  id: string;
-  type: 'keyword' | 'place_type';
-  value: string;
-  createdAt: string;
-}
-
-interface SearchHistory {
-  id: string;
-  businessType: string;
-  city: string;
-  state: string;
-  country: string;
-  searchCount: number;
-  searchedAt: string;
-}
-
-interface LastSearchParams {
-  query: string;
-  location: string;
-  excludedKeywords: string[];
-  excludedTypes: string[];
-  category?: string;
-}
-
-const US_STATES = [
-  "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
-  "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
-  "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan",
-  "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
-  "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
-  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
-  "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
-  "Wisconsin", "Wyoming"
-];
-
-const BASE_COUNTRIES = [
-  "United States", "Canada", "United Kingdom", "Australia", "Germany", "France",
-  "Spain", "Italy", "Japan", "Mexico", "Brazil", "India", "China", "Poland",
-  "Netherlands", "Belgium", "Sweden", "Norway", "Denmark", "Finland", "Ireland",
-  "Austria", "Switzerland", "Portugal", "Greece", "Czech Republic", "Hungary",
-  "Romania", "Bulgaria", "Croatia", "Slovakia", "Slovenia", "Lithuania", "Latvia",
-  "Estonia", "Luxembourg", "Malta", "Cyprus", "Iceland", "New Zealand", "Singapore",
-  "South Korea", "Taiwan", "Hong Kong", "Thailand", "Vietnam", "Philippines",
-  "Indonesia", "Malaysia", "South Africa", "Egypt", "Nigeria", "Kenya", "Morocco",
-  "Argentina", "Chile", "Colombia", "Peru", "Venezuela", "Ecuador", "Uruguay",
-  "Saudi Arabia", "United Arab Emirates", "Israel", "Turkey", "Russia", "Ukraine"
-];
-
-// Dark mode styles for Google Maps
-const POI_HIDDEN_STYLES = [
-  {
-    featureType: "poi",
-    stylers: [{ visibility: "off" }],
-  },
-  {
-    featureType: "poi.park",
-    elementType: "geometry",
-    stylers: [{ visibility: "on" }],
-  },
-];
-
-const LIGHT_MAP_STYLES = [
-  ...POI_HIDDEN_STYLES,
-];
-
-const DARK_MAP_STYLES = [
-  ...POI_HIDDEN_STYLES,
-  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-  {
-    featureType: "administrative.locality",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#d59563" }],
-  },
-  {
-    featureType: "poi.park",
-    elementType: "geometry",
-    stylers: [{ color: "#263c3f" }],
-  },
-  {
-    featureType: "road",
-    elementType: "geometry",
-    stylers: [{ color: "#38414e" }],
-  },
-  {
-    featureType: "road",
-    elementType: "geometry.stroke",
-    stylers: [{ color: "#212a37" }],
-  },
-  {
-    featureType: "road",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#9ca5b3" }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry",
-    stylers: [{ color: "#746855" }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry.stroke",
-    stylers: [{ color: "#1f2835" }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#f3d19c" }],
-  },
-  {
-    featureType: "transit",
-    elementType: "geometry",
-    stylers: [{ color: "#2f3948" }],
-  },
-  {
-    featureType: "transit.station",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#d59563" }],
-  },
-  {
-    featureType: "water",
-    elementType: "geometry",
-    stylers: [{ color: "#17263c" }],
-  },
-  {
-    featureType: "water",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#515c6d" }],
-  },
-  {
-    featureType: "water",
-    elementType: "labels.text.stroke",
-    stylers: [{ color: "#17263c" }],
-  },
-];
+import {
+  BASE_COUNTRIES,
+  CANADIAN_PROVINCES,
+  DARK_MAP_STYLES,
+  LIGHT_MAP_STYLES,
+  US_STATES,
+} from "@/components/map-search/map-search.constants";
+import type {
+  Category,
+  GoogleSheet,
+  LastSearchParams,
+  PlaceResult,
+  SavedExclusion,
+  SearchHistory,
+} from "@/components/map-search/map-search.types";
 
 export default function MapSearch() {
   const { toast } = useToast();
@@ -246,11 +92,6 @@ export default function MapSearch() {
   }, [searchString]);
 
   // Fetch Google Sheets to check if Store Database is configured
-  interface GoogleSheet {
-    id: string;
-    sheetPurpose: string;
-    spreadsheetId: string;
-  }
   const { data: sheetsData, isLoading: sheetsLoading } = useQuery<{ sheets: GoogleSheet[] }>({
     queryKey: ["/api/sheets"],
   });

@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, PhoneOff, ExternalLink, Sparkles, Search, ChevronDown, ChevronLeft, ChevronRight, Plus, FileText, Check, ChevronsUpDown, Info, GripVertical } from "lucide-react";
+import { Loader2, Save, Phone, PhoneOff, ExternalLink, Sparkles, Search, ChevronDown, ChevronLeft, ChevronRight, Plus, FileText, Check, ChevronsUpDown, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -42,107 +42,15 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-  useSortable,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-
-// Helper function: Case-insensitive lookup for link value
-const getLinkValue = (row: any): string | undefined => {
-  if (!row) return undefined;
-
-  // Iterate over all row keys and find the one that matches "link" (case-insensitive)
-  for (const key in row) {
-    if (key.toLowerCase().trim() === "link") {
-      const value = row[key];
-      // Return the value if it's a non-empty string
-      if (typeof value === "string" && value.trim()) {
-        return value.trim();
-      }
-    }
-  }
-
-  return undefined;
-};
-
-// US States and Canadian Provinces for state dropdowns
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 
-  'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia', 
-  'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 
-  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 
-  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 
-  'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 
-  'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 
-  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 
-  'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
-];
-
-const CANADIAN_PROVINCES = [
-  'Alberta',
-  'British Columbia',
-  'Manitoba',
-  'New Brunswick',
-  'Newfoundland and Labrador',
-  'Northwest Territories',
-  'Nova Scotia',
-  'Nunavut',
-  'Ontario',
-  'Prince Edward Island',
-  'Quebec',
-  'Saskatchewan',
-  'Yukon'
-];
-
-// Sortable Section Component for drag-and-drop reordering
-function SortableSection({ id, children }: { id: string; children: React.ReactNode }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} className="relative">
-      <div className="absolute left-0 top-0 flex items-center justify-center h-12 w-8 cursor-grab active:cursor-grabbing z-10" {...attributes} {...listeners}>
-        <GripVertical className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-      </div>
-      <div className="pl-6">
-        {children}
-      </div>
-    </div>
-  );
-}
+import { SortableSection } from "@/components/store-details/sortable-section";
+import { StoreSearchDialog } from "@/components/store-details/store-search-dialog";
+import { UnsavedWarningDialog } from "@/components/store-details/unsaved-warning-dialog";
+import { getLinkValue, US_STATES, CANADIAN_PROVINCES } from "@/components/store-details/store-details-utils";
+import type { StoreDetailsDialogProps } from "@/components/store-details/store-details.types";
 
 // Store Details Dialog Component
-export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger, allVisibleStores, onNavigateToStore }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  row: any;
-  trackerSheetId: string | undefined;
-  storeSheetId: string | undefined;
-  currentColors: any;
-  refetch: () => Promise<any>;
-  franchiseContext?: {
-    brandName: string;
-    allLocations: any[];
-  };
-  statusOptions: string[];
-  statusColors: { [status: string]: { background: string; text: string } };
-  contextUpdateTrigger: number;
-  setContextUpdateTrigger: (value: number | ((prev: number) => number)) => void;
-  loadDefaultScriptTrigger: number;
-  allVisibleStores?: any[];
-  onNavigateToStore?: (row: any) => void;
-}) {
+export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger, allVisibleStores, onNavigateToStore }: StoreDetailsDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: currentUser } = useQuery<{ id: string; email?: string; role?: string; agentName?: string }>({ queryKey: ['/api/auth/user'] });
@@ -1105,22 +1013,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
   return (
     <>
-      <AlertDialog open={showUnsavedWarning} onOpenChange={setShowUnsavedWarning}>
-        <AlertDialogContent data-testid="alert-unsaved-changes">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved changes. Are you sure you want to close without saving?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-close">Keep Editing</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmClose} data-testid="button-confirm-close">
-              Close Without Saving
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <UnsavedWarningDialog
+        open={showUnsavedWarning}
+        onOpenChange={setShowUnsavedWarning}
+        onConfirm={handleConfirmClose}
+      />
 
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent enableEnterSubmit={false} className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden flex flex-col" : "max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"}>
@@ -2531,126 +2428,16 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       </Dialog>
 
       {/* Store Search Dialog for Multi-Location Selection */}
-      <Dialog open={storeSearchDialog} onOpenChange={setStoreSearchDialog}>
-        <DialogContent enableEnterSubmit={false} className="max-w-3xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>Select Multiple Locations</DialogTitle>
-            <DialogDescription>
-              Search and select multiple stores to claim with the DBA name
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="store_search">Search Stores (type 2+ letters to search)</Label>
-              <Input
-                id="store_search"
-                data-testid="input-store-search"
-                value={storeSearch}
-                onChange={(e) => setStoreSearch(e.target.value)}
-                placeholder="Search by name, city, state, or address..."
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                {selectedStores.length} location{selectedStores.length !== 1 ? 's' : ''} selected
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (filteredStores.length > 0) {
-                      setSelectedStores(filteredStores.map((store: any) => ({ link: store.link, name: store.name })));
-                    }
-                  }}
-                  disabled={filteredStores.length === 0}
-                  data-testid="button-select-all"
-                >
-                  Select All ({filteredStores.length})
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedStores([])}
-                  disabled={selectedStores.length === 0}
-                  data-testid="button-select-none"
-                >
-                  Clear All
-                </Button>
-              </div>
-            </div>
-
-            <ScrollArea className="h-96 border rounded-md">
-              <div className="p-4 space-y-2">
-                {storeSearch.length < 2 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    Type 2 or more letters to search for stores...
-                  </p>
-                ) : isLoadingStores ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
-                    Loading stores...
-                  </p>
-                ) : filteredStores.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    No stores found matching "{storeSearch}"
-                  </p>
-                ) : (
-                  filteredStores.map((store: any) => {
-                    const isSelected = selectedStores.some(s => s.link === store.link);
-
-                    const toggleStore = () => {
-                      setSelectedStores(prev => {
-                        const alreadySelected = prev.some(s => s.link === store.link);
-                        if (alreadySelected) {
-                          return prev.filter(s => s.link !== store.link);
-                        } else {
-                          return [...prev, { link: store.link, name: store.name }];
-                        }
-                      });
-                    };
-
-                    return (
-                      <div
-                        key={store.link}
-                        className={`flex items-start space-x-3 p-3 rounded-md border cursor-pointer hover-elevate ${
-                          isSelected ? 'bg-primary/10 border-primary' : ''
-                        }`}
-                        onClick={toggleStore}
-                        data-testid={`store-option-${store.link}`}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          data-testid={`checkbox-store-${store.link}`}
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium">{store.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {store.city && store.state ? `${store.city}, ${store.state}` : store.city || store.state || ''}
-                          </div>
-                          {store.address && (
-                            <div className="text-xs text-muted-foreground">{store.address}</div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStoreSearchDialog(false)} data-testid="button-cancel-search">
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <StoreSearchDialog
+        open={storeSearchDialog}
+        onOpenChange={setStoreSearchDialog}
+        filteredStores={filteredStores}
+        isLoadingStores={isLoadingStores}
+        onSearchChange={setStoreSearch}
+        onSelectionChange={setSelectedStores}
+        selectedStores={selectedStores}
+        storeSearch={storeSearch}
+      />
 
       {/* Parse Locations Dialog */}
       <ParseLocationsDialog

@@ -1,28 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -33,31 +13,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
-  ArrowLeft,
   Bot,
-  Calendar,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
   FileText,
-  Folder,
-  FolderPlus,
-  Library,
   Loader2,
-  Mail,
-  MessageSquarePlus,
   Pencil,
   Plus,
-  Search,
   Send,
   Sparkles,
-  Store,
-  Tag,
-  Trash2,
   User as UserIcon,
   X,
-  Image as ImageIcon,
 } from "lucide-react";
 import type {
   Conversation,
@@ -65,220 +32,15 @@ import type {
   Template,
   ChatMessage as ChatMessageType,
 } from "@shared/schema";
-import { ConversationContextMenu } from "./conversation-context-menu";
-import { ProjectContextMenu } from "./project-context-menu";
 import { EmailPreview } from "./email-preview";
-
-interface InlineAIChatEnhancedProps {
-  storeContext?: {
-    sales_ready_summary?: string;
-    notes?: string;
-    point_of_contact?: string;
-    poc_email?: string;
-    poc_phone?: string;
-    status?: string;
-    follow_up_date?: string;
-    next_action?: string;
-    dba?: string;
-    name: string;
-    type?: string;
-    link?: string;
-    address?: string;
-    city?: string;
-    state?: string;
-    phone?: string;
-    email?: string;
-    website?: string;
-  };
-  contextUpdateTrigger?: number;
-  loadDefaultScriptTrigger?: number;
-  trackerSheetId?: string;
-  onStatusChange?: (newStatus: string) => void;
-}
-
-// Helper function to clean and format AI output
-function formatAIContent(content: string): string {
-  // Remove ALL source citations - match any pattern like [number:number{ANY_CHAR}source]
-  let cleaned = content.replace(/\s*\[\d+:\d+[^\]]*source\]\s*/gi, '');
-  
-  // Remove any remaining bracketed number references
-  cleaned = cleaned.replace(/\s*\[\d+:\d+\]\s*/g, '');
-  
-  // Clean up any extra whitespace
-  cleaned = cleaned.trim();
-  
-  return cleaned;
-}
-
-// Helper function to render formatted text with comprehensive markdown support
-function renderFormattedText(content: string): JSX.Element[] {
-  const formattedContent = formatAIContent(content);
-  const lines = formattedContent.split('\n');
-  const result: JSX.Element[] = [];
-  
-  lines.forEach((line, lineIndex) => {
-    // Check for headers first
-    const h3Match = line.match(/^###\s+(.+)$/);
-    const h2Match = line.match(/^##\s+(.+)$/);
-    const h1Match = line.match(/^#\s+(.+)$/);
-    
-    if (h3Match) {
-      result.push(<h3 key={`line-${lineIndex}`} className="text-base font-semibold mt-3 mb-2">{h3Match[1]}</h3>);
-      return;
-    }
-    if (h2Match) {
-      result.push(<h2 key={`line-${lineIndex}`} className="text-lg font-semibold mt-4 mb-2">{h2Match[1]}</h2>);
-      return;
-    }
-    if (h1Match) {
-      result.push(<h1 key={`line-${lineIndex}`} className="text-xl font-bold mt-4 mb-3">{h1Match[1]}</h1>);
-      return;
-    }
-    
-    // Process inline markdown (bold, italic, code)
-    const parts: (string | JSX.Element)[] = [];
-    let remaining = line;
-    let partIndex = 0;
-    
-    // Process bold **text**, italic *text*, and inline code `text`
-    const inlineRegex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
-    let lastIndex = 0;
-    let match;
-    
-    while ((match = inlineRegex.exec(line)) !== null) {
-      // Add text before the match
-      if (match.index > lastIndex) {
-        parts.push(line.substring(lastIndex, match.index));
-      }
-      
-      // Determine what type of match this is
-      if (match[0].startsWith('**')) {
-        // Bold
-        parts.push(<strong key={`part-${lineIndex}-${partIndex++}`}>{match[2]}</strong>);
-      } else if (match[0].startsWith('`')) {
-        // Inline code
-        parts.push(<code key={`part-${lineIndex}-${partIndex++}`} className="bg-muted px-1 rounded text-xs">{match[4]}</code>);
-      } else if (match[0].startsWith('*')) {
-        // Italic
-        parts.push(<em key={`part-${lineIndex}-${partIndex++}`}>{match[3]}</em>);
-      }
-      
-      lastIndex = match.index + match[0].length;
-    }
-    
-    // Add remaining text
-    if (lastIndex < line.length) {
-      parts.push(line.substring(lastIndex));
-    }
-    
-    // If no parts were added, add the whole line
-    if (parts.length === 0) {
-      parts.push(line);
-    }
-    
-    result.push(
-      <span key={`line-${lineIndex}`}>
-        {parts}
-        {lineIndex < lines.length - 1 && <br />}
-      </span>
-    );
-  });
-  
-  return result;
-}
-
-// Helper function to detect and parse email content from AI messages
-function parseEmailFromMessage(content: string): { to: string; subject: string; body: string } | null {
-  // Look for email pattern: To:, Subject:, and Body: (or Message:)
-  const toMatch = content.match(/To:\s*(.+?)(?:\n|$)/i);
-  const subjectMatch = content.match(/Subject:\s*(.+?)(?:\n|$)/i);
-
-  // Match body from "Body:" or "Message:" to the end of content (captures multi-paragraph emails)
-  const bodyMatch = content.match(/(?:Body|Message):\s*\n([\s\S]+)$/i);
-
-  if (toMatch && subjectMatch && bodyMatch) {
-    return {
-      to: toMatch[1].trim(),
-      subject: subjectMatch[1].trim(),
-      body: bodyMatch[1].trim(),
-    };
-  }
-  return null;
-}
-
-// Helper function to replace simple template variables with actual values (used for email generation)
-function replaceSimpleTemplateVariables(
-  content: string,
-  storeContext?: {
-    name?: string;
-    address?: string;
-    city?: string;
-    state?: string;
-    phone?: string;
-    website?: string;
-    email?: string;
-    point_of_contact?: string;
-    poc_email?: string;
-    poc_phone?: string;
-  },
-  user?: any
-) {
-  let result = content;
-
-  // Get user data (agent info)
-  const agentName = user?.username || "Your Name";
-  const agentEmail = user?.email || "your@email.com";
-  const agentPhone = (user as any)?.phone || "";
-  const agentMeetingLink = (user as any)?.meetingLink || "";
-
-  // Replace store-related variables
-  if (storeContext) {
-    // Smart email replacement: try POC Email first, fall back to Email
-    const pocEmail = storeContext.poc_email || "";
-    const generalEmail = storeContext.email || "";
-    const smartEmail = pocEmail || generalEmail || "";
-
-    result = result.replace(/\{\{storeName\}\}/g, storeContext.name || "");
-    result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || "");
-    result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || "");
-    result = result.replace(/\{\{storeState\}\}/g, storeContext.state || "");
-    result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || "");
-    result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || "");
-    result = result.replace(/\{\{pocName\}\}/g, storeContext.point_of_contact || "");
-
-    // Both {{email}} and {{pocEmail}} use smart fallback logic (POC email → general email)
-    result = result.replace(/\{\{pocEmail\}\}/g, smartEmail);
-    result = result.replace(/\{\{email\}\}/g, smartEmail);
-    result = result.replace(/\{\{pocPhone\}\}/g, storeContext.poc_phone || "");
-  }
-
-  // Replace agent variables
-  result = result.replace(/\{\{agentName\}\}/g, agentName);
-  result = result.replace(/\{\{agentEmail\}\}/g, agentEmail);
-  result = result.replace(/\{\{agentPhone\}\}/g, agentPhone);
-  result = result.replace(/\{\{agentMeetingLink\}\}/g, agentMeetingLink);
-
-  // Replace date/time variables
-  const now = new Date();
-  result = result.replace(/\{\{currentDate\}\}/g, now.toLocaleDateString());
-  result = result.replace(/\{\{currentTime\}\}/g, now.toLocaleTimeString());
-
-  result = result.replace(/\{\{image:(.*?)\}\}/g, (match, url) => {
-    let directUrl = url.trim();
-    const fileMatch = directUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (fileMatch) {
-      directUrl = `https://lh3.googleusercontent.com/d/${fileMatch[1]}`;
-    } else {
-      const idMatch = directUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (idMatch) {
-        directUrl = `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
-      }
-    }
-    return `<img src="${directUrl}" alt="" style="max-width: 100%; height: auto; display: block; margin: 10px 0;" />`;
-  });
-
-  return result;
-}
+import { formatAIContent, parseEmailFromMessage, renderFormattedText, replaceSimpleTemplateVariables } from "@/components/inline-ai-chat-utils";
+import { TemplatePreviewDialog } from "@/components/template-preview-dialog";
+import { InlineAiTemplateBuilderDialog } from "@/components/inline-ai-template-builder-dialog";
+import { buildInlineAiContextData } from "@/components/inline-ai-context-data";
+import { handleConversationsPanelToggle, handleTemplatesPanelToggle } from "@/components/inline-ai-sidebar-toggle";
+import type { InlineAIChatEnhancedProps, TimelineItem } from "@/components/inline-ai-chat-enhanced.types";
+import { InlineAiChatMainLayout } from "@/components/inline-ai-chat-main-layout";
+import { InlineAiPrimaryDialogs } from "@/components/inline-ai-primary-dialogs";
 
 export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadDefaultScriptTrigger, trackerSheetId, onStatusChange }: InlineAIChatEnhancedProps) {
   const { toast } = useToast();
@@ -295,18 +57,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollBottomRef = useRef<HTMLDivElement>(null);
   
-  // Timeline state - chronological order of scripts and messages
-  type TimelineItem = 
-    | { type: 'script'; id: string; title: string; content: string; timestamp: number }
-    | { type: 'message'; id: string; role: 'user' | 'assistant'; content: string; timestamp: number; status?: 'pending' | 'sent' | 'error'; error?: string };
-  
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [lastLoadTrigger, setLastLoadTrigger] = useState(0);
 
-  // Template form state
-  const [newTemplateTitle, setNewTemplateTitle] = useState("");
-  const [newTemplateContent, setNewTemplateContent] = useState("");
-  const [newTemplateTags, setNewTemplateTags] = useState("");
   const [templateSearch, setTemplateSearch] = useState("");
 
   // Dialog states
@@ -986,26 +739,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   useEffect(() => {
     if (contextUpdateTrigger && contextUpdateTrigger > 0 && selectedConversationId && storeContext) {
       const updateContext = async () => {
-        const contextData = {
-          sales_ready_summary: storeContext.sales_ready_summary,
-          notes: storeContext.notes,
-          point_of_contact: storeContext.point_of_contact,
-          poc_email: storeContext.poc_email,
-          poc_phone: storeContext.poc_phone,
-          status: storeContext.status,
-          follow_up_date: storeContext.follow_up_date,
-          next_action: storeContext.next_action,
-          dba: storeContext.dba,
-          storeName: storeContext.name,
-          type: storeContext.type,
-          link: storeContext.link,
-          address: storeContext.address,
-          city: storeContext.city,
-          state: storeContext.state,
-          phone: storeContext.phone,
-          email: storeContext.email,
-          website: storeContext.website,
-        };
+        const contextData = buildInlineAiContextData(storeContext);
         await updateConversationContextMutation.mutateAsync({ 
           id: selectedConversationId, 
           contextData 
@@ -1047,26 +781,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   // Mutations
   const createConversationMutation = useMutation({
     mutationFn: async () => {
-      const contextData = storeContext ? {
-        sales_ready_summary: storeContext.sales_ready_summary,
-        notes: storeContext.notes,
-        point_of_contact: storeContext.point_of_contact,
-        poc_email: storeContext.poc_email,
-        poc_phone: storeContext.poc_phone,
-        status: storeContext.status,
-        follow_up_date: storeContext.follow_up_date,
-        next_action: storeContext.next_action,
-        dba: storeContext.dba,
-        storeName: storeContext.name,
-        type: storeContext.type,
-        link: storeContext.link,
-        address: storeContext.address,
-        city: storeContext.city,
-        state: storeContext.state,
-        phone: storeContext.phone,
-        email: storeContext.email,
-        website: storeContext.website,
-      } : {};
+      const contextData = buildInlineAiContextData(storeContext) || {};
 
       return await apiRequest("POST", "/api/conversations", {
         title: storeContext?.name ? `Chat about ${storeContext.name}` : "New Chat",
@@ -1115,26 +830,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: string | null; content: string }) => {
-      const contextData = storeContext ? {
-        sales_ready_summary: storeContext.sales_ready_summary,
-        notes: storeContext.notes,
-        point_of_contact: storeContext.point_of_contact,
-        poc_email: storeContext.poc_email,
-        poc_phone: storeContext.poc_phone,
-        status: storeContext.status,
-        follow_up_date: storeContext.follow_up_date,
-        next_action: storeContext.next_action,
-        dba: storeContext.dba,
-        storeName: storeContext.name,
-        type: storeContext.type,
-        link: storeContext.link,
-        address: storeContext.address,
-        city: storeContext.city,
-        state: storeContext.state,
-        phone: storeContext.phone,
-        email: storeContext.email,
-        website: storeContext.website,
-      } : undefined;
+      const contextData = buildInlineAiContextData(storeContext);
 
       return await apiRequest("POST", "/api/openai/chat", {
         message: content,
@@ -1162,9 +858,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/templates/tags"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user-tags"] });
-      setNewTemplateTitle("");
-      setNewTemplateContent("");
-      setNewTemplateTags("");
       setBuilderTitle("");
       setBuilderContent("");
       setBuilderType("Email");
@@ -1392,27 +1085,63 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     }
   };
 
-  const handleSaveTemplate = () => {
-    if (!newTemplateTitle.trim() || !newTemplateContent.trim()) {
-      toast({
-        title: "Error",
-        description: "Title and content are required",
-        variant: "destructive",
-      });
-      return;
+  const handleOpenTemplateBuilderFromSidebar = () => {
+    setBuilderTitle("");
+    setBuilderContent("");
+    setBuilderType("Email");
+    setBuilderTags("");
+    setBuilderIsDefault(false);
+    setEditingTemplateId(null);
+    setEmailTo("{{email}}");
+    setEmailSubject("");
+    setEmailBody("");
+    setTemplateBuilderOpen(true);
+  };
+
+  const handleInjectTemplate = (template: Template) => {
+    isInjectingScriptRef.current = true;
+
+    const filledContent = replaceTemplateVariables(template.content, storeContext, user);
+    const scriptItem: TimelineItem = {
+      type: "script",
+      id: `script-${Date.now()}`,
+      title: template.title,
+      content: filledContent,
+      timestamp: Date.now(),
+    };
+    setTimeline(prev => [...prev, scriptItem]);
+    toast({
+      title: "Script Injected",
+      description: `"${template.title}" added to display`,
+    });
+  };
+
+  const handleEditTemplateFromLibrary = (template: Template) => {
+    setBuilderTitle(template.title);
+    const templateType = (template as any).type || "Email";
+    setBuilderType(templateType);
+    setBuilderTags(template.tags?.join(", ") || "");
+    setEditingTemplateId(template.id);
+    setBuilderIsDefault((template as any).isDefault || false);
+
+    if (templateType === "Email") {
+      const parsed = parseEmailTemplate(template.content);
+      if (parsed) {
+        setEmailTo(parsed.to);
+        setEmailSubject(parsed.subject);
+        setEmailBody(parsed.body);
+        setBuilderContent("");
+      } else {
+        setBuilderContent(template.content);
+      }
+    } else {
+      setBuilderContent(template.content);
+      setEmailTo("{{email}}");
+      setEmailSubject("");
+      setEmailBody("");
     }
 
-    const tags = newTemplateTags
-      .split(",")
-      .map(t => t.trim())
-      .filter(Boolean);
-
-    createTemplateMutation.mutate({
-      title: newTemplateTitle,
-      content: newTemplateContent,
-      type: "Script",
-      tags,
-    });
+    setTemplateBuilderView("builder");
   };
 
   const handleCopyTemplate = async (template: Template) => {
@@ -1559,1711 +1288,162 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     } catch { return true; }
   });
 
-  const handleConversationsToggle = (isOpen: boolean) => {
-    if (isOpen) {
-      setTemplatesOpen(false);
-      try { localStorage.setItem('wickCoach_templatesOpen', 'false'); } catch {}
-    }
-    setConversationsOpen(isOpen);
-    try { localStorage.setItem('wickCoach_conversationsOpen', String(isOpen)); } catch {}
-  };
+  const handleConversationsToggle = (isOpen: boolean) =>
+    handleConversationsPanelToggle({ isOpen, setConversationsOpen, setTemplatesOpen });
 
-  const handleTemplatesToggle = (isOpen: boolean) => {
-    if (isOpen) {
-      setConversationsOpen(false);
-      try { localStorage.setItem('wickCoach_conversationsOpen', 'false'); } catch {}
-    }
-    setTemplatesOpen(isOpen);
-    try { localStorage.setItem('wickCoach_templatesOpen', String(isOpen)); } catch {}
-  };
+  const handleTemplatesToggle = (isOpen: boolean) =>
+    handleTemplatesPanelToggle({ isOpen, setConversationsOpen, setTemplatesOpen });
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Sidebar */}
-      {sidebarOpen && (
-        <div className="w-64 border-r flex flex-col min-h-0 h-full">
-          <div className="p-3 border-b flex items-center justify-between flex-shrink-0">
-            <h3 className="font-semibold text-sm">Wick Coach</h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(false)}
-              className="h-7 w-7"
-              data-testid="button-close-sidebar"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </div>
+      <InlineAiChatMainLayout
+        conversations={conversations}
+        conversationsByProject={conversationsByProject as Record<string, Conversation[]>}
+        conversationsOpen={conversationsOpen}
+        createConversationMutation={createConversationMutation}
+        deleteConversationMutation={deleteConversationMutation}
+        deleteProjectMutation={deleteProjectMutation}
+        deleteTemplateMutation={deleteTemplateMutation}
+        filteredTemplates={filteredTemplates}
+        handleConversationsToggle={handleConversationsToggle}
+        handleCopyTemplate={handleCopyTemplate}
+        handleEditTemplateFromLibrary={handleEditTemplateFromLibrary}
+        handleEmailTemplate={handleEmailTemplate}
+        handleInjectTemplate={handleInjectTemplate}
+        handleKeyPress={handleKeyPress}
+        handleOpenTemplateBuilderFromSidebar={handleOpenTemplateBuilderFromSidebar}
+        handleRetryMessage={handleRetryMessage}
+        handleSendMessage={handleSendMessage}
+        handleTemplatesToggle={handleTemplatesToggle}
+        isSending={isSending}
+        mergedTimeline={mergedTimeline}
+        messageInput={messageInput}
+        messagesLoading={messagesLoading}
+        moveConversationMutation={moveConversationMutation}
+        projects={projects}
+        scrollBottomRef={scrollBottomRef}
+        scrollRef={scrollRef}
+        selectedConversation={selectedConversation}
+        selectedConversationId={selectedConversationId}
+        setMessageInput={setMessageInput}
+        setNewConversationTitle={setNewConversationTitle}
+        setNewProjectDialogOpen={setNewProjectDialogOpen}
+        setRenameDialogOpen={setRenameDialogOpen}
+        setRenamingConversationId={setRenamingConversationId}
+        setSelectedConversationId={setSelectedConversationId}
+        setSidebarOpen={setSidebarOpen}
+        setTemplateBuilderOpen={setTemplateBuilderOpen}
+        setTemplateSearch={setTemplateSearch}
+        setTimeline={setTimeline}
+        sidebarOpen={sidebarOpen}
+        storeContext={storeContext}
+        templateSearch={templateSearch}
+        templates={templates}
+        templatesOpen={templatesOpen}
+        timeline={timeline}
+        toast={toast}
+        user={user}
+        copyMessageToClipboard={copyMessageToClipboard}
+        makeTemplateFromMessage={makeTemplateFromMessage}
+        onConversationsToggle={handleConversationsToggle}
+        onNewProject={() => setNewProjectDialogOpen(true)}
+        onRenameConversation={(conversation: Conversation) => {
+          setRenamingConversationId(conversation.id);
+          setNewConversationTitle(conversation.title);
+          setRenameDialogOpen(true);
+        }}
+        onSelectConversation={setSelectedConversationId}
+        onTemplatesToggle={handleTemplatesToggle}
+      />
 
-          {/* Conversations Collapsible */}
-          <Collapsible open={conversationsOpen} onOpenChange={handleConversationsToggle} className={conversationsOpen ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "flex-shrink-0"}>
-              <div className="border-b flex-shrink-0">
-                <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-conversations">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    <span className="font-semibold text-sm">Conversations</span>
-                    <Badge variant="secondary">{conversations.length}</Badge>
-                  </div>
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform ${conversationsOpen ? "rotate-180" : ""}`}
-                  />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="flex-1 min-h-0 overflow-hidden">
-                  <div className="p-2 h-full overflow-y-auto">
-                    <div className="flex gap-1 mb-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => createConversationMutation.mutate()}
-                        className="flex-1"
-                        data-testid="button-new-chat"
-                      >
-                        <MessageSquarePlus className="h-4 w-4 mr-1" />
-                        New Chat
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setNewProjectDialogOpen(true)}
-                        className="flex-1"
-                        data-testid="button-new-project"
-                      >
-                        <FolderPlus className="h-4 w-4 mr-1" />
-                        New Project
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      {/* Uncategorized */}
-                      {conversationsByProject.none && conversationsByProject.none.length > 0 && (
-                        <div className="space-y-1">
-                          {conversationsByProject.none.map((conv) => (
-                            <ConversationContextMenu
-                              key={conv.id}
-                              conversationId={conv.id}
-                              onRename={() => {
-                                setRenamingConversationId(conv.id);
-                                setNewConversationTitle(conv.title);
-                                setRenameDialogOpen(true);
-                              }}
-                              onDelete={() => deleteConversationMutation.mutate(conv.id)}
-                              onMove={(projectId) => moveConversationMutation.mutate({ conversationId: conv.id, projectId })}
-                              projects={projects}
-                              currentProjectId={conv.projectId}
-                            >
-                              <div
-                                className={`p-2 rounded-md cursor-pointer hover-elevate ${
-                                  selectedConversationId === conv.id ? "bg-accent" : ""
-                                }`}
-                                onClick={() => setSelectedConversationId(conv.id)}
-                                data-testid={`conversation-item-${conv.id}`}
-                              >
-                                <p className="text-sm font-medium truncate">{conv.title}</p>
-                              </div>
-                            </ConversationContextMenu>
-                          ))}
-                        </div>
-                      )}
+      <InlineAiPrimaryDialogs
+        createProjectMutation={createProjectMutation}
+        newConversationTitle={newConversationTitle}
+        newProjectDialogOpen={newProjectDialogOpen}
+        newProjectName={newProjectName}
+        previewTemplate={previewTemplate}
+        renameConversationMutation={renameConversationMutation}
+        renameDialogOpen={renameDialogOpen}
+        renamingConversationId={renamingConversationId}
+        setNewConversationTitle={setNewConversationTitle}
+        setNewProjectDialogOpen={setNewProjectDialogOpen}
+        setNewProjectName={setNewProjectName}
+        setRenameDialogOpen={setRenameDialogOpen}
+        setRenamingConversationId={setRenamingConversationId}
+        setTemplatePreviewOpen={setTemplatePreviewOpen}
+        storeContext={storeContext}
+        templatePreviewOpen={templatePreviewOpen}
+        toast={toast}
+        user={user}
+      />
 
-                      {/* Projects */}
-                      {projects.map((project) => (
-                        <div key={project.id} className="space-y-1">
-                          <ProjectContextMenu
-                            projectId={project.id}
-                            onDelete={() => deleteProjectMutation.mutate(project.id)}
-                          >
-                            <div className="flex items-center gap-2 px-2 py-1 rounded-md hover-elevate" data-testid={`project-item-${project.id}`}>
-                              <Folder className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm font-medium">{project.name}</span>
-                            </div>
-                          </ProjectContextMenu>
-                          {conversationsByProject[project.id]?.map((conv) => (
-                            <ConversationContextMenu
-                              key={conv.id}
-                              conversationId={conv.id}
-                              onRename={() => {
-                                setRenamingConversationId(conv.id);
-                                setNewConversationTitle(conv.title);
-                                setRenameDialogOpen(true);
-                              }}
-                              onDelete={() => deleteConversationMutation.mutate(conv.id)}
-                              onMove={(projectId) => moveConversationMutation.mutate({ conversationId: conv.id, projectId })}
-                              projects={projects}
-                              currentProjectId={conv.projectId}
-                            >
-                              <div
-                                className={`p-2 rounded-md cursor-pointer ml-4 hover-elevate ${
-                                  selectedConversationId === conv.id ? "bg-accent" : ""
-                                }`}
-                                onClick={() => setSelectedConversationId(conv.id)}
-                                data-testid={`conversation-item-${conv.id}`}
-                              >
-                                <p className="text-sm font-medium truncate">{conv.title}</p>
-                              </div>
-                            </ConversationContextMenu>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
+      <InlineAiTemplateBuilderDialog
+        availableVariables={availableVariables}
+        builderContent={builderContent}
+        builderIsDefault={builderIsDefault}
+        builderTags={builderTags}
+        builderTitle={builderTitle}
+        builderType={builderType}
+        contentTextareaRef={contentTextareaRef}
+        convertToDirectImageUrl={convertToDirectImageUrl}
+        createTemplateMutation={createTemplateMutation}
+        deleteImageMutation={deleteImageMutation}
+        deleteTagsMutation={deleteTagsMutation}
+        deleteTemplateMutation={deleteTemplateMutation}
+        editingTemplateId={editingTemplateId}
+        emailBody={emailBody}
+        emailBodyRef={emailBodyRef}
+        emailSubject={emailSubject}
+        emailSubjectRef={emailSubjectRef}
+        emailTo={emailTo}
+        emailToRef={emailToRef}
+        extractGoogleDriveFileId={extractGoogleDriveFileId}
+        formatEmailTemplate={formatEmailTemplate}
+        handleDeleteSelectedTags={handleDeleteSelectedTags}
+        handleEditTemplateFromLibrary={handleEditTemplateFromLibrary}
+        handleImageError={handleImageError}
+        handleTemplateTypeChange={handleTemplateTypeChange}
+        imagePreviewError={imagePreviewError}
+        insertImageAtCursor={insertImageAtCursor}
+        insertTag={insertTag}
+        insertVariable={insertVariable}
+        newImageLabel={newImageLabel}
+        newImageUrl={newImageUrl}
+        saveImageMutation={saveImageMutation}
+        savedEmailImages={savedEmailImages}
+        selectedTagFilter={selectedTagFilter}
+        selectedTagIds={selectedTagIds}
+        selectedTypeFilter={selectedTypeFilter}
+        setBuilderContent={setBuilderContent}
+        setBuilderIsDefault={setBuilderIsDefault}
+        setBuilderTags={setBuilderTags}
+        setBuilderTitle={setBuilderTitle}
+        setBuilderType={setBuilderType}
+        setEditingTemplateId={setEditingTemplateId}
+        setEmailBody={setEmailBody}
+        setEmailSubject={setEmailSubject}
+        setEmailTo={setEmailTo}
+        setImagePreviewError={setImagePreviewError}
+        setNewImageLabel={setNewImageLabel}
+        setNewImageUrl={setNewImageUrl}
+        setSelectedTagFilter={setSelectedTagFilter}
+        setSelectedTagIds={setSelectedTagIds}
+        setSelectedTypeFilter={setSelectedTypeFilter}
+        setTagEditMode={setTagEditMode}
+        setTemplateBuilderOpen={setTemplateBuilderOpen}
+        setTemplateBuilderView={setTemplateBuilderView}
+        setTemplateSearch={setTemplateSearch}
+        tagEditMode={tagEditMode}
+        templateBuilderOpen={templateBuilderOpen}
+        templateBuilderView={templateBuilderView}
+        templateSearch={templateSearch}
+        templates={templates}
+        toggleTagSelection={toggleTagSelection}
+        updateTemplateMutation={updateTemplateMutation}
+        useTemplate={useTemplate}
+        userTags={userTags}
+      />
 
-          {/* Template Library */}
-          <Collapsible open={templatesOpen} onOpenChange={handleTemplatesToggle} className={templatesOpen ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "flex-shrink-0"}>
-            <div className="border-t flex-shrink-0">
-              <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-templates">
-                <div className="flex items-center gap-2">
-                  <Tag className="h-4 w-4" />
-                  <span className="font-semibold text-sm">Template Library</span>
-                  <Badge variant="secondary">{templates.length}</Badge>
-                </div>
-                <ChevronDown
-                  className={`h-4 w-4 transition-transform ${templatesOpen ? "rotate-180" : ""}`}
-                />
-              </CollapsibleTrigger>
-            </div>
-            <CollapsibleContent className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-              <div className="p-2 space-y-3">
-                  {/* Template Builder Button */}
-                  <Button
-                    onClick={() => {
-                      // Reset all builder state for a new template
-                      setBuilderTitle("");
-                      setBuilderContent("");
-                      setBuilderType("Email");
-                      setBuilderTags("");
-                      setBuilderIsDefault(false);
-                      setEditingTemplateId(null);
-                      setEmailTo("{{email}}");
-                      setEmailSubject("");
-                      setEmailBody("");
-                      setTemplateBuilderOpen(true);
-                    }}
-                    className="w-full"
-                    variant="default"
-                    data-testid="button-template-builder"
-                  >
-                    Template Builder
-                  </Button>
-
-                  {/* Search Templates */}
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search templates..."
-                      value={templateSearch}
-                      onChange={(e) => setTemplateSearch(e.target.value)}
-                      className="pl-8"
-                      data-testid="input-template-search"
-                    />
-                  </div>
-
-                  {/* Template List */}
-                    <div className="space-y-2">
-                    {filteredTemplates.map((template) => (
-                      <div key={template.id} className="p-2 border rounded-md bg-card" data-testid={`template-${template.id}`}>
-                        <div className="flex items-start justify-between mb-1">
-                          <h5 className="text-xs font-semibold">{template.title}</h5>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5"
-                              onClick={() => {
-                                setBuilderTitle(template.title);
-                                const templateType = (template as any).type || "Email";
-                                setBuilderType(templateType);
-                                setBuilderTags(template.tags?.join(", ") || "");
-                                setEditingTemplateId(template.id);
-                                
-                                // Set isDefault based on whether this template is the default
-                                setBuilderIsDefault((template as any).isDefault || false);
-
-                                // Parse content based on type
-                                if (templateType === "Email") {
-                                  const parsed = parseEmailTemplate(template.content);
-                                  if (parsed) {
-                                    setEmailTo(parsed.to);
-                                    setEmailSubject(parsed.subject);
-                                    setEmailBody(parsed.body);
-                                    setBuilderContent(""); // Clear script content
-                                  } else {
-                                    // Fallback if parsing fails
-                                    setBuilderContent(template.content);
-                                  }
-                                } else {
-                                  // Script type
-                                  setBuilderContent(template.content);
-                                  // Clear email fields
-                                  setEmailTo("{{email}}");
-                                  setEmailSubject("");
-                                  setEmailBody("");
-                                }
-
-                                setTemplateBuilderOpen(true);
-                              }}
-                              data-testid={`button-edit-template-${template.id}`}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 text-destructive"
-                              onClick={() => deleteTemplateMutation.mutate(template.id)}
-                              disabled={deleteTemplateMutation.isPending}
-                              data-testid={`button-delete-template-${template.id}`}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                          {template.content}
-                        </p>
-                        {template.tags && template.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {template.tags.map((tag, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs py-0">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                        <div className="flex gap-1">
-                          {template.type === "Script" ? (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="flex-1"
-                              onClick={() => {
-                                // Set flag to prevent auto-scroll on script injection
-                                isInjectingScriptRef.current = true;
-                                
-                                const filledContent = replaceTemplateVariables(template.content, storeContext, user);
-                                const scriptItem: TimelineItem = {
-                                  type: 'script',
-                                  id: `script-${Date.now()}`,
-                                  title: template.title,
-                                  content: filledContent,
-                                  timestamp: Date.now()
-                                };
-                                setTimeline(prev => [...prev, scriptItem]);
-                                toast({ 
-                                  title: "Script Injected", 
-                                  description: `"${template.title}" added to display` 
-                                });
-                              }}
-                              data-testid={`button-inject-template-${template.id}`}
-                            >
-                              <FileText className="h-3 w-3 mr-1" />
-                              Inject
-                            </Button>
-                          ) : template.type === "Email" && (storeContext?.email || storeContext?.poc_email) ? (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="flex-1"
-                              onClick={() => handleEmailTemplate(template)}
-                              data-testid={`button-email-template-${template.id}`}
-                            >
-                              <Mail className="h-3 w-3 mr-1" />
-                              Email
-                            </Button>
-                          ) : null}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                            onClick={() => handleCopyTemplate(template)}
-                            data-testid={`button-copy-template-${template.id}`}
-                          >
-                            <Copy className="h-3 w-3 mr-1" />
-                            Copy
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    </div>
-                </div>
-              </CollapsibleContent>
-          </Collapsible>
-        </div>
-      )}
-
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
-        {/* Header */}
-        <div className="p-3 border-b flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2">
-            {!sidebarOpen && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen(true)}
-                className="h-7 w-7"
-                data-testid="button-open-sidebar"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            )}
-            <Bot className="h-5 w-5" />
-            <h2 className="font-semibold">Sales Assistant</h2>
-          </div>
-          {timeline.some(item => item.type === 'script') && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setTimeline(prev => prev.filter(item => item.type !== 'script'));
-                toast({ title: "Scripts Cleared", description: "Script display reset" });
-              }}
-              data-testid="button-clear-scripts"
-            >
-              <X className="h-3 w-3 mr-1" />
-              Clear Scripts
-            </Button>
-          )}
-        </div>
-
-        {/* Context Indicator - only show when there's actual store context */}
-        {selectedConversation?.contextData?.storeName && (
-          <div className="px-4 py-2 bg-muted/50 text-sm flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <span className="text-muted-foreground">
-              Context:{" "}
-              <span className="font-medium text-foreground">
-                {selectedConversation.contextData.storeName}
-              </span>
-            </span>
-          </div>
-        )}
-
-        {/* Messages - Unified Timeline */}
-        <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
-          {!selectedConversationId && mergedTimeline.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8">
-              <Bot className="h-16 w-16 mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">Welcome to Sales Assistant</h3>
-              <p className="text-muted-foreground mb-4">
-                Inject a script or create a new chat to get started
-              </p>
-              <Button onClick={() => createConversationMutation.mutate()} data-testid="button-start-chat">
-                <MessageSquarePlus className="h-4 w-4 mr-2" />
-                Start New Chat
-              </Button>
-            </div>
-          ) : messagesLoading && selectedConversationId ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Render merged timeline chronologically */}
-              {mergedTimeline.map((item) => {
-                if (item.type === 'script') {
-                  // Script display
-                  return (
-                    <div key={item.id} className="border-2 border-primary/30 rounded-lg bg-card p-4" data-testid={`script-${item.id}`}>
-                      <div className="flex items-center gap-2 mb-3 pb-2 border-b">
-                        <FileText className="h-5 w-5 text-primary" />
-                        <h3 className="font-semibold text-lg">{item.title}</h3>
-                      </div>
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.content}</p>
-                      </div>
-                    </div>
-                  );
-                }
-                
-                // Type assertion: at this point, item must be a message since we filtered out scripts
-                const messageItem = item as Extract<TimelineItem, { type: 'message' }>;
-                
-                // Message display
-                const emailData = messageItem.role === "assistant" ? parseEmailFromMessage(messageItem.content) : null;
-                const processedEmailData = emailData ? {
-                  to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
-                  subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
-                  body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
-                } : null;
-
-                return (
-                  <div
-                    key={messageItem.id}
-                    className={`flex gap-3 ${messageItem.role === "user" ? "justify-end" : ""}`}
-                    data-testid={`message-${messageItem.id}`}
-                  >
-                    {messageItem.role === "assistant" && (
-                      <div className="flex-shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Bot className="h-4 w-4 text-primary" />
-                        </div>
-                      </div>
-                    )}
-                    <div className={`max-w-[80%] ${messageItem.role === "user" ? "w-full" : ""}`}>
-                        {messageItem.role === "assistant" ? (
-                          <ContextMenu>
-                            <ContextMenuTrigger>
-                              <div className="rounded-lg p-3 bg-muted">
-                                <div className="text-sm leading-relaxed">
-                                  {renderFormattedText(messageItem.content)}
-                                </div>
-                              </div>
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                              <ContextMenuItem
-                                onClick={() => copyMessageToClipboard(messageItem.content)}
-                                data-testid="context-menu-copy"
-                              >
-                                <Copy className="mr-2 h-4 w-4" />
-                                Copy
-                              </ContextMenuItem>
-                              <ContextMenuItem
-                                onClick={() => makeTemplateFromMessage(messageItem.content)}
-                                data-testid="context-menu-make-template"
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                Make Template
-                              </ContextMenuItem>
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        ) : (
-                          <div className={`rounded-lg p-3 ${
-                            messageItem.status === 'error' 
-                              ? 'bg-destructive/20 border border-destructive' 
-                              : messageItem.status === 'pending'
-                              ? 'bg-primary/70 text-primary-foreground'
-                              : 'bg-primary text-primary-foreground'
-                          }`}>
-                            <p className="text-sm whitespace-pre-wrap">{messageItem.content}</p>
-                            {messageItem.status === 'error' && (
-                              <div className="mt-2 flex items-center gap-2">
-                                <p className="text-xs text-destructive">{messageItem.error}</p>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleRetryMessage(messageItem.id, messageItem.content)}
-                                  data-testid={`button-retry-${messageItem.id}`}
-                                >
-                                  Retry
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {processedEmailData && (
-                          <EmailPreview
-                            to={processedEmailData.to}
-                            subject={processedEmailData.subject}
-                            body={processedEmailData.body}
-                          />
-                        )}
-                    </div>
-                    {messageItem.role === "user" && (
-                      <div className="flex-shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
-                          <UserIcon className="h-4 w-4" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              
-              {/* Typing indicator when AI is responding */}
-              {isSending && (
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-primary" />
-                    </div>
-                  </div>
-                  <div className="rounded-lg p-3 bg-muted">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm text-muted-foreground">AI is thinking...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Bottom anchor for auto-scroll */}
-              <div ref={scrollBottomRef} />
-            </div>
-          )}
-        </ScrollArea>
-
-        {/* Input */}
-        <div className="p-4 border-t flex-shrink-0">
-          <div className="flex gap-2">
-            <Textarea
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ask about sales scripts, objections, or product info..."
-              disabled={isSending}
-              className="min-h-[60px] max-h-[200px]"
-              data-testid="input-message"
-            />
-            <Button
-              onClick={handleSendMessage}
-              disabled={isSending || !messageInput.trim()}
-              size="icon"
-              className="h-[60px] w-[60px]"
-              data-testid="button-send-message"
-            >
-              {isSending ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-      </div>
-
-      {/* New Project Dialog */}
-      <Dialog open={newProjectDialogOpen} onOpenChange={setNewProjectDialogOpen}>
-        <DialogContent data-testid="dialog-new-project">
-          <DialogHeader>
-            <DialogTitle>New Project</DialogTitle>
-            <DialogDescription>Create a new folder to organize your conversations</DialogDescription>
-          </DialogHeader>
-          <Input
-            value={newProjectName}
-            onChange={(e) => setNewProjectName(e.target.value)}
-            placeholder="Project name..."
-            data-testid="input-project-name"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewProjectDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => createProjectMutation.mutate(newProjectName)}
-              disabled={createProjectMutation.isPending || !newProjectName.trim()}
-              data-testid="button-create-project"
-              data-primary="true"
-            >
-              Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Rename Conversation Dialog */}
-      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
-        <DialogContent data-testid="dialog-rename-conversation">
-          <DialogHeader>
-            <DialogTitle>Rename Conversation</DialogTitle>
-            <DialogDescription>Enter a new name for this conversation</DialogDescription>
-          </DialogHeader>
-          <Input
-            value={newConversationTitle}
-            onChange={(e) => setNewConversationTitle(e.target.value)}
-            placeholder="Conversation title..."
-            data-testid="input-conversation-title"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newConversationTitle.trim() && renamingConversationId) {
-                renameConversationMutation.mutate({
-                  conversationId: renamingConversationId,
-                  title: newConversationTitle.trim(),
-                });
-              }
-            }}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setRenameDialogOpen(false);
-              setRenamingConversationId(null);
-              setNewConversationTitle("");
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (renamingConversationId) {
-                  renameConversationMutation.mutate({
-                    conversationId: renamingConversationId,
-                    title: newConversationTitle.trim(),
-                  });
-                }
-              }}
-              disabled={renameConversationMutation.isPending || !newConversationTitle.trim()}
-              data-testid="button-save-rename"
-              data-primary="true"
-            >
-              {renameConversationMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Template Builder Dialog */}
-      <Dialog open={templateBuilderOpen} onOpenChange={setTemplateBuilderOpen}>
-        <DialogContent className="max-w-full w-screen h-screen max-h-screen m-0 rounded-none p-0 flex flex-col" data-testid="dialog-template-builder">
-          <DialogHeader className="px-6 py-4 border-b">
-            <div className="flex items-center gap-4">
-              {templateBuilderView === "library" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setTemplateBuilderView("builder")}
-                  data-testid="button-back-to-builder"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-              )}
-              <DialogTitle>{templateBuilderView === "builder" ? "Template Builder" : "My Templates"}</DialogTitle>
-            </div>
-          </DialogHeader>
-
-          {/* Builder View */}
-          {templateBuilderView === "builder" && (
-            <div className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
-              <div className="space-y-4 flex-1 flex flex-col min-h-0">
-                {/* Type & Title - Side by Side */}
-                <div className="flex gap-4">
-                  <div className="w-[200px] space-y-2">
-                    <label className="text-sm font-semibold">Type</label>
-                    <Select
-                      value={builderType}
-                      onValueChange={(value: "Email" | "Script") => handleTemplateTypeChange(value)}
-                    >
-                      <SelectTrigger data-testid="select-builder-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Email">Email</SelectItem>
-                        <SelectItem value="Script">Script</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <label className="text-sm font-semibold">Title</label>
-                    <Input
-                      placeholder="Template name..."
-                      value={builderTitle}
-                      onChange={(e) => setBuilderTitle(e.target.value)}
-                      data-testid="input-builder-title"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-semibold">Tags</label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          data-testid="button-insert-tag"
-                        >
-                          <Tag className="h-4 w-4 mr-1" />
-                          My Tags
-                          <ChevronDown className="h-3 w-3 ml-1" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-72" align="end">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold text-sm flex items-center gap-2">
-                              <Tag className="h-4 w-4" />
-                              Your Personal Tags
-                            </h4>
-                            {userTags.length > 0 && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setTagEditMode(!tagEditMode);
-                                  if (tagEditMode) {
-                                    setSelectedTagIds(new Set());
-                                  }
-                                }}
-                                data-testid="button-edit-tags"
-                              >
-                                {tagEditMode ? "Done" : "Edit"}
-                              </Button>
-                            )}
-                          </div>
-
-                          {tagEditMode && selectedTagIds.size > 0 && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="w-full"
-                              onClick={handleDeleteSelectedTags}
-                              disabled={deleteTagsMutation.isPending}
-                              data-testid="button-delete-selected-tags"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete {selectedTagIds.size} tag{selectedTagIds.size > 1 ? 's' : ''}
-                            </Button>
-                          )}
-
-                          {userTags.length === 0 ? (
-                            <p className="text-xs text-muted-foreground py-4 text-center">
-                              No tags yet. Tags you use in templates will appear here.
-                            </p>
-                          ) : (
-                            <div className="space-y-1 max-h-64 overflow-y-auto">
-                              {userTags.map((userTag) => (
-                                <button
-                                  key={userTag.id}
-                                  onClick={() => tagEditMode ? toggleTagSelection(userTag.id) : insertTag(userTag.tag)}
-                                  className="w-full text-left p-2 rounded hover-elevate flex items-center justify-between group"
-                                  data-testid={`${tagEditMode ? 'toggle' : 'insert'}-tag-${userTag.tag}`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {tagEditMode && (
-                                      <input
-                                        type="checkbox"
-                                        checked={selectedTagIds.has(userTag.id)}
-                                        onChange={() => toggleTagSelection(userTag.id)}
-                                        className="h-4 w-4"
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    )}
-                                    <span className="text-sm">{userTag.tag}</span>
-                                  </div>
-                                  {!tagEditMode && (
-                                    <Badge variant="outline" className="text-xs">Click to add</Badge>
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <Input
-                    placeholder="email, follow-up, introduction..."
-                    value={builderTags}
-                    onChange={(e) => setBuilderTags(e.target.value)}
-                    data-testid="input-builder-tags"
-                  />
-                  <p className="text-xs text-muted-foreground">Comma-separated tags</p>
-                </div>
-
-                {/* Default Script Checkbox - Only for Script type */}
-                {builderType === "Script" && (
-                  <div className="space-y-2">
-                    <div 
-                      className={`flex items-center gap-2 p-3 rounded border ${
-                        !templates.some(t => t.type === 'Script' && t.isDefault) 
-                          ? 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700' 
-                          : 'border-border'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        id="builder-is-default"
-                        checked={builderIsDefault}
-                        onChange={(e) => setBuilderIsDefault(e.target.checked)}
-                        className="h-4 w-4"
-                        data-testid="checkbox-is-default"
-                      />
-                      <label htmlFor="builder-is-default" className="text-sm font-medium cursor-pointer flex-1">
-                        Set as Default Script
-                      </label>
-                      {!templates.some(t => t.type === 'Script' && t.isDefault) && (
-                        <span className="text-xs text-yellow-700 dark:text-yellow-500">No default set</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Default script automatically loads when you click a phone number
-                    </p>
-                  </div>
-                )}
-
-                {/* Conditional Content Based on Type */}
-                {builderType === "Email" ? (
-                  // Email Builder - Compact Layout
-                  <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                    {/* To Field - Simple */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold">To</label>
-                      <Input
-                        ref={emailToRef}
-                        placeholder="{{email}}"
-                        value={emailTo}
-                        onChange={(e) => setEmailTo(e.target.value)}
-                        className="font-mono"
-                        data-testid="input-email-to"
-                      />
-                    </div>
-
-                    {/* Subject Field - Simple */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold">Subject</label>
-                      <Input
-                        ref={emailSubjectRef}
-                        placeholder="Email subject..."
-                        value={emailSubject}
-                        onChange={(e) => setEmailSubject(e.target.value)}
-                        className="font-mono"
-                        data-testid="input-email-subject"
-                      />
-                    </div>
-
-                    {/* Body Field - Label and buttons on same row, justified */}
-                    <div className="space-y-2 flex-1 flex flex-col min-h-0">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-semibold">Body</label>
-                        <div className="flex flex-wrap gap-2">
-                          {/* Store Info Variables */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-store-variable-body"
-                              >
-                                <Store className="h-4 w-4 mr-1" />
-                                Store
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72" align="end">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <Store className="h-4 w-4" />
-                                  Store Information
-                                </h4>
-                                <div className="space-y-1">
-                                  {availableVariables
-                                    .filter(v => ['storeName', 'storeAddress', 'storeCity', 'storeState', 'storeWebsite', 'storePhone'].includes(v.name))
-                                    .map((variable) => (
-                                      <button
-                                        key={variable.name}
-                                        onClick={() => insertVariable(variable.name, 'body')}
-                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                        data-testid={`insert-variable-body-${variable.name}`}
-                                      >
-                                        <div className="font-mono text-sm text-primary">
-                                          {`{{${variable.name}}}`}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {variable.description}
-                                        </div>
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-
-                          {/* Contact Variables */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-contact-variable-body"
-                              >
-                                <Mail className="h-4 w-4 mr-1" />
-                                Contact
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72" align="end">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <Mail className="h-4 w-4" />
-                                  Contact Information
-                                </h4>
-                                <div className="space-y-1">
-                                  {availableVariables
-                                    .filter(v => ['email', 'pocName', 'pocEmail', 'pocPhone'].includes(v.name))
-                                    .map((variable) => (
-                                      <button
-                                        key={variable.name}
-                                        onClick={() => insertVariable(variable.name, 'body')}
-                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                        data-testid={`insert-variable-body-${variable.name}`}
-                                      >
-                                        <div className="font-mono text-sm text-primary">
-                                          {`{{${variable.name}}}`}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {variable.description}
-                                        </div>
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-
-                          {/* Agent Variables */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-agent-variable-body"
-                              >
-                                <UserIcon className="h-4 w-4 mr-1" />
-                                Agent
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72" align="end">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <UserIcon className="h-4 w-4" />
-                                  Agent Information
-                                </h4>
-                                <div className="space-y-1">
-                                  {availableVariables
-                                    .filter(v => ['agentName', 'agentEmail', 'agentPhone', 'agentMeetingLink'].includes(v.name))
-                                    .map((variable) => (
-                                      <button
-                                        key={variable.name}
-                                        onClick={() => insertVariable(variable.name, 'body')}
-                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                        data-testid={`insert-variable-body-${variable.name}`}
-                                      >
-                                        <div className="font-mono text-sm text-primary">
-                                          {`{{${variable.name}}}`}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {variable.description}
-                                        </div>
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-
-                          {/* Date/Time Variables */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-datetime-variable-body"
-                              >
-                                <Calendar className="h-4 w-4 mr-1" />
-                                Date/Time
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72" align="end">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <Calendar className="h-4 w-4" />
-                                  Date & Time
-                                </h4>
-                                <div className="space-y-1">
-                                  {availableVariables
-                                    .filter(v => ['currentDate', 'currentTime'].includes(v.name))
-                                    .map((variable) => (
-                                      <button
-                                        key={variable.name}
-                                        onClick={() => insertVariable(variable.name, 'body')}
-                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                        data-testid={`insert-variable-body-${variable.name}`}
-                                      >
-                                        <div className="font-mono text-sm text-primary">
-                                          {`{{${variable.name}}}`}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {variable.description}
-                                        </div>
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-
-                          {/* Image Library */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-image-body"
-                              >
-                                <ImageIcon className="h-4 w-4 mr-1" />
-                                Image
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80" align="end">
-                              <div className="space-y-3">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <ImageIcon className="h-4 w-4" />
-                                  Image Library
-                                </h4>
-                                {savedEmailImages.length > 0 ? (
-                                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                                    {savedEmailImages.map((img: any) => (
-                                      <div
-                                        key={img.id}
-                                        className="relative group rounded border p-1 hover-elevate cursor-pointer"
-                                        data-testid={`image-library-item-${img.id}`}
-                                      >
-                                        <button
-                                          onClick={() => insertImageAtCursor(img.url, 'body')}
-                                          className="w-full"
-                                          data-testid={`button-insert-image-${img.id}`}
-                                        >
-                                          <img
-                                            src={convertToDirectImageUrl(img.url)}
-                                            alt={img.label}
-                                            className="w-full h-16 object-cover rounded"
-                                            onError={(e) => handleImageError(e, img.url)}
-                                          />
-                                          <p className="text-xs truncate mt-1 text-muted-foreground">{img.label}</p>
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteImageMutation.mutate(img.id);
-                                          }}
-                                          className="absolute top-0 right-0 p-0.5 rounded-bl bg-destructive/80 text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                                          data-testid={`button-delete-image-${img.id}`}
-                                        >
-                                          <X className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground text-center py-2">No saved images yet</p>
-                                )}
-                                <div className="border-t" />
-                                <div className="space-y-2">
-                                  <p className="text-xs font-medium">Add New Image</p>
-                                  <Input
-                                    placeholder="Paste image URL (Google Drive, etc.)"
-                                    value={newImageUrl.startsWith('data:') ? 'Pasted image (use a URL instead)' : newImageUrl}
-                                    onChange={(e) => { setNewImageUrl(e.target.value); setImagePreviewError(false); }}
-                                    onPaste={(e) => {
-                                      const text = e.clipboardData.getData('text/plain');
-                                      if (text && !text.startsWith('data:')) {
-                                        e.preventDefault();
-                                        setNewImageUrl(text.trim());
-                                        setImagePreviewError(false);
-                                      }
-                                    }}
-                                    className="text-xs"
-                                    data-testid="input-new-image-url"
-                                  />
-                                  <Input
-                                    placeholder="Label (e.g., Product Banner)"
-                                    value={newImageLabel}
-                                    onChange={(e) => setNewImageLabel(e.target.value)}
-                                    className="text-xs"
-                                    data-testid="input-new-image-label"
-                                  />
-                                  {newImageUrl && !imagePreviewError && !newImageUrl.startsWith('data:') && (
-                                    <div className="rounded border p-1">
-                                      <img
-                                        src={convertToDirectImageUrl(newImageUrl)}
-                                        alt="Preview"
-                                        className="w-full h-20 object-cover rounded"
-                                        onError={(e) => {
-                                          const fileId = extractGoogleDriveFileId(newImageUrl);
-                                          if (!fileId) { setImagePreviewError(true); return; }
-                                          const img = e.target as HTMLImageElement;
-                                          if (img.src.includes('googleusercontent.com')) {
-                                            img.src = `https://drive.google.com/uc?export=view&id=${fileId}`;
-                                          } else if (img.src.includes('uc?export=view')) {
-                                            img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
-                                          } else {
-                                            setImagePreviewError(true);
-                                          }
-                                        }}
-                                        data-testid="img-new-image-preview"
-                                      />
-                                    </div>
-                                  )}
-                                  {newImageUrl.startsWith('data:') && (
-                                    <p className="text-xs text-destructive">Please paste a URL link, not an image directly. Use a Google Drive share link or any public image URL.</p>
-                                  )}
-                                  {imagePreviewError && !newImageUrl.startsWith('data:') && (
-                                    <p className="text-xs text-destructive">Could not load image preview. Check the URL.</p>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    className="w-full"
-                                    disabled={!newImageUrl || !newImageLabel || saveImageMutation.isPending || newImageUrl.startsWith('data:')}
-                                    onClick={async () => {
-                                      const urlToSave = convertToDirectImageUrl(newImageUrl.trim());
-                                      await saveImageMutation.mutateAsync({ url: urlToSave, label: newImageLabel });
-                                      insertImageAtCursor(urlToSave, 'body');
-                                      setNewImageUrl("");
-                                      setNewImageLabel("");
-                                      setImagePreviewError(false);
-                                    }}
-                                    data-testid="button-save-insert-image"
-                                  >
-                                    {saveImageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-                                    Save & Insert
-                                  </Button>
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </div>
-                      <Textarea
-                        ref={emailBodyRef}
-                        placeholder="Email body with {{variables}}..."
-                        value={emailBody}
-                        onChange={(e) => setEmailBody(e.target.value)}
-                        className="flex-1 min-h-[200px] font-mono"
-                        data-testid="textarea-email-body"
-                      />
-                      {/* Inline image previews for {{image:...}} placeholders */}
-                      {(() => {
-                        const imageMatches = emailBody.match(/\{\{image:(.*?)\}\}/g);
-                        if (!imageMatches || imageMatches.length === 0) return null;
-                        const imageUrls = imageMatches.map(m => m.replace(/^\{\{image:/, '').replace(/\}\}$/, ''));
-                        return (
-                          <div className="flex gap-2 flex-wrap py-1" data-testid="inline-image-previews">
-                            {imageUrls.map((url, idx) => (
-                              <div key={idx} className="flex items-center gap-1.5 rounded border p-1 bg-muted/30">
-                                <img
-                                  src={convertToDirectImageUrl(url)}
-                                  alt={`Image ${idx + 1}`}
-                                  className="h-10 w-10 object-cover rounded"
-                                  onError={(e) => handleImageError(e, url)}
-                                />
-                                <span className="text-xs text-muted-foreground max-w-[120px] truncate">{url.split('/').pop() || 'Image'}</span>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                      <p className="text-xs text-muted-foreground">
-                        Use variables like: {`{{storeName}}, {{pocName}}, {{pocEmail}}`}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  // Script Builder - Compact Layout
-                  <div className="space-y-3 flex-1 flex flex-col">
-                    <div className="space-y-2 flex-1 flex flex-col">
-                      <div className="flex items-center justify-between gap-4">
-                        <label className="text-sm font-semibold">Content</label>
-                        <div className="flex flex-wrap gap-2">
-                          {/* Store Info Variables */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-store-variable"
-                              >
-                                <Store className="h-4 w-4 mr-1" />
-                                Store
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72" align="end">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <Store className="h-4 w-4" />
-                                  Store Information
-                                </h4>
-                                <div className="space-y-1">
-                                  {availableVariables
-                                    .filter(v => ['storeName', 'storeAddress', 'storeCity', 'storeState', 'storeWebsite', 'storePhone'].includes(v.name))
-                                    .map((variable) => (
-                                      <button
-                                        key={variable.name}
-                                        onClick={() => insertVariable(variable.name)}
-                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                        data-testid={`insert-variable-${variable.name}`}
-                                      >
-                                        <div className="font-mono text-sm text-primary">
-                                          {`{{${variable.name}}}`}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {variable.description}
-                                        </div>
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-
-                          {/* Contact Variables */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-contact-variable"
-                              >
-                                <Mail className="h-4 w-4 mr-1" />
-                                Contact
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72" align="end">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <Mail className="h-4 w-4" />
-                                  Contact Information
-                                </h4>
-                                <div className="space-y-1">
-                                  {availableVariables
-                                    .filter(v => ['email', 'pocName', 'pocEmail', 'pocPhone'].includes(v.name))
-                                    .map((variable) => (
-                                      <button
-                                        key={variable.name}
-                                        onClick={() => insertVariable(variable.name)}
-                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                        data-testid={`insert-variable-${variable.name}`}
-                                      >
-                                        <div className="font-mono text-sm text-primary">
-                                          {`{{${variable.name}}}`}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {variable.description}
-                                        </div>
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-
-                          {/* Agent Variables */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-agent-variable"
-                              >
-                                <UserIcon className="h-4 w-4 mr-1" />
-                                Agent
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72" align="end">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <UserIcon className="h-4 w-4" />
-                                  Agent Information
-                                </h4>
-                                <div className="space-y-1">
-                                  {availableVariables
-                                    .filter(v => ['agentName', 'agentEmail', 'agentPhone', 'agentMeetingLink'].includes(v.name))
-                                    .map((variable) => (
-                                      <button
-                                        key={variable.name}
-                                        onClick={() => insertVariable(variable.name)}
-                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                        data-testid={`insert-variable-${variable.name}`}
-                                      >
-                                        <div className="font-mono text-sm text-primary">
-                                          {`{{${variable.name}}}`}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {variable.description}
-                                        </div>
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-
-                          {/* Date/Time Variables */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                data-testid="button-insert-datetime-variable"
-                              >
-                                <Calendar className="h-4 w-4 mr-1" />
-                                Date/Time
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-72" align="end">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2">
-                                  <Calendar className="h-4 w-4" />
-                                  Date & Time
-                                </h4>
-                                <div className="space-y-1">
-                                  {availableVariables
-                                    .filter(v => ['currentDate', 'currentTime'].includes(v.name))
-                                    .map((variable) => (
-                                      <button
-                                        key={variable.name}
-                                        onClick={() => insertVariable(variable.name)}
-                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                        data-testid={`insert-variable-${variable.name}`}
-                                      >
-                                        <div className="font-mono text-sm text-primary">
-                                          {`{{${variable.name}}}`}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {variable.description}
-                                        </div>
-                                      </button>
-                                    ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </div>
-                      <Textarea
-                        ref={contentTextareaRef}
-                        placeholder="Template content with {{variables}}..."
-                        value={builderContent}
-                        onChange={(e) => setBuilderContent(e.target.value)}
-                        className="flex-1 min-h-[200px] font-mono"
-                        data-testid="textarea-builder-content"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Use variables like: {`{{storeName}}, {{pocName}}, {{pocEmail}}`}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2 mt-4 pt-4 border-t flex-shrink-0">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setBuilderTitle("");
-                    setBuilderContent("");
-                    setBuilderType("Email");
-                    setBuilderTags("");
-                    setEmailTo("{{email}}");
-                    setEmailSubject("");
-                    setEmailBody("");
-                    setEditingTemplateId(null);
-                    setTemplateBuilderOpen(false);
-                  }}
-                  data-testid="button-cancel-builder"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setTemplateBuilderView("library")}
-                  data-testid="button-goto-templates"
-                >
-                  <Library className="h-4 w-4 mr-2" />
-                  View My Templates
-                </Button>
-                <Button
-                  className="flex-1"
-                  disabled={
-                    !builderTitle.trim() || 
-                    (builderType === "Email" 
-                      ? (!emailTo.trim() || !emailSubject.trim() || !emailBody.trim())
-                      : !builderContent.trim()) ||
-                    createTemplateMutation.isPending || 
-                    updateTemplateMutation.isPending
-                  }
-                  onClick={() => {
-                    const tags = builderTags
-                      .split(",")
-                      .map((tag) => tag.trim())
-                      .filter((tag) => tag.length > 0);
-
-                    const content = builderType === "Email" 
-                      ? formatEmailTemplate(emailTo, emailSubject, emailBody)
-                      : builderContent;
-
-                    const templateData = {
-                      title: builderTitle,
-                      content,
-                      type: builderType,
-                      tags,
-                      isDefault: builderIsDefault,
-                    };
-
-                    if (editingTemplateId) {
-                      updateTemplateMutation.mutate({ id: editingTemplateId, template: templateData });
-                    } else {
-                      createTemplateMutation.mutate(templateData);
-                    }
-                  }}
-                  data-testid="button-save-template-builder"
-                >
-                  {editingTemplateId ? "Update Template" : "Save Template"}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Library View */}
-          {templateBuilderView === "library" && (
-            <div className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
-              <div className="flex flex-col flex-1 gap-4 overflow-hidden">
-                {/* Type and Tag Filters */}
-                <div className="flex flex-wrap gap-2">
-                  {/* Type Filters First */}
-                  <Badge
-                    variant={selectedTypeFilter === null ? "default" : "outline"}
-                    className="cursor-pointer hover-elevate"
-                    onClick={() => setSelectedTypeFilter(null)}
-                    data-testid="type-filter-all"
-                  >
-                    All
-                  </Badge>
-                  <Badge
-                    variant={selectedTypeFilter === "Email" ? "default" : "outline"}
-                    className="cursor-pointer hover-elevate"
-                    onClick={() => setSelectedTypeFilter("Email")}
-                    data-testid="type-filter-email"
-                  >
-                    Email
-                  </Badge>
-                  <Badge
-                    variant={selectedTypeFilter === "Script" ? "default" : "outline"}
-                    className="cursor-pointer hover-elevate"
-                    onClick={() => setSelectedTypeFilter("Script")}
-                    data-testid="type-filter-script"
-                  >
-                    Script
-                  </Badge>
-
-                  {/* Separator */}
-                  {Array.from(new Set(templates.flatMap((t) => t.tags || []))).length > 0 && (
-                    <>
-                      <div className="w-px h-6 bg-border mx-1" />
-                      
-                      {/* Clear Tags Button */}
-                      <Badge
-                        variant={selectedTagFilter === null ? "default" : "outline"}
-                        className="cursor-pointer hover-elevate"
-                        onClick={() => setSelectedTagFilter(null)}
-                        data-testid="tag-filter-clear"
-                      >
-                        All Tags
-                      </Badge>
-                    </>
-                  )}
-
-                  {/* Tag Filters */}
-                  {Array.from(new Set(templates.flatMap((t) => t.tags || []))).map((tag) => (
-                    <Badge
-                      key={tag}
-                      variant={selectedTagFilter === tag ? "default" : "outline"}
-                      className="cursor-pointer hover-elevate"
-                      onClick={() => setSelectedTagFilter(tag)}
-                      data-testid={`tag-filter-${tag}`}
-                    >
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-
-                {/* Scrollable Templates List */}
-                <ScrollArea className="flex-1 min-h-0 h-[calc(100vh-400px)]">
-                  <div className="space-y-2 pr-4">
-                    {templates
-                      .filter(
-                        (template) =>
-                          (template.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
-                          template.content.toLowerCase().includes(templateSearch.toLowerCase()) ||
-                          template.tags?.some((tag) =>
-                            tag.toLowerCase().includes(templateSearch.toLowerCase())
-                          )) &&
-                          (selectedTypeFilter === null || (template as any).type === selectedTypeFilter) &&
-                          (selectedTagFilter === null || template.tags?.includes(selectedTagFilter))
-                      )
-                      .map((template) => (
-                        <div
-                          key={template.id}
-                          className={`p-4 border rounded-lg hover-elevate bg-card ${
-                            (template as any).type === 'Script' && (template as any).isDefault 
-                              ? 'border-black dark:border-white border-2' 
-                              : ''
-                          }`}
-                          data-testid={`template-card-${template.id}`}
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <h4 className="font-semibold">{template.title}</h4>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => useTemplate({ ...template, type: template.type || "Script" })}
-                                data-testid={`button-use-template-${template.id}`}
-                              >
-                                Use
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setBuilderTitle(template.title);
-                                  const templateType = (template as any).type || "Email";
-                                  setBuilderType(templateType);
-                                  setBuilderTags(template.tags?.join(", ") || "");
-                                  setEditingTemplateId(template.id);
-                                  
-                                  // Set isDefault based on whether this template is the default
-                                  setBuilderIsDefault((template as any).isDefault || false);
-
-                                  // Parse content based on type
-                                  if (templateType === "Email") {
-                                    const parsed = parseEmailTemplate(template.content);
-                                    if (parsed) {
-                                      setEmailTo(parsed.to);
-                                      setEmailSubject(parsed.subject);
-                                      setEmailBody(parsed.body);
-                                      setBuilderContent(""); // Clear script content
-                                    } else {
-                                      // Fallback if parsing fails
-                                      setBuilderContent(template.content);
-                                    }
-                                  } else {
-                                    // Script type
-                                    setBuilderContent(template.content);
-                                    // Clear email fields
-                                    setEmailTo("{{email}}");
-                                    setEmailSubject("");
-                                    setEmailBody("");
-                                  }
-
-                                  setTemplateBuilderView("builder");
-                                }}
-                                data-testid={`button-edit-template-${template.id}`}
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteTemplateMutation.mutate(template.id);
-                                }}
-                                disabled={deleteTemplateMutation.isPending}
-                                data-testid={`button-delete-template-builder-${template.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground line-clamp-3 mb-2 font-mono">
-                            {template.content}
-                          </p>
-                          <div className="flex flex-wrap gap-1 items-center">
-                            {(template as any).type && (
-                              <Badge variant="default" className="text-xs">
-                                {(template as any).type}
-                              </Badge>
-                            )}
-                            {template.tags && template.tags.map((tag, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    {templates.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <p>No templates yet</p>
-                        <p className="text-sm">Go back to builder to create your first template</p>
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-
-                {/* Search Bar */}
-                <div className="flex gap-4 mt-4 pt-4 border-t flex-shrink-0">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search templates..."
-                      value={templateSearch}
-                      onChange={(e) => setTemplateSearch(e.target.value)}
-                      className="pl-8"
-                      data-testid="input-search-templates-library"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Template Preview Dialog */}
-      <Dialog open={templatePreviewOpen} onOpenChange={setTemplatePreviewOpen}>
-        <DialogContent className="max-w-3xl" data-testid="dialog-template-preview">
-          <DialogHeader>
-            <DialogTitle>{previewTemplate?.title || "Template Preview"}</DialogTitle>
-            <DialogDescription>
-              Rendered template with your store context data
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-4 border rounded-lg bg-muted">
-              <p className="text-sm whitespace-pre-wrap">{previewTemplate?.content}</p>
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setTemplatePreviewOpen(false)}
-              data-testid="button-close-preview"
-            >
-              Close
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (previewTemplate) {
-                  navigator.clipboard.writeText(previewTemplate.content);
-                  toast({ title: "Copied", description: "Template content copied to clipboard" });
-                }
-              }}
-              data-testid="button-copy-preview"
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Copy
-            </Button>
-            {previewTemplate && parseEmailFromMessage(previewTemplate.content) && (() => {
-              const emailData = parseEmailFromMessage(previewTemplate.content)!;
-              return (
-                <EmailPreview
-                  to={replaceSimpleTemplateVariables(emailData.to, storeContext, user)}
-                  subject={replaceSimpleTemplateVariables(emailData.subject, storeContext, user)}
-                  body={replaceSimpleTemplateVariables(emailData.body, storeContext, user)}
-                />
-              );
-            })()}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

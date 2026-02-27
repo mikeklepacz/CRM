@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { isSuperAdmin } from "@/lib/authUtils";
@@ -29,149 +28,46 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { 
   Building2, Users, BarChart3, Plus, Edit, Eye, Loader2, Check, Trash2, UserPlus, 
-  Search, ArrowUpDown, ArrowUp, ArrowDown, Mail, Lock, Briefcase, KeyRound, 
+  Search, Mail, Lock, Briefcase, KeyRound, 
   UserX, UserCheck, Phone, Ticket, Webhook, Mic, FileSpreadsheet, Send, XCircle, Tag
 } from "lucide-react";
 import { VoiceSettings } from "@/components/voice-settings";
 import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { WebhookManager } from "@/components/webhook-manager";
 import { CategoryManagement } from "@/components/category-management";
-
-interface Tenant {
-  id: string;
-  name: string;
-  slug: string;
-  status: string;
-  createdAt: string;
-  userCount?: number;
-  settings?: {
-    allowedModules?: string[];
-    enabledModules?: string[];
-    companyName?: string;
-    timezone?: string;
-  };
-}
-
-interface TenantMembership {
-  tenantId: string;
-  tenantName: string;
-  roleInTenant: string;
-}
-
-interface UserWithMemberships {
-  id: string;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  agentName: string | null;
-  isSuperAdmin: boolean;
-  isActive: boolean;
-  hasVoiceAccess: boolean;
-  tenantMemberships: TenantMembership[];
-}
-
-interface Metrics {
-  totalTenants: number;
-  totalUsers: number;
-  totalClients: number;
-  activeTenants: number;
-}
-
-interface SuperAdminTicket {
-  id: string;
-  tenantId: string;
-  tenantName?: string;
-  userId: string;
-  subject: string;
-  message: string;
-  category: string;
-  status: string;
-  priority: string;
-  isUnreadByAdmin: boolean;
-  isUnreadByUser: boolean;
-  createdAt: string;
-  updatedAt: string;
-  userEmail?: string;
-  userName?: string;
-}
-
-interface TicketReply {
-  id: string;
-  ticketId: string;
-  userId: string;
-  message: string;
-  createdAt: string;
-  userName?: string;
-  userEmail?: string;
-}
-
-const TICKET_CATEGORIES = [
-  'Bug Report',
-  'Feature Request',
-  'Technical Support',
-  'Account Issue',
-  'Billing Question',
-  'Data Issue',
-  'Performance Problem',
-  'Integration Help',
-  'General Question',
-  'Other',
-] as const;
-
-interface TenantDetails {
-  tenant: Tenant & {
-    settings?: {
-      allowedModules?: string[];
-      enabledModules?: string[];
-      companyName?: string;
-      timezone?: string;
-    };
-  };
-  stats: {
-    userCount: number;
-    clientCount: number;
-    callCount: number;
-  };
-}
-
-const tenantFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  slug: z.string().optional(),
-  status: z.enum(["active", "trial", "suspended"]),
-});
-
-type TenantFormData = z.infer<typeof tenantFormSchema>;
-
-const addUserToTenantSchema = z.object({
-  tenantId: z.string().min(1, "Tenant is required"),
-  roleInTenant: z.enum(["org_admin", "agent"]),
-});
-
-type AddUserToTenantFormData = z.infer<typeof addUserToTenantSchema>;
-
-const createUserSchema = z.object({
-  email: z.string().email("Valid email is required"),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  agentName: z.string().optional(),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  tenantId: z.string().min(1, "Tenant is required"),
-  roleInTenant: z.enum(["org_admin", "agent"]),
-});
-
-type CreateUserFormData = z.infer<typeof createUserSchema>;
-
-const editUserSchema = z.object({
-  email: z.string().email("Valid email is required"),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  agentName: z.string().optional(),
-});
-
-type EditUserFormData = z.infer<typeof editUserSchema>;
-
-type SortField = "name" | "email" | "tenants" | null;
-type SortDirection = "asc" | "desc";
+import {
+  addUserToTenantSchema,
+  createUserSchema,
+  editUserSchema,
+  tenantFormSchema,
+  type AddUserToTenantFormData,
+  type CreateUserFormData,
+  type EditUserFormData,
+  type TenantFormData,
+} from "@/components/super-admin/super-admin.forms";
+import {
+  TICKET_CATEGORIES,
+  filterAndSortUsers,
+  filterTickets,
+  formatDate,
+  getAvailableTenants,
+  getSortIcon,
+  getStatusBadgeVariant,
+  getUnreadTicketCount,
+  getUserCountByStatus,
+} from "@/components/super-admin/super-admin-utils";
+import { SuperAdminCreateUserDialog } from "@/components/super-admin/super-admin-create-user-dialog";
+import { SuperAdminTenantDialogs } from "@/components/super-admin/super-admin-tenant-dialogs";
+import type {
+  Metrics,
+  SortDirection,
+  SortField,
+  SuperAdminTicket,
+  Tenant,
+  TenantDetails,
+  TicketReply,
+  UserWithMemberships,
+} from "@/components/super-admin/super-admin.types";
 
 export default function SuperAdmin() {
   const { user, isLoading: authLoading } = useAuth();
@@ -382,65 +278,22 @@ export default function SuperAdmin() {
   }, [isCreateUserDialogOpen, createUserForm]);
 
   const filteredAndSortedUsers = useMemo(() => {
-    if (!usersData?.users) return [];
-
-    let filtered = usersData.users.filter(u => {
-      const isActiveMatch = userStatusFilter === "active" ? u.isActive !== false : u.isActive === false;
-      if (!isActiveMatch) return false;
-
-      if (tenantFilter !== "all") {
-        const hasTenant = u.tenantMemberships?.some(m => m.tenantId === tenantFilter);
-        if (!hasTenant) return false;
-      }
-
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const fullName = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
-        const email = (u.email || "").toLowerCase();
-        const agentName = (u.agentName || "").toLowerCase();
-        if (!fullName.includes(query) && !email.includes(query) && !agentName.includes(query)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    if (sortField) {
-      filtered.sort((a, b) => {
-        let aVal = "";
-        let bVal = "";
-
-        switch (sortField) {
-          case "name":
-            aVal = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
-            bVal = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
-            break;
-          case "email":
-            aVal = (a.email || "").toLowerCase();
-            bVal = (b.email || "").toLowerCase();
-            break;
-          case "tenants":
-            aVal = String(a.tenantMemberships?.length || 0);
-            bVal = String(b.tenantMemberships?.length || 0);
-            break;
-        }
-
-        if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-        if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-        return 0;
-      });
-    }
-
-    return filtered;
+    return filterAndSortUsers(
+      usersData?.users,
+      userStatusFilter,
+      tenantFilter,
+      searchQuery,
+      sortField,
+      sortDirection,
+    );
   }, [usersData?.users, userStatusFilter, tenantFilter, searchQuery, sortField, sortDirection]);
 
   const activeUsersCount = useMemo(() => {
-    return usersData?.users?.filter(u => u.isActive !== false).length ?? 0;
+    return getUserCountByStatus(usersData?.users, "active");
   }, [usersData?.users]);
 
   const inactiveUsersCount = useMemo(() => {
-    return usersData?.users?.filter(u => u.isActive === false).length ?? 0;
+    return getUserCountByStatus(usersData?.users, "inactive");
   }, [usersData?.users]);
 
   const createTenantMutation = useMutation({
@@ -869,11 +722,7 @@ export default function SuperAdmin() {
     }
   };
 
-  const getAvailableTenants = () => {
-    if (!selectedUser || !tenantsData?.tenants) return [];
-    const memberTenantIds = new Set(selectedUser.tenantMemberships.map(m => m.tenantId));
-    return tenantsData.tenants.filter(t => !memberTenantIds.has(t.id));
-  };
+  const availableTenants = getAvailableTenants(selectedUser, tenantsData?.tenants);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -882,15 +731,6 @@ export default function SuperAdmin() {
       setSortField(field);
       setSortDirection("asc");
     }
-  };
-
-  const getSortIcon = (field: SortField) => {
-    if (sortField !== field) {
-      return <ArrowUpDown className="ml-1 h-3 w-3" />;
-    }
-    return sortDirection === "asc" 
-      ? <ArrowUp className="ml-1 h-3 w-3" />
-      : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
   const handleCloseUserDialog = () => {
@@ -924,45 +764,23 @@ export default function SuperAdmin() {
 
   // Filtered tickets
   const filteredTickets = useMemo(() => {
-    if (!ticketsData?.tickets) return [];
-    return ticketsData.tickets.filter(t => {
-      const statusMatch = ticketStatusFilter === 'all' || t.status === ticketStatusFilter;
-      const categoryMatch = ticketCategoryFilter === 'all' || t.category === ticketCategoryFilter;
-      const tenantMatch = ticketTenantFilter === 'all' || t.tenantId === ticketTenantFilter;
-      return statusMatch && categoryMatch && tenantMatch;
-    });
+    return filterTickets(
+      ticketsData?.tickets,
+      ticketStatusFilter,
+      ticketCategoryFilter,
+      ticketTenantFilter,
+    );
   }, [ticketsData?.tickets, ticketStatusFilter, ticketCategoryFilter, ticketTenantFilter]);
 
   const ticketDetail = ticketDetailData?.ticket;
   const ticketReplies = ticketDetailData?.replies || [];
-  const unreadTicketCount = ticketsData?.tickets?.filter(t => t.isUnreadByAdmin).length ?? 0;
+  const unreadTicketCount = getUnreadTicketCount(ticketsData?.tickets);
 
   if (authLoading) return null;
 
   if (!isSuperAdmin(user)) {
     return null;
   }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "active":
-        return "default";
-      case "trial":
-        return "secondary";
-      case "suspended":
-        return "destructive";
-      default:
-        return "outline";
-    }
-  };
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -1168,7 +986,7 @@ export default function SuperAdmin() {
                               onClick={() => handleSort("name")}
                             >
                               <div className="flex items-center" data-testid="sort-name">
-                                Name {getSortIcon("name")}
+                                Name {getSortIcon(sortField, sortDirection, "name")}
                               </div>
                             </TableHead>
                             <TableHead 
@@ -1176,7 +994,7 @@ export default function SuperAdmin() {
                               onClick={() => handleSort("email")}
                             >
                               <div className="flex items-center" data-testid="sort-email">
-                                Email {getSortIcon("email")}
+                                Email {getSortIcon(sortField, sortDirection, "email")}
                               </div>
                             </TableHead>
                             <TableHead>Agent Name</TableHead>
@@ -1187,7 +1005,7 @@ export default function SuperAdmin() {
                               onClick={() => handleSort("tenants")}
                             >
                               <div className="flex items-center" data-testid="sort-tenants">
-                                Tenant Memberships {getSortIcon("tenants")}
+                                Tenant Memberships {getSortIcon(sortField, sortDirection, "tenants")}
                               </div>
                             </TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -1287,7 +1105,7 @@ export default function SuperAdmin() {
                               onClick={() => handleSort("name")}
                             >
                               <div className="flex items-center" data-testid="sort-name-inactive">
-                                Name {getSortIcon("name")}
+                                Name {getSortIcon(sortField, sortDirection, "name")}
                               </div>
                             </TableHead>
                             <TableHead 
@@ -1295,7 +1113,7 @@ export default function SuperAdmin() {
                               onClick={() => handleSort("email")}
                             >
                               <div className="flex items-center" data-testid="sort-email-inactive">
-                                Email {getSortIcon("email")}
+                                Email {getSortIcon(sortField, sortDirection, "email")}
                               </div>
                             </TableHead>
                             <TableHead>Agent Name</TableHead>
@@ -1306,7 +1124,7 @@ export default function SuperAdmin() {
                               onClick={() => handleSort("tenants")}
                             >
                               <div className="flex items-center" data-testid="sort-tenants-inactive">
-                                Tenant Memberships {getSortIcon("tenants")}
+                                Tenant Memberships {getSortIcon(sortField, sortDirection, "tenants")}
                               </div>
                             </TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -1878,435 +1696,34 @@ export default function SuperAdmin() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Tenant</DialogTitle>
-            <DialogDescription>Add a new tenant to the platform</DialogDescription>
-          </DialogHeader>
-          <Form {...createForm}>
-            <form onSubmit={createForm.handleSubmit(handleCreateSubmit)} className="space-y-4">
-              <FormField
-                control={createForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Tenant name" {...field} data-testid="input-tenant-name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createForm.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Slug (optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="tenant-slug" {...field} data-testid="input-tenant-slug" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-tenant-status">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="trial">Trial</SelectItem>
-                        <SelectItem value="suspended">Suspended</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsCreateDialogOpen(false)}
-                  data-testid="button-cancel-create"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createTenantMutation.isPending} data-testid="button-submit-create" data-primary="true">
-                  {createTenantMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <SuperAdminTenantDialogs
+        createForm={createForm}
+        createTenantPending={createTenantMutation.isPending}
+        detailsLoading={detailsLoading}
+        editingAllowedModules={editingAllowedModules}
+        editingTenant={editingTenant}
+        editForm={editForm}
+        getStatusBadgeVariant={getStatusBadgeVariant}
+        handleCreateSubmit={handleCreateSubmit}
+        handleEditSubmit={handleEditSubmit}
+        isCreateDialogOpen={isCreateDialogOpen}
+        setEditingAllowedModules={setEditingAllowedModules}
+        setEditingTenant={setEditingTenant}
+        setIsCreateDialogOpen={setIsCreateDialogOpen}
+        setViewingTenantId={setViewingTenantId}
+        tenantDetails={tenantDetails}
+        updateTenantPending={updateTenantMutation.isPending}
+        viewingTenantId={viewingTenantId}
+      />
 
-      <Dialog open={!!editingTenant} onOpenChange={(open) => !open && setEditingTenant(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Tenant</DialogTitle>
-            <DialogDescription>Update tenant information</DialogDescription>
-          </DialogHeader>
-          <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
-              <FormField
-                control={editForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Tenant name" {...field} data-testid="input-edit-tenant-name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Slug</FormLabel>
-                    <FormControl>
-                      <Input placeholder="tenant-slug" {...field} data-testid="input-edit-tenant-slug" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-tenant-status">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="trial">Trial</SelectItem>
-                        <SelectItem value="suspended">Suspended</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Separator className="my-4" />
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Allowed Modules</Label>
-                <p className="text-xs text-muted-foreground">
-                  Select which modules this tenant can enable. The tenant's org admin will only see these options.
-                </p>
-                <div className="grid grid-cols-2 gap-3 pt-2" data-testid="allowed-modules-container">
-                  {AVAILABLE_MODULES.map((module) => (
-                    <div key={module.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`allowed-module-${module.id}`}
-                        checked={editingAllowedModules.includes(module.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setEditingAllowedModules([...editingAllowedModules, module.id]);
-                          } else {
-                            setEditingAllowedModules(editingAllowedModules.filter(id => id !== module.id));
-                          }
-                        }}
-                        data-testid={`checkbox-allowed-module-${module.id}`}
-                      />
-                      <Label 
-                        htmlFor={`allowed-module-${module.id}`}
-                        className="text-sm font-normal cursor-pointer"
-                      >
-                        {module.label}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {editingAllowedModules.length === AVAILABLE_MODULES.length 
-                    ? "All modules enabled" 
-                    : editingAllowedModules.length === 0
-                      ? "No modules allowed - tenant cannot access any features"
-                      : `${editingAllowedModules.length} of ${AVAILABLE_MODULES.length} modules allowed`}
-                </p>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setEditingTenant(null)}
-                  data-testid="button-cancel-edit"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={updateTenantMutation.isPending} data-testid="button-submit-edit" data-primary="true">
-                  {updateTenantMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!viewingTenantId} onOpenChange={(open) => !open && setViewingTenantId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Tenant Details</DialogTitle>
-            <DialogDescription>
-              {tenantDetails?.tenant?.name ?? "Loading..."}
-            </DialogDescription>
-          </DialogHeader>
-          {detailsLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-6 w-full" />
-            </div>
-          ) : tenantDetails ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Slug</p>
-                  <p className="font-medium">{tenantDetails.tenant.slug}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <Badge variant={getStatusBadgeVariant(tenantDetails.tenant.status)}>
-                    {tenantDetails.tenant.status}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Users</p>
-                  <p className="font-medium">{tenantDetails.stats.userCount}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Clients</p>
-                  <p className="font-medium">{tenantDetails.stats.clientCount}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Calls</p>
-                  <p className="font-medium">{tenantDetails.stats.callCount}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Created</p>
-                  <p className="font-medium">{formatDate(tenantDetails.tenant.createdAt)}</p>
-                </div>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Allowed Modules</p>
-                <div className="flex flex-wrap gap-1.5" data-testid="details-allowed-modules">
-                  {tenantDetails.tenant.settings?.allowedModules && tenantDetails.tenant.settings.allowedModules.length > 0 ? (
-                    tenantDetails.tenant.settings.allowedModules.map((moduleId) => {
-                      const module = AVAILABLE_MODULES.find(m => m.id === moduleId);
-                      return module ? (
-                        <Badge key={moduleId} variant="secondary" className="no-default-hover-elevate no-default-active-elevate">
-                          {module.label}
-                        </Badge>
-                      ) : null;
-                    })
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">All modules available (no restrictions)</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewingTenantId(null)} data-testid="button-close-details">
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isCreateUserDialogOpen} onOpenChange={setIsCreateUserDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create New User</DialogTitle>
-            <DialogDescription>Add a new user to the platform</DialogDescription>
-          </DialogHeader>
-          <Form {...createUserForm}>
-            <form onSubmit={createUserForm.handleSubmit(handleCreateUserSubmit)} className="space-y-4">
-              <FormField
-                control={createUserForm.control}
-                name="tenantId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tenant *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-create-user-tenant">
-                          <SelectValue placeholder="Select tenant" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {tenantsData?.tenants?.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={createUserForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email *</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          placeholder="user@example.com" 
-                          className="pl-10"
-                          {...field} 
-                          data-testid="input-create-user-email" 
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={createUserForm.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="John" {...field} data-testid="input-create-user-firstname" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createUserForm.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Doe" {...field} data-testid="input-create-user-lastname" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={createUserForm.control}
-                name="agentName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Agent Name</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Briefcase className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          placeholder="Agent display name" 
-                          className="pl-10"
-                          {...field} 
-                          data-testid="input-create-user-agentname" 
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={createUserForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password *</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          type="password"
-                          placeholder="Minimum 6 characters" 
-                          className="pl-10"
-                          {...field} 
-                          data-testid="input-create-user-password" 
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={createUserForm.control}
-                name="roleInTenant"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role in Tenant</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-create-user-role">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="org_admin">Admin</SelectItem>
-                        <SelectItem value="agent">Agent</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsCreateUserDialogOpen(false)}
-                  data-testid="button-cancel-create-user"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-create-user" data-primary="true">
-                  {createUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create User
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <SuperAdminCreateUserDialog
+        createUserForm={createUserForm}
+        createUserPending={createUserMutation.isPending}
+        handleCreateUserSubmit={handleCreateUserSubmit}
+        isCreateUserDialogOpen={isCreateUserDialogOpen}
+        setIsCreateUserDialogOpen={setIsCreateUserDialogOpen}
+        tenants={tenantsData?.tenants}
+      />
 
       <Dialog open={!!selectedUser} onOpenChange={(open) => !open && handleCloseUserDialog()}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -2652,7 +2069,7 @@ export default function SuperAdmin() {
             <div className="border-t pt-4">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm font-medium">Add to Tenant</h4>
-                {!isAddToTenantOpen && getAvailableTenants().length > 0 && (
+                {!isAddToTenantOpen && availableTenants.length > 0 && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -2665,7 +2082,7 @@ export default function SuperAdmin() {
                 )}
               </div>
 
-              {getAvailableTenants().length === 0 && !isAddToTenantOpen && (
+              {availableTenants.length === 0 && !isAddToTenantOpen && (
                 <p className="text-sm text-muted-foreground">
                   This user is already a member of all available tenants.
                 </p>
@@ -2687,7 +2104,7 @@ export default function SuperAdmin() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {getAvailableTenants().map((t) => (
+                              {availableTenants.map((t) => (
                                 <SelectItem key={t.id} value={t.id}>
                                   {t.name}
                                 </SelectItem>

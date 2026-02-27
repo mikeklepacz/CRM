@@ -25,108 +25,15 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Settings as SettingsIcon, BarChart3, Plus, Trash2, Loader2, UserPlus, Mail, X, Workflow, ArrowLeft, GripVertical, Pencil, FolderKanban, Archive, ArchiveRestore, Star, MapPin, Building2, Tag } from "lucide-react";
-import { TIMEZONE_DATA } from "@shared/timezoneUtils";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CategoryManagement } from "@/components/category-management";
-
-interface TenantUser {
-  id: string;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  roleInTenant: string;
-  joinedAt: string | null;
-  agentName: string | null;
-  phone: string | null;
-  twilioPhoneNumber: string | null;
-  meetingLink: string | null;
-}
-
-interface Tenant {
-  id: string;
-  name: string;
-  slug: string;
-  status: string;
-  settings: {
-    companyName?: string;
-    timezone?: string;
-    enabledModules?: string[];
-    allowedModules?: string[];
-    primaryColor?: string;
-    logoUrl?: string;
-  };
-  createdAt: string;
-}
-
-interface TenantStats {
-  userCount: number;
-  clientCount: number;
-  callCount: number;
-}
-
-interface TenantInvite {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  expiresAt: string;
-  createdAt: string;
-}
-
-interface Pipeline {
-  id: string;
-  tenantId: string;
-  name: string;
-  slug: string;
-  pipelineType: string;
-  description: string | null;
-  aiPromptTemplate: string | null;
-  aiAssistantId: string | null;
-  voiceAgentId: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface ElevenLabsAgent {
-  id: string;
-  name: string;
-  agentId: string;
-  isDefault: boolean;
-}
-
-interface PipelineStage {
-  id: string;
-  tenantId: string;
-  pipelineId: string;
-  name: string;
-  stageOrder: number;
-  stageType: string;
-  config: Record<string, any> | null;
-  isTerminal: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface PipelineWithStages extends Pipeline {
-  stages: PipelineStage[];
-}
-
-interface TenantProject {
-  id: string;
-  tenantId: string;
-  name: string;
-  slug: string;
-  projectType: string;
-  description: string | null;
-  accentColor: string | null;
-  status: string;
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import { OrgAdminUserCreationDialogs } from "@/components/org-admin/org-admin-user-creation-dialogs";
+import { OrgAdminUserManagementDialogs } from "@/components/org-admin/org-admin-user-management-dialogs";
+import { SortableStageItem } from "@/components/org-admin/sortable-stage-item";
+import { detectBrowserTimezone } from "@/components/org-admin/org-admin-utils";
+import type { ElevenLabsAgent, Pipeline, PipelineStage, PipelineWithStages, Tenant, TenantInvite, TenantProject, TenantStats, TenantUser } from "@/components/org-admin/org-admin.types";
+import { TIMEZONE_DATA } from "@shared/timezoneUtils";
 
 const PIPELINE_TYPES = [
   { value: "sales", label: "Sales" },
@@ -203,85 +110,6 @@ const projectFormSchema = z.object({
 
 type ProjectFormData = z.infer<typeof projectFormSchema>;
 
-function SortableStageItem({ stage, onEdit, onDelete, isDeleting }: { 
-  stage: PipelineStage; 
-  onEdit: () => void; 
-  onDelete: () => void;
-  isDeleting: boolean;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: stage.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  const getStageTypeBadgeVariant = (type: string) => {
-    switch (type) {
-      case "action": return "default";
-      case "decision": return "secondary";
-      case "wait": return "outline";
-      case "complete": return "default";
-      default: return "outline";
-    }
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-3 p-3 border rounded-md bg-background"
-      data-testid={`stage-item-${stage.id}`}
-    >
-      <button
-        type="button"
-        className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
-        {...attributes}
-        {...listeners}
-        data-testid={`drag-handle-${stage.id}`}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div className="flex-1 flex items-center gap-3">
-        <span className="font-medium" data-testid={`stage-name-${stage.id}`}>{stage.name}</span>
-        <Badge variant={getStageTypeBadgeVariant(stage.stageType)} className="no-default-hover-elevate no-default-active-elevate">
-          {stage.stageType}
-        </Badge>
-        {stage.isTerminal && (
-          <Badge variant="outline" className="no-default-hover-elevate no-default-active-elevate text-xs">Terminal</Badge>
-        )}
-      </div>
-      <div className="flex items-center gap-1">
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={onEdit}
-          data-testid={`button-edit-stage-${stage.id}`}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={onDelete}
-          disabled={isDeleting}
-          data-testid={`button-delete-stage-${stage.id}`}
-        >
-          {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 const inviteFormSchema = z.object({
   email: z.string().email("Invalid email address"),
   role: z.enum(["org_admin", "agent"]),
@@ -305,111 +133,6 @@ const settingsFormSchema = z.object({
 });
 
 type SettingsFormData = z.infer<typeof settingsFormSchema>;
-
-function detectBrowserTimezone(): string {
-  try {
-    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const found = TIMEZONE_DATA.find(tz => tz.value === browserTz);
-    if (found) return found.value;
-    if (browserTz.startsWith('America/')) return browserTz;
-    return 'America/New_York';
-  } catch {
-    return 'America/New_York';
-  }
-}
-
-function EditUserForm({ user, onSave, onCancel, isPending }: { 
-  user: TenantUser; 
-  onSave: (data: Record<string, any>) => void; 
-  onCancel: () => void;
-  isPending: boolean;
-}) {
-  const [formData, setFormData] = useState({
-    firstName: user.firstName || "",
-    lastName: user.lastName || "",
-    agentName: user.agentName || "",
-    phone: user.phone || "",
-    twilioPhoneNumber: user.twilioPhoneNumber || "",
-    meetingLink: user.meetingLink || "",
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="edit-firstName">First Name</Label>
-          <Input
-            id="edit-firstName"
-            value={formData.firstName}
-            onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-            data-testid="input-edit-firstName"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="edit-lastName">Last Name</Label>
-          <Input
-            id="edit-lastName"
-            value={formData.lastName}
-            onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-            data-testid="input-edit-lastName"
-          />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="edit-agentName">Agent Name</Label>
-        <Input
-          id="edit-agentName"
-          value={formData.agentName}
-          onChange={(e) => setFormData(prev => ({ ...prev, agentName: e.target.value }))}
-          placeholder="Name used in WooCommerce/Sheets matching"
-          data-testid="input-edit-agentName"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="edit-phone">Personal Phone</Label>
-        <Input
-          id="edit-phone"
-          value={formData.phone}
-          onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-          placeholder="Agent's personal phone number"
-          data-testid="input-edit-phone"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="edit-twilioPhoneNumber">Twilio VoIP Number</Label>
-        <Input
-          id="edit-twilioPhoneNumber"
-          value={formData.twilioPhoneNumber}
-          onChange={(e) => setFormData(prev => ({ ...prev, twilioPhoneNumber: e.target.value }))}
-          placeholder="+1XXXXXXXXXX (E.164 format)"
-          data-testid="input-edit-twilioPhoneNumber"
-        />
-        <p className="text-xs text-muted-foreground">
-          Assign a Twilio number for in-browser VoIP calling. Leave empty to use tel: links.
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="edit-meetingLink">Meeting Link</Label>
-        <Input
-          id="edit-meetingLink"
-          value={formData.meetingLink}
-          onChange={(e) => setFormData(prev => ({ ...prev, meetingLink: e.target.value }))}
-          placeholder="Calendly, Google Meet, etc."
-          data-testid="input-edit-meetingLink"
-        />
-      </div>
-      <div className="flex justify-end gap-2 pt-2">
-        <Button variant="outline" onClick={onCancel} data-testid="button-cancel-edit">
-          Cancel
-        </Button>
-        <Button onClick={() => onSave(formData)} disabled={isPending} data-testid="button-save-edit">
-          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save Changes
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 export default function OrgAdmin() {
   const { user, isLoading: authLoading } = useAuth();
@@ -2053,271 +1776,41 @@ export default function OrgAdmin() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Invite User</DialogTitle>
-            <DialogDescription>Send an invitation to join your organization</DialogDescription>
-          </DialogHeader>
-          <Form {...inviteForm}>
-            <form onSubmit={inviteForm.handleSubmit(handleInviteSubmit)} className="space-y-4">
-              <FormField
-                control={inviteForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email Address</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="email"
-                        placeholder="user@example.com" 
-                        {...field} 
-                        data-testid="input-invite-email" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={inviteForm.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-invite-role">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="agent">Agent</SelectItem>
-                        <SelectItem value="org_admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsInviteDialogOpen(false)}
-                  data-testid="button-cancel-invite-dialog"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createInviteMutation.isPending} data-testid="button-submit-invite" data-primary="true">
-                  {createInviteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Send Invitation
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <OrgAdminUserCreationDialogs
+        createInvitePending={createInviteMutation.isPending}
+        createUserForm={createUserForm}
+        createUserPending={createUserMutation.isPending}
+        handleCreateUserSubmit={handleCreateUserSubmit}
+        handleInviteSubmit={handleInviteSubmit}
+        inviteForm={inviteForm}
+        isCreateUserDialogOpen={isCreateUserDialogOpen}
+        isInviteDialogOpen={isInviteDialogOpen}
+        setIsCreateUserDialogOpen={setIsCreateUserDialogOpen}
+        setIsInviteDialogOpen={setIsInviteDialogOpen}
+      />
 
-      <Dialog open={isCreateUserDialogOpen} onOpenChange={setIsCreateUserDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create User</DialogTitle>
-            <DialogDescription>Create a new user in your organization</DialogDescription>
-          </DialogHeader>
-          <Form {...createUserForm}>
-            <form onSubmit={createUserForm.handleSubmit(handleCreateUserSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={createUserForm.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First Name</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="John" 
-                          {...field} 
-                          data-testid="input-create-firstname" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createUserForm.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="Doe" 
-                          {...field} 
-                          data-testid="input-create-lastname" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <FormField
-                control={createUserForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email Address</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="email"
-                        placeholder="user@example.com" 
-                        {...field} 
-                        data-testid="input-create-email" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createUserForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="password"
-                        placeholder="Enter password" 
-                        {...field} 
-                        data-testid="input-create-password" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createUserForm.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-create-role">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="agent">Agent</SelectItem>
-                        <SelectItem value="org_admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsCreateUserDialogOpen(false)}
-                  data-testid="button-cancel-create-dialog"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-create" data-primary="true">
-                  {createUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create User
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!roleChangeUser} onOpenChange={(open) => !open && setRoleChangeUser(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change User Role</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to change {roleChangeUser?.user.firstName || roleChangeUser?.user.email || "this user"}'s role to {roleChangeUser?.newRole === "org_admin" ? "Admin" : "Agent"}?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setRoleChangeUser(null)}
-              data-testid="button-cancel-role-change"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => roleChangeUser && updateRoleMutation.mutate({ userId: roleChangeUser.user.id, role: roleChangeUser.newRole })}
-              disabled={updateRoleMutation.isPending}
-              data-testid="button-confirm-role-change"
-              data-primary="true"
-            >
-              {updateRoleMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!userToRemove} onOpenChange={(open) => !open && setUserToRemove(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove User</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to remove {userToRemove?.firstName || userToRemove?.email || "this user"} from the organization? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setUserToRemove(null)}
-              data-testid="button-cancel-remove"
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive"
-              onClick={() => userToRemove && removeUserMutation.mutate(userToRemove.id)}
-              disabled={removeUserMutation.isPending}
-              data-testid="button-confirm-remove"
-              data-primary="true"
-            >
-              {removeUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Remove User
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {editingUser && (
-        <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Edit User</DialogTitle>
-              <DialogDescription>
-                Update details for {editingUser.firstName || editingUser.email || "this user"}
-              </DialogDescription>
-            </DialogHeader>
-            <EditUserForm
-              user={editingUser}
-              onSave={(data) => editUserMutation.mutate({ userId: editingUser.id, data })}
-              onCancel={() => setEditingUser(null)}
-              isPending={editUserMutation.isPending}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
+      <OrgAdminUserManagementDialogs
+        editUserMutationPending={editUserMutation.isPending}
+        editingUser={editingUser}
+        onCloseEditingUser={() => setEditingUser(null)}
+        onCloseRoleChange={() => setRoleChangeUser(null)}
+        onCloseUserRemove={() => setUserToRemove(null)}
+        onEditUserSave={(data) => editingUser && editUserMutation.mutate({ userId: editingUser.id, data })}
+        onRoleChangeConfirm={() => {
+          if (roleChangeUser) {
+            updateRoleMutation.mutate({ userId: roleChangeUser.user.id, role: roleChangeUser.newRole });
+          }
+        }}
+        onUserRemoveConfirm={() => {
+          if (userToRemove) {
+            removeUserMutation.mutate(userToRemove.id);
+          }
+        }}
+        removeUserMutationPending={removeUserMutation.isPending}
+        roleChangeUser={roleChangeUser}
+        updateRoleMutationPending={updateRoleMutation.isPending}
+        userToRemove={userToRemove}
+      />
 
       <Dialog open={isPipelineDialogOpen} onOpenChange={(open) => {
         if (!open) {
