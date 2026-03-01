@@ -1,0 +1,25 @@
+import type { HolidayToggleItem } from './types';
+
+export const HOLIDAY_TOGGLES: HolidayToggleItem[] = [
+  { holidayId: 'new_years_day', name: "New Year's Day" },
+  { holidayId: 'birthday_of_martin_luther_king_jr', name: 'Birthday of Martin Luther King, Jr.' },
+  { holidayId: 'washingtons_birthday', name: "Washington's Birthday" },
+  { holidayId: 'memorial_day', name: 'Memorial Day' },
+  { holidayId: 'juneteenth_national_independence_day', name: 'Juneteenth National Independence Day' },
+  { holidayId: 'independence_day', name: 'Independence Day' },
+  { holidayId: 'labor_day', name: 'Labor Day' },
+  { holidayId: 'columbus_day', name: 'Columbus Day' },
+  { holidayId: 'veterans_day', name: 'Veterans Day' },
+  { holidayId: 'thanksgiving_day', name: 'Thanksgiving Day' },
+  { holidayId: 'christmas_day', name: 'Christmas Day' },
+  { holidayId: 'thanksgiving_eve', name: 'Thanksgiving Eve' },
+  { holidayId: 'black_friday', name: 'Black Friday' },
+  { holidayId: 'thanksgiving_weekend_saturday', name: 'Thanksgiving Weekend (Saturday)' },
+  { holidayId: 'thanksgiving_weekend_sunday', name: 'Thanksgiving Weekend (Sunday)' },
+  { holidayId: 'cyber_monday', name: 'Cyber Monday' },
+  { holidayId: 'christmas_eve_eve', name: 'Christmas Eve Eve (Dec 23)' },
+  { holidayId: 'christmas_eve', name: 'Christmas Eve' },
+  { holidayId: 'day_after_christmas', name: 'Day After Christmas' },
+  { holidayId: 'new_years_eve', name: "New Year's Eve" },
+  { holidayId: 'day_after_new_years', name: "Day After New Year's" },
+];

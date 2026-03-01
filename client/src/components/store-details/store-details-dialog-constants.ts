@@ -1,0 +1,51 @@
+export const STORE_DETAILS_INITIAL_FORM_DATA = {
+  name: "",
+  type: "",
+  link: "",
+  address: "",
+  city: "",
+  state: "",
+  phone: "",
+  website: "",
+  email: "",
+  sales_ready_summary: "",
+  notes: "",
+  point_of_contact: "",
+  poc_email: "",
+  poc_phone: "",
+  status: "",
+  follow_up_date: "",
+  next_action: "",
+  open: "TRUE",
+  automated_line: "FALSE",
+  dba: "",
+  parent_link: "",
+  is_parent: "",
+  head_office_link: "",
+};
+
+export const STORE_DETAILS_DEFAULT_SECTION_ORDER = ["contact-info", "sales-info"];
+export const STORE_DETAILS_SECTION_ORDER_KEY = "storeDialog_sectionOrder";
+export const STORE_DETAILS_GLOBAL_AI_ASSISTANT_KEY = "show-ai-assistant";
+
+export const STORE_DETAILS_FIELD_TO_SHEET_MAPPING: Record<string, { sheet: "store" | "tracker"; column: string }> = {
+  name: { sheet: "store", column: "Name" },
+  type: { sheet: "store", column: "Type" },
+  link: { sheet: "store", column: "Link" },
+  address: { sheet: "store", column: "Address" },
+  city: { sheet: "store", column: "City" },
+  state: { sheet: "store", column: "State" },
+  phone: { sheet: "store", column: "Phone" },
+  website: { sheet: "store", column: "Website" },
+  email: { sheet: "store", column: "Email" },
+  sales_ready_summary: { sheet: "store", column: "Sales-ready Summary" },
+  open: { sheet: "store", column: "Open" },
+  automated_line: { sheet: "store", column: "Automated Line" },
+  notes: { sheet: "tracker", column: "Notes" },
+  point_of_contact: { sheet: "tracker", column: "Point of Contact" },
+  poc_email: { sheet: "tracker", column: "POC Email" },
+  poc_phone: { sheet: "tracker", column: "POC Phone" },
+  status: { sheet: "tracker", column: "Status" },
+  follow_up_date: { sheet: "tracker", column: "Follow-Up Date" },
+  next_action: { sheet: "tracker", column: "Next Action" },
+};

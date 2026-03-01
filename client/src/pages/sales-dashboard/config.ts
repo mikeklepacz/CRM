@@ -1,0 +1,47 @@
+export const AVAILABLE_WIDGETS = [
+  { id: "revenue-overview", name: "Revenue Overview", description: "Total earnings and monthly averages" },
+  { id: "commission-breakdown", name: "Commission Breakdown", description: "25% vs 10% tier earnings" },
+  { id: "commission-status", name: "Commission Status", description: "Recent commission activity" },
+  { id: "portfolio-metrics", name: "Portfolio Metrics", description: "Client portfolio statistics" },
+  { id: "revenue-trends", name: "Revenue Trends", description: "Time-based revenue analysis" },
+  { id: "action-alerts", name: "Action Alerts", description: "Important follow-ups and alerts" },
+  { id: "reminders", name: "Reminders", description: "Upcoming reminders and tasks" },
+  { id: "top-clients", name: "Top Clients", description: "Highest earning clients" },
+  { id: "referral-commissions", name: "Referral Commissions", description: "Agents earning from referrals" },
+];
+
+export const defaultLayouts = {
+  lg: [
+    { i: "revenue-overview", x: 0, y: 0, w: 6, h: 2, minW: 2, minH: 1 },
+    { i: "commission-breakdown", x: 6, y: 0, w: 6, h: 2, minW: 2, minH: 1 },
+    { i: "commission-status", x: 0, y: 2, w: 4, h: 3, minW: 2, minH: 2 },
+    { i: "portfolio-metrics", x: 4, y: 2, w: 4, h: 3, minW: 2, minH: 2 },
+    { i: "revenue-trends", x: 8, y: 2, w: 4, h: 4, minW: 2, minH: 2 },
+    { i: "action-alerts", x: 0, y: 6, w: 6, h: 3, minW: 2, minH: 2 },
+    { i: "reminders", x: 6, y: 6, w: 6, h: 3, minW: 2, minH: 2 },
+    { i: "top-clients", x: 0, y: 9, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "referral-commissions", x: 0, y: 12, w: 12, h: 3, minW: 4, minH: 2 },
+  ],
+  md: [
+    { i: "revenue-overview", x: 0, y: 0, w: 6, h: 2, minW: 2, minH: 1 },
+    { i: "commission-breakdown", x: 6, y: 0, w: 6, h: 2, minW: 2, minH: 1 },
+    { i: "commission-status", x: 0, y: 2, w: 6, h: 3, minW: 2, minH: 2 },
+    { i: "portfolio-metrics", x: 6, y: 2, w: 6, h: 3, minW: 2, minH: 2 },
+    { i: "revenue-trends", x: 0, y: 5, w: 12, h: 4, minW: 4, minH: 2 },
+    { i: "action-alerts", x: 0, y: 9, w: 6, h: 3, minW: 2, minH: 2 },
+    { i: "reminders", x: 6, y: 9, w: 6, h: 3, minW: 2, minH: 2 },
+    { i: "top-clients", x: 0, y: 12, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "referral-commissions", x: 0, y: 15, w: 12, h: 3, minW: 4, minH: 2 },
+  ],
+  sm: [
+    { i: "revenue-overview", x: 0, y: 0, w: 12, h: 2, minW: 4, minH: 1 },
+    { i: "commission-breakdown", x: 0, y: 2, w: 12, h: 2, minW: 4, minH: 1 },
+    { i: "commission-status", x: 0, y: 4, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "portfolio-metrics", x: 0, y: 7, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "revenue-trends", x: 0, y: 10, w: 12, h: 4, minW: 4, minH: 2 },
+    { i: "action-alerts", x: 0, y: 14, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "reminders", x: 0, y: 17, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "top-clients", x: 0, y: 20, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "referral-commissions", x: 0, y: 23, w: 12, h: 3, minW: 4, minH: 2 },
+  ],
+};
