@@ -14,8 +14,18 @@ class VoiceProxyServer {
 
   initialize(httpServer: HTTPServer): void {
     this.wss = new WebSocketServer({
-      server: httpServer,
-      path: '/media-stream'
+      noServer: true
+    });
+
+    httpServer.on('upgrade', (req, socket, head) => {
+      const pathname = req.url ? new URL(req.url, 'http://localhost').pathname : '';
+      if (pathname !== '/media-stream') {
+        return;
+      }
+
+      this.wss?.handleUpgrade(req, socket, head, (ws) => {
+        this.wss?.emit('connection', ws, req);
+      });
     });
 
     this.wss.on('error', (error) => {

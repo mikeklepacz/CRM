@@ -27,7 +27,10 @@ export function registerOrganizationModuleSheetsRoutes(app: Express, deps: Organ
     isAuthenticatedCustom: deps.isAuthenticatedCustom,
     clearUserCache: deps.clearUserCache,
   });
-  registerSheetsTrackerUnclaimRoutes(app, { isAuthenticatedCustom: deps.isAuthenticatedCustom });
+  registerSheetsTrackerUnclaimRoutes(app, {
+    isAuthenticatedCustom: deps.isAuthenticatedCustom,
+    clearUserCache: deps.clearUserCache,
+  });
   registerSheetsAutoClaimRoutes(app, {
     isAuthenticatedCustom: deps.isAuthenticatedCustom,
     clearUserCache: deps.clearUserCache,

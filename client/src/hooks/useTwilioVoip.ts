@@ -31,6 +31,24 @@ let sharedTimer: ReturnType<typeof setInterval> | null = null;
 let sharedState: VoipState = { ...DEFAULT_STATE };
 let initPromise: Promise<Device | null> | null = null;
 const listeners = new Set<() => void>();
+const VOIP_DEBUG = import.meta.env.VITE_DEBUG_MODE === "true";
+const TWILIO_LOG_LEVEL = String(import.meta.env.VITE_TWILIO_LOG_LEVEL || "").toLowerCase();
+const EFFECTIVE_TWILIO_LOG_LEVEL =
+  TWILIO_LOG_LEVEL === "trace" ||
+  TWILIO_LOG_LEVEL === "debug" ||
+  TWILIO_LOG_LEVEL === "info" ||
+  TWILIO_LOG_LEVEL === "warn" ||
+  TWILIO_LOG_LEVEL === "error" ||
+  TWILIO_LOG_LEVEL === "silent"
+    ? TWILIO_LOG_LEVEL
+    : VOIP_DEBUG
+      ? "debug"
+      : "error";
+
+function voipDebugLog(message: string, ...args: unknown[]) {
+  if (!VOIP_DEBUG) return;
+  console.log(message, ...args);
+}
 
 function getSnapshot(): VoipState {
   return sharedState;
@@ -61,21 +79,21 @@ async function initSharedDevice(): Promise<Device | null> {
 
   initPromise = (async () => {
     try {
-      console.log("[VoIP] Initializing device...");
+      voipDebugLog("[VoIP] Initializing device...");
       const data = await apiRequest("GET", "/api/twilio/voip-token");
-      console.log("[VoIP] Token received, creating Device...");
+      voipDebugLog("[VoIP] Token received, creating Device...");
 
       const device = new Device(data.token, {
-        logLevel: 1,
+        logLevel: EFFECTIVE_TWILIO_LOG_LEVEL,
         codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
       });
 
       device.on("registered", () => {
-        console.log("[VoIP] Device registered event fired");
+        voipDebugLog("[VoIP] Device registered event fired");
       });
 
       device.on("unregistered", () => {
-        console.log("[VoIP] Device unregistered");
+        voipDebugLog("[VoIP] Device unregistered");
       });
 
       device.on("error", (error: any) => {
@@ -95,7 +113,7 @@ async function initSharedDevice(): Promise<Device | null> {
 
       await device.register();
       sharedDevice = device;
-      console.log("[VoIP] Device registered successfully");
+      voipDebugLog("[VoIP] Device registered successfully");
       return device;
     } catch (err: any) {
       const errorMsg = err?.message || err?.code || String(err);
@@ -132,7 +150,7 @@ export function useTwilioVoip() {
 
   const makeCall = useCallback(
     async (phoneNumber: string, context?: CallContext) => {
-      console.log(`[VoIP] makeCall called - sharedDevice: ${!!sharedDevice}, hasTwilioNumber: ${hasTwilioNumber}`);
+      voipDebugLog(`[VoIP] makeCall called - sharedDevice: ${!!sharedDevice}, hasTwilioNumber: ${hasTwilioNumber}`);
 
       const logCallHistory = (phone: string, ctx?: CallContext) => {
         if (ctx?.storeName || ctx?.storeLink) {
@@ -156,7 +174,7 @@ export function useTwilioVoip() {
       }
 
       if (!device) {
-        console.log("[VoIP] No device available, using tel: link");
+        voipDebugLog("[VoIP] No device available, using tel: link");
         logCallHistory(phoneNumber, context);
         window.location.href = `tel:${phoneNumber}`;
         return;

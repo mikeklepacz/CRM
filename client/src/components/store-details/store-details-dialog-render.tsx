@@ -28,6 +28,7 @@ export function StoreDetailsDialogRender(props: any) {
             formData={props.formData}
             getStoreName={props.getStoreName}
             handleAutoLoadScriptChange={props.handleAutoLoadScriptChange}
+            handleHideListing={props.handleHideListing}
             handleInputChange={props.handleInputChange}
             handleShowAssistantChange={props.handleShowAssistantChange}
             handleUnclaim={props.handleUnclaim}

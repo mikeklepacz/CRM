@@ -188,10 +188,11 @@ export function StoreDetailsDialogController({ open, onOpenChange, row, trackerS
     setFormData(prev => ({ ...prev, [field]: value }));
     markPocFieldManuallyEdited(field);
   };
-  const { handleUnclaim, handleSave, handleSaveAndExit, handleCallFromDetails } = useStoreDetailsActions({
+  const { handleHideListing, handleUnclaim, handleSave, handleSaveAndExit, handleCallFromDetails } = useStoreDetailsActions({
     formData,
     initialData,
     row,
+    trackerSheetId,
     toast,
     queryClient,
     refetch,
@@ -217,6 +218,7 @@ export function StoreDetailsDialogController({ open, onOpenChange, row, trackerS
       handleAutoLoadScriptChange={handleAutoLoadScriptChange}
       handleInputChange={handleInputChange}
       handleShowAssistantChange={handleShowAssistantChange}
+      handleHideListing={handleHideListing}
       handleUnclaim={handleUnclaim}
       initialData={initialData}
       nextStore={nextStore}

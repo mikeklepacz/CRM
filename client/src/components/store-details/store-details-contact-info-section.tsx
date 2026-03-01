@@ -22,6 +22,16 @@ export function StoreDetailsContactInfoSection(props: any) {
         <AccordionContent>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
+              <Label htmlFor="listing-name">Listing Name</Label>
+              <Input
+                id="listing-name"
+                data-testid="input-listing-name"
+                value={p.formData.name}
+                onChange={(e) => p.handleInputChange("name", e.target.value)}
+                placeholder="Store listing name"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="address">Street Address</Label>
               <Input
                 id="address"

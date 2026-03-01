@@ -7,6 +7,9 @@ import { ChevronLeft, ChevronRight, Info, Sparkles } from "lucide-react";
 
 export function StoreDetailsDialogHeader(props: any) {
   const p = props;
+  const claimedAgentName =
+    p.row?.["Agent Name"] || p.row?.["agent name"] || p.row?.Agent || p.row?.agent || "";
+  const isClaimed = typeof claimedAgentName === "string" ? claimedAgentName.trim().length > 0 : !!claimedAgentName;
 
   return (
     <DialogHeader>
@@ -104,7 +107,7 @@ export function StoreDetailsDialogHeader(props: any) {
           <div className="flex items-center gap-2">
             <Checkbox
               id="claimed"
-              checked={!!p.row._trackerRowIndex}
+              checked={isClaimed}
               onCheckedChange={async (checked) => {
                 if (!checked) {
                   await p.handleUnclaim();
@@ -123,7 +126,7 @@ export function StoreDetailsDialogHeader(props: any) {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="text-xs">Uncheck to release this store back to the pool.</p>
-                  <p className="text-xs">Cannot unclaim if commission records exist.</p>
+                  <p className="text-xs">Commission/history rows are preserved when needed; Agent Name is cleared.</p>
                 </TooltipContent>
               </Tooltip>
             </Label>
@@ -137,6 +140,21 @@ export function StoreDetailsDialogHeader(props: any) {
             />
             <Label htmlFor="listing-active" className="text-sm font-medium cursor-pointer whitespace-nowrap">
               Listing Active
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="hide-listing"
+              checked={false}
+              onCheckedChange={(checked) => {
+                if (checked && p.handleHideListing) {
+                  p.handleHideListing();
+                }
+              }}
+              data-testid="checkbox-hide-listing"
+            />
+            <Label htmlFor="hide-listing" className="text-sm font-medium cursor-pointer whitespace-nowrap">
+              Hide
             </Label>
           </div>
           <div className="flex items-center gap-2">

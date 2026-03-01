@@ -8,7 +8,7 @@ export function SuperAdminPageHeader(props: any) {
       <h2 className="text-3xl font-semibold text-foreground" data-testid="text-page-title">
         Super Admin Dashboard
       </h2>
-      <p className="text-muted-foreground" data-testid="text-page-subtitle">
+      <div className="text-muted-foreground" data-testid="text-page-subtitle">
         {p.metricsLoading ? (
           <Skeleton className="h-4 w-64 inline-block" />
         ) : (
@@ -16,7 +16,7 @@ export function SuperAdminPageHeader(props: any) {
             {p.metricsData?.totalTenants ?? 0} tenants, {p.metricsData?.totalUsers ?? 0} users, {p.metricsData?.totalClients ?? 0} clients
           </>
         )}
-      </p>
+      </div>
     </div>
   );
 }

@@ -181,7 +181,8 @@ export function useStoreDetailsSaveMutation({
       try {
         setInitialData(formData);
 
-        const isUnclaimed = !row._trackerRowIndex;
+        const claimedAgentName = row["Agent Name"] || row["agent name"] || row["Agent"] || row["agent"] || "";
+        const isUnclaimed = !claimedAgentName || !String(claimedAgentName).trim();
         const linkValue = formData.link || getLinkValue(row);
         const joinColumn = "link";
 

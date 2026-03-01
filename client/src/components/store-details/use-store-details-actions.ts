@@ -5,6 +5,7 @@ interface UseStoreDetailsActionsParams {
   formData: any;
   initialData: any;
   row: any;
+  trackerSheetId?: string;
   toast: any;
   queryClient: any;
   refetch: () => Promise<any>;
@@ -17,6 +18,7 @@ export function useStoreDetailsActions({
   formData,
   initialData,
   row,
+  trackerSheetId,
   toast,
   queryClient,
   refetch,
@@ -24,6 +26,49 @@ export function useStoreDetailsActions({
   saveMutation,
   voip,
 }: UseStoreDetailsActionsParams) {
+  const handleHideListing = async () => {
+    const link = formData.link || getLinkValue(row);
+    if (!link) {
+      toast({
+        title: "Error",
+        description: "Cannot hide: Store link is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!row?._trackerRowIndex || !trackerSheetId) {
+      toast({
+        title: "Hide Unavailable",
+        description: "This listing is not currently claimed.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const result = await apiRequest("POST", "/api/sheets/tracker/release", { link });
+
+      toast({
+        title: "Listing Hidden",
+        description:
+          result?.action === "deleted-row"
+            ? "Listing was unclaimed by removing its tracker row."
+            : "Listing was unclaimed by clearing Agent Name.",
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+      await refetch();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: "Hide Failed",
+        description: error.message || "Failed to hide listing. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleUnclaim = async () => {
     const link = formData.link || getLinkValue(row);
 
@@ -37,25 +82,14 @@ export function useStoreDetailsActions({
     }
 
     try {
-      console.log("[Unclaim] Checking commission count for:", link);
-      const encodedLink = encodeURIComponent(link);
-      const countResponse = await apiRequest("GET", `/api/stores/${encodedLink}/commissions/count`);
-
-      if (countResponse.count > 0) {
-        toast({
-          title: "Cannot Unclaim",
-          description: `This store has ${countResponse.count} commission record${countResponse.count === 1 ? "" : "s"}. Cannot unclaim stores with existing commissions.`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      console.log("[Unclaim] No commissions found, deleting tracker row");
-      await apiRequest("DELETE", "/api/sheets/tracker/row", { link });
+      const result = await apiRequest("POST", "/api/sheets/tracker/release", { link });
 
       toast({
         title: "Store Unclaimed",
-        description: "This store has been released back to the pool and is now available for others to claim.",
+        description:
+          result?.action === "deleted-row"
+            ? "Tracker row was removed and the listing is back in the pool."
+            : "Agent Name was cleared and the listing is back in the pool.",
       });
 
       await queryClient.invalidateQueries({ queryKey: ["merged-data"] });
@@ -110,6 +144,7 @@ export function useStoreDetailsActions({
   };
 
   return {
+    handleHideListing,
     handleUnclaim,
     handleSave,
     handleSaveAndExit,

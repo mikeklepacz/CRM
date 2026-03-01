@@ -144,5 +144,6 @@ export function useOrgAdminHandlers(props: any) {
     handlePipelineSubmit,
     handleProjectSubmit,
     handleSettingsSubmit,
+    handleStageSubmit,
   };
 }

@@ -8,13 +8,13 @@ export function OrgAdminPageHeader(props: any) {
       <h2 className="text-3xl font-semibold text-foreground" data-testid="text-page-title">
         Organization Admin
       </h2>
-      <p className="text-muted-foreground" data-testid="text-page-subtitle">
+      <div className="text-muted-foreground" data-testid="text-page-subtitle">
         {p.settingsLoading ? (
           <Skeleton className="h-4 w-64 inline-block" />
         ) : (
           <>Manage {p.settingsData?.tenant?.name || "your organization"}</>
         )}
-      </p>
+      </div>
     </div>
   );
 }
