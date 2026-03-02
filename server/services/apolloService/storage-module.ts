@@ -84,6 +84,8 @@ export async function enrichAndStoreCompany(options: {
       twitterUrl: apolloCompany.twitter_url,
       facebookUrl: apolloCompany.facebook_url,
       websiteUrl: apolloCompany.website_url,
+      shortDescription: apolloCompany.short_description,
+      keywords: apolloCompany.keywords,
       employeeCount: apolloCompany.estimated_num_employees,
       industry: apolloCompany.industry,
       foundedYear: apolloCompany.founded_year,

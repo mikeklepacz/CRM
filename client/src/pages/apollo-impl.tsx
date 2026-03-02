@@ -12,7 +12,7 @@ import { useApolloBulkReview } from "./apollo/hooks/use-apollo-bulk-review";
 import { useApolloLeadsWorkflow } from "./apollo/hooks/use-apollo-leads-workflow";
 import { useApolloManualAdd } from "./apollo/hooks/use-apollo-manual-add";
 import { useApolloPreviewWorkflow } from "./apollo/hooks/use-apollo-preview-workflow";
-import type { ApolloCompany, ApolloSettings, StoreContact } from "./apollo/types";
+import type { ApolloCompany, ApolloLeadDiscoveryStats, ApolloSettings, StoreContact } from "./apollo/types";
 
 export default function Apollo() {
   const { toast } = useToast();
@@ -28,7 +28,10 @@ export default function Apollo() {
 
   const { data: enrichedCompanies, isLoading: companiesLoading } = useApolloEnrichedCompanies(currentProject?.id);
 
-  const { data: storeContacts, isLoading: storeLoading } = useQuery<{ contacts: StoreContact[] }>({
+  const { data: storeContacts, isLoading: storeLoading } = useQuery<{
+    contacts: StoreContact[];
+    stats?: ApolloLeadDiscoveryStats;
+  }>({
     queryKey: ["/api/apollo/leads-without-emails", currentProject?.id],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -216,6 +219,7 @@ export default function Apollo() {
         onPreview={handlePreview}
         enrichmentStatus={enrichmentStatus}
         failedEnrichmentLinks={failedEnrichmentLinks}
+        leadDiscoveryStats={storeContacts?.stats}
       />
 
       <ApolloWorkflowDialogs

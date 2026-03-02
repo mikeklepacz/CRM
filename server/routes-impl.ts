@@ -249,6 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerEngagementModuleRoutes(app, {
     checkAdminAccess,
     clearUserCache,
+    getEffectiveTenantId,
     googleSheets,
     isAdmin,
     isAuthenticatedCustom,

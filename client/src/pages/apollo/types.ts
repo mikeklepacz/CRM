@@ -96,9 +96,19 @@ export interface StoreContact {
   website: string;
 }
 
+export interface ApolloLeadDiscoveryStats {
+  source: "apollo_candidates" | "store_sheet" | "qualification_leads" | "none";
+  totalRows: number;
+  eligibleRows: number;
+  deduplicatedRows: number;
+  excludedHasEmail: number;
+  excludedMissingLink: number;
+  excludedAlreadyProcessed: number;
+  excludedCategoryMismatch: number;
+}
+
 export interface BulkPreviewItem {
   contact: StoreContact;
   preview: PreviewResult | null;
   error?: string;
 }
-

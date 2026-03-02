@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { ApolloCoreRouteDeps } from "./apolloCore.types";
 import * as apolloService from "../../services/apolloService";
 import { parseApolloOrganizationId } from "./apolloCore.helpers";
+import { resolveTenantProjectId } from "../../services/projectScopeValidation";
 
 export function registerApolloEnrichRoute(app: Express, deps: ApolloCoreRouteDeps): void {
   app.post("/api/apollo/enrich", deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
@@ -10,7 +11,8 @@ export function registerApolloEnrichRoute(app: Express, deps: ApolloCoreRouteDep
           if (!tenantId) {
               return res.status(400).json({ message: "No tenant associated with user" });
           }
-          const { googleSheetLink, domain, companyName, organizationId, apolloAccountUrl, selectedPersonIds, projectId } = req.body;
+          const { googleSheetLink, domain, companyName, organizationId, apolloAccountUrl, selectedPersonIds, projectId: requestedProjectId } = req.body;
+          const projectId = await resolveTenantProjectId(tenantId, requestedProjectId);
           const effectiveOrganizationId = organizationId || parseApolloOrganizationId(apolloAccountUrl);
           if (!googleSheetLink) {
               return res.status(400).json({ message: "googleSheetLink is required" });

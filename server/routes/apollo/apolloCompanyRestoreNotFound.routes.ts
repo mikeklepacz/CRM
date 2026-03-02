@@ -9,7 +9,7 @@ export function registerApolloCompanyRestoreNotFoundRoute(app: Express, deps: Ap
     deps.isAdmin,
     async (req: any, res) => {
       try {
-        const tenantId = req.user?.tenantId;
+        const tenantId = await deps.getEffectiveTenantId(req);
         if (!tenantId) {
           return res.status(400).json({ message: "No tenant associated with user" });
         }

@@ -197,6 +197,7 @@ export default function EHub() {
       <EhubMainTabsSection
         actions={actions}
         configMutations={configMutations}
+        currentProjectId={currentProject?.id}
         handleConnectEmail={handleConnectEmail}
         operationsMutations={operationsMutations}
         queries={queries}

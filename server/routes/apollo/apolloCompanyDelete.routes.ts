@@ -5,7 +5,7 @@ import type { ApolloManagementDeps } from "./apolloManagement.types";
 export function registerApolloCompanyDeleteRoute(app: Express, deps: ApolloManagementDeps): void {
   app.delete("/api/apollo/companies/:companyId", deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = await deps.getEffectiveTenantId(req);
       if (!tenantId) {
         return res.status(400).json({ message: "No tenant associated with user" });
       }

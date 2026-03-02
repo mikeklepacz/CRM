@@ -13,6 +13,7 @@ export function EhubMainTabsSection(props: any) {
       contactedFilter={props.state.contactedFilter}
       createMutation={props.sequenceMutations.createMutation}
       currentSequence={props.queries.currentSequence}
+      currentProjectId={props.currentProjectId}
       deleteEmailAccountMutation={props.configMutations.deleteEmailAccountMutation}
       emailAccounts={props.queries.emailAccounts}
       finalizedStrategyEdit={props.state.finalizedStrategyEdit}
@@ -103,8 +104,10 @@ export function EhubMainTabsSection(props: any) {
       setRecipientSelectAll={props.state.setRecipientSelectAll}
       setReplyScannerDialogOpen={props.state.setReplyScannerDialogOpen}
       setSearch={props.state.setSearch}
+      setSelectedContacts={props.state.setSelectedContacts}
       setSelectedRecipientIds={props.state.setSelectedRecipientIds}
       setSelectedSequenceId={props.state.setSelectedSequenceId}
+      setSelectAllMode={props.state.setSelectAllMode}
       setSenderEmailAccountId={props.state.setSenderEmailAccountId}
       setSettingsForm={props.state.setSettingsForm}
       setStepDelays={props.state.setStepDelays}

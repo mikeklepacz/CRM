@@ -101,6 +101,7 @@ export function StoreDetailsReminderCollapsible(props: any) {
                   return typeof key === "string" && key.startsWith("/api/reminders");
                 },
               });
+              return true;
             } catch (error: any) {
               console.error("[REMINDER] Error:", error);
               p.toast({
@@ -108,6 +109,7 @@ export function StoreDetailsReminderCollapsible(props: any) {
                 description: error.message || "Failed to create reminder",
                 variant: "destructive",
               });
+              return false;
             } finally {
               p.setIsSavingReminder(false);
             }
@@ -118,6 +120,7 @@ export function StoreDetailsReminderCollapsible(props: any) {
           userTimezone={p.userPreferences?.timezone}
           defaultTimezoneMode={p.userPreferences?.defaultTimezoneMode}
           timeFormat={p.userPreferences?.timeFormat}
+          defaultCalendarReminders={p.userPreferences?.defaultCalendarReminders}
           pointOfContact={p.formData.point_of_contact}
           pocEmail={p.formData.poc_email}
           pocPhone={p.formData.poc_phone}

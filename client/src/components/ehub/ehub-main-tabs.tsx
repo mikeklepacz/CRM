@@ -54,6 +54,7 @@ export function EhubMainTabs(props: any) {
       <EhubAllContactsTab
         allContactsData={p.allContactsData}
         contactStatusFilter={p.contactStatusFilter}
+        currentProjectId={p.currentProjectId}
         handleClearSelection={p.handleClearSelection}
         handleSelectAllMatching={p.handleSelectAllMatching}
         handleSelectAllOnPage={p.handleSelectAllOnPage}
@@ -65,6 +66,8 @@ export function EhubMainTabs(props: any) {
         search={p.search}
         selectAllMode={p.selectAllMode}
         selectedContacts={p.selectedContacts}
+        setSelectedContacts={p.setSelectedContacts}
+        setSelectAllMode={p.setSelectAllMode}
         setContactStatusFilter={p.setContactStatusFilter}
         setIsAddToSequenceDialogOpen={p.setIsAddToSequenceDialogOpen}
         setSearch={p.setSearch}

@@ -45,6 +45,9 @@ export async function markCompanyPrescreened(
   name?: string,
   contactCount?: number,
   projectId?: string,
+  websiteUrl?: string,
+  shortDescription?: string,
+  keywords?: string[],
 ): Promise<ApolloCompany> {
   const _contactCount = contactCount;
   const [company] = await db
@@ -56,6 +59,9 @@ export async function markCompanyPrescreened(
       apolloOrgId,
       domain: domain || null,
       name: name || null,
+      websiteUrl: websiteUrl || null,
+      shortDescription: shortDescription || null,
+      keywords: keywords || null,
       enrichmentStatus: "prescreened",
       creditsUsed: 0,
     })

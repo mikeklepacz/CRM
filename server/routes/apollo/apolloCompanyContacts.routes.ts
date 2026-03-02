@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { ApolloCoreRouteDeps } from "./apolloCore.types";
 import { getScopedContactsForCompany, getScopedEnrichedCompanies } from "../../services/apolloScopeService";
+import { resolveTenantProjectId } from "../../services/projectScopeValidation";
 
 export function registerApolloCompanyContactsRoute(app: Express, deps: ApolloCoreRouteDeps): void {
   app.get("/api/apollo/companies/:companyId/contacts", deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
@@ -10,7 +11,8 @@ export function registerApolloCompanyContactsRoute(app: Express, deps: ApolloCor
           if (!tenantId) {
               return res.status(400).json({ message: "No tenant associated with user" });
           }
-          const projectId = req.query.projectId as string | undefined;
+          const requestedProjectId = req.query.projectId as string | undefined;
+          const projectId = await resolveTenantProjectId(tenantId, requestedProjectId);
           const contacts = await getScopedContactsForCompany(tenantId, companyId, projectId);
           res.json(contacts);
       }

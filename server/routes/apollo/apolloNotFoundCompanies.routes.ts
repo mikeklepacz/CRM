@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import * as apolloService from "../../services/apolloService";
 import type { ApolloPrescreenDeps } from "./apolloPrescreen.types";
+import { resolveTenantProjectId } from "../../services/projectScopeValidation";
 
 export function registerApolloNotFoundCompaniesRoute(app: Express, deps: ApolloPrescreenDeps): void {
   app.get("/api/apollo/companies/not-found", deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
@@ -9,7 +10,8 @@ export function registerApolloNotFoundCompaniesRoute(app: Express, deps: ApolloP
       if (!tenantId) {
         return res.status(400).json({ message: "No tenant associated with user" });
       }
-      const projectId = req.query.projectId as string | undefined;
+      const requestedProjectId = req.query.projectId as string | undefined;
+      const projectId = await resolveTenantProjectId(tenantId, requestedProjectId);
       const companies = await apolloService.getNotFoundCompanies(tenantId, projectId);
       res.json(companies);
     } catch (error: any) {

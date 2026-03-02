@@ -4,6 +4,7 @@ import { registerApolloCheckEnrichmentRoute } from "./apolloCheckEnrichment.rout
 import { registerApolloNotFoundCompaniesRoute } from "./apolloNotFoundCompanies.routes";
 import { registerApolloPrescreenedCompaniesRoute } from "./apolloPrescreenedCompanies.routes";
 import { registerApolloBulkPrescreenRoute } from "./apolloBulkPrescreen.routes";
+import { registerApolloCandidatesRoutes } from "./apolloCandidates.routes";
 
 export function registerApolloPrescreenRoutes(
   app: Express,
@@ -13,4 +14,5 @@ export function registerApolloPrescreenRoutes(
   registerApolloNotFoundCompaniesRoute(app, deps);
   registerApolloPrescreenedCompaniesRoute(app, deps);
   registerApolloBulkPrescreenRoute(app, deps);
+  registerApolloCandidatesRoutes(app, deps);
 }

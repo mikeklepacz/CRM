@@ -1,5 +1,6 @@
 import * as apolloService from "../../services/apolloService";
 import { extractDomain } from "./apolloPrescreen.helpers";
+import { resolveTenantProjectId } from "../../services/projectScopeValidation";
 
 export async function handleApolloBulkPrescreen(
   req: any,
@@ -12,10 +13,12 @@ export async function handleApolloBulkPrescreen(
       return res.status(400).json({ message: "No tenant associated with user" });
     }
 
-    const { contacts, projectId } = req.body;
+    const { contacts, projectId: requestedProjectId } = req.body;
     if (!Array.isArray(contacts)) {
       return res.status(400).json({ message: "contacts must be an array" });
     }
+
+    const projectId = await resolveTenantProjectId(tenantId, requestedProjectId);
 
     const links = contacts.map((c: any) => c.link).filter(Boolean);
     const existingStatus = await apolloService.bulkCheckEnrichmentStatus(tenantId, links);
@@ -52,7 +55,10 @@ export async function handleApolloBulkPrescreen(
             preview.company.primary_domain || domain,
             preview.company.name || contact.name,
             preview.totalContacts,
-            projectId
+            projectId,
+            preview.company.website_url,
+            preview.company.short_description,
+            preview.company.keywords
           );
         } else {
           notFound++;

@@ -2587,6 +2587,8 @@ export const apolloCompanies = pgTable("apollo_companies", {
   twitterUrl: varchar("twitter_url", { length: 500 }), // Twitter profile
   facebookUrl: varchar("facebook_url", { length: 500 }), // Facebook profile
   websiteUrl: varchar("website_url", { length: 500 }), // Website URL
+  shortDescription: text("short_description"),
+  keywords: text("keywords").array(),
   employeeCount: integer("employee_count"), // Headcount
   industry: varchar("industry", { length: 255 }), // Industry classification
   foundedYear: integer("founded_year"), // Year founded
@@ -2662,6 +2664,59 @@ export const insertApolloContactSchema = createInsertSchema(apolloContacts).omit
 
 export type InsertApolloContact = z.infer<typeof insertApolloContactSchema>;
 export type ApolloContact = typeof apolloContacts.$inferSelect;
+
+// Apollo candidate queue - normalized company-level staging before prescreen/enrichment
+export const apolloCandidates = pgTable("apollo_candidates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  projectId: varchar("project_id").notNull().references(() => tenantProjects.id, { onDelete: 'cascade' }),
+  canonicalKey: varchar("canonical_key", { length: 500 }).notNull(),
+  cleanCompanyName: varchar("clean_company_name", { length: 500 }).notNull(),
+  domain: varchar("domain", { length: 255 }),
+  representativeLink: varchar("representative_link").notNull(),
+  sourceCount: integer("source_count").notNull().default(1),
+  status: varchar("status", { length: 30 }).notNull().default("pending"),
+  lastCheckedAt: timestamp("last_checked_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_apollo_candidates_unique_key").on(table.tenantId, table.projectId, table.canonicalKey),
+  index("idx_apollo_candidates_tenant_project").on(table.tenantId, table.projectId),
+  index("idx_apollo_candidates_status").on(table.tenantId, table.projectId, table.status),
+]);
+
+export const insertApolloCandidateSchema = createInsertSchema(apolloCandidates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertApolloCandidate = z.infer<typeof insertApolloCandidateSchema>;
+export type ApolloCandidate = typeof apolloCandidates.$inferSelect;
+
+export const apolloCandidateSources = pgTable("apollo_candidate_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  projectId: varchar("project_id").notNull().references(() => tenantProjects.id, { onDelete: 'cascade' }),
+  candidateId: varchar("candidate_id").notNull().references(() => apolloCandidates.id, { onDelete: 'cascade' }),
+  sourceLink: varchar("source_link").notNull(),
+  rawName: varchar("raw_name", { length: 500 }),
+  rawWebsite: varchar("raw_website", { length: 500 }),
+  state: varchar("state", { length: 100 }),
+  category: varchar("category", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_apollo_candidate_sources_unique_link").on(table.tenantId, table.projectId, table.sourceLink),
+  index("idx_apollo_candidate_sources_candidate").on(table.candidateId),
+]);
+
+export const insertApolloCandidateSourceSchema = createInsertSchema(apolloCandidateSources).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertApolloCandidateSource = z.infer<typeof insertApolloCandidateSourceSchema>;
+export type ApolloCandidateSource = typeof apolloCandidateSources.$inferSelect;
 
 // Apollo Enrichment Settings - Per-tenant configuration for Apollo enrichment
 export const apolloSettings = pgTable("apollo_settings", {

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { insertSequenceSchema } from "@shared/schema";
 import { storage } from "../../storage";
+import { assertTenantProjectScope } from "../../services/projectScopeValidation";
 import type { SequencesCoreDeps } from "./sequencesCore.types";
 
 export function registerSequencesCreateRoute(app: Express, deps: SequencesCoreDeps): void {
@@ -10,6 +11,8 @@ export function registerSequencesCreateRoute(app: Express, deps: SequencesCoreDe
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
+
+      await assertTenantProjectScope(req.user.tenantId, req.body?.projectId);
 
       const sequenceData = insertSequenceSchema.parse({
         ...req.body,

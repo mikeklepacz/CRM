@@ -9,7 +9,7 @@ export interface QuickReminderSaveData {
 }
 
 export interface QuickReminderProps {
-  onSave: (data: QuickReminderSaveData) => void;
+  onSave: (data: QuickReminderSaveData) => void | Promise<boolean | void>;
   isSaving?: boolean;
   defaultNote?: string;
   defaultDate?: Date;

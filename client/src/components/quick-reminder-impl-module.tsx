@@ -41,6 +41,7 @@ export function QuickReminder({
   const [time, setTime] = useState("09:00");
   const [useCustomerTimezone, setUseCustomerTimezone] = useState(defaultTimezoneMode === "customer");
   const [calendarReminders, setCalendarReminders] = useState(defaultCalendarReminders);
+  const [lastSavedSlot, setLastSavedSlot] = useState<{ date: string; time: string } | null>(null);
 
   const customerTimezone = detectTimezoneFromAddress(storeAddress, storeCity, storeState);
   const agentTimezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -80,20 +81,47 @@ export function QuickReminder({
     }
   }, [JSON.stringify(defaultCalendarReminders)]);
 
-  const handleSave = () => {
+  const selectedSlot = date
+    ? buildSaveDateTime(date, time, useCustomerTimezone, customerTimezone, agentTimezone)
+    : null;
+
+  const hasJustSavedSlotConflict =
+    !!selectedSlot &&
+    !!lastSavedSlot &&
+    selectedSlot.finalDateStr === lastSavedSlot.date &&
+    selectedSlot.finalTime === lastSavedSlot.time;
+
+  useEffect(() => {
+    if (!lastSavedSlot || !selectedSlot) return;
+    const stillOnSavedSlot =
+      selectedSlot.finalDateStr === lastSavedSlot.date &&
+      selectedSlot.finalTime === lastSavedSlot.time;
+    if (!stillOnSavedSlot) {
+      setLastSavedSlot(null);
+    }
+  }, [lastSavedSlot, selectedSlot?.finalDateStr, selectedSlot?.finalTime]);
+
+  const handleSave = async () => {
     if (!note.trim() || !date) return;
 
     const { finalDateStr, finalTime } = buildSaveDateTime(date, time, useCustomerTimezone, customerTimezone, agentTimezone);
 
-    onSave({
-      note,
-      date: finalDateStr,
-      time: finalTime,
-      useCustomerTimezone: false,
-      customerTimezone,
-      agentTimezone,
-      calendarReminders,
-    });
+    try {
+      const saveResult = await onSave({
+        note,
+        date: finalDateStr,
+        time: finalTime,
+        useCustomerTimezone: false,
+        customerTimezone,
+        agentTimezone,
+        calendarReminders,
+      });
+      if (saveResult !== false) {
+        setLastSavedSlot({ date: finalDateStr, time: finalTime });
+      }
+    } catch {
+      // Save failed; keep conflict checks active.
+    }
   };
 
   const timePreview = getTimeConversionPreview(date, time, useCustomerTimezone, customerTimezone, agentTimezone, timeFormat);
@@ -109,6 +137,7 @@ export function QuickReminder({
     isLoadingReminders,
     isLoadingConvertedReminders,
   });
+  const effectiveTimeConflict = timeConflict && !hasJustSavedSlotConflict;
 
   const displayEmail = pocEmail || defaultEmail;
   const displayPhone = pocPhone || defaultPhone;
@@ -168,7 +197,7 @@ export function QuickReminder({
         </p>
       )}
 
-      {timeConflict && (
+      {effectiveTimeConflict && (
         <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20" data-testid="conflict-warning">
           <p className="text-sm text-destructive font-medium">Scheduling conflict</p>
           <p className="text-xs text-destructive/80 mt-1">
@@ -177,7 +206,7 @@ export function QuickReminder({
         </div>
       )}
 
-      <Button onClick={handleSave} disabled={!note.trim() || !date || isSaving || timeConflict || isCheckingConflict} className="w-full" data-testid="button-save-reminder">
+      <Button onClick={handleSave} disabled={!note.trim() || !date || isSaving || effectiveTimeConflict || isCheckingConflict} className="w-full" data-testid="button-save-reminder">
         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         {isSaving ? "Saving..." : isCheckingConflict ? "Checking..." : "Save Reminder"}
       </Button>

@@ -1,8 +1,10 @@
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -14,11 +16,47 @@ import {
 } from "@/components/ui/table";
 import { TabsContent } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Info, Loader2, X } from "lucide-react";
+
+type ApolloCompanyRow = {
+  id: string;
+  name?: string | null;
+  contactCount?: number | null;
+  websiteUrl?: string | null;
+  shortDescription?: string | null;
+  keywords?: string[] | null;
+};
+
+type ApolloContactRow = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  title?: string | null;
+  seniority?: string | null;
+  email?: string | null;
+  emailStatus?: string | null;
+};
+
+type ApolloContactListItem = ApolloContactRow & {
+  companyId: string;
+  companyName: string;
+};
+
+type ApolloMappedRow = {
+  companyName: string;
+  companyWebsite?: string | null;
+  companyShortDescription?: string | null;
+  companyKeywords?: string[] | null;
+  ehubContact: EhubContact;
+  emailStatus?: string | null;
+  seniority?: string | null;
+  title?: string | null;
+};
 
 type EhubAllContactsTabProps = {
   allContactsData: AllContactsResponse | undefined;
   contactStatusFilter: string;
+  currentProjectId?: string;
   handleClearSelection: () => void;
   handleSelectAllMatching: () => void;
   handleSelectAllOnPage: (checked: boolean | "indeterminate") => void;
@@ -30,6 +68,8 @@ type EhubAllContactsTabProps = {
   search: string;
   selectAllMode: "none" | "page" | "all";
   selectedContacts: EhubContact[];
+  setSelectedContacts: (value: EhubContact[] | ((prev: EhubContact[]) => EhubContact[])) => void;
+  setSelectAllMode: (mode: "none" | "page" | "all") => void;
   setContactStatusFilter: (value: string) => void;
   setIsAddToSequenceDialogOpen: (open: boolean) => void;
   setSearch: (value: string) => void;
@@ -38,6 +78,7 @@ type EhubAllContactsTabProps = {
 export function EhubAllContactsTab({
   allContactsData,
   contactStatusFilter,
+  currentProjectId,
   handleClearSelection,
   handleSelectAllMatching,
   handleSelectAllOnPage,
@@ -49,11 +90,129 @@ export function EhubAllContactsTab({
   search,
   selectAllMode,
   selectedContacts,
+  setSelectedContacts,
+  setSelectAllMode,
   setContactStatusFilter,
   setIsAddToSequenceDialogOpen,
   setSearch,
 }: EhubAllContactsTabProps) {
   const totalPages = Math.ceil((allContactsData?.total || 0) / 50) || 1;
+  const isApolloFilter = contactStatusFilter === "apollo";
+
+  const { data: apolloCompanies, isLoading: isApolloCompaniesLoading } = useQuery<ApolloCompanyRow[]>({
+    queryKey: ["/api/apollo/companies", "ehub-filter", currentProjectId || "none"],
+    queryFn: async () => {
+      if (!currentProjectId) return [];
+      const params = new URLSearchParams({ projectId: currentProjectId });
+      const response = await fetch(`/api/apollo/companies?${params.toString()}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to load Apollo companies");
+      return response.json();
+    },
+    enabled: !!currentProjectId,
+  });
+
+  const { data: apolloContacts, isLoading: isApolloContactsLoading } = useQuery<ApolloContactListItem[]>({
+    queryKey: ["/api/apollo/contacts", "ehub-filter", currentProjectId || "none"],
+    queryFn: async () => {
+      if (!currentProjectId) return [];
+
+      const params = new URLSearchParams({ projectId: currentProjectId });
+      const companiesResponse = await fetch(`/api/apollo/companies?${params.toString()}`, { credentials: "include" });
+      if (!companiesResponse.ok) throw new Error("Failed to load Apollo companies");
+      const companies = (await companiesResponse.json()) as ApolloCompanyRow[];
+
+      const perCompany = await Promise.all(
+        companies.map(async (company) => {
+          const response = await fetch(
+            `/api/apollo/companies/${company.id}/contacts-clean?${params.toString()}`,
+            { credentials: "include" }
+          );
+          if (!response.ok) return [] as ApolloContactListItem[];
+          const contacts = (await response.json()) as ApolloContactRow[];
+          return contacts.map((contact) => ({
+            ...contact,
+            companyId: company.id,
+            companyName: company.name || "Unnamed Company",
+          }));
+        })
+      );
+
+      return perCompany.flat();
+    },
+    enabled: isApolloFilter && !!currentProjectId,
+  });
+
+  const apolloCount = apolloCompanies?.reduce((sum, row) => sum + (row.contactCount || 0), 0) || 0;
+  const apolloSearch = search.trim().toLowerCase();
+  const filteredApolloContacts = !apolloContacts
+    ? []
+    : apolloContacts.filter((contact) => {
+        if (!apolloSearch) return true;
+        const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ").toLowerCase();
+        return (
+          fullName.includes(apolloSearch) ||
+          (contact.email || "").toLowerCase().includes(apolloSearch) ||
+          (contact.title || "").toLowerCase().includes(apolloSearch) ||
+          (contact.seniority || "").toLowerCase().includes(apolloSearch) ||
+          (contact.companyName || "").toLowerCase().includes(apolloSearch)
+        );
+      });
+
+  const mappedApolloRows: ApolloMappedRow[] = filteredApolloContacts
+    .filter((contact) => !!contact.email)
+    .map((contact) => {
+      const company = (apolloCompanies || []).find((row) => row.id === contact.companyId);
+      return {
+        companyName: contact.companyName,
+        companyWebsite: company?.websiteUrl,
+        companyShortDescription: company?.shortDescription,
+        companyKeywords: company?.keywords,
+        emailStatus: contact.emailStatus,
+        seniority: contact.seniority,
+        title: contact.title,
+        ehubContact: {
+          name: [contact.firstName, contact.lastName].filter(Boolean).join(" ") || "Unnamed Contact",
+          email: (contact.email || "").toLowerCase(),
+          state: "",
+          timezone: "America/New_York",
+          hours: "",
+          link: `apollo:${contact.companyId}:${contact.id}`,
+          salesSummary: [contact.companyName, contact.title].filter(Boolean).join(" - "),
+          neverContacted: true,
+          contacted: false,
+          inSequence: false,
+          replied: false,
+          bounced: false,
+          sequenceNames: [],
+        },
+      };
+    });
+
+  const selectedApolloEmailSet = new Set(selectedContacts.map((contact) => contact.email.toLowerCase()));
+  const allApolloSelected =
+    mappedApolloRows.length > 0 &&
+    mappedApolloRows.every((row) => selectedApolloEmailSet.has(row.ehubContact.email.toLowerCase()));
+
+  const toggleApolloContact = (contact: EhubContact) => {
+    setSelectAllMode("none");
+    setSelectedContacts((prev) => {
+      const exists = prev.some((item) => item.email.toLowerCase() === contact.email.toLowerCase());
+      if (exists) {
+        return prev.filter((item) => item.email.toLowerCase() !== contact.email.toLowerCase());
+      }
+      return [...prev, contact];
+    });
+  };
+
+  const toggleSelectAllApollo = (checked: boolean | "indeterminate") => {
+    if (checked) {
+      setSelectedContacts(mappedApolloRows.map((row) => row.ehubContact));
+      setSelectAllMode("page");
+      return;
+    }
+    setSelectedContacts([]);
+    setSelectAllMode("none");
+  };
 
   return (
     <TabsContent value="all-contacts" className="space-y-4">
@@ -88,6 +247,9 @@ export function EhubAllContactsTab({
               <ToggleGroupItem value="bounced" data-testid="filter-bounced">
                 Bounced ({allContactsData?.statusCounts.bounced || 0})
               </ToggleGroupItem>
+              <ToggleGroupItem value="apollo" data-testid="filter-apollo">
+                Apollo ({apolloCount})
+              </ToggleGroupItem>
             </ToggleGroup>
           </div>
           <div className="pt-4">
@@ -101,7 +263,107 @@ export function EhubAllContactsTab({
           </div>
         </CardHeader>
         <CardContent>
-          {isLoadingContacts ? (
+          {isApolloFilter ? (
+            !currentProjectId ? (
+              <div className="text-center py-8 text-muted-foreground">Select a project to view Apollo contacts</div>
+            ) : isApolloCompaniesLoading || isApolloContactsLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin" />
+              </div>
+            ) : !filteredApolloContacts.length ? (
+              <div className="text-center py-8 text-muted-foreground">No Apollo contacts found for this project</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={allApolloSelected}
+                        onCheckedChange={toggleSelectAllApollo}
+                        data-testid="checkbox-select-all-apollo"
+                      />
+                    </TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Seniority</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mappedApolloRows.map((row) => (
+                    <TableRow key={row.ehubContact.link} data-testid={`row-apollo-contact-${row.ehubContact.link}`}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedApolloEmailSet.has(row.ehubContact.email.toLowerCase())}
+                          onCheckedChange={() => toggleApolloContact(row.ehubContact)}
+                          data-testid={`checkbox-apollo-contact-${row.ehubContact.email}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {row.ehubContact.name}
+                      </TableCell>
+                      <TableCell>{row.ehubContact.email || "—"}</TableCell>
+                      <TableCell>{row.title || "—"}</TableCell>
+                      <TableCell>{row.seniority || "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span>{row.companyName || "—"}</span>
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <button
+                                type="button"
+                                className="text-muted-foreground hover:text-foreground"
+                                data-testid={`button-apollo-company-info-${row.ehubContact.link}`}
+                                aria-label="Company insights"
+                              >
+                                <Info className="h-4 w-4" />
+                              </button>
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-[360px] space-y-2" align="start">
+                              <div className="text-sm font-medium">{row.companyName || "Company"}</div>
+                              {row.companyWebsite ? (
+                                <a
+                                  href={row.companyWebsite}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-primary hover:underline break-all"
+                                >
+                                  {row.companyWebsite}
+                                </a>
+                              ) : (
+                                <div className="text-xs text-muted-foreground">No website saved</div>
+                              )}
+                              <div className="text-xs leading-relaxed text-muted-foreground max-h-28 overflow-y-auto">
+                                {row.companyShortDescription || "No short description saved"}
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {(row.companyKeywords && row.companyKeywords.length > 0) ? (
+                                  row.companyKeywords.slice(0, 12).map((keyword) => (
+                                    <Badge key={`${row.ehubContact.link}-${keyword}`} variant="secondary" className="text-[10px]">
+                                      {keyword}
+                                    </Badge>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">No keywords saved</span>
+                                )}
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={row.emailStatus === "verified" ? "default" : "outline"}>
+                          {row.emailStatus || "unknown"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          ) : isLoadingContacts ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-8 h-8 animate-spin" />
             </div>

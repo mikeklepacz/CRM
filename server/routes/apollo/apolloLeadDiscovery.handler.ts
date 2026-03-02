@@ -3,6 +3,9 @@ import { apolloCompanies, qualificationLeads, tenantProjects } from "@shared/sch
 import { db } from "../../db";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { resolveTenantProjectId } from "../../services/projectScopeValidation";
+import { getAllowedEhubCategoryNames } from "../../services/ehubProjectScope";
+import { loadCandidateQueueLeadDiscovery } from "./apolloLeadDiscoveryCandidates";
 
 function extractDomain(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -24,20 +27,42 @@ export function buildApolloLeadDiscoveryHandler(deps: {
         return res.status(400).json({ message: "No tenant associated with user" });
       }
 
-      const projectId = req.query.projectId as string | undefined;
+      const requestedProjectId = req.query.projectId as string | undefined;
+      const projectId = await resolveTenantProjectId(tenantId, requestedProjectId);
+      if (!projectId) {
+        return res.status(400).json({ message: "projectId is required" });
+      }
 
-      let allowedCategoryName: string | null = null;
+      // Primary source: project-scoped Apollo candidate queue (persistent deduped table).
+      const candidateLeadDiscovery = await loadCandidateQueueLeadDiscovery(tenantId, projectId);
+      if (candidateLeadDiscovery) {
+        return res.json(candidateLeadDiscovery);
+      }
+
+      let allowedCategoryNames: Set<string> | null = null;
       if (projectId) {
         const project = await db
           .select({ name: tenantProjects.name })
           .from(tenantProjects)
-          .where(eq(tenantProjects.id, projectId))
+          .where(and(eq(tenantProjects.id, projectId), eq(tenantProjects.tenantId, tenantId)))
           .limit(1);
 
         if (project.length === 0) {
-          return res.json({ contacts: [] });
+          return res.json({
+            contacts: [],
+            stats: {
+              source: "none",
+              totalRows: 0,
+              eligibleRows: 0,
+              deduplicatedRows: 0,
+              excludedHasEmail: 0,
+              excludedMissingLink: 0,
+              excludedAlreadyProcessed: 0,
+              excludedCategoryMismatch: 0,
+            },
+          });
         }
-        allowedCategoryName = project[0].name.toLowerCase().trim();
+        allowedCategoryNames = await getAllowedEhubCategoryNames(tenantId, projectId);
       }
 
       const alreadyEnrichedLinks = await db
@@ -69,40 +94,85 @@ export function buildApolloLeadDiscoveryHandler(deps: {
           const linkIndex = headers.indexOf("link");
           const websiteIndex = headers.indexOf("website");
           const categoryIndex = headers.indexOf("category");
+          const stats = {
+            source: "store_sheet",
+            totalRows: rows.length,
+            eligibleRows: 0,
+            deduplicatedRows: 0,
+            excludedHasEmail: 0,
+            excludedMissingLink: 0,
+            excludedAlreadyProcessed: 0,
+            excludedCategoryMismatch: 0,
+          };
 
-          leadsWithoutEmails = rows
-            .filter((row: any[]) => {
-              const email = emailIndex !== -1 ? (row[emailIndex] || "").trim() : "";
-              if (email && email.includes("@")) {
-                return false;
+          leadsWithoutEmails = rows.flatMap((row: any[]) => {
+            const email = emailIndex !== -1 ? (row[emailIndex] || "").trim() : "";
+            if (email && email.includes("@")) {
+              stats.excludedHasEmail++;
+              return [];
+            }
+
+            const link = linkIndex !== -1 ? (row[linkIndex] || "").trim() : "";
+            if (!link) {
+              stats.excludedMissingLink++;
+              return [];
+            }
+
+            if (enrichedLinkSet.has(link)) {
+              stats.excludedAlreadyProcessed++;
+              return [];
+            }
+
+            if (allowedCategoryNames !== null && categoryIndex !== -1) {
+              const rowCategory = (row[categoryIndex] || "").toLowerCase().trim();
+              if (!rowCategory || !allowedCategoryNames.has(rowCategory)) {
+                stats.excludedCategoryMismatch++;
+                return [];
               }
+            }
 
-              const link = linkIndex !== -1 ? (row[linkIndex] || "").trim() : "";
-              if (!link) {
-                return false;
-              }
-
-              if (enrichedLinkSet.has(link)) {
-                return false;
-              }
-
-              if (allowedCategoryName !== null && categoryIndex !== -1) {
-                const rowCategory = (row[categoryIndex] || "").toLowerCase().trim();
-                if (!rowCategory || rowCategory !== allowedCategoryName) {
-                  return false;
-                }
-              }
-
-              return true;
-            })
-            .map((row: any[]) => ({
+            stats.eligibleRows++;
+            return [{
               name: nameIndex !== -1 ? row[nameIndex] || "Unknown" : "Unknown",
               email: emailIndex !== -1 ? (row[emailIndex] || "").trim() : "",
               state: stateIndex !== -1 ? row[stateIndex] || "" : "",
               link: linkIndex !== -1 ? row[linkIndex] : "",
               website: websiteIndex !== -1 ? row[websiteIndex] || "" : "",
-            }));
+            }];
+          });
+
+          const seenDomains = new Map();
+          const deduplicatedLeads: any[] = [];
+          for (const lead of leadsWithoutEmails) {
+            const domain = extractDomain(lead.website);
+            if (domain && seenDomains.has(domain)) {
+              const existing = seenDomains.get(domain);
+              if (!existing.allLinks) existing.allLinks = [existing.link];
+              existing.allLinks.push(lead.link);
+            } else {
+              const entry = { ...lead, domain, allLinks: [lead.link] };
+              if (domain) seenDomains.set(domain, entry);
+              deduplicatedLeads.push(entry);
+            }
+          }
+
+          stats.deduplicatedRows = deduplicatedLeads.length;
+          return res.json({ contacts: deduplicatedLeads, stats });
         }
+
+        return res.json({
+          contacts: [],
+          stats: {
+            source: "store_sheet",
+            totalRows: 0,
+            eligibleRows: 0,
+            deduplicatedRows: 0,
+            excludedHasEmail: 0,
+            excludedMissingLink: 0,
+            excludedAlreadyProcessed: 0,
+            excludedCategoryMismatch: 0,
+          },
+        });
       } else {
         console.log("[Apollo] No Store Database sheet found, using qualification_leads table");
 
@@ -124,54 +194,66 @@ export function buildApolloLeadDiscoveryHandler(deps: {
           .from(qualificationLeads)
           .where(and(...conditions));
 
-        leadsWithoutEmails = sqlLeads
-          .filter((lead) => {
+        const stats = {
+          source: "qualification_leads",
+          totalRows: sqlLeads.length,
+          eligibleRows: 0,
+          deduplicatedRows: 0,
+          excludedHasEmail: 0,
+          excludedMissingLink: 0,
+          excludedAlreadyProcessed: 0,
+          excludedCategoryMismatch: 0,
+        };
+
+        leadsWithoutEmails = sqlLeads.flatMap((lead) => {
             const email = (lead.pocEmail || "").trim();
             if (email && email.includes("@")) {
-              return false;
+              stats.excludedHasEmail++;
+              return [];
             }
 
             const link = `ql:${lead.id}`;
             if (enrichedLinkSet.has(link)) {
-              return false;
+              stats.excludedAlreadyProcessed++;
+              return [];
             }
 
-            if (allowedCategoryName !== null && !projectId) {
+            if (allowedCategoryNames !== null && !projectId) {
               const leadCategory = (lead.category || "").toLowerCase().trim();
-              if (!leadCategory || leadCategory !== allowedCategoryName) {
-                return false;
+              if (!leadCategory || !allowedCategoryNames.has(leadCategory)) {
+                stats.excludedCategoryMismatch++;
+                return [];
               }
             }
 
-            return true;
-          })
-          .map((lead) => ({
+            stats.eligibleRows++;
+            return [{
             name: lead.company || "Unknown",
             email: (lead.pocEmail || "").trim(),
             state: lead.state || "",
             link: `ql:${lead.id}`,
             website: lead.website || "",
-          }));
+          }];
+        });
 
         console.log(`[Apollo] Found ${leadsWithoutEmails.length} leads from qualification_leads table`);
-      }
-
-      const seenDomains = new Map();
-      const deduplicatedLeads: any[] = [];
-      for (const lead of leadsWithoutEmails) {
-        const domain = extractDomain(lead.website);
-        if (domain && seenDomains.has(domain)) {
-          const existing = seenDomains.get(domain);
-          if (!existing.allLinks) existing.allLinks = [existing.link];
-          existing.allLinks.push(lead.link);
-        } else {
-          const entry = { ...lead, domain, allLinks: [lead.link] };
-          if (domain) seenDomains.set(domain, entry);
-          deduplicatedLeads.push(entry);
+        const seenDomains = new Map();
+        const deduplicatedLeads: any[] = [];
+        for (const lead of leadsWithoutEmails) {
+          const domain = extractDomain(lead.website);
+          if (domain && seenDomains.has(domain)) {
+            const existing = seenDomains.get(domain);
+            if (!existing.allLinks) existing.allLinks = [existing.link];
+            existing.allLinks.push(lead.link);
+          } else {
+            const entry = { ...lead, domain, allLinks: [lead.link] };
+            if (domain) seenDomains.set(domain, entry);
+            deduplicatedLeads.push(entry);
+          }
         }
+        stats.deduplicatedRows = deduplicatedLeads.length;
+        return res.json({ contacts: deduplicatedLeads, stats });
       }
-
-      res.json({ contacts: deduplicatedLeads });
     } catch (error: any) {
       console.error("Error fetching leads without emails:", error);
       res.status(500).json({ message: error.message || "Failed to fetch leads" });

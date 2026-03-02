@@ -33,7 +33,11 @@ export function registerEngagementEhubRoutes(app: Express, deps: EngagementModul
     isAdmin: deps.isAdmin,
     isAuthenticatedCustom: deps.isAuthenticatedCustom,
   });
-  registerApolloManagementRoutes(app, { isAdmin: deps.isAdmin, isAuthenticatedCustom: deps.isAuthenticatedCustom });
+  registerApolloManagementRoutes(app, {
+    getEffectiveTenantId: deps.getEffectiveTenantId,
+    isAdmin: deps.isAdmin,
+    isAuthenticatedCustom: deps.isAuthenticatedCustom,
+  });
 
   registerTestEmailRoutes(app, { isAdmin: deps.isAdmin, isAuthenticatedCustom: deps.isAuthenticatedCustom });
   registerLabelProjectsExportRoutes(app);

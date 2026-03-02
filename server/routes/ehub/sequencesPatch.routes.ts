@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { insertSequenceSchema } from "@shared/schema";
 import { storage } from "../../storage";
+import { assertTenantProjectScope } from "../../services/projectScopeValidation";
 import type { SequencesCoreDeps } from "./sequencesCore.types";
 
 export function registerSequencesPatchRoute(app: Express, deps: SequencesCoreDeps): void {
@@ -8,6 +9,7 @@ export function registerSequencesPatchRoute(app: Express, deps: SequencesCoreDep
     try {
       const { id } = req.params;
       const updates = insertSequenceSchema.partial().parse(req.body);
+      await assertTenantProjectScope(req.user.tenantId, updates.projectId);
 
       const existingSequence = await storage.getSequence(id, req.user.tenantId);
       if (!existingSequence) {

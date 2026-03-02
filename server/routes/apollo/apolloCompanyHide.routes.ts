@@ -5,7 +5,7 @@ import type { ApolloManagementDeps } from "./apolloManagement.types";
 export function registerApolloCompanyHideRoute(app: Express, deps: ApolloManagementDeps): void {
   app.patch("/api/apollo/companies/:companyId/hide", deps.isAuthenticatedCustom, deps.isAdmin, async (req: any, res) => {
     try {
-      const tenantId = req.user?.tenantId;
+      const tenantId = await deps.getEffectiveTenantId(req);
       if (!tenantId) {
         return res.status(400).json({ message: "No tenant associated with user" });
       }
