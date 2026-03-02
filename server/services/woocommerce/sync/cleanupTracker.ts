@@ -30,7 +30,7 @@ export async function cleanupTrackerRows(params: {
     }
 
     for (const rowIndex of rowsToDelete.reverse()) {
-      await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, trackerSheet.sheetId!, rowIndex);
+      await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, (trackerSheet as any).sheetId!, rowIndex);
       trackerRowsDeleted++;
     }
   } catch (cleanupError: any) {

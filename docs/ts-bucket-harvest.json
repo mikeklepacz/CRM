@@ -1,0 +1,137 @@
+{
+  "generatedAt": "2026-02-26T17:36:10.067Z",
+  "source": "/tmp/tsc-bucket-harvest.txt",
+  "totalDiagnostics": 414,
+  "byBucket": {
+    "A": {
+      "count": 0,
+      "codes": []
+    },
+    "B": {
+      "count": 0,
+      "codes": []
+    },
+    "C": {
+      "count": 0,
+      "codes": []
+    },
+    "D": {
+      "count": 387,
+      "codes": [
+        {
+          "code": 2339,
+          "count": 161
+        },
+        {
+          "code": 2345,
+          "count": 48
+        },
+        {
+          "code": 2322,
+          "count": 31
+        },
+        {
+          "code": 2769,
+          "count": 30
+        },
+        {
+          "code": 7006,
+          "count": 21
+        },
+        {
+          "code": 18048,
+          "count": 17
+        },
+        {
+          "code": 2551,
+          "count": 16
+        },
+        {
+          "code": 2353,
+          "count": 14
+        },
+        {
+          "code": 2554,
+          "count": 13
+        },
+        {
+          "code": 2367,
+          "count": 12
+        },
+        {
+          "code": 18049,
+          "count": 5
+        },
+        {
+          "code": 2461,
+          "count": 3
+        },
+        {
+          "code": 18046,
+          "count": 2
+        },
+        {
+          "code": 2323,
+          "count": 2
+        },
+        {
+          "code": 2393,
+          "count": 2
+        },
+        {
+          "code": 2552,
+          "count": 1
+        },
+        {
+          "code": 2454,
+          "count": 1
+        },
+        {
+          "code": 2741,
+          "count": 1
+        },
+        {
+          "code": 18047,
+          "count": 1
+        },
+        {
+          "code": 7031,
+          "count": 1
+        },
+        {
+          "code": 1501,
+          "count": 1
+        },
+        {
+          "code": 2740,
+          "count": 1
+        },
+        {
+          "code": 2739,
+          "count": 1
+        },
+        {
+          "code": 7022,
+          "count": 1
+        },
+        {
+          "code": 7024,
+          "count": 1
+        }
+      ]
+    },
+    "E": {
+      "count": 27,
+      "codes": [
+        {
+          "code": 2802,
+          "count": 24
+        },
+        {
+          "code": 7016,
+          "count": 3
+        }
+      ]
+    }
+  }
+}

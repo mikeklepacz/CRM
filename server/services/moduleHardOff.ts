@@ -127,8 +127,7 @@ async function cancelVoiceQueue(tenantId: string): Promise<number> {
       .update(callCampaignTargets)
       .set({ 
         targetStatus: 'cancelled',
-        lastError: 'Module disabled by administrator',
-        updatedAt: new Date()
+        lastError: 'Module disabled by administrator'
       })
       .where(inArray(callCampaignTargets.id, targetIds));
 

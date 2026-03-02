@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApolloEnrichedCompaniesTab } from "@/components/apollo-enriched-companies-tab";
 import { ApolloEnrichLeadsTable } from "@/components/apollo-enrich-leads-table";
 import { ApolloNotFoundTab } from "@/components/apollo-not-found-tab";
-import type { ApolloCompany, StoreContact } from "../types";
+import type { ApolloCompany, ApolloLeadDiscoveryStats, StoreContact } from "../types";
 
 type EnrichedCompanyRow = ComponentProps<typeof ApolloEnrichedCompaniesTab>["companies"][number];
 
@@ -42,6 +42,7 @@ type ApolloMainTabsProps = {
   onPreview: (contact: StoreContact) => void;
   enrichmentStatus?: Record<string, string | null>;
   failedEnrichmentLinks: Set<string>;
+  leadDiscoveryStats?: ApolloLeadDiscoveryStats;
 };
 
 export function ApolloMainTabs({
@@ -74,6 +75,7 @@ export function ApolloMainTabs({
   onPreview,
   enrichmentStatus,
   failedEnrichmentLinks,
+  leadDiscoveryStats,
 }: ApolloMainTabsProps) {
   return (
     <Tabs value={activeTab} onValueChange={onActiveTabChange}>
@@ -176,7 +178,26 @@ export function ApolloMainTabs({
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  No contacts to enrich for project "{projectName}". All contacts have been processed.
+                  <div>No contacts to enrich for project "{projectName}".</div>
+                  {leadDiscoveryStats && (
+                    <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                      <div>
+                        Source: {leadDiscoveryStats.source === "apollo_candidates"
+                          ? "Apollo Candidate Queue"
+                          : leadDiscoveryStats.source === "store_sheet"
+                            ? "Store Database Sheet"
+                            : leadDiscoveryStats.source === "qualification_leads"
+                              ? "Qualification Leads"
+                              : "None"}
+                      </div>
+                      <div>
+                        Rows scanned: {leadDiscoveryStats.totalRows} | Eligible: {leadDiscoveryStats.eligibleRows} | After domain dedupe: {leadDiscoveryStats.deduplicatedRows}
+                      </div>
+                      <div>
+                        Excluded - has email: {leadDiscoveryStats.excludedHasEmail}, missing link: {leadDiscoveryStats.excludedMissingLink}, already processed: {leadDiscoveryStats.excludedAlreadyProcessed}, category mismatch: {leadDiscoveryStats.excludedCategoryMismatch}
+                      </div>
+                    </div>
+                  )}
                 </AlertDescription>
               </Alert>
             ) : (

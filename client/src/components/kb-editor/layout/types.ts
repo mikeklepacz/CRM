@@ -1,0 +1,46 @@
+import type { EditorMode, SaveStatus } from "@/components/kb-editor/types";
+
+export interface KBEditorLayoutProps {
+  className?: string;
+  editorMode: EditorMode;
+  selectedItemId: string | null;
+  content: string;
+  saveStatus: SaveStatus;
+  fileSearchQuery: string;
+  showFindReplace: boolean;
+  findQuery: string;
+  replaceQuery: string;
+  caseSensitive: boolean;
+  currentMatchIndex: number;
+  matchCount: number;
+  matches: number[];
+  kbLoading: boolean;
+  agentsLoading: boolean;
+  filteredFiles: any[];
+  agents: any[];
+  kbFiles: any[];
+  hasUnsavedChanges: boolean;
+  isLoading: boolean;
+  textareaRef: HTMLTextAreaElement | null;
+  onSetEditorMode: (mode: EditorMode) => void;
+  onSetSelectedItemId: (id: string | null) => void;
+  onSetFileSearchQuery: (value: string) => void;
+  onSelectFile: (file: any) => void;
+  onSelectAgent: (agentId: string) => void;
+  onDownloadFile: (file: any) => void;
+  onToggleFindReplace: () => void;
+  onSave: () => void;
+  onSetFindQuery: (value: string) => void;
+  onSetReplaceQuery: (value: string) => void;
+  onCloseFindReplace: () => void;
+  onPreviousMatch: () => void;
+  onNextMatch: () => void;
+  onToggleCaseSensitive: () => void;
+  onReplace: () => void;
+  onReplaceAll: () => void;
+  highlightRef: HTMLDivElement | null;
+  onSetHighlightRef: (el: HTMLDivElement | null) => void;
+  onSetTextareaRef: (el: HTMLTextAreaElement | null) => void;
+  onTextareaScroll: () => void;
+  onContentChange: (value: string) => void;
+}

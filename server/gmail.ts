@@ -48,8 +48,8 @@ export async function sendGmailNotification(
       
       if (credentials.access_token) {
         await storage.updateUserIntegration(adminUser.id, {
-          accessToken: credentials.access_token,
-          expiresAt: credentials.expiry_date ? new Date(credentials.expiry_date) : undefined,
+          googleCalendarAccessToken: credentials.access_token,
+          googleCalendarTokenExpiry: credentials.expiry_date ?? undefined,
         });
         
         oauth2Client.setCredentials({

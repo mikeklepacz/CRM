@@ -40,7 +40,7 @@ export async function deleteMissingOrders(params: {
               }
 
               for (const rowIndex of rowsToDelete.reverse()) {
-                await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, trackerSheet.sheetId!, rowIndex);
+                await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, (trackerSheet as any).sheetId!, rowIndex);
               }
             }
           }
@@ -51,7 +51,7 @@ export async function deleteMissingOrders(params: {
 
       if (localOrder.clientId) {
         try {
-          const client = await storage.getClientById(localOrder.clientId);
+          const client = await storage.getClient(localOrder.clientId, tenantId);
           if (client) {
             const orderTotal = parseFloat(localOrder.total || '0');
             const currentTotalSales = parseFloat(client.totalSales || '0');

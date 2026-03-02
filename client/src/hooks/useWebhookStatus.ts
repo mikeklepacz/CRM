@@ -28,9 +28,7 @@ export function useWebhookStatus() {
 
   const reRegisterMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/calendar/webhook-register', {
-        method: 'POST',
-      });
+      return await apiRequest('POST', '/api/calendar/webhook-register');
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar/webhook-status'] });

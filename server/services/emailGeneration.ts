@@ -29,7 +29,11 @@ export async function generateEmailSubject(
   const { recipientName, promptInjection, keywordBin } = options;
 
   // Get OpenAI API key from storage
-  const openaiSettings = await storage.getOpenaiSettings();
+  const tenantId = await storage.getAdminTenantId();
+  if (!tenantId) {
+    throw new Error('No tenant available for OpenAI settings lookup.');
+  }
+  const openaiSettings = await storage.getOpenaiSettings(tenantId);
   if (!openaiSettings || !openaiSettings.apiKey) {
     throw new Error('OpenAI API key not configured. Please configure in Settings.');
   }
@@ -82,7 +86,11 @@ export async function generateEmailBody(
   const { recipientName, recipientEmail, salesSummary, promptInjection, keywordBin } = options;
 
   // Get OpenAI API key from storage
-  const openaiSettings = await storage.getOpenaiSettings();
+  const tenantId = await storage.getAdminTenantId();
+  if (!tenantId) {
+    throw new Error('No tenant available for OpenAI settings lookup.');
+  }
+  const openaiSettings = await storage.getOpenaiSettings(tenantId);
   if (!openaiSettings || !openaiSettings.apiKey) {
     throw new Error('OpenAI API key not configured. Please configure in Settings.');
   }

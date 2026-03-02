@@ -75,9 +75,9 @@ export async function processWooOrders(params: {
         tenantId,
       });
 
-      if (isReOrder && client.assignedAgent) {
+      if (isReOrder && client && client.assignedAgent) {
         const clientName = (client.data as any)?.name || (client.data as any)?.company || 'Unknown Client';
-        await storage.createNotification({
+        await (storage as any).createNotification({
           userId: client.assignedAgent,
           clientId: client.id,
           type: 're_order',

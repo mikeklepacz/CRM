@@ -29,6 +29,7 @@ export function useApolloLeadsWorkflow({
   currentProjectId,
   toast,
 }: UseApolloLeadsWorkflowParams) {
+  const PRESCREEN_BATCH_SIZE = 100;
   const [isPrescreening, setIsPrescreening] = useState(false);
   const [prescreenProgress, setPrescreenProgress] = useState({ current: 0, total: 0 });
   const [prescreenStats, setPrescreenStats] = useState<{ checked: number; found: number; notFound: number } | null>(null);
@@ -75,24 +76,34 @@ export function useApolloLeadsWorkflow({
     setPrescreenStats(null);
 
     try {
-      const response = await apiRequest("POST", "/api/apollo/bulk-prescreen", {
-        contacts: contactsToPrescreen.map((c) => ({
-          link: c.link,
-          website: c.website,
-          name: c.name,
-        })),
-        projectId: currentProjectId,
-      }) as { checked: number; found: number; notFound: number; skipped: number };
+      const aggregate = { checked: 0, found: 0, notFound: 0, skipped: 0 };
+      for (let i = 0; i < contactsToPrescreen.length; i += PRESCREEN_BATCH_SIZE) {
+        const batch = contactsToPrescreen.slice(i, i + PRESCREEN_BATCH_SIZE);
+        const response = await apiRequest("POST", "/api/apollo/bulk-prescreen", {
+          contacts: batch.map((c) => ({
+            link: c.link,
+            website: c.website,
+            name: c.name,
+          })),
+          projectId: currentProjectId,
+        }) as { checked: number; found: number; notFound: number; skipped: number };
 
-      setPrescreenStats(response);
+        aggregate.checked += response.checked || 0;
+        aggregate.found += response.found || 0;
+        aggregate.notFound += response.notFound || 0;
+        aggregate.skipped += response.skipped || 0;
+        setPrescreenProgress({ current: Math.min(i + batch.length, contactsToPrescreen.length), total: contactsToPrescreen.length });
+      }
+
+      setPrescreenStats(aggregate);
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/check-enrichment"] });
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies/not-found", currentProjectId] });
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/leads-without-emails", currentProjectId] });
 
-      const skippedText = response.skipped > 0 ? `, ${response.skipped} already processed` : "";
+      const skippedText = aggregate.skipped > 0 ? `, ${aggregate.skipped} already processed` : "";
       toast({
         title: "Pre-screening complete",
-        description: `Found ${response.found} in Apollo, ${response.notFound} not found${skippedText}`,
+        description: `Found ${aggregate.found} in Apollo, ${aggregate.notFound} not found${skippedText}`,
       });
     } catch (error: any) {
       toast({ title: "Pre-screening failed", description: error.message, variant: "destructive" });
