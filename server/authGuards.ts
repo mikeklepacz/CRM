@@ -16,9 +16,10 @@ export const requireOrgAdmin: RequestHandler = (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
   const user = req.user as any;
+  const normalizedPath = (req.path || "").replace(/\/+$/, "") || "/";
   const isOrgAdminReadRoute =
     req.method === "GET" &&
-    (req.path === "/api/org-admin/settings" || req.path === "/api/org-admin/projects");
+    (normalizedPath.endsWith("/api/org-admin/settings") || normalizedPath.endsWith("/api/org-admin/projects"));
 
   if (user?.isSuperAdmin) {
     return next();
