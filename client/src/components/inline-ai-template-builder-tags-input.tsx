@@ -18,6 +18,7 @@ export function InlineAiTemplateBuilderTagsInput(props: any) {
     toggleTagSelection,
     userTags,
   } = props;
+  const deleteTagsPending = !!deleteTagsMutation?.isPending;
 
   return (
     <div className="space-y-2">
@@ -61,7 +62,7 @@ export function InlineAiTemplateBuilderTagsInput(props: any) {
                   size="sm"
                   className="w-full"
                   onClick={handleDeleteSelectedTags}
-                  disabled={deleteTagsMutation.isPending}
+                  disabled={deleteTagsPending}
                   data-testid="button-delete-selected-tags"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />

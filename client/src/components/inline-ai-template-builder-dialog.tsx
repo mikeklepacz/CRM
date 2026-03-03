@@ -81,6 +81,9 @@ export function InlineAiTemplateBuilderDialog(props: any) {
     convertToDirectImageUrl,
     useTemplate,
   } = props;
+  const createTemplatePending = !!createTemplateMutation?.isPending;
+  const updateTemplatePending = !!updateTemplateMutation?.isPending;
+  const deleteTemplatePending = !!deleteTemplateMutation?.isPending;
 
   return (
     <Dialog open={templateBuilderOpen} onOpenChange={setTemplateBuilderOpen}>
@@ -212,13 +215,13 @@ export function InlineAiTemplateBuilderDialog(props: any) {
               builderTags={builderTags}
               builderTitle={builderTitle}
               builderType={builderType}
-              createPending={createTemplateMutation.isPending}
+              createPending={createTemplatePending}
               editingTemplateId={editingTemplateId}
               emailBody={emailBody}
               emailSubject={emailSubject}
               emailTo={emailTo}
               formatEmailTemplate={formatEmailTemplate}
-              updatePending={updateTemplateMutation.isPending}
+              updatePending={updateTemplatePending}
               onCancel={() => {
                 setBuilderTitle("");
                 setBuilderContent("");
@@ -232,9 +235,9 @@ export function InlineAiTemplateBuilderDialog(props: any) {
               }}
               onSave={(templateData) => {
                 if (editingTemplateId) {
-                  updateTemplateMutation.mutate({ id: editingTemplateId, template: templateData });
+                  updateTemplateMutation?.mutate?.({ id: editingTemplateId, template: templateData });
                 } else {
-                  createTemplateMutation.mutate(templateData);
+                  createTemplateMutation?.mutate?.(templateData);
                 }
               }}
               onViewTemplates={() => setTemplateBuilderView("library")}
@@ -245,8 +248,8 @@ export function InlineAiTemplateBuilderDialog(props: any) {
         {/* Library View */}
         {templateBuilderView === "library" && (
           <TemplateBuilderLibraryView
-            deletePending={deleteTemplateMutation.isPending}
-            onDeleteTemplate={(id) => deleteTemplateMutation.mutate(id)}
+            deletePending={deleteTemplatePending}
+            onDeleteTemplate={(id) => deleteTemplateMutation?.mutate?.(id)}
             onEditTemplate={handleEditTemplateFromLibrary}
             onTagFilterChange={setSelectedTagFilter}
             onTemplateSearchChange={setTemplateSearch}

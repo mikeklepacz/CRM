@@ -34,6 +34,8 @@ export function InlineAiEmailImageLibraryPopover({
   onSetNewImageLabel,
   onSetNewImageUrl,
 }: InlineAiEmailImageLibraryPopoverProps) {
+  const saveImagePending = !!saveImageMutation?.isPending;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -77,7 +79,7 @@ export function InlineAiEmailImageLibraryPopover({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteImageMutation.mutate(img.id);
+                      deleteImageMutation?.mutate?.(img.id);
                     }}
                     className="absolute top-0 right-0 p-0.5 rounded-bl bg-destructive/80 text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                     data-testid={`button-delete-image-${img.id}`}
@@ -146,10 +148,10 @@ export function InlineAiEmailImageLibraryPopover({
             <Button
               size="sm"
               className="w-full"
-              disabled={!newImageUrl || !newImageLabel || saveImageMutation.isPending || newImageUrl.startsWith("data:")}
+              disabled={!newImageUrl || !newImageLabel || saveImagePending || newImageUrl.startsWith("data:")}
               onClick={async () => {
                 const urlToSave = onConvertToDirectImageUrl(newImageUrl.trim());
-                await saveImageMutation.mutateAsync({ url: urlToSave, label: newImageLabel });
+                await saveImageMutation?.mutateAsync?.({ url: urlToSave, label: newImageLabel });
                 onInsertImageAtCursor(urlToSave, "body");
                 onSetNewImageUrl("");
                 onSetNewImageLabel("");
@@ -157,7 +159,7 @@ export function InlineAiEmailImageLibraryPopover({
               }}
               data-testid="button-save-insert-image"
             >
-              {saveImageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+              {saveImagePending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               Save & Insert
             </Button>
           </div>

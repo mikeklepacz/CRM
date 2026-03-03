@@ -8,6 +8,8 @@ import { StoreDetailsDbaManagementSection } from "@/components/store-details/sto
 import { StoreDetailsActionButtons } from "@/components/store-details/store-details-action-buttons";
 
 export function StoreDetailsDialogMainPane(props: any) {
+  const savePending = !!props.saveMutation?.isPending;
+
   return (
     <div className="flex gap-4 overflow-hidden flex-1">
       {props.showAssistant && (
@@ -159,7 +161,7 @@ export function StoreDetailsDialogMainPane(props: any) {
               <div className="sticky bottom-0 bg-background border-t pt-4 mt-4 flex justify-end gap-2">
                 <StoreDetailsActionButtons
                   currentColors={props.currentColors}
-                  isSavePending={props.saveMutation.isPending}
+                  isSavePending={savePending}
                   onCall={props.handleCallFromDetails}
                   onCancel={() => props.onOpenChange(false)}
                   onSave={props.handleSave}
