@@ -40,9 +40,9 @@ export function registerGovernanceModuleRoutes(app: Express, deps: Deps): void {
   registerSuperAdminTenantSheetsRoutes(app, { requireSuperAdmin: deps.requireSuperAdmin });
   registerSuperAdminTenantWebhooksRoutes(app, { requireSuperAdmin: deps.requireSuperAdmin });
 
-  registerOrgAdminCoreRoutes(app, { requireOrgAdmin: deps.requireOrgAdmin });
+  registerOrgAdminCoreRoutes(app, { requireAgent: deps.requireAgent, requireOrgAdmin: deps.requireOrgAdmin });
   registerOrgAdminPipelinesRoutes(app, { requireOrgAdmin: deps.requireOrgAdmin });
-  registerOrgAdminProjectsRoutes(app, { requireOrgAdmin: deps.requireOrgAdmin });
+  registerOrgAdminProjectsRoutes(app, { requireAgent: deps.requireAgent, requireOrgAdmin: deps.requireOrgAdmin });
   registerOrgAdminBlueprintsRoutes(app, { requireOrgAdmin: deps.requireOrgAdmin });
   registerTenantContextRoutes(app, { requireAgent: deps.requireAgent });
   registerQualificationRoutes(app, {

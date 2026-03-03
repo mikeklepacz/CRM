@@ -3,7 +3,7 @@ import type { OrgAdminProjectsRouteDeps } from "./orgAdminProjects.types";
 import { storage } from "../../storage";
 
 export function registerOrgAdminProjectsListRoute(app: Express, deps: OrgAdminProjectsRouteDeps): void {
-  app.get("/api/org-admin/projects", deps.requireOrgAdmin, async (req: any, res) => {
+  app.get("/api/org-admin/projects", deps.requireAgent, async (req: any, res) => {
       try {
           const tenantId = req.user.tenantId;
           const { status } = req.query;

@@ -3,7 +3,7 @@ import type { OrgAdminCoreRouteDeps } from "./orgAdminCore.types";
 import { storage } from "../../storage";
 
 export function registerOrgAdminSettingsGetRoute(app: Express, deps: OrgAdminCoreRouteDeps): void {
-  app.get("/api/org-admin/settings", deps.requireOrgAdmin, async (req: any, res) => {
+  app.get("/api/org-admin/settings", deps.requireAgent, async (req: any, res) => {
       try {
           const tenantId = req.user.tenantId;
           const tenant = await storage.getTenantById(tenantId);
