@@ -38,7 +38,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   });
 
   const { data: projectsData, isLoading, refetch } = useQuery<{ projects: TenantProject[] }>({
-    queryKey: ['/api/org-admin/projects'],
+    queryKey: ['/api/tenant/projects'],
     enabled: isAuthenticated && (user?.role === 'admin' || user?.roleInTenant === 'org_admin' || user?.roleInTenant === 'agent'),
   });
 

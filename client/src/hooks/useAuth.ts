@@ -4,6 +4,7 @@ import type { User } from "@shared/schema";
 
 // Extended user type with tenant context from session
 export type AuthUser = User & {
+  allowedModules?: string[] | null;
   tenantId?: string;
   roleInTenant?: string;
   tenantName?: string | null;

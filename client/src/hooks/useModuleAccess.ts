@@ -50,18 +50,19 @@ export const MODULE_NAV_MAPPING: Record<string, string> = {
 
 export function useModuleAccess(): ModuleAccessResult {
   const { user, isLoading: authLoading } = useAuth();
+  const sessionAllowedModules = user?.allowedModules;
 
-  // Fetch tenant settings to get allowedModules
+  // Fallback to tenant settings only when allowed modules are not present in auth user context.
   const { data: settingsData, isLoading: settingsLoading, error } = useQuery<TenantSettingsResponse>({
-    queryKey: ['/api/org-admin/settings'],
-    enabled: !!user?.tenantId && !user?.isSuperAdmin,
+    queryKey: ['/api/tenant/settings'],
+    enabled: !!user?.tenantId && !user?.isSuperAdmin && (sessionAllowedModules === undefined || sessionAllowedModules === null),
     retry: false,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
   const allowedModules = user?.isSuperAdmin 
     ? undefined // Super admins have no restrictions
-    : settingsData?.tenant?.settings?.allowedModules;
+    : (sessionAllowedModules ?? settingsData?.tenant?.settings?.allowedModules);
 
   const isModuleEnabled = (moduleId: string): boolean => {
     if (!user?.tenantId) {
@@ -85,7 +86,7 @@ export function useModuleAccess(): ModuleAccessResult {
   return {
     isModuleEnabled,
     allowedModules,
-    isLoading: authLoading || (!!user?.tenantId && !user?.isSuperAdmin && settingsLoading),
+    isLoading: authLoading || (!!user?.tenantId && !user?.isSuperAdmin && (sessionAllowedModules === undefined || sessionAllowedModules === null) && settingsLoading),
     error: error as Error | null,
   };
 }
