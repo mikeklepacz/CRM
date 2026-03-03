@@ -54,7 +54,6 @@ export function InlineAiChatMainLayout(props: any) {
     setMessageInput,
     handleSendMessage,
   } = props;
-  const deleteTemplatePending = !!deleteTemplateMutation?.isPending;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -91,11 +90,11 @@ export function InlineAiChatMainLayout(props: any) {
           />
 
           <TemplateLibraryCollapsible
-            deletePending={deleteTemplatePending}
+            deletePending={deleteTemplateMutation.isPending}
             filteredTemplates={filteredTemplates}
             hasEmailContext={!!(storeContext?.email || storeContext?.poc_email)}
             onCopyTemplate={handleCopyTemplate}
-            onDeleteTemplate={(id) => deleteTemplateMutation?.mutate?.(id)}
+            onDeleteTemplate={(id) => deleteTemplateMutation.mutate(id)}
             onEditTemplate={(template) => {
               handleEditTemplateFromLibrary(template);
               setTemplateBuilderOpen(true);

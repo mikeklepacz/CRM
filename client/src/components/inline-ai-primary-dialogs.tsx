@@ -23,26 +23,24 @@ export function InlineAiPrimaryDialogs(props: any) {
     setTemplatePreviewOpen,
     toast,
   } = props;
-  const createProjectPending = !!createProjectMutation?.isPending;
-  const renameConversationPending = !!renameConversationMutation?.isPending;
 
   return (
     <>
       <NewProjectDialog
         open={newProjectDialogOpen}
         projectName={newProjectName}
-        isPending={createProjectPending}
+        isPending={createProjectMutation.isPending}
         onOpenChange={setNewProjectDialogOpen}
         onProjectNameChange={setNewProjectName}
         onCancel={() => setNewProjectDialogOpen(false)}
-        onCreate={() => createProjectMutation?.mutate?.(newProjectName)}
+        onCreate={() => createProjectMutation.mutate(newProjectName)}
       />
 
       <RenameConversationDialog
         open={renameDialogOpen}
         conversationTitle={newConversationTitle}
         renamingConversationId={renamingConversationId}
-        isPending={renameConversationPending}
+        isPending={renameConversationMutation.isPending}
         onOpenChange={setRenameDialogOpen}
         onConversationTitleChange={setNewConversationTitle}
         onCancel={() => {
@@ -52,7 +50,7 @@ export function InlineAiPrimaryDialogs(props: any) {
         }}
         onSave={() => {
           if (renamingConversationId) {
-            renameConversationMutation?.mutate?.({
+            renameConversationMutation.mutate({
               conversationId: renamingConversationId,
               title: newConversationTitle.trim(),
             });

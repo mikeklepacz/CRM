@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, and, or, isNull } from "drizzle-orm";
 import { users, kbFiles, categories, geocodeCache as geocodeCacheTable } from "@shared/schema";
-import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin, requireAgent } from "./replitAuth";
+import { setupAuth, isAuthenticated, getOidcConfig, requireSuperAdmin, requireOrgAdmin } from "./replitAuth";
 import bcrypt from "bcrypt";
 import * as client from "openid-client";
 import * as googleSheets from "./googleSheets";
@@ -261,7 +261,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     isAdmin,
     isAuthenticated,
     isAuthenticatedCustom,
-    requireAgent,
     requireOrgAdmin,
     requireSuperAdmin,
     syncAgentSettingsFromElevenLabs,

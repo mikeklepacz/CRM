@@ -4,7 +4,6 @@ export function useInlineAiRenderProps(params: any) {
     conversationsByProject: params.conversationsByProject,
     conversationsOpen: params.conversationsOpen,
     createConversationMutation: params.createConversationMutation,
-    createProjectMutation: params.createProjectMutation,
     deleteConversationMutation: params.deleteConversationMutation,
     deleteProjectMutation: params.deleteProjectMutation,
     deleteTemplateMutation: params.deleteTemplateMutation,
