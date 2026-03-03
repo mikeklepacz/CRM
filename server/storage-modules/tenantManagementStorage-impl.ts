@@ -179,11 +179,20 @@ export async function addUserToTenantStorage(
   roleInTenant: string,
   isDefault?: boolean
 ): Promise<void> {
+  const existingMemberships = await db
+    .select({ tenantId: userTenants.tenantId })
+    .from(userTenants)
+    .where(eq(userTenants.userId, userId));
+
+  if (existingMemberships.length > 0 && !existingMemberships.some((m) => m.tenantId === tenantId)) {
+    throw new Error("User is already assigned to a different tenant");
+  }
+
   await db.insert(userTenants).values({
     userId,
     tenantId,
     roleInTenant,
-    isDefault: isDefault ?? false,
+    isDefault: isDefault ?? true,
   });
 }
 

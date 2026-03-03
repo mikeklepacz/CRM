@@ -16,10 +16,18 @@ export const requireOrgAdmin: RequestHandler = (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
   const user = req.user as any;
+  const isOrgAdminReadRoute =
+    req.method === "GET" &&
+    (req.path === "/api/org-admin/settings" || req.path === "/api/org-admin/projects");
+
   if (user?.isSuperAdmin) {
     return next();
   }
   if (user?.roleInTenant === "org_admin" || user?.role === "admin") {
+    return next();
+  }
+  // Agents need read access for shared tenant/project context used across the app.
+  if (isOrgAdminReadRoute && user?.tenantId && user?.roleInTenant === "agent") {
     return next();
   }
   return res.status(403).json({ message: "Forbidden: Organization admin access required" });

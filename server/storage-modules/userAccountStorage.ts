@@ -76,15 +76,6 @@ export async function getAgentsStorage(): Promise<User[]> {
 export async function getUserDefaultTenantStorage(
   userId: string
 ): Promise<{ tenantId: string; roleInTenant: string } | undefined> {
-  const [defaultTenant] = await db
-    .select({ tenantId: userTenants.tenantId, roleInTenant: userTenants.roleInTenant })
-    .from(userTenants)
-    .where(and(eq(userTenants.userId, userId), eq(userTenants.isDefault, true)));
-
-  if (defaultTenant) {
-    return defaultTenant;
-  }
-
   const [firstTenant] = await db
     .select({ tenantId: userTenants.tenantId, roleInTenant: userTenants.roleInTenant })
     .from(userTenants)
