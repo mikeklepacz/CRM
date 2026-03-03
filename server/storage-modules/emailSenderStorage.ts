@@ -87,6 +87,7 @@ export async function getAdminTenantIdStorage(): Promise<string | null> {
       FROM users u
       JOIN user_tenants ut ON u.id = ut.user_id
       WHERE u.role = 'admin'
+        AND ut.is_default = TRUE
       ORDER BY u.created_at ASC
       LIMIT 1
     `);
