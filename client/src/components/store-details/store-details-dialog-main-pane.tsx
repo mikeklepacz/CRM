@@ -71,6 +71,7 @@ export function StoreDetailsDialogMainPane(props: any) {
                       if (sectionId === "sales-info") {
                         return (
                           <StoreDetailsSalesInfoSection
+                            key="sales-info"
                             corporateAddress={props.corporateAddress}
                             corporateCity={props.corporateCity}
                             corporateEmail={props.corporateEmail}
@@ -134,6 +135,7 @@ export function StoreDetailsDialogMainPane(props: any) {
                       if (sectionId === "contact-info") {
                         return (
                           <StoreDetailsContactInfoSection
+                            key="contact-info"
                             formData={props.formData}
                             handleInputChange={props.handleInputChange}
                           />
