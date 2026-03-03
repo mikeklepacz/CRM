@@ -9,6 +9,7 @@ import { registerOrgAdminCoreRoutes } from "../organization/orgAdminCore.routes"
 import { registerOrgAdminPipelinesRoutes } from "../organization/orgAdminPipelines.routes";
 import { registerOrgAdminProjectsRoutes } from "../organization/orgAdminProjects.routes";
 import { registerOrgAdminBlueprintsRoutes } from "../organization/orgAdminBlueprints.routes";
+import { registerTenantContextRoutes } from "../organization/tenantContext.routes";
 import { registerQualificationRoutes } from "../qualification.routes";
 import { registerOrganizationInvitesRoutes } from "../organization/invites.routes";
 import { registerAdminEmailAccountsRoutes } from "../admin/emailAccounts.routes";
@@ -22,6 +23,7 @@ type Deps = {
   isAdmin: any;
   isAuthenticated: any;
   isAuthenticatedCustom: any;
+  requireAgent: any;
   requireOrgAdmin: any;
   requireSuperAdmin: any;
   syncAgentSettingsFromElevenLabs: any;
@@ -42,6 +44,7 @@ export function registerGovernanceModuleRoutes(app: Express, deps: Deps): void {
   registerOrgAdminPipelinesRoutes(app, { requireOrgAdmin: deps.requireOrgAdmin });
   registerOrgAdminProjectsRoutes(app, { requireOrgAdmin: deps.requireOrgAdmin });
   registerOrgAdminBlueprintsRoutes(app, { requireOrgAdmin: deps.requireOrgAdmin });
+  registerTenantContextRoutes(app, { requireAgent: deps.requireAgent });
   registerQualificationRoutes(app, {
     requireOrgAdmin: deps.requireOrgAdmin,
     isAuthenticated: deps.isAuthenticated,
