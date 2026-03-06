@@ -2,6 +2,8 @@ import { stringSimilarity } from "./orderMatchSuggestions.helpers";
 import { normalizeLink } from "../../../shared/linkUtils";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
+import { listStoreDatabaseSheets } from "../../services/sheets/storeDatabaseResolver";
 
 export function buildOrderMatchSuggestionsEndpointHandler() {
   return async (req: any, res: any) => {
@@ -16,17 +18,19 @@ export function buildOrderMatchSuggestionsEndpointHandler() {
       }
       // Find Store Database and Commission Tracker sheets
       const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+      const storeSheets = await listStoreDatabaseSheets((req.user as any).tenantId);
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-      if (!storeSheet) {
+      if (storeSheets.length === 0) {
           return res.status(404).json({ message: 'Store Database sheet not found' });
       }
       // Check Commission Tracker for already-matched stores (trackerSheet from line above)
       const matchedStoreLinks: string[] = [];
       if (trackerSheet) {
           try {
-              const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-              const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+              const trackerRows = await googleSheets.readSheetData(
+                trackerSheet.spreadsheetId,
+                buildSheetRange(trackerSheet.sheetName, "A:ZZ")
+              );
               if (trackerRows.length > 0) {
                   const trackerHeaders = trackerRows[0];
                   const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
@@ -49,99 +53,112 @@ export function buildOrderMatchSuggestionsEndpointHandler() {
           }
       }
       // Read all store data
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-      if (storeRows.length === 0) {
-          return res.json({ order, suggestions: [], matchedStoreLinks });
-      }
-      // Parse store data
-      const storeHeaders = storeRows[0];
-      const nameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'name');
-      const dbaIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'dba');
-      const linkIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'link');
-      const emailIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'email');
-      const cityIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'city');
-      const stateIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'state');
       const suggestions: any[] = [];
       const orderCompany = order.billingCompany || '';
       const orderEmail = order.billingEmail || '';
       const isManualSearch = manualSearch.trim().length > 0;
       const searchLower = manualSearch.toLowerCase().trim();
-      // Process each store row
-      storeRows.slice(1).forEach((row, index) => {
-          let score = 0;
-          const reasons: string[] = [];
-          const storeName = nameIndex !== -1 ? (row[nameIndex] || '') : '';
-          const storeDba = dbaIndex !== -1 ? (row[dbaIndex] || '') : '';
-          const storeLink = linkIndex !== -1 ? (row[linkIndex] || '') : '';
-          const storeEmail = emailIndex !== -1 ? (row[emailIndex] || '') : '';
-          const storeCity = cityIndex !== -1 ? (row[cityIndex] || '') : '';
-          const storeState = stateIndex !== -1 ? (row[stateIndex] || '') : '';
-          // MANUAL SEARCH MODE: Simple substring matching
-          if (isManualSearch) {
-              const nameMatch = storeName.toLowerCase().includes(searchLower);
-              const dbaMatch = storeDba.toLowerCase().includes(searchLower);
-              const emailMatch = storeEmail.toLowerCase().includes(searchLower);
-              if (nameMatch || dbaMatch || emailMatch) {
-                  score = 50; // Base score for manual matches
-                  if (nameMatch)
-                      reasons.push('Name match');
-                  if (dbaMatch)
-                      reasons.push('DBA match');
-                  if (emailMatch)
-                      reasons.push('Email match');
-              }
-          }
-          // AI SMART MATCHING MODE: Fuzzy matching based on order data
-          else {
-              // Company name similarity (check both Name and DBA fields)
-              if (orderCompany && (storeName || storeDba)) {
-                  const nameSimilarity = stringSimilarity(orderCompany, storeName);
-                  const dbaSimilarity = storeDba ? stringSimilarity(orderCompany, storeDba) : 0;
-                  const companySimilarity = Math.max(nameSimilarity, dbaSimilarity);
-                  if (companySimilarity > 0.6) {
-                      score += companySimilarity * 50;
-                      reasons.push(`Company name ${Math.round(companySimilarity * 100)}% similar`);
+
+      const suggestionByLink = new Map<string, any>();
+      // Process each store tab
+      for (const storeSheet of storeSheets) {
+          const storeRange = buildSheetRange(storeSheet.sheetName, "A:ZZ");
+          const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+          if (storeRows.length === 0) continue;
+
+          const storeHeaders = storeRows[0];
+          const nameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'name');
+          const dbaIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'dba');
+          const linkIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'link');
+          const emailIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'email');
+          const cityIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'city');
+          const stateIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'state');
+
+          for (let index = 1; index < storeRows.length; index++) {
+              const row = storeRows[index];
+              let score = 0;
+              const reasons: string[] = [];
+              const storeName = nameIndex !== -1 ? (row[nameIndex] || '') : '';
+              const storeDba = dbaIndex !== -1 ? (row[dbaIndex] || '') : '';
+              const storeLink = linkIndex !== -1 ? (row[linkIndex] || '') : '';
+              const storeEmail = emailIndex !== -1 ? (row[emailIndex] || '') : '';
+              const storeCity = cityIndex !== -1 ? (row[cityIndex] || '') : '';
+              const storeState = stateIndex !== -1 ? (row[stateIndex] || '') : '';
+              // MANUAL SEARCH MODE: Simple substring matching
+              if (isManualSearch) {
+                  const nameMatch = storeName.toLowerCase().includes(searchLower);
+                  const dbaMatch = storeDba.toLowerCase().includes(searchLower);
+                  const emailMatch = storeEmail.toLowerCase().includes(searchLower);
+                  if (nameMatch || dbaMatch || emailMatch) {
+                      score = 50; // Base score for manual matches
+                      if (nameMatch)
+                          reasons.push('Name match');
+                      if (dbaMatch)
+                          reasons.push('DBA match');
+                      if (emailMatch)
+                          reasons.push('Email match');
                   }
               }
-              // Email similarity
-              if (orderEmail && storeEmail) {
-                  const emailSimilarity = stringSimilarity(orderEmail, storeEmail);
-                  if (emailSimilarity > 0.8) {
-                      score += emailSimilarity * 30;
-                      reasons.push(`Email ${Math.round(emailSimilarity * 100)}% similar`);
+              // AI SMART MATCHING MODE: Fuzzy matching based on order data
+              else {
+                  // Company name similarity (check both Name and DBA fields)
+                  if (orderCompany && (storeName || storeDba)) {
+                      const nameSimilarity = stringSimilarity(orderCompany, storeName);
+                      const dbaSimilarity = storeDba ? stringSimilarity(orderCompany, storeDba) : 0;
+                      const companySimilarity = Math.max(nameSimilarity, dbaSimilarity);
+                      if (companySimilarity > 0.6) {
+                          score += companySimilarity * 50;
+                          reasons.push(`Company name ${Math.round(companySimilarity * 100)}% similar`);
+                      }
                   }
-              }
-              // Exact email match (highest priority)
-              if (orderEmail && storeEmail && orderEmail.toLowerCase() === storeEmail.toLowerCase()) {
-                  score += 100;
-                  reasons.push('Exact email match');
-              }
-              // Exact company match (check both Name and DBA)
-              if (orderCompany) {
-                  const exactNameMatch = storeName && orderCompany.toLowerCase() === storeName.toLowerCase();
-                  const exactDbaMatch = storeDba && orderCompany.toLowerCase() === storeDba.toLowerCase();
-                  if (exactNameMatch || exactDbaMatch) {
+                  // Email similarity
+                  if (orderEmail && storeEmail) {
+                      const emailSimilarity = stringSimilarity(orderEmail, storeEmail);
+                      if (emailSimilarity > 0.8) {
+                          score += emailSimilarity * 30;
+                          reasons.push(`Email ${Math.round(emailSimilarity * 100)}% similar`);
+                      }
+                  }
+                  // Exact email match (highest priority)
+                  if (orderEmail && storeEmail && orderEmail.toLowerCase() === storeEmail.toLowerCase()) {
                       score += 100;
-                      reasons.push('Exact company name match');
+                      reasons.push('Exact email match');
+                  }
+                  // Exact company match (check both Name and DBA)
+                  if (orderCompany) {
+                      const exactNameMatch = storeName && orderCompany.toLowerCase() === storeName.toLowerCase();
+                      const exactDbaMatch = storeDba && orderCompany.toLowerCase() === storeDba.toLowerCase();
+                      if (exactNameMatch || exactDbaMatch) {
+                          score += 100;
+                          reasons.push('Exact company name match');
+                      }
+                  }
+              }
+
+              // Add to suggestions if score is high enough
+              if (score > 10) {
+                  const suggestion = {
+                      rowIndex: index + 1,
+                      storeSheetId: storeSheet.id,
+                      link: storeLink,
+                      name: storeName,
+                      dba: storeDba,
+                      email: storeEmail,
+                      score: Math.min(score, 100),
+                      reasons,
+                      displayName: storeName || storeDba || storeEmail,
+                      displayInfo: `${storeCity ? storeCity + ', ' : ''}${storeState || ''}`.trim(),
+                  };
+                  const dedupeKey = normalizeLink(storeLink || `${storeSheet.id}:${index}`);
+                  const existing = suggestionByLink.get(dedupeKey);
+                  if (!existing || suggestion.score > existing.score) {
+                      suggestionByLink.set(dedupeKey, suggestion);
                   }
               }
           }
-          // Add to suggestions if score is high enough
-          if (score > 10) {
-              suggestions.push({
-                  rowIndex: index + 2,
-                  link: storeLink,
-                  name: storeName,
-                  dba: storeDba,
-                  email: storeEmail,
-                  score: Math.min(score, 100),
-                  reasons,
-                  displayName: storeName || storeDba || storeEmail,
-                  displayInfo: `${storeCity ? storeCity + ', ' : ''}${storeState || ''}`.trim(),
-              });
-          }
-      });
+      }
+
+      suggestions.push(...Array.from(suggestionByLink.values()));
       // Sort by score descending and return top results
       suggestions.sort((a, b) => b.score - a.score);
       const limit = isManualSearch ? 100 : 20; // More results for manual search

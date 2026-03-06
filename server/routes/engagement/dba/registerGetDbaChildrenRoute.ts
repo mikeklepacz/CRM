@@ -1,5 +1,7 @@
 import type { DbaRouteDeps } from "./types";
 import { normalizeLink } from "../../../../shared/linkUtils";
+import { buildSheetRange } from "../../../services/sheets/a1Range";
+import { listStoreDatabaseSheets } from "../../../services/sheets/storeDatabaseResolver";
 
 export function registerGetDbaChildrenRoute(deps: DbaRouteDeps) {
   const { app, storage, googleSheets, isAuthenticatedCustom, clearUserCache } = deps;
@@ -10,11 +12,11 @@ export function registerGetDbaChildrenRoute(deps: DbaRouteDeps) {
           const { parentLink } = req.params;
           const sheets = await storage.getAllActiveGoogleSheets((req.user as any).tenantId);
           const trackerSheet = sheets.find((s: any) => s.sheetPurpose === 'commissions');
-          const storeDbSheet = sheets.find((s: any) => s.sheetPurpose === 'Store Database');
+          const storeDbSheets = await listStoreDatabaseSheets((req.user as any).tenantId);
           if (!trackerSheet) {
               return res.status(404).json({ message: 'Commission Tracker sheet not found' });
           }
-          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
           const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
           const trackerHeaders = trackerRows[0];
           const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
@@ -24,18 +26,24 @@ export function registerGetDbaChildrenRoute(deps: DbaRouteDeps) {
           }
           // Load Store Database to get store names
           let storeDbMap: Map<string, any> = new Map();
-          if (storeDbSheet) {
-              const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
-              const storeDbRows = await googleSheets.readSheetData(storeDbSheet.spreadsheetId, storeDbRange);
-              const storeDbHeaders = storeDbRows[0];
-              const storeDbLinkIndex = storeDbHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-              const storeDbNameIndex = storeDbHeaders.findIndex((h: string) => h.toLowerCase() === 'name' || h.toLowerCase() === 'store name');
-              if (storeDbLinkIndex !== -1) {
-                  for (let i = 1; i < storeDbRows.length; i++) {
-                      const link = storeDbRows[i][storeDbLinkIndex];
-                      if (link) {
-                          const storeName = storeDbNameIndex !== -1 ? storeDbRows[i][storeDbNameIndex] : '';
-                          storeDbMap.set(normalizeLink(link), storeName);
+          if (storeDbSheets.length > 0) {
+              for (const storeDbSheet of storeDbSheets) {
+                  const storeDbRange = buildSheetRange(storeDbSheet.sheetName, "A:ZZ");
+                  const storeDbRows = await googleSheets.readSheetData(storeDbSheet.spreadsheetId, storeDbRange);
+                  if (storeDbRows.length === 0) continue;
+                  const storeDbHeaders = storeDbRows[0];
+                  const storeDbLinkIndex = storeDbHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+                  const storeDbNameIndex = storeDbHeaders.findIndex((h: string) => h.toLowerCase() === 'name' || h.toLowerCase() === 'store name');
+                  if (storeDbLinkIndex !== -1) {
+                      for (let i = 1; i < storeDbRows.length; i++) {
+                          const link = storeDbRows[i][storeDbLinkIndex];
+                          if (link) {
+                              const storeName = storeDbNameIndex !== -1 ? storeDbRows[i][storeDbNameIndex] : '';
+                              const normalized = normalizeLink(link);
+                              if (!storeDbMap.has(normalized)) {
+                                  storeDbMap.set(normalized, storeName);
+                              }
+                          }
                       }
                   }
               }

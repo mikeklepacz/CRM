@@ -6,7 +6,11 @@ export function registerMapSearchHistoryDeleteRoute(app: Express, deps: MapSearc
   app.delete("/api/maps/search-history/:id", deps.isAuthenticatedCustom, async (req: any, res) => {
     try {
       const { id } = req.params;
-      await storage.deleteSearchHistory(id);
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({ message: "No tenant associated with user" });
+      }
+      await storage.deleteSearchHistory(id, tenantId);
       res.json({ message: "Search history entry deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting search history:", error);

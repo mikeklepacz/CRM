@@ -618,6 +618,7 @@ export const searchHistory = pgTable(
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+    projectId: varchar("project_id").references(() => tenantProjects.id, { onDelete: "set null" }), // Optional project scope
     businessType: text("business_type").notNull(),
     category: varchar("category", { length: 100 }), // Category used for this search (e.g., 'pet', 'food', etc.)
     city: text("city").notNull(),
@@ -2497,6 +2498,7 @@ export const qualificationLeads = pgTable("qualification_leads", {
   // Company information
   company: varchar("company", { length: 255 }).notNull(),
   website: varchar("website", { length: 500 }),
+  googleMapsUrl: varchar("google_maps_url", { length: 500 }),
   category: varchar("category", { length: 100 }), // Business type/category from map search
   
   // Point of Contact
@@ -2513,6 +2515,10 @@ export const qualificationLeads = pgTable("qualification_leads", {
   postalCode: varchar("postal_code", { length: 20 }),
   country: varchar("country", { length: 100 }),
   countryCode: varchar("country_code", { length: 3 }), // ISO 3166-1 alpha-2
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 11, scale: 7 }),
+  businessStatus: varchar("business_status", { length: 50 }),
+  businessHours: text("business_hours"),
   
   // Call tracking
   callSessionId: varchar("call_session_id"), // Links to callSessions.id after call
@@ -2597,6 +2603,18 @@ export const apolloCompanies = pgTable("apollo_companies", {
   country: varchar("country", { length: 100 }),
   logoUrl: varchar("logo_url", { length: 500 }), // Company logo
   enrichmentStatus: varchar("enrichment_status", { length: 20 }).default('enriched'), // 'enriched', 'not_found', 'skipped'
+  prescreenContactCount: integer("prescreen_contact_count").notNull().default(0), // Apollo people count discovered during pre-screen
+  prescreenPeoplePreview: jsonb("prescreen_people_preview").$type<
+    Array<{
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      title: string | null;
+      seniority: string | null;
+      hasEmail: boolean;
+      linkedinUrl: string | null;
+    }>
+  >().notNull().default(sql`'[]'::jsonb`), // Small list of preview people for table visibility
   enrichedAt: timestamp("enriched_at").defaultNow(), // When we enriched it
   creditsUsed: integer("credits_used").default(0), // Apollo credits consumed
   createdAt: timestamp("created_at").defaultNow(),

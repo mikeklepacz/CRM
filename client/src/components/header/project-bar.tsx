@@ -11,7 +11,19 @@ interface ProjectBarProps {
 }
 
 export function ProjectBar({ currentProject, projects, projectContext }: ProjectBarProps) {
-  if (!currentProject) return null;
+  if (!currentProject) {
+    return (
+      <div
+        className="px-2 py-1.5 md:px-3 flex items-center justify-between gap-2 bg-amber-500/20 text-amber-200 border-b border-amber-500/30"
+        data-testid="project-bar-empty"
+      >
+        <div className="flex items-center gap-2">
+          <FolderKanban className="h-4 w-4" />
+          <span className="text-sm font-semibold">No project loaded</span>
+        </div>
+      </div>
+    );
+  }
 
   const accentColor = currentProject.accentColor || "#6366f1";
   const r = parseInt(accentColor.slice(1, 3), 16);

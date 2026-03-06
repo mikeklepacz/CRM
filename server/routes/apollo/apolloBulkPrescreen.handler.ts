@@ -1,6 +1,19 @@
 import * as apolloService from "../../services/apolloService";
 import { extractDomain } from "./apolloPrescreen.helpers";
 import { resolveTenantProjectId } from "../../services/projectScopeValidation";
+import { setApolloCandidateDecisionByLink } from "../../services/apolloCandidateService";
+
+function toPrescreenPeoplePreview(people: any[] | undefined) {
+  return (people || []).slice(0, 5).map((person) => ({
+    id: person.id,
+    firstName: person.first_name || null,
+    lastName: person.last_name || null,
+    title: person.title || null,
+    seniority: person.seniority || null,
+    hasEmail: !!person.has_email,
+    linkedinUrl: person.linkedin_url || null,
+  }));
+}
 
 export async function handleApolloBulkPrescreen(
   req: any,
@@ -13,15 +26,18 @@ export async function handleApolloBulkPrescreen(
       return res.status(400).json({ message: "No tenant associated with user" });
     }
 
-    const { contacts, projectId: requestedProjectId } = req.body;
+    const { contacts, forceRescreen = false, projectId: requestedProjectId } = req.body;
     if (!Array.isArray(contacts)) {
       return res.status(400).json({ message: "contacts must be an array" });
     }
 
     const projectId = await resolveTenantProjectId(tenantId, requestedProjectId);
+    if (!projectId) {
+      return res.status(400).json({ message: "projectId is required" });
+    }
 
     const links = contacts.map((c: any) => c.link).filter(Boolean);
-    const existingStatus = await apolloService.bulkCheckEnrichmentStatus(tenantId, links);
+    const existingStatus = await apolloService.bulkCheckEnrichmentStatus(tenantId, links, projectId);
 
     let checked = 0;
     let found = 0;
@@ -31,7 +47,7 @@ export async function handleApolloBulkPrescreen(
     for (const contact of contacts) {
       if (!contact.link) continue;
 
-      if (existingStatus[contact.link]) {
+      if (!forceRescreen && existingStatus[contact.link]) {
         skipped++;
         continue;
       }
@@ -57,17 +73,26 @@ export async function handleApolloBulkPrescreen(
             preview.totalContacts,
             projectId,
             preview.company.website_url,
+            preview.company.linkedin_url,
             preview.company.short_description,
-            preview.company.keywords
+            preview.company.keywords,
+            preview.company.estimated_num_employees,
+            toPrescreenPeoplePreview(preview.contacts),
           );
         } else {
           notFound++;
           await apolloService.markCompanyNotFound(tenantId, contact.link, domain, contact.name, projectId);
+          if (projectId) {
+            await setApolloCandidateDecisionByLink(tenantId, projectId, contact.link, "rejected");
+          }
         }
       } catch (error) {
         console.error(`Error prescreening contact ${contact.link}:`, error);
         notFound++;
         await apolloService.markCompanyNotFound(tenantId, contact.link, undefined, contact.name, projectId);
+        if (projectId) {
+          await setApolloCandidateDecisionByLink(tenantId, projectId, contact.link, "rejected");
+        }
       }
     }
 

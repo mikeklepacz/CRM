@@ -1,5 +1,8 @@
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
+import { listStoreDatabaseSheets } from "../../services/sheets/storeDatabaseResolver";
+import { normalizeLink } from "../../../shared/linkUtils";
 
 export function buildAnalyticsPortfolioMetricsEndpointHandler() {
   return async (req: any, res: any) => {
@@ -36,8 +39,8 @@ export function buildAnalyticsPortfolioMetricsEndpointHandler() {
       // Get both sheets
       const sheets = await storage.getAllActiveGoogleSheets(req.user.tenantId);
       const trackerSheet = sheets.find((s) => s.sheetPurpose === 'commissions');
-      const storeSheet = sheets.find((s) => s.sheetPurpose === 'Store Database');
-      if (!trackerSheet || !storeSheet) {
+      const storeSheets = await listStoreDatabaseSheets(req.user.tenantId);
+      if (!trackerSheet || storeSheets.length === 0) {
           return res.json({
               totalClients: 0,
               activeClients: 0,
@@ -47,32 +50,11 @@ export function buildAnalyticsPortfolioMetricsEndpointHandler() {
       }
       // Read Store Database to get total clients for this agent
       let totalClients = 0;
+      const countedStoreLinks = new Set<string>();
       if (isAgent) {
           // For agents, count only stores assigned to them
-          const storeRange = `${storeSheet.sheetName}!A:Z`;
-          const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-          if (storeRows.length > 1) {
-              const storeHeaders = storeRows[0];
-              let storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent'); // Check for 'agent' column
-              if (storeAgentIndex === -1) {
-                  // Fallback to 'agent name' if 'agent' not found
-                  storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
-              }
-              if (storeAgentIndex !== -1) {
-                  totalClients = storeRows
-                      .slice(1)
-                      .filter((row) => {
-                      const rowAgent = row[storeAgentIndex] || '';
-                      const rowAgentNormalized = rowAgent.toLowerCase().trim();
-                      return allowedAgentNames.some((name) => name.toLowerCase().trim() === rowAgentNormalized);
-                  }).length;
-              }
-          }
-      }
-      else {
-          // Admin: Filter by agentIds parameter
-          if (allowedAgentNames.length > 0) {
-              const storeRange = `${storeSheet.sheetName}!A:Z`;
+          for (const storeSheet of storeSheets) {
+              const storeRange = buildSheetRange(storeSheet.sheetName, "A:Z");
               const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
               if (storeRows.length > 1) {
                   const storeHeaders = storeRows[0];
@@ -81,26 +63,76 @@ export function buildAnalyticsPortfolioMetricsEndpointHandler() {
                       // Fallback to 'agent name' if 'agent' not found
                       storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
                   }
+                  const linkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
                   if (storeAgentIndex !== -1) {
-                      totalClients = storeRows
-                          .slice(1)
-                          .filter((row) => {
+                      for (const row of storeRows.slice(1)) {
                           const rowAgent = row[storeAgentIndex] || '';
                           const rowAgentNormalized = rowAgent.toLowerCase().trim();
-                          return allowedAgentNames.some((name) => name.toLowerCase().trim() === rowAgentNormalized);
-                      }).length;
+                          const isAllowed = allowedAgentNames.some((name) => name.toLowerCase().trim() === rowAgentNormalized);
+                          if (!isAllowed) continue;
+                          const link = linkIndex !== -1 ? row[linkIndex] || "" : "";
+                          const dedupeKey = link ? normalizeLink(String(link)) : `${storeSheet.id}:${countedStoreLinks.size}`;
+                          if (!countedStoreLinks.has(dedupeKey)) {
+                              countedStoreLinks.add(dedupeKey);
+                              totalClients++;
+                          }
+                      }
+                  }
+              }
+          }
+      }
+      else {
+          // Admin: Filter by agentIds parameter
+          if (allowedAgentNames.length > 0) {
+              for (const storeSheet of storeSheets) {
+                  const storeRange = buildSheetRange(storeSheet.sheetName, "A:Z");
+                  const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+                  if (storeRows.length > 1) {
+                      const storeHeaders = storeRows[0];
+                      let storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent'); // Check for 'agent' column
+                      if (storeAgentIndex === -1) {
+                          // Fallback to 'agent name' if 'agent' not found
+                          storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
+                      }
+                      const linkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+                      if (storeAgentIndex !== -1) {
+                          for (const row of storeRows.slice(1)) {
+                              const rowAgent = row[storeAgentIndex] || '';
+                              const rowAgentNormalized = rowAgent.toLowerCase().trim();
+                              const isAllowed = allowedAgentNames.some((name) => name.toLowerCase().trim() === rowAgentNormalized);
+                              if (!isAllowed) continue;
+                              const link = linkIndex !== -1 ? row[linkIndex] || "" : "";
+                              const dedupeKey = link ? normalizeLink(String(link)) : `${storeSheet.id}:${countedStoreLinks.size}`;
+                              if (!countedStoreLinks.has(dedupeKey)) {
+                                  countedStoreLinks.add(dedupeKey);
+                                  totalClients++;
+                              }
+                          }
+                      }
                   }
               }
           }
           else {
               // No filter, count all stores
-              const storeRange = `${storeSheet.sheetName}!A:A`;
-              const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-              totalClients = Math.max(0, storeRows.length - 1);
+              for (const storeSheet of storeSheets) {
+                  const storeRange = buildSheetRange(storeSheet.sheetName, "A:Z");
+                  const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+                  if (storeRows.length <= 1) continue;
+                  const storeHeaders = storeRows[0];
+                  const linkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+                  for (const row of storeRows.slice(1)) {
+                      const link = linkIndex !== -1 ? row[linkIndex] || "" : "";
+                      const dedupeKey = link ? normalizeLink(String(link)) : `${storeSheet.id}:${countedStoreLinks.size}`;
+                      if (!countedStoreLinks.has(dedupeKey)) {
+                          countedStoreLinks.add(dedupeKey);
+                          totalClients++;
+                      }
+                  }
+              }
           }
       }
       // Read Commission Tracker to calculate active clients and repeat order rate
-      const trackerRange = `${trackerSheet.sheetName}!A:G`;
+      const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:G");
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
       if (trackerRows.length <= 1) {
           return res.json({

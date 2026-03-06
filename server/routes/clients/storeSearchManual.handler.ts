@@ -1,5 +1,6 @@
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
 
 export async function handleStoreSearchManual(req: any, res: any): Promise<any> {
   try {
@@ -16,7 +17,7 @@ export async function handleStoreSearchManual(req: any, res: any): Promise<any> 
       return res.status(404).json({ message: "Sheet not found" });
     }
 
-    const rows = await googleSheets.readSheetData(sheet.spreadsheetId, `${sheet.sheetName}!A:ZZ`);
+    const rows = await googleSheets.readSheetData(sheet.spreadsheetId, buildSheetRange(sheet.sheetName, "A:ZZ"));
 
     if (rows.length === 0) {
       return res.json({ stores: [] });

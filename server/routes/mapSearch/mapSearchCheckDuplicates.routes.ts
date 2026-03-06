@@ -5,7 +5,7 @@ import type { MapSearchCoreDeps } from "./searchCore.types";
 export function registerMapSearchCheckDuplicatesRoute(app: Express, deps: MapSearchCoreDeps): void {
   app.post("/api/maps/check-duplicates", deps.isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const { websites } = req.body as { websites: string[] };
+      const { websites, projectId } = req.body as { websites: string[]; projectId?: string };
       const tenantId = req.user?.tenantId;
       if (!tenantId) {
         return res.status(400).json({ message: "Tenant context required" });
@@ -14,7 +14,7 @@ export function registerMapSearchCheckDuplicatesRoute(app: Express, deps: MapSea
         return res.json({ duplicates: [] });
       }
 
-      const duplicates = await findDuplicateWebsites(tenantId, websites);
+      const duplicates = await findDuplicateWebsites(tenantId, websites, projectId);
       res.json({ duplicates });
     } catch (error: any) {
       console.error("Error checking duplicates:", error);

@@ -3,6 +3,8 @@ import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
 import { getAllContacts } from "../ehubContactsService";
 import { emailRegex, ensureImportableSequence, persistImportedRecipients } from "./sequenceRecipientsImportShared";
+import { resolveStoreDatabaseSheet } from "../sheets/storeDatabaseResolver";
+import { buildSheetRange } from "../sheets/a1Range";
 
 type ImportFromContactsInput = {
   sequenceId: string;
@@ -36,10 +38,18 @@ export async function importSequenceRecipientsFromContacts(input: ImportFromCont
   }
 
   const storeEmailToLink = new Map<string, { link?: string; salesSummary?: string }>();
-  const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", input.tenantId);
+  const storeSheet = await resolveStoreDatabaseSheet({
+    tenantId: input.tenantId,
+    projectId: sequence.projectId || undefined,
+    preferProjectMatch: true,
+    requireProjectMatch: !!sequence.projectId,
+  });
 
   if (storeSheet) {
-    const storeData = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+    const storeData = await googleSheets.readSheetData(
+      storeSheet.spreadsheetId,
+      buildSheetRange(storeSheet.sheetName, "A:ZZ")
+    );
     if (storeData.length) {
       const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
       const emailIndex = headers.indexOf("email");

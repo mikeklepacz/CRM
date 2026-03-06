@@ -17,11 +17,22 @@ export function useApolloPreviewWorkflow({ currentProjectId, toast }: UseApolloP
   const [previewResult, setPreviewResult] = useState<PreviewResult | null>(null);
 
   const previewMutation = useMutation({
-    mutationFn: async ({ domain, companyName }: { domain?: string; companyName?: string }) => (
-      apiRequest("POST", "/api/apollo/preview", { domain, companyName })
+    mutationFn: async ({
+      domain,
+      companyName,
+      googleSheetLink,
+      projectId,
+    }: {
+      domain?: string;
+      companyName?: string;
+      googleSheetLink?: string;
+      projectId?: string;
+    }) => (
+      apiRequest("POST", "/api/apollo/preview", { domain, companyName, googleSheetLink, projectId })
     ),
     onSuccess: (data) => {
       setPreviewResult(data as PreviewResult);
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/prescreen-results", currentProjectId] });
     },
     onError: (error: any) => {
       toast({ title: "Preview failed", description: error.message, variant: "destructive" });
@@ -72,6 +83,8 @@ export function useApolloPreviewWorkflow({ currentProjectId, toast }: UseApolloP
     previewMutation.mutate({
       domain: domain || undefined,
       companyName: !domain ? contact.name : undefined,
+      googleSheetLink: contact.link,
+      projectId: currentProjectId,
     });
   };
 

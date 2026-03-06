@@ -69,16 +69,16 @@ export const mapStatusTicketFollowupMethods: Partial<StorageRuntimeContract> = {
   },
 
   // Search History operations - for Map Search
-  async getAllSearchHistory() {
-      return await getAllSearchHistoryStorage();
+  async getAllSearchHistory(tenantId, projectId?) {
+      return await getAllSearchHistoryStorage(tenantId, projectId);
   },
 
-  async recordSearch(tenantId, businessType, city, state, country, excludedKeywords = [], excludedTypes = [], category?) {
-      return await recordSearchStorage(tenantId, businessType, city, state, country, excludedKeywords, excludedTypes, category);
+  async recordSearch(tenantId, businessType, city, state, country, excludedKeywords = [], excludedTypes = [], category?, projectId?) {
+      return await recordSearchStorage(tenantId, businessType, city, state, country, excludedKeywords, excludedTypes, category, projectId);
   },
 
-  async deleteSearchHistory(id) {
-      await deleteSearchHistoryStorage(id);
+  async deleteSearchHistory(id, tenantId) {
+      await deleteSearchHistoryStorage(id, tenantId);
   },
 
   // Saved Exclusions operations

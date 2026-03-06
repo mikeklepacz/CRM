@@ -1,3 +1,6 @@
+import { buildSheetRange } from "../sheets/a1Range";
+import { resolveStoreDatabaseSheet } from "../sheets/storeDatabaseResolver";
+
 type CrawlDeps = {
   clearUserCache: (userId: string) => void;
   crawlWebsiteForEmail: (website: string) => Promise<{ email: string | null; searched: boolean; skipped?: boolean }>;
@@ -153,11 +156,14 @@ export function createCrawlClientEmailsHandler(deps: CrawlDeps) {
         return res.json({ message: "No websites to check", totalProcessed: 0, emailsFound: 0, remainingToProcess: 0, hasMore: false });
       }
 
-      const sheets = await storage.getAllActiveGoogleSheets(tenantId);
-      const storeSheet = sheets.find((s: any) => s.sheetPurpose === "Store Database");
+      const storeSheet = await resolveStoreDatabaseSheet({
+        tenantId,
+        projectId,
+        preferProjectMatch: true,
+      });
       if (!storeSheet) return res.status(400).json({ message: "No Store Database sheet configured" });
 
-      const rows = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+      const rows = await googleSheets.readSheetData(storeSheet.spreadsheetId, buildSheetRange(storeSheet.sheetName, "A:ZZ"));
       if (rows.length <= 1) {
         return res.json({ message: "No data", totalProcessed: 0, emailsFound: 0, remainingToProcess: 0, hasMore: false });
       }
@@ -200,10 +206,18 @@ export function createCrawlClientEmailsHandler(deps: CrawlDeps) {
           const crawl = await crawlWebsiteForEmail(website);
           if (!crawl.skipped && rowIndex) {
             if (crawl.email && emailIdx !== -1) {
-              await googleSheets.writeSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!${String.fromCharCode(65 + emailIdx)}${rowIndex}`, [[crawl.email]]);
+              await googleSheets.writeSheetData(
+                storeSheet.spreadsheetId,
+                buildSheetRange(storeSheet.sheetName, `${String.fromCharCode(65 + emailIdx)}${rowIndex}`),
+                [[crawl.email]]
+              );
             }
             if (crawl.searched && searchedIdx !== -1) {
-              await googleSheets.writeSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!${String.fromCharCode(65 + searchedIdx)}${rowIndex}`, [["Yes"]]);
+              await googleSheets.writeSheetData(
+                storeSheet.spreadsheetId,
+                buildSheetRange(storeSheet.sheetName, `${String.fromCharCode(65 + searchedIdx)}${rowIndex}`),
+                [["Yes"]]
+              );
             }
           }
           results.push({ rowIndex, email: crawl.email, searched: crawl.searched });

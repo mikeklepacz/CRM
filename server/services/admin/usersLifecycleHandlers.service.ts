@@ -1,5 +1,7 @@
 import { google } from "googleapis";
 import OpenAI from "openai";
+import { listStoreDatabaseSheets } from "../sheets/storeDatabaseResolver";
+import { buildSheetRange } from "../sheets/a1Range";
 
 type Deps = {
   googleSheets: {
@@ -52,13 +54,16 @@ async function unregisterGoogleCalendarWebhook(storage: any, userId: string, con
 async function releaseUnclosedListings(deps: Deps, tenantId: string, userAgentName: string) {
   const sheets = await deps.storage.getAllActiveGoogleSheets(tenantId);
   const trackerSheet = sheets.find((s: any) => s.sheetPurpose === "commissions");
-  const storeDbSheet = sheets.find((s: any) => s.sheetPurpose === "Store Database");
-  if (!trackerSheet || !storeDbSheet) return { releasedCount: 0, protectedCount: 0 };
+  const storeDbSheets = await listStoreDatabaseSheets(tenantId);
+  if (!trackerSheet || storeDbSheets.length === 0) return { releasedCount: 0, protectedCount: 0 };
 
   let releasedCount = 0;
   let protectedCount = 0;
 
-  const trackerRows = await deps.googleSheets.readSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`);
+  const trackerRows = await deps.googleSheets.readSheetData(
+    trackerSheet.spreadsheetId,
+    buildSheetRange(trackerSheet.sheetName, "A:ZZ")
+  );
   if (trackerRows.length === 0) return { releasedCount, protectedCount };
 
   const headers = trackerRows[0];
@@ -81,14 +86,14 @@ async function releaseUnclosedListings(deps: Deps, tenantId: string, userAgentNa
     const rowIndex = i + 1;
     await deps.googleSheets.writeSheetData(
       trackerSheet.spreadsheetId,
-      `${trackerSheet.sheetName}!${columnLetter(agentNameIndex)}${rowIndex}`,
+      buildSheetRange(trackerSheet.sheetName, `${columnLetter(agentNameIndex)}${rowIndex}`),
       [[""]]
     );
 
     if (statusIndex !== -1) {
       await deps.googleSheets.writeSheetData(
         trackerSheet.spreadsheetId,
-        `${trackerSheet.sheetName}!${columnLetter(statusIndex)}${rowIndex}`,
+        buildSheetRange(trackerSheet.sheetName, `${columnLetter(statusIndex)}${rowIndex}`),
         [["7 – Warm"]]
       );
     }

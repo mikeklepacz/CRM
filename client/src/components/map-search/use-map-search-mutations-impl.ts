@@ -124,6 +124,7 @@ export function useMapSearchMutations(props: UseMapSearchMutationsProps) {
         excludedKeywords: props.activeKeywords,
         excludedTypes: props.activeTypes,
         category: props.category || undefined,
+        projectId: props.currentProjectId,
       };
 
       props.setLastSearchParams(params);
@@ -151,7 +152,10 @@ export function useMapSearchMutations(props: UseMapSearchMutationsProps) {
         try {
           const websites = results.map((r: any) => r.website).filter((w: string | undefined): w is string => !!w);
           if (websites.length > 0) {
-            const dupResponse = await apiRequest("POST", "/api/maps/check-duplicates", { websites });
+            const dupResponse = await apiRequest("POST", "/api/maps/check-duplicates", {
+              websites,
+              projectId: props.currentProjectId,
+            });
             const duplicates = new Set<string>(dupResponse.duplicates || []);
             props.setDuplicateWebsites(duplicates);
           } else {

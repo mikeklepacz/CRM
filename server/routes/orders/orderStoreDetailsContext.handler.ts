@@ -1,6 +1,8 @@
 import { normalizeLink } from "../../../shared/linkUtils";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
+import { findStoreSheetRowByLink } from "../../services/sheets/storeDatabaseResolver";
 
 export async function handleOrderStoreDetailsContext(req: any, res: any): Promise<any> {
   try {
@@ -12,13 +14,12 @@ export async function handleOrderStoreDetailsContext(req: any, res: any): Promis
     }
 
     const sheets = await storage.getAllActiveGoogleSheets(tenantId);
-    const storeSheet = sheets.find(s => s.sheetPurpose === "Store Database");
     const trackerSheet = sheets.find(s => s.sheetPurpose === "commissions");
     if (!trackerSheet) {
       return res.status(404).json({ message: "Commission Tracker sheet not found" });
     }
 
-    const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+    const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
     const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
     if (!trackerRows.length) {
       return res.status(404).json({ message: "Commission Tracker sheet is empty" });
@@ -51,27 +52,20 @@ export async function handleOrderStoreDetailsContext(req: any, res: any): Promis
     let storeRowIndex: number | null = null;
     let storeSheetId: string | null = null;
 
-    if (storeSheet) {
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-      if (storeRows.length > 0) {
-        const storeHeaders = storeRows[0];
-        const storeLinkIndex = storeHeaders.findIndex(h => h.toLowerCase() === "link");
-        if (storeLinkIndex !== -1) {
-          const trackerLinkSet = new Set(trackerMatches.map(m => m.normalizedLink));
-          for (let i = 1; i < storeRows.length; i++) {
-            const rawLink = storeRows[i][storeLinkIndex] || "";
-            if (trackerLinkSet.has(normalizeLink(rawLink))) {
-              storeRow = {};
-              storeHeaders.forEach((header: string, idx: number) => {
-                storeRow[header] = storeRows[i][idx] || "";
-              });
-              storeRowIndex = i + 1;
-              storeSheetId = storeSheet.id;
-              break;
-            }
-          }
-        }
+    for (const trackerMatch of trackerMatches) {
+      const matchedStore = await findStoreSheetRowByLink({
+        tenantId,
+        link: trackerMatch.link,
+        preferProjectMatch: true,
+      });
+      if (matchedStore) {
+        storeRow = {};
+        matchedStore.headers.forEach((header: string, idx: number) => {
+          storeRow[header] = matchedStore.row[idx] || "";
+        });
+        storeRowIndex = matchedStore.rowIndex;
+        storeSheetId = matchedStore.sheet.id;
+        break;
       }
     }
 

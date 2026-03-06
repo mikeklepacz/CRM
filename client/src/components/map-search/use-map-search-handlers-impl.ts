@@ -34,6 +34,12 @@ interface UseMapSearchHandlersProps {
 }
 
 export function useMapSearchHandlers(props: UseMapSearchHandlersProps) {
+  const getFailureReason = (error: unknown): string => {
+    const raw = error instanceof Error ? error.message : String(error || "Unknown error");
+    const cleaned = raw.replace(/^\d{3}:\s*/, "").trim();
+    return cleaned || "Unknown error";
+  };
+
   const getEffectiveCategory = () => {
     if (props.isQualificationMode && props.customCategory.trim()) {
       return props.customCategory.trim();
@@ -53,9 +59,10 @@ export function useMapSearchHandlers(props: UseMapSearchHandlersProps) {
 
     props.setExportProgress({ current: 0, total, failed: 0 });
 
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 3;
     let successCount = 0;
     let failedCount = 0;
+    const failureReasons = new Map<string, number>();
     const endpoint = props.isQualificationMode ? "/api/maps/save-to-qualification" : "/api/maps/save-to-sheet";
 
     for (let i = 0; i < selectedArray.length; i += BATCH_SIZE) {
@@ -75,6 +82,8 @@ export function useMapSearchHandlers(props: UseMapSearchHandlersProps) {
           successCount++;
         } else {
           failedCount++;
+          const reason = getFailureReason(result.reason);
+          failureReasons.set(reason, (failureReasons.get(reason) || 0) + 1);
         }
       });
 
@@ -83,6 +92,10 @@ export function useMapSearchHandlers(props: UseMapSearchHandlersProps) {
         total,
         failed: failedCount,
       });
+
+      if (i + BATCH_SIZE < selectedArray.length) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
     }
 
     props.setExportProgress(null);
@@ -94,9 +107,12 @@ export function useMapSearchHandlers(props: UseMapSearchHandlersProps) {
         description: `Successfully exported ${successCount} ${props.isQualificationMode ? "leads" : "stores"} to ${destination}`,
       });
     } else {
+      const topReason = Array.from(failureReasons.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
       props.toast({
         title: "Export Complete with Errors",
-        description: `${successCount} exported successfully, ${failedCount} failed`,
+        description: topReason
+          ? `${successCount} exported successfully, ${failedCount} failed. Top error: ${topReason}`
+          : `${successCount} exported successfully, ${failedCount} failed`,
         variant: failedCount === total ? "destructive" : "default",
       });
     }

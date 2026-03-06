@@ -1,4 +1,6 @@
 import * as googleSheets from "../../../googleSheets";
+import { buildSheetRange } from "../../sheets/a1Range";
+import { resolveStoreDatabaseSheet } from "../../sheets/storeDatabaseResolver";
 
 type Deps = {
   storage: any;
@@ -27,16 +29,22 @@ export function createEligibleStoresHandler(deps: Deps) {
 
       const { scenario } = req.params;
       const tenantId = (req.user as any).tenantId;
+      const projectId = req.query.projectId as string | undefined;
 
       const commissionSheet = await storage.getGoogleSheetByPurpose("commissions", tenantId);
-      const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", tenantId);
+      const storeSheet = await resolveStoreDatabaseSheet({
+        tenantId,
+        projectId,
+        preferProjectMatch: true,
+        requireProjectMatch: !!projectId,
+      });
       const hasSheetsConfigured = commissionSheet && storeSheet;
 
       let commissionData: any[] = [];
       let storeData: any[] = [];
 
       if (hasSheetsConfigured) {
-        const commissionRange = `${commissionSheet.sheetName}!A:ZZ`;
+        const commissionRange = buildSheetRange(commissionSheet.sheetName, "A:ZZ");
         const commissionRows = await googleSheets.readSheetData(commissionSheet.spreadsheetId, commissionRange);
         if (commissionRows.length > 0) {
           const commissionHeaders = commissionRows[0];
@@ -49,7 +57,7 @@ export function createEligibleStoresHandler(deps: Deps) {
           });
         }
 
-        const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+        const storeRange = buildSheetRange(storeSheet.sheetName, "A:ZZ");
         const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
         if (storeRows.length > 0) {
           const storeHeaders = storeRows[0];
@@ -83,7 +91,6 @@ export function createEligibleStoresHandler(deps: Deps) {
         })
         .filter((store: any) => store.Link);
 
-      const projectId = req.query.projectId as string | undefined;
       let projectFilteredStores = stores;
 
       if (projectId) {

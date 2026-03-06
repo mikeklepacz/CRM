@@ -1,10 +1,23 @@
 import { storage } from "../storage";
 import { batchUpdateSheetData, getSpreadsheetInfo } from "./sheetCrud";
 import { getSystemGoogleSheetClient } from "./auth";
+import { buildSheetRange } from "../services/sheets/a1Range";
+import { findStoreSheetRowByLink } from "../services/sheets/storeDatabaseResolver";
 
-export async function mergeAndUpdateStore(targetLink: string, mergedData: Record<string, any>, tenantId: string) {
+export async function mergeAndUpdateStore(
+  targetLink: string,
+  mergedData: Record<string, any>,
+  tenantId: string,
+  projectId?: string
+) {
   const sheets = await getSystemGoogleSheetClient();
-  const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", tenantId);
+  const targetMatch = await findStoreSheetRowByLink({
+    tenantId,
+    link: targetLink,
+    projectId,
+    preferProjectMatch: true,
+  });
+  const storeSheet = targetMatch?.sheet || null;
 
   if (!storeSheet) {
     throw new Error("Store Database sheet ID not configured");
@@ -12,7 +25,7 @@ export async function mergeAndUpdateStore(targetLink: string, mergedData: Record
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: storeSheet.spreadsheetId,
-    range: storeSheet.sheetName,
+    range: buildSheetRange(storeSheet.sheetName, "A:ZZ"),
   });
 
   const rows = response.data.values || [];
@@ -41,7 +54,7 @@ export async function mergeAndUpdateStore(targetLink: string, mergedData: Record
   const rowNumber = targetRowIndex + 2;
   await sheets.spreadsheets.values.update({
     spreadsheetId: storeSheet.spreadsheetId,
-    range: `${storeSheet.sheetName}!A${rowNumber}`,
+    range: buildSheetRange(storeSheet.sheetName, `A${rowNumber}`),
     valueInputOption: "RAW",
     requestBody: {
       values: [updatedRow],
@@ -51,9 +64,15 @@ export async function mergeAndUpdateStore(targetLink: string, mergedData: Record
   return mergedData;
 }
 
-export async function deleteStoreFromSheet(link: string, tenantId: string) {
+export async function deleteStoreFromSheet(link: string, tenantId: string, projectId?: string) {
   const sheets = await getSystemGoogleSheetClient();
-  const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", tenantId);
+  const linkMatch = await findStoreSheetRowByLink({
+    tenantId,
+    link,
+    projectId,
+    preferProjectMatch: true,
+  });
+  const storeSheet = linkMatch?.sheet || null;
 
   if (!storeSheet) {
     throw new Error("Store Database sheet ID not configured");
@@ -61,7 +80,7 @@ export async function deleteStoreFromSheet(link: string, tenantId: string) {
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: storeSheet.spreadsheetId,
-    range: storeSheet.sheetName,
+    range: buildSheetRange(storeSheet.sheetName, "A:ZZ"),
   });
 
   const rows = response.data.values || [];
@@ -119,7 +138,7 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: trackerSheet.spreadsheetId,
-    range: trackerSheet.sheetName,
+    range: buildSheetRange(trackerSheet.sheetName, "A:ZZ"),
   });
 
   const rows = response.data.values || [];
@@ -199,7 +218,7 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
 
     const keeperRowNumber = effectiveKeeperIdx + 2;
     updatedRows.push({
-      range: `${trackerSheet.sheetName}!A${keeperRowNumber}`,
+      range: buildSheetRange(trackerSheet.sheetName, `A${keeperRowNumber}`),
       values: [keeperRow],
     });
   }
@@ -213,7 +232,7 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
 
     const rowNumber = srcIdx + 2;
     updatedRows.push({
-      range: `${trackerSheet.sheetName}!A${rowNumber}`,
+      range: buildSheetRange(trackerSheet.sheetName, `A${rowNumber}`),
       values: [updatedRow],
     });
   }

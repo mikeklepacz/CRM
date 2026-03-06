@@ -1,41 +1,49 @@
 import * as googleSheets from "../../googleSheets";
-import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
+import { listStoreDatabaseSheetsByPriority } from "../../services/sheets/storeDatabaseResolver";
+import { normalizeLink } from "../../../shared/linkUtils";
 
 export async function handleStoreSearch(req: any, res: any): Promise<any> {
   try {
-    const { searchTerm } = req.body;
+    const { searchTerm, projectId } = req.body;
 
     if (!searchTerm || searchTerm.trim().length === 0) {
       return res.status(400).json({ message: "Search term is required" });
     }
 
-    const sheets = await storage.getAllActiveGoogleSheets(req.user.tenantId);
-    const storeSheet = sheets.find((s) => s.sheetPurpose === "Store Database");
-
-    if (!storeSheet) {
+    const storeSheets = await listStoreDatabaseSheetsByPriority({
+      tenantId: req.user.tenantId,
+      projectId,
+      preferProjectMatch: true,
+    });
+    if (storeSheets.length === 0) {
       return res.status(404).json({ message: "Store Database sheet not found" });
     }
 
-    const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
-
-    if (storeRows.length === 0) {
-      return res.json({ stores: [] });
-    }
-
-    const storeHeaders = storeRows[0];
-    const nameIndex = storeHeaders.findIndex((h) => h.toLowerCase() === "name");
-    const dbaIndex = storeHeaders.findIndex((h) => h.toLowerCase() === "dba");
-    const linkIndex = storeHeaders.findIndex((h) => h.toLowerCase() === "link");
-    const agentIndex = storeHeaders.findIndex((h) => h.toLowerCase() === "agent name");
-    const addressIndex = storeHeaders.findIndex((h) => h.toLowerCase() === "address");
-    const cityIndex = storeHeaders.findIndex((h) => h.toLowerCase() === "city");
-    const stateIndex = storeHeaders.findIndex((h) => h.toLowerCase() === "state");
-
     const searchLower = searchTerm.toLowerCase().trim();
+    const seenLinks = new Set<string>();
+    const matchingStores: any[] = [];
 
-    const matchingStores = storeRows
-      .slice(1)
-      .map((row, index) => {
+    for (const storeSheet of storeSheets) {
+      const storeRows = await googleSheets.readSheetData(
+        storeSheet.spreadsheetId,
+        buildSheetRange(storeSheet.sheetName, "A:ZZ")
+      );
+      if (storeRows.length === 0) {
+        continue;
+      }
+
+      const storeHeaders = storeRows[0];
+      const nameIndex = storeHeaders.findIndex((h) => (h || "").toLowerCase() === "name");
+      const dbaIndex = storeHeaders.findIndex((h) => (h || "").toLowerCase() === "dba");
+      const linkIndex = storeHeaders.findIndex((h) => (h || "").toLowerCase() === "link");
+      const agentIndex = storeHeaders.findIndex((h) => (h || "").toLowerCase() === "agent name");
+      const addressIndex = storeHeaders.findIndex((h) => (h || "").toLowerCase() === "address");
+      const cityIndex = storeHeaders.findIndex((h) => (h || "").toLowerCase() === "city");
+      const stateIndex = storeHeaders.findIndex((h) => (h || "").toLowerCase() === "state");
+
+      for (let i = 1; i < storeRows.length; i++) {
+        const row = storeRows[i];
         const name = nameIndex !== -1 ? row[nameIndex] || "" : "";
         const dba = dbaIndex !== -1 ? row[dbaIndex] || "" : "";
         const link = linkIndex !== -1 ? row[linkIndex] || "" : "";
@@ -46,26 +54,32 @@ export async function handleStoreSearch(req: any, res: any): Promise<any> {
 
         const nameMatch = name.toLowerCase().includes(searchLower);
         const dbaMatch = dba.toLowerCase().includes(searchLower);
-
-        if (nameMatch || dbaMatch) {
-          return {
-            rowIndex: index + 2,
-            name,
-            dba,
-            link,
-            agentName,
-            address,
-            city,
-            state,
-            isAssigned: !!agentName,
-          };
+        if (!nameMatch && !dbaMatch) {
+          continue;
         }
 
-        return null;
-      })
-      .filter((store) => store !== null);
+        const normalized = normalizeLink(link || `${storeSheet.id}:${i}`);
+        if (seenLinks.has(normalized)) {
+          continue;
+        }
+        seenLinks.add(normalized);
 
-    res.json({ stores: matchingStores, storeSheetId: storeSheet.id });
+        matchingStores.push({
+          rowIndex: i + 1,
+          storeSheetId: storeSheet.id,
+          name,
+          dba,
+          link,
+          agentName,
+          address,
+          city,
+          state,
+          isAssigned: !!agentName,
+        });
+      }
+    }
+
+    res.json({ stores: matchingStores, storeSheetId: storeSheets[0]?.id || null });
   } catch (error: any) {
     console.error("Error searching stores:", error);
     res.status(500).json({ message: error.message || "Failed to search stores" });

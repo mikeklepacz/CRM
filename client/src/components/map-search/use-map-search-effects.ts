@@ -3,6 +3,14 @@ import type { RefObject } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import type { GoogleSheet } from "@/components/map-search/map-search.types";
 
+function normalizeSheetName(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
 interface UseMapSearchEffectsProps {
   activeKeywords: string[];
   activeTypes: string[];
@@ -48,12 +56,16 @@ export function useMapSearchEffects(props: UseMapSearchEffectsProps) {
 
   useEffect(() => {
     if (props.sheetsData?.sheets) {
-      const storeSheet = props.sheetsData.sheets.find((s) => s.sheetPurpose === "Store Database");
+      const storeSheets = props.sheetsData.sheets.filter((s) => s.sheetPurpose === "Store Database");
+      const projectMatchedStoreSheet = props.currentProjectName
+        ? storeSheets.find((s) => normalizeSheetName(s.sheetName || "") === normalizeSheetName(props.currentProjectName || ""))
+        : null;
+      const storeSheet = projectMatchedStoreSheet || storeSheets[0];
       const trackerSheet = props.sheetsData.sheets.find((s) => s.sheetPurpose === "commissions");
       if (storeSheet) props.setStoreSheetId(storeSheet.id);
       if (trackerSheet) props.setTrackerSheetId(trackerSheet.id);
     }
-  }, [props.sheetsData, props.setStoreSheetId, props.setTrackerSheetId]);
+  }, [props.currentProjectName, props.sheetsData, props.setStoreSheetId, props.setTrackerSheetId]);
 
   useEffect(() => {
     if (!props.categoryLoaded && props.lastCategoryData !== undefined && !props.currentProjectName) {

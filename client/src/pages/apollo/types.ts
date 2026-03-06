@@ -28,8 +28,20 @@ export interface ApolloCompany {
   logoUrl: string | null;
   enrichedAt: string;
   creditsUsed: number | null;
+  prescreenContactCount?: number | null;
+  prescreenPeoplePreview?: ApolloPrescreenPersonPreview[] | null;
   contactCount?: number;
   enrichmentStatus?: string | null;
+}
+
+export interface ApolloPrescreenPersonPreview {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  title: string | null;
+  seniority: string | null;
+  hasEmail: boolean;
+  linkedinUrl: string | null;
 }
 
 export interface ApolloContact {
@@ -94,6 +106,9 @@ export interface StoreContact {
   state: string;
   link: string;
   website: string;
+  candidateId?: string;
+  sourceCount?: number;
+  candidateStatus?: "pending" | "approved" | "rejected" | string;
 }
 
 export interface ApolloLeadDiscoveryStats {
@@ -105,6 +120,30 @@ export interface ApolloLeadDiscoveryStats {
   excludedMissingLink: number;
   excludedAlreadyProcessed: number;
   excludedCategoryMismatch: number;
+}
+
+export interface ApolloPrescreenResultRow {
+  candidateId: string;
+  sourceCount: number;
+  candidateStatus: "pending" | "approved" | "rejected" | string;
+  cleanCompanyName: string;
+  representativeLink: string;
+  candidateDomain: string | null;
+  apolloStatus: string | null;
+  apolloName: string | null;
+  apolloDomain: string | null;
+  websiteUrl: string | null;
+  linkedinUrl: string | null;
+  shortDescription: string | null;
+  keywords: string[] | null;
+  employeeCount: number | null;
+  prescreenContactCount: number | null;
+  prescreenPeoplePreview: ApolloPrescreenPersonPreview[] | null;
+  industry: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  updatedAt: string;
 }
 
 export interface BulkPreviewItem {

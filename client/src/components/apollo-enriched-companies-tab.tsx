@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, Linkedin, Users, MoreVertical, Trash2, EyeOff, FilterX } from "lucide-react";
+import { ArrowUpDown, Globe, Linkedin, Loader2, MoreVertical, Trash2, EyeOff, FilterX, Users } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { VoipCallButton } from "@/components/voip-call-button";
@@ -14,14 +17,40 @@ interface ApolloCompany {
   id: string;
   name?: string | null;
   industry?: string | null;
+  keywords?: string[] | null;
+  shortDescription?: string | null;
   employeeCount?: number | null;
   city?: string | null;
   state?: string | null;
+  country?: string | null;
+  websiteUrl?: string | null;
   logoUrl?: string | null;
   linkedinUrl?: string | null;
   enrichedAt?: string | null;
   contactCount?: number | null;
   creditsUsed?: number | null;
+}
+
+type CompanySortField = "enrichedAt" | "name" | "employeeCount" | "city" | "country" | "contactCount" | "creditsUsed";
+type SortDirection = "asc" | "desc";
+
+function safeString(value?: string | null): string {
+  return (value || "").trim();
+}
+
+function compareNullableText(a?: string | null, b?: string | null): number {
+  const aText = safeString(a).toLowerCase();
+  const bText = safeString(b).toLowerCase();
+  if (!aText && !bText) return 0;
+  if (!aText) return 1;
+  if (!bText) return -1;
+  return aText.localeCompare(bText);
+}
+
+function compareNullableNumber(a?: number | null, b?: number | null): number {
+  const aValue = typeof a === "number" ? a : Number.NEGATIVE_INFINITY;
+  const bValue = typeof b === "number" ? b : Number.NEGATIVE_INFINITY;
+  return aValue - bValue;
 }
 
 interface ApolloContact {
@@ -49,6 +78,11 @@ export function ApolloEnrichedCompaniesTab({
 }) {
   const { toast } = useToast();
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [cityFilter, setCityFilter] = useState("all");
+  const [sortField, setSortField] = useState<CompanySortField>("enrichedAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const { data: contacts } = useQuery<ApolloContact[]>({
     queryKey: ["/api/apollo/companies", expandedCompany, "contacts-clean", projectId || "all-projects"],
@@ -133,9 +167,182 @@ export function ApolloEnrichedCompaniesTab({
     );
   }
 
+  const availableCountries = useMemo(
+    () => Array.from(new Set(companies.map((company) => safeString(company.country)).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [companies]
+  );
+
+  const availableCities = useMemo(
+    () => Array.from(new Set(companies.map((company) => safeString(company.city)).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [companies]
+  );
+
+  const filteredCompanies = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    const filtered = companies.filter((company) => {
+      if (countryFilter !== "all" && safeString(company.country) !== countryFilter) {
+        return false;
+      }
+      if (cityFilter !== "all" && safeString(company.city) !== cityFilter) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+
+      const keywordText = (company.keywords || []).join(" ").toLowerCase();
+      const haystack = [
+        company.name,
+        company.industry,
+        company.websiteUrl,
+        company.city,
+        company.state,
+        company.country,
+        company.shortDescription,
+        keywordText,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+
+    filtered.sort((a, b) => {
+      let base = 0;
+      switch (sortField) {
+        case "name":
+          base = compareNullableText(a.name, b.name);
+          break;
+        case "employeeCount":
+          base = compareNullableNumber(a.employeeCount, b.employeeCount);
+          break;
+        case "city":
+          base = compareNullableText(a.city, b.city);
+          break;
+        case "country":
+          base = compareNullableText(a.country, b.country);
+          break;
+        case "contactCount":
+          base = compareNullableNumber(a.contactCount, b.contactCount);
+          break;
+        case "creditsUsed":
+          base = compareNullableNumber(a.creditsUsed, b.creditsUsed);
+          break;
+        case "enrichedAt":
+        default: {
+          const aTime = a.enrichedAt ? new Date(a.enrichedAt).getTime() : Number.NEGATIVE_INFINITY;
+          const bTime = b.enrichedAt ? new Date(b.enrichedAt).getTime() : Number.NEGATIVE_INFINITY;
+          base = aTime - bTime;
+          break;
+        }
+      }
+
+      if (base === 0) {
+        base = compareNullableText(a.name, b.name);
+      }
+
+      return sortDirection === "asc" ? base : -base;
+    });
+
+    return filtered;
+  }, [cityFilter, companies, countryFilter, searchQuery, sortDirection, sortField]);
+
   return (
     <div className="space-y-4">
-      {companies.map((company) => (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Enriched Company Explorer</CardTitle>
+          <CardDescription>
+            Search and sort enriched companies by name, employee size, location, contacts, and credits.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px_220px_120px]">
+            <div className="space-y-1">
+              <Label htmlFor="apollo-enriched-search">Search</Label>
+              <Input
+                id="apollo-enriched-search"
+                placeholder="Company, industry, city, country, keyword..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Country</Label>
+              <Select value={countryFilter} onValueChange={setCountryFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All countries" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All countries</SelectItem>
+                  {availableCountries.map((country) => (
+                    <SelectItem key={country} value={country}>
+                      {country}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>City</Label>
+              <Select value={cityFilter} onValueChange={setCityFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All cities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All cities</SelectItem>
+                  {availableCities.map((city) => (
+                    <SelectItem key={city} value={city}>
+                      {city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Sort by</Label>
+              <Select value={sortField} onValueChange={(value) => setSortField(value as CompanySortField)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="enrichedAt">Enriched Date</SelectItem>
+                  <SelectItem value="name">Company Name</SelectItem>
+                  <SelectItem value="employeeCount">Employees</SelectItem>
+                  <SelectItem value="city">City</SelectItem>
+                  <SelectItem value="country">Country</SelectItem>
+                  <SelectItem value="contactCount">Contact Count</SelectItem>
+                  <SelectItem value="creditsUsed">Credits Used</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Order</Label>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
+              >
+                <ArrowUpDown className="h-4 w-4 mr-2" />
+                {sortDirection === "asc" ? "Ascending" : "Descending"}
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Showing {filteredCompanies.length} of {companies.length} companies
+          </p>
+        </CardContent>
+      </Card>
+
+      {filteredCompanies.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No enriched companies match the current search and filters.
+          </CardContent>
+        </Card>
+      ) : (
+        filteredCompanies.map((company) => (
         <Card key={company.id}>
           <CardHeader className="cursor-pointer hover-elevate" onClick={() => setExpandedCompany(expandedCompany === company.id ? null : company.id)}>
             <div className="flex items-center justify-between gap-3">
@@ -153,7 +360,9 @@ export function ApolloEnrichedCompaniesTab({
                     )}
                   </CardTitle>
                   <CardDescription>
-                    {company.industry} · {company.employeeCount} employees · {company.city}, {company.state}
+                    {[company.industry, company.employeeCount ? `${company.employeeCount.toLocaleString()} employees` : null, [company.city, company.state, company.country].filter(Boolean).join(", ")]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </CardDescription>
                 </div>
               </div>
@@ -186,6 +395,44 @@ export function ApolloEnrichedCompaniesTab({
           </CardHeader>
           {expandedCompany === company.id && (
             <CardContent>
+              <div className="grid gap-3 md:grid-cols-2 mb-4">
+                <div className="rounded-md border p-3">
+                  <p className="text-xs uppercase text-muted-foreground tracking-wide">About</p>
+                  <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+                    {company.shortDescription || "No company summary available from Apollo."}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3 space-y-2">
+                  <p className="text-xs uppercase text-muted-foreground tracking-wide">Company Details</p>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <div>{[company.city, company.state, company.country].filter(Boolean).join(", ") || "Location unavailable"}</div>
+                    {company.websiteUrl ? (
+                      <a
+                        href={company.websiteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        <Globe className="h-3.5 w-3.5" />
+                        Website
+                      </a>
+                    ) : (
+                      <div>Website unavailable</div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {(company.keywords || []).length > 0 ? (
+                      (company.keywords || []).slice(0, 12).map((keyword) => (
+                        <Badge key={`${company.id}-${keyword}`} variant="secondary" className="text-xs">
+                          {keyword}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground">No keywords available</span>
+                    )}
+                  </div>
+                </div>
+              </div>
               <h4 className="font-medium mb-3">Contacts</h4>
               {contacts && contacts.length > 0 ? (
                 <Table>
@@ -244,7 +491,8 @@ export function ApolloEnrichedCompaniesTab({
             </CardContent>
           )}
         </Card>
-      ))}
+      ))
+      )}
     </div>
   );
 }

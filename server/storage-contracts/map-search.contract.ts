@@ -11,9 +11,19 @@ export interface MapSearchStorageContract {
   recordImportedPlace(placeId: string, tenantId: string): Promise<void>;
 
   // Search History operations
-  getAllSearchHistory(): Promise<SearchHistory[]>;
-  recordSearch(tenantId: string, businessType: string, city: string, state: string, country: string, excludedKeywords?: string[], excludedTypes?: string[], category?: string): Promise<SearchHistory>;
-  deleteSearchHistory(id: string): Promise<void>;
+  getAllSearchHistory(tenantId: string, projectId?: string): Promise<SearchHistory[]>;
+  recordSearch(
+    tenantId: string,
+    businessType: string,
+    city: string,
+    state: string,
+    country: string,
+    excludedKeywords?: string[],
+    excludedTypes?: string[],
+    category?: string,
+    projectId?: string
+  ): Promise<SearchHistory>;
+  deleteSearchHistory(id: string, tenantId: string): Promise<void>;
 
   // Saved Exclusions operations
   getAllSavedExclusions(tenantId: string, projectId?: string): Promise<SavedExclusion[]>;

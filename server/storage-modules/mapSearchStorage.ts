@@ -23,8 +23,18 @@ export async function recordImportedPlaceStorage(placeId: string, tenantId: stri
   await db.insert(importedPlaces).values({ placeId, tenantId }).onConflictDoNothing();
 }
 
-export async function getAllSearchHistoryStorage(): Promise<SearchHistory[]> {
-  const history = await db.select().from(searchHistory).orderBy(desc(searchHistory.searchedAt));
+export async function getAllSearchHistoryStorage(
+  tenantId: string,
+  projectId?: string
+): Promise<SearchHistory[]> {
+  const whereClause = projectId
+    ? and(eq(searchHistory.tenantId, tenantId), eq(searchHistory.projectId, projectId))
+    : eq(searchHistory.tenantId, tenantId);
+  const history = await db
+    .select()
+    .from(searchHistory)
+    .where(whereClause)
+    .orderBy(desc(searchHistory.searchedAt));
   return history;
 }
 
@@ -36,8 +46,13 @@ export async function recordSearchStorage(
   country: string,
   excludedKeywords: string[] = [],
   excludedTypes: string[] = [],
-  category?: string
+  category?: string,
+  projectId?: string
 ): Promise<SearchHistory> {
+  const projectScopeCondition = projectId
+    ? eq(searchHistory.projectId, projectId)
+    : isNull(searchHistory.projectId);
+
   const [existing] = await db
     .select()
     .from(searchHistory)
@@ -47,7 +62,8 @@ export async function recordSearchStorage(
         eq(searchHistory.businessType, businessType),
         eq(searchHistory.city, city),
         eq(searchHistory.state, state),
-        eq(searchHistory.country, country)
+        eq(searchHistory.country, country),
+        projectScopeCondition
       )
     );
 
@@ -70,6 +86,7 @@ export async function recordSearchStorage(
       .values({
         tenantId,
         businessType,
+        projectId: projectId || null,
         city,
         state,
         country,

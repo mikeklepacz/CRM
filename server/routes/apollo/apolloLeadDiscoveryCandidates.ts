@@ -15,6 +15,7 @@ export type LeadDiscoveryResponse = {
     allLinks?: string[];
     candidateId?: string;
     sourceCount?: number;
+    candidateStatus?: "pending" | "approved" | "rejected" | string;
   }>;
   stats: {
     source: "apollo_candidates" | "store_sheet" | "qualification_leads" | "none";
@@ -46,8 +47,13 @@ export async function loadCandidateQueueLeadDiscovery(
     | null = null;
 
   if (candidateCount === 0) {
-    queueStats = await rebuildApolloCandidatesFromStoreSheet(tenantId, projectId);
-    candidateCount = queueStats.candidates;
+    try {
+      queueStats = await rebuildApolloCandidatesFromStoreSheet(tenantId, projectId);
+      candidateCount = queueStats.candidates;
+    } catch (error) {
+      console.warn("[Apollo] Candidate queue rebuild failed, falling back to direct lead discovery source:", error);
+      return null;
+    }
   }
 
   if (candidateCount === 0) {
@@ -67,6 +73,7 @@ export async function loadCandidateQueueLeadDiscovery(
       allLinks: [candidate.representativeLink],
       candidateId: candidate.id,
       sourceCount: candidate.sourceCount,
+      candidateStatus: candidate.status,
     })),
     stats: {
       source: "apollo_candidates",

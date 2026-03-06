@@ -22,16 +22,30 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseG
     let city = "";
     let state = "";
     let country = "";
+    let adminAreaLevel2 = "";
+    let sublocality = "";
 
     for (const component of addressComponents) {
-      if (component.types.includes("locality")) {
+      if (component.types.includes("locality") || component.types.includes("postal_town")) {
         city = component.long_name;
+      } else if (component.types.includes("administrative_area_level_2")) {
+        adminAreaLevel2 = component.long_name;
+      } else if (
+        component.types.includes("sublocality") ||
+        component.types.includes("sublocality_level_1") ||
+        component.types.includes("neighborhood")
+      ) {
+        sublocality = component.long_name;
       } else if (component.types.includes("administrative_area_level_1")) {
         const stateAbbr = component.short_name;
         state = STATE_ABBREVIATIONS[stateAbbr.toUpperCase()] || component.long_name;
       } else if (component.types.includes("country")) {
         country = component.long_name;
       }
+    }
+
+    if (!city) {
+      city = adminAreaLevel2 || sublocality;
     }
 
     return {

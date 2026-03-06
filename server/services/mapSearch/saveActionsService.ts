@@ -1,10 +1,62 @@
 import * as googleMaps from "../../googleMaps";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../sheets/a1Range";
+import { resolveStoreDatabaseSheet } from "../sheets/storeDatabaseResolver";
+
+const RETRYABLE_HTTP_CODES = new Set([408, 429, 500, 502, 503, 504]);
 
 function formatHours(weekdayText?: string[]): string {
   if (!weekdayText || weekdayText.length === 0) return "";
   return weekdayText[0] || "";
+}
+
+function normalizeWebsite(url?: string | null): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+
+  try {
+    const parsed = new URL(trimmed);
+    return `${parsed.protocol}//${parsed.hostname}`;
+  } catch {
+    return trimmed;
+  }
+}
+
+function isRetryableError(error: any): boolean {
+  const status = Number(error?.status || error?.code || error?.response?.status);
+  if (Number.isFinite(status) && RETRYABLE_HTTP_CODES.has(status)) {
+    return true;
+  }
+
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("quota") ||
+    message.includes("rate limit") ||
+    message.includes("too many requests") ||
+    message.includes("backenderror") ||
+    message.includes("internal error")
+  );
+}
+
+async function withRetry<T>(operation: () => Promise<T>, maxAttempts = 4): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      if (!isRetryableError(error) || attempt === maxAttempts) {
+        throw error;
+      }
+      const delayMs = 250 * 2 ** (attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw lastError;
 }
 
 export async function saveMapPlaceToStoreSheet(params: {
@@ -14,9 +66,12 @@ export async function saveMapPlaceToStoreSheet(params: {
   projectId?: string;
 }): Promise<{ message: string; place: any }> {
   const { placeId, tenantId, category, projectId } = params;
-  const placeDetails = await googleMaps.getPlaceDetails(placeId);
+  const placeDetails = await withRetry(() => googleMaps.getPlaceDetails(placeId));
   if (!placeDetails) {
     throw new Error("Place not found");
+  }
+  if (placeDetails.business_status === "CLOSED_PERMANENTLY") {
+    throw new Error("Cannot import permanently closed business");
   }
 
   const { street, city, state, zip, country } = googleMaps.extractAddressFromComponents(
@@ -39,19 +94,26 @@ export async function saveMapPlaceToStoreSheet(params: {
     await storage.getOrCreateCategoryByName(tenantId, effectiveCategory.trim(), projectId);
   }
 
-  const sheets = await storage.getAllActiveGoogleSheets(tenantId);
-  const storeSheet = sheets.find((sheet) => sheet.sheetPurpose === "Store Database");
+  const storeSheet = await resolveStoreDatabaseSheet({
+    tenantId,
+    projectId,
+    preferProjectMatch: true,
+    requireProjectMatch: !!projectId,
+  });
   if (!storeSheet) {
+    if (projectId) {
+      throw new Error("Store Database sheet for this project not found. Create or connect a matching tab first.");
+    }
     throw new Error("Store Database sheet not found. Please connect a Google Sheet first.");
   }
 
-  const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-  const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-  if (!storeRows || storeRows.length === 0) {
+  const headerRange = buildSheetRange(storeSheet.sheetName, "1:1");
+  const headerRows = await withRetry(() => googleSheets.readSheetData(storeSheet.spreadsheetId, headerRange));
+  if (!headerRows || headerRows.length === 0) {
     throw new Error("Store Database sheet is empty or has no headers");
   }
 
-  const allHeaders = storeRows[0];
+  const allHeaders = headerRows[0];
   const headers = allHeaders.filter((header) => header && header.trim() !== "");
   const findColumnIndex = (columnName: string) =>
     headers.findIndex((header: string) => header.toLowerCase() === columnName.toLowerCase());
@@ -79,13 +141,15 @@ export async function saveMapPlaceToStoreSheet(params: {
   if (stateIndex !== -1) row[stateIndex] = state;
   if (zipIndex !== -1) row[zipIndex] = zip;
   if (phoneIndex !== -1) row[phoneIndex] = placeDetails.formatted_phone_number || placeDetails.international_phone_number || "";
-  if (websiteIndex !== -1) row[websiteIndex] = placeDetails.website || "";
+  if (websiteIndex !== -1) row[websiteIndex] = normalizeWebsite(placeDetails.website);
   if (hoursIndex !== -1) row[hoursIndex] = formatHours(placeDetails.opening_hours?.weekday_text);
   if (openIndex !== -1) row[openIndex] = placeDetails.business_status === "OPERATIONAL" ? "TRUE" : "FALSE";
   if (categoryIndex !== -1) row[categoryIndex] = effectiveCategory;
   if (countryIndex !== -1) row[countryIndex] = country;
 
-  await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [row]);
+  await withRetry(() =>
+    googleSheets.appendSheetData(storeSheet.spreadsheetId, buildSheetRange(storeSheet.sheetName, "A:ZZ"), [row])
+  );
   await storage.recordImportedPlace(placeId, tenantId);
 
   return {
@@ -105,9 +169,12 @@ export async function saveMapPlaceToQualification(params: {
   projectId?: string;
 }): Promise<{ message: string; lead: any }> {
   const { placeId, tenantId, category, projectId } = params;
-  const placeDetails = await googleMaps.getPlaceDetails(placeId);
+  const placeDetails = await withRetry(() => googleMaps.getPlaceDetails(placeId));
   if (!placeDetails) {
     throw new Error("Place not found");
+  }
+  if (placeDetails.business_status === "CLOSED_PERMANENTLY") {
+    throw new Error("Cannot import permanently closed business");
   }
 
   const { street, city, state, zip, country: extractedCountry } = googleMaps.extractAddressFromComponents(
@@ -144,7 +211,8 @@ export async function saveMapPlaceToQualification(params: {
   const leadData = {
     tenantId,
     company: placeDetails.name || "Unknown Business",
-    website: placeDetails.website || null,
+    website: normalizeWebsite(placeDetails.website) || null,
+    googleMapsUrl: placeDetails.url || null,
     category: effectiveCategory || null,
     projectId: projectId || null,
     pocPhone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || null,
@@ -154,6 +222,10 @@ export async function saveMapPlaceToQualification(params: {
     postalCode: zip || null,
     country,
     countryCode,
+    latitude: placeDetails.geometry?.location?.lat != null ? String(placeDetails.geometry.location.lat) : null,
+    longitude: placeDetails.geometry?.location?.lng != null ? String(placeDetails.geometry.location.lng) : null,
+    businessStatus: placeDetails.business_status || null,
+    businessHours: placeDetails.opening_hours?.weekday_text?.join(" | ") || null,
     source: "map_search",
     callStatus: "pending",
     tags: placeDetails.types || [],

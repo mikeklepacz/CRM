@@ -8,7 +8,7 @@ type Deps = {
 export function registerStoreByLinkRoutes(app: Express, deps: Deps): void {
   app.get("/api/stores/by-link", deps.isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const { link } = req.query;
+      const { link, projectId, sheetId } = req.query;
       if (!link) {
         return res.status(400).json({ error: "Link parameter is required" });
       }
@@ -16,6 +16,8 @@ export function registerStoreByLinkRoutes(app: Express, deps: Deps): void {
       const payload = await getStoreByLink({
         link: String(link),
         tenantId: req.user.tenantId,
+        projectId: typeof projectId === "string" ? projectId : undefined,
+        sheetId: typeof sheetId === "string" ? sheetId : undefined,
       });
 
       res.json(payload);

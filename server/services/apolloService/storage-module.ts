@@ -239,20 +239,27 @@ export async function isCompanyEnriched(tenantId: string, googleSheetLink: strin
   return (result[0]?.count || 0) > 0;
 }
 
-export async function bulkCheckEnrichmentStatus(tenantId: string, links: string[]): Promise<Record<string, string | null>> {
+export async function bulkCheckEnrichmentStatus(
+  tenantId: string,
+  links: string[],
+  projectId?: string,
+): Promise<Record<string, string | null>> {
   if (links.length === 0) return {};
 
   console.log(`[Apollo Check] Checking ${links.length} links for tenant ${tenantId}`);
 
+  const conditions = [
+    eq(apolloCompanies.tenantId, tenantId),
+    sql`${apolloCompanies.googleSheetLink} = ANY(${sql.raw(`ARRAY[${links.map((l) => `'${l.replace(/'/g, "''")}'`).join(",")}]`)})`,
+  ];
+  if (projectId) {
+    conditions.push(eq(apolloCompanies.projectId, projectId));
+  }
+
   const companies = await db
     .select({ link: apolloCompanies.googleSheetLink, status: apolloCompanies.enrichmentStatus })
     .from(apolloCompanies)
-    .where(
-      and(
-        eq(apolloCompanies.tenantId, tenantId),
-        sql`${apolloCompanies.googleSheetLink} = ANY(${sql.raw(`ARRAY[${links.map((l) => `'${l.replace(/'/g, "''")}'`).join(",")}]`)})`,
-      ),
-    );
+    .where(and(...conditions));
 
   console.log(`[Apollo Check] Found ${companies.length} matching companies in DB`);
   companies.forEach((c) => console.log(`[Apollo Check] DB match: ${c.link?.substring(0, 60)}... -> ${c.status}`));

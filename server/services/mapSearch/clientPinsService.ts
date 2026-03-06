@@ -3,6 +3,7 @@ import { geocodeCache as geocodeCacheTable } from "@shared/schema";
 import { db } from "../../db";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../sheets/a1Range";
 
 type GeocodeFn = (address: string) => Promise<{ lat: number; lng: number } | null>;
 type PrimeCacheFn = (address: string, coords: { lat: number; lng: number }) => void;
@@ -46,8 +47,8 @@ export async function buildClientPins(
     throw new Error("One or both sheets not found");
   }
 
-  const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-  const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+  const storeRange = buildSheetRange(storeSheet.sheetName, "A:ZZ");
+  const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
   const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
   const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 

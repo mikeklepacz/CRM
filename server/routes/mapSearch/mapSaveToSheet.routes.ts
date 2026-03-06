@@ -21,10 +21,16 @@ export function registerMapSaveToSheetRoute(app: Express, deps: MapSearchSaveAct
       if (error.message === "Place not found") {
         return res.status(404).json({ message: "Place not found" });
       }
+      if (error.message === "Cannot import permanently closed business") {
+        return res.status(400).json({ message: error.message });
+      }
       if (error.message === "Category or valid projectId is required") {
         return res.status(400).json({ message: error.message });
       }
       if (error.message === "Store Database sheet not found. Please connect a Google Sheet first.") {
+        return res.status(404).json({ message: error.message });
+      }
+      if (error.message === "Store Database sheet for this project not found. Create or connect a matching tab first.") {
         return res.status(404).json({ message: error.message });
       }
       console.error("Error saving place to sheet:", error);

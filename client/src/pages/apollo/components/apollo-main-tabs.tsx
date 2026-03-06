@@ -8,27 +8,29 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApolloEnrichedCompaniesTab } from "@/components/apollo-enriched-companies-tab";
 import { ApolloEnrichLeadsTable } from "@/components/apollo-enrich-leads-table";
 import { ApolloNotFoundTab } from "@/components/apollo-not-found-tab";
-import type { ApolloCompany, ApolloLeadDiscoveryStats, StoreContact } from "../types";
-
+import { ApolloPrescreenResultsTab } from "./apollo-prescreen-results-tab";
+import type { ApolloCompany, ApolloLeadDiscoveryStats, ApolloPrescreenResultRow, StoreContact } from "../types";
 type EnrichedCompanyRow = ComponentProps<typeof ApolloEnrichedCompaniesTab>["companies"][number];
-
 type ApolloMainTabsProps = {
   activeTab: string;
   onActiveTabChange: (tab: string) => void;
   enrichedCount: number;
   notFoundCount: number;
+  prescreenCount: number;
   notFoundCompanies?: ApolloCompany[];
   notFoundLoading: boolean;
   companies: EnrichedCompanyRow[];
   companiesLoading: boolean;
   projectId?: string;
   projectName?: string;
+  projectLoading?: boolean;
   storeLoading: boolean;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   onOpenManualAdd: () => void;
   onPrescreenAll: () => void;
   isPrescreening: boolean;
+  prescreenProgress?: { current: number; total: number };
   contactsNeedingPrescreenCount: number;
   selectedLinksSize: number;
   onStartReviewQueue: () => void;
@@ -43,25 +45,31 @@ type ApolloMainTabsProps = {
   enrichmentStatus?: Record<string, string | null>;
   failedEnrichmentLinks: Set<string>;
   leadDiscoveryStats?: ApolloLeadDiscoveryStats;
+  prescreenRows: ApolloPrescreenResultRow[];
+  prescreenLoading: boolean;
+  onSetPrescreenDecision: (candidateId: string, decision: "approved" | "rejected") => void;
+  isSavingPrescreenDecision: boolean;
 };
-
 export function ApolloMainTabs({
   activeTab,
   onActiveTabChange,
   enrichedCount,
   notFoundCount,
+  prescreenCount,
   notFoundCompanies,
   notFoundLoading,
   companies,
   companiesLoading,
   projectId,
   projectName,
+  projectLoading = false,
   storeLoading,
   searchQuery,
   onSearchQueryChange,
   onOpenManualAdd,
   onPrescreenAll,
   isPrescreening,
+  prescreenProgress,
   contactsNeedingPrescreenCount,
   selectedLinksSize,
   onStartReviewQueue,
@@ -76,9 +84,35 @@ export function ApolloMainTabs({
   enrichmentStatus,
   failedEnrichmentLinks,
   leadDiscoveryStats,
+  prescreenRows,
+  prescreenLoading,
+  onSetPrescreenDecision,
+  isSavingPrescreenDecision,
 }: ApolloMainTabsProps) {
+  const progressCurrent = prescreenProgress?.current || 0;
+  const progressTotal = prescreenProgress?.total || 0;
+  const progressPercent = progressTotal > 0 ? Math.round((progressCurrent / progressTotal) * 100) : 0;
+  const progressRemaining = progressTotal > 0 ? Math.max(0, progressTotal - progressCurrent) : 0;
+  const approvedDecisionCount = prescreenRows.filter((row) => row.candidateStatus === "approved").length;
+  const pendingDecisionCount = prescreenRows.filter((row) => row.candidateStatus === "pending").length;
   return (
     <Tabs value={activeTab} onValueChange={onActiveTabChange}>
+      {isPrescreening && progressTotal > 0 && (
+        <div className="mb-3 border rounded-md p-3 bg-muted/30">
+          <div className="text-sm font-medium">
+            Pre-screen running: {progressCurrent} / {progressTotal} checked ({progressPercent}%)
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Remaining: {progressRemaining}
+          </div>
+          <div className="h-1.5 bg-muted rounded overflow-hidden mt-2">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${Math.min(100, progressPercent)}%` }}
+            />
+          </div>
+        </div>
+      )}
       <TabsList>
         <TabsTrigger value="enrich" data-testid="tab-enrich">
           <Search className="h-4 w-4 mr-2" />
@@ -91,6 +125,10 @@ export function ApolloMainTabs({
         <TabsTrigger value="not-found" data-testid="tab-not-found">
           <AlertCircle className="h-4 w-4 mr-2" />
           Not Found ({notFoundCount})
+        </TabsTrigger>
+        <TabsTrigger value="prescreen" data-testid="tab-prescreen">
+          <Eye className="h-4 w-4 mr-2" />
+          Pre-screen ({prescreenCount})
         </TabsTrigger>
       </TabsList>
 
@@ -161,9 +199,27 @@ export function ApolloMainTabs({
                 )}
               </div>
             </div>
+            {isPrescreening && prescreenProgress && prescreenProgress.total > 0 && (
+              <div className="mt-3 space-y-1">
+                <div className="text-xs text-muted-foreground">
+                  Pre-screen progress: {prescreenProgress.current} / {prescreenProgress.total} (
+                  {Math.round((prescreenProgress.current / prescreenProgress.total) * 100)}%)
+                </div>
+                <div className="h-1.5 bg-muted rounded overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${Math.min(100, Math.round((prescreenProgress.current / prescreenProgress.total) * 100))}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-            {!projectId ? (
+            {projectLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : !projectId ? (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
@@ -179,6 +235,13 @@ export function ApolloMainTabs({
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
                   <div>No contacts to enrich for project "{projectName}".</div>
+                  {leadDiscoveryStats?.source === "apollo_candidates" && pendingDecisionCount > 0 && (
+                    <div className="mt-2 text-xs">
+                      {approvedDecisionCount > 0
+                        ? `Approved: ${approvedDecisionCount}. Pending pre-screen decisions: ${pendingDecisionCount}.`
+                        : `Pre-screen decisions are still pending for ${pendingDecisionCount} companies. Mark rows as "Valid" in Pre-screen to move them into Enrich Leads.`}
+                    </div>
+                  )}
                   {leadDiscoveryStats && (
                     <div className="mt-2 text-xs text-muted-foreground space-y-1">
                       <div>
@@ -214,7 +277,6 @@ export function ApolloMainTabs({
           </CardContent>
         </Card>
       </TabsContent>
-
       <TabsContent value="enriched" className="space-y-4">
         <ApolloEnrichedCompaniesTab
           companies={companies}
@@ -222,9 +284,19 @@ export function ApolloMainTabs({
           projectId={projectId}
         />
       </TabsContent>
-
       <TabsContent value="not-found" className="space-y-4">
         <ApolloNotFoundTab companies={notFoundCompanies} isLoading={notFoundLoading} projectId={projectId} />
+      </TabsContent>
+      <TabsContent value="prescreen" className="space-y-4">
+        <ApolloPrescreenResultsTab
+          projectId={projectId}
+          isLoading={prescreenLoading}
+          rows={prescreenRows}
+          onDecision={onSetPrescreenDecision}
+          isSavingDecision={isSavingPrescreenDecision}
+          isPrescreening={isPrescreening}
+          prescreenProgress={prescreenProgress}
+        />
       </TabsContent>
     </Tabs>
   );

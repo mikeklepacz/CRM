@@ -12,10 +12,13 @@ export default function MapSearchSettings() {
   const { toast } = useToast();
   const projectContext = useOptionalProject();
   const currentProject = projectContext?.currentProject;
+  const searchHistoryUrl = currentProject?.id
+    ? `/api/maps/search-history?projectId=${currentProject.id}`
+    : "/api/maps/search-history";
 
   // Fetch search history
   const { data: historyData, isLoading: historyLoading } = useQuery<{ history: SearchHistory[] }>({
-    queryKey: ['/api/maps/search-history'],
+    queryKey: [searchHistoryUrl],
   });
 
   // Fetch saved exclusions (project-specific)
@@ -32,7 +35,7 @@ export default function MapSearchSettings() {
       return apiRequest('DELETE', `/api/maps/search-history/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/maps/search-history'] });
+      queryClient.invalidateQueries({ queryKey: [searchHistoryUrl] });
       toast({
         title: "Deleted",
         description: "Search history entry removed successfully",

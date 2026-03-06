@@ -10,14 +10,18 @@ import { ApolloWorkflowDialogs } from "./apollo/components/apollo-workflow-dialo
 import { ManualAddDialog } from "./apollo/components/manual-add-dialog";
 import { useApolloBulkReview } from "./apollo/hooks/use-apollo-bulk-review";
 import { useApolloLeadsWorkflow } from "./apollo/hooks/use-apollo-leads-workflow";
+import { useApolloLeadDiscovery } from "./apollo/hooks/use-apollo-lead-discovery";
 import { useApolloManualAdd } from "./apollo/hooks/use-apollo-manual-add";
+import { useApolloNotFoundCompanies } from "./apollo/hooks/use-apollo-not-found-companies";
+import { useApolloPrescreenResults } from "./apollo/hooks/use-apollo-prescreen-results";
 import { useApolloPreviewWorkflow } from "./apollo/hooks/use-apollo-preview-workflow";
-import type { ApolloCompany, ApolloLeadDiscoveryStats, ApolloSettings, StoreContact } from "./apollo/types";
+import type { ApolloSettings } from "./apollo/types";
 
 export default function Apollo() {
   const { toast } = useToast();
   const projectContext = useOptionalProject();
   const currentProject = projectContext?.currentProject;
+  const isProjectLoading = projectContext?.isLoading ?? false;
   const [activeTab, setActiveTab] = useState("enrich");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -28,24 +32,7 @@ export default function Apollo() {
 
   const { data: enrichedCompanies, isLoading: companiesLoading } = useApolloEnrichedCompanies(currentProject?.id);
 
-  const { data: storeContacts, isLoading: storeLoading } = useQuery<{
-    contacts: StoreContact[];
-    stats?: ApolloLeadDiscoveryStats;
-  }>({
-    queryKey: ["/api/apollo/leads-without-emails", currentProject?.id],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (currentProject?.id) {
-        params.set("projectId", currentProject.id);
-      }
-      const response = await fetch(`/api/apollo/leads-without-emails?${params.toString()}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch leads");
-      return response.json();
-    },
-    enabled: !!currentProject,
-  });
+  const { data: storeContacts, isLoading: storeLoading } = useApolloLeadDiscovery(currentProject?.id);
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: Partial<ApolloSettings>) => {
@@ -62,25 +49,29 @@ export default function Apollo() {
   });
 
   const { data: enrichmentStatus } = useQuery<Record<string, string | null>>({
-    queryKey: ["/api/apollo/check-enrichment", storeContacts?.contacts?.map(c => c.link)],
+    queryKey: ["/api/apollo/check-enrichment", currentProject?.id, storeContacts?.contacts?.map(c => c.link)],
     queryFn: async () => {
       const links = storeContacts?.contacts?.map(c => c.link).filter(Boolean) || [];
       if (links.length === 0) return {};
-      const response = await apiRequest("POST", "/api/apollo/check-enrichment", { links });
+      const response = await apiRequest("POST", "/api/apollo/check-enrichment", {
+        links,
+        projectId: currentProject?.id,
+      });
       return response as Record<string, string | null>;
     },
-    enabled: !!storeContacts?.contacts?.length,
+    enabled: !!currentProject?.id && !!storeContacts?.contacts?.length,
   });
 
-  const { data: notFoundCompanies, isLoading: notFoundLoading } = useQuery<ApolloCompany[]>({
-    queryKey: ["/api/apollo/companies/not-found", currentProject?.id],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (currentProject?.id) params.set("projectId", currentProject.id);
-      const response = await fetch(`/api/apollo/companies/not-found?${params.toString()}`, { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch not found companies");
-      return response.json();
-    },
+  const { data: notFoundCompanies, isLoading: notFoundLoading } = useApolloNotFoundCompanies(currentProject?.id);
+
+  const {
+    prescreenResults,
+    prescreenLoading,
+    setPrescreenDecision,
+    isSavingPrescreenDecision,
+  } = useApolloPrescreenResults({
+    currentProjectId: currentProject?.id,
+    toast,
   });
 
   const {
@@ -141,6 +132,7 @@ export default function Apollo() {
 
   const {
     isPrescreening,
+    prescreenProgress,
     failedEnrichmentLinks,
     notEnrichedContacts,
     contactsNeedingPrescreen,
@@ -194,18 +186,21 @@ export default function Apollo() {
         onActiveTabChange={setActiveTab}
         enrichedCount={(enrichedCompanies || []).filter((c) => (c.contactCount || 0) > 0).length}
         notFoundCount={notFoundCompanies?.length || 0}
+        prescreenCount={prescreenResults?.results?.length || 0}
         notFoundCompanies={notFoundCompanies}
         notFoundLoading={notFoundLoading}
         companies={(enrichedCompanies || []).filter((c) => (c.contactCount || 0) > 0)}
         companiesLoading={companiesLoading}
         projectId={currentProject?.id}
         projectName={currentProject?.name}
+        projectLoading={isProjectLoading}
         storeLoading={storeLoading}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
         onOpenManualAdd={() => setManualAddOpen(true)}
         onPrescreenAll={handlePrescreenAll}
         isPrescreening={isPrescreening}
+        prescreenProgress={prescreenProgress}
         contactsNeedingPrescreenCount={contactsNeedingPrescreen.length}
         selectedLinksSize={selectedLinks.size}
         onStartReviewQueue={handleStartReviewQueue}
@@ -220,6 +215,10 @@ export default function Apollo() {
         enrichmentStatus={enrichmentStatus}
         failedEnrichmentLinks={failedEnrichmentLinks}
         leadDiscoveryStats={storeContacts?.stats}
+        prescreenRows={prescreenResults?.results || []}
+        prescreenLoading={prescreenLoading}
+        onSetPrescreenDecision={setPrescreenDecision}
+        isSavingPrescreenDecision={isSavingPrescreenDecision}
       />
 
       <ApolloWorkflowDialogs

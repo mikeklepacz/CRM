@@ -1,5 +1,7 @@
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
+import { findStoreSheetRowByLink } from "../../services/sheets/storeDatabaseResolver";
 
 type Deps = {
   isAuthenticatedCustom: any;
@@ -15,17 +17,23 @@ export function buildStoreDetailsUpdateHandler(_deps: Deps) {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { storeId } = req.params;
       const updates = req.body;
+      const projectId = typeof req.query?.projectId === "string" ? req.query.projectId : undefined;
 
       const sheets = await storage.getAllActiveGoogleSheets(req.user.tenantId);
-      const storeSheet = sheets.find((s) => s.sheetPurpose === "Store Database");
+      const storeMatch = await findStoreSheetRowByLink({
+        tenantId: req.user.tenantId,
+        link: decodeURIComponent(storeId),
+        projectId,
+        preferProjectMatch: true,
+      });
+      const storeSheet = storeMatch?.sheet || null;
 
       if (!storeSheet) {
         return res.status(404).json({ message: "Store sheet not found" });
       }
 
       const decodedId = decodeURIComponent(storeId);
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      const storeRows = storeMatch?.rows || [];
 
       if (storeRows.length === 0) {
         return res.status(404).json({ message: "Store sheet is empty" });
@@ -40,7 +48,7 @@ export function buildStoreDetailsUpdateHandler(_deps: Deps) {
         return obj;
       });
 
-      const store = storeData.find((row: any) => row.link === decodedId);
+      const store = storeData.find((row: any) => row._storeRowIndex === storeMatch?.rowIndex);
       if (!store || !store._storeRowIndex) {
         return res.status(404).json({ message: "Store not found or has no row index" });
       }
@@ -77,14 +85,14 @@ export function buildStoreDetailsUpdateHandler(_deps: Deps) {
       Object.entries(updates).forEach(([field, value]) => {
         const columnName = storeColumnMapping[field];
         if (columnName) {
-          const columnIndex = storeHeaders.findIndex((h) => h.toLowerCase() === columnName.toLowerCase());
-          if (columnIndex !== -1) {
-            const columnLetter = String.fromCharCode(65 + columnIndex);
-            storeBatchUpdates.push({
-              range: `${storeSheet.sheetName}!${columnLetter}${store._storeRowIndex}`,
-              values: [[value]],
-            });
-          }
+            const columnIndex = storeHeaders.findIndex((h) => h.toLowerCase() === columnName.toLowerCase());
+            if (columnIndex !== -1) {
+              const columnLetter = String.fromCharCode(65 + columnIndex);
+              storeBatchUpdates.push({
+              range: buildSheetRange(storeSheet.sheetName, `${columnLetter}${store._storeRowIndex}`),
+                values: [[value]],
+              });
+            }
         }
       });
 
@@ -100,7 +108,7 @@ export function buildStoreDetailsUpdateHandler(_deps: Deps) {
         const currentUser = await storage.getUser(userId);
 
         if (currentUser && currentUser.agentName) {
-          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
           const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
           if (trackerRows.length > 0) {
@@ -142,10 +150,10 @@ export function buildStoreDetailsUpdateHandler(_deps: Deps) {
                 newRow[statusIndex] = "Claimed";
               }
 
-              const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+              const safeAppendRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
               const response = await googleSheets.appendSheetData(
                 trackerSheet.spreadsheetId,
-                appendRange,
+                safeAppendRange,
                 [newRow]
               );
 
@@ -168,14 +176,14 @@ export function buildStoreDetailsUpdateHandler(_deps: Deps) {
               Object.entries(updates).forEach(([field, value]) => {
                 const columnName = trackerColumnMapping[field];
                 if (columnName) {
-                  const columnIndex = trackerHeaders.findIndex((h) => h.toLowerCase() === columnName.toLowerCase());
-                  if (columnIndex !== -1) {
-                    const columnLetter = String.fromCharCode(65 + columnIndex);
-                    trackerBatchUpdates.push({
-                      range: `${trackerSheet.sheetName}!${columnLetter}${rowIndex}`,
-                      values: [[value]],
-                    });
-                  }
+                    const columnIndex = trackerHeaders.findIndex((h) => h.toLowerCase() === columnName.toLowerCase());
+                    if (columnIndex !== -1) {
+                      const columnLetter = String.fromCharCode(65 + columnIndex);
+                      trackerBatchUpdates.push({
+                      range: buildSheetRange(trackerSheet.sheetName, `${columnLetter}${rowIndex}`),
+                        values: [[value]],
+                      });
+                    }
                 }
               });
 

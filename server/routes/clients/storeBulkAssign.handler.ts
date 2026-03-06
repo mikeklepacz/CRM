@@ -1,6 +1,7 @@
 import { normalizeLink } from "../../../shared/linkUtils";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
 
 export async function handleStoreBulkAssign(req: any, res: any, deps: any): Promise<any> {
   try {
@@ -21,7 +22,10 @@ export async function handleStoreBulkAssign(req: any, res: any, deps: any): Prom
       return res.status(404).json({ message: "Commission Tracker sheet not found" });
     }
 
-    const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`);
+    const trackerRows = await googleSheets.readSheetData(
+      trackerSheet.spreadsheetId,
+      buildSheetRange(trackerSheet.sheetName, "A:ZZ")
+    );
 
     if (trackerRows.length === 0) {
       return res.status(404).json({ message: "Commission Tracker sheet is empty" });
@@ -54,7 +58,7 @@ export async function handleStoreBulkAssign(req: any, res: any, deps: any): Prom
 
       if (matchesAnyLink) {
         batchUpdates.push({
-          range: `${trackerSheet.sheetName}!${agentColumnLetter}${rowIndex}`,
+          range: buildSheetRange(trackerSheet.sheetName, `${agentColumnLetter}${rowIndex}`),
           values: [[agentName]],
         });
         updatedCount++;

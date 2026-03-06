@@ -13,6 +13,7 @@ export interface ApolloStoreContact {
   state: string;
   link: string;
   website: string;
+  candidateStatus?: "pending" | "approved" | "rejected" | string;
 }
 
 function extractDomain(url: string | undefined): string | null {
@@ -109,6 +110,7 @@ export function ApolloEnrichLeadsTable({
           <TableBody>
             {pageContacts.map((contact) => {
               const status = enrichmentStatus?.[contact.link];
+              const candidateStatus = contact.candidateStatus?.toLowerCase().trim();
               const parsedDomain = extractDomain(contact.website);
               return (
                 <TableRow key={contact.link} data-testid={`row-contact-${contact.link}`}>
@@ -149,6 +151,8 @@ export function ApolloEnrichLeadsTable({
                         <RefreshCw className="h-3 w-3 mr-1" />
                         Retry
                       </Badge>
+                    ) : candidateStatus === "approved" ? (
+                      <Badge variant="default">Approved</Badge>
                     ) : status === "prescreened" ? (
                       <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
                         <Eye className="h-3 w-3 mr-1" />

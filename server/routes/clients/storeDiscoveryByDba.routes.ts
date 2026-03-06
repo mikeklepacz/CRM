@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { StoreDiscoveryRouteDeps } from "./storeDiscovery.types";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
 
 export function registerStoreDiscoveryByDbaRoute(app: Express, deps: StoreDiscoveryRouteDeps): void {
   app.get("/api/stores/by-dba/:sheetId/:dbaName", deps.isAuthenticatedCustom, async (req: any, res) => {
@@ -11,7 +12,7 @@ export function registerStoreDiscoveryByDbaRoute(app: Express, deps: StoreDiscov
           if (!sheet) {
               return res.status(404).json({ message: "Sheet not found" });
           }
-          const range = `${sheet.sheetName}!A:ZZ`;
+          const range = buildSheetRange(sheet.sheetName, "A:ZZ");
           const rows = await googleSheets.readSheetData(sheet.spreadsheetId, range);
           if (rows.length === 0) {
               return res.json([]);

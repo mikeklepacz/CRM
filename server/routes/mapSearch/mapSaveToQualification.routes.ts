@@ -26,6 +26,9 @@ export function registerMapSaveToQualificationRoute(app: Express, deps: MapSearc
       if (error.message === "Place not found") {
         return res.status(404).json({ message: "Place not found" });
       }
+      if (error.message === "Cannot import permanently closed business") {
+        return res.status(400).json({ message: error.message });
+      }
       if (error.message === "Category or valid projectId is required") {
         return res.status(400).json({ message: error.message });
       }

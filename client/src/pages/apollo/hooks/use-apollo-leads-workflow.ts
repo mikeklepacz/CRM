@@ -50,19 +50,40 @@ export function useApolloLeadsWorkflow({
       .map((c) => c.googleSheetLink),
   ), [enrichedCompanies]);
 
-  const notEnrichedContacts = useMemo(() => filteredContacts.filter((c) => {
+  const allNotEnrichedContacts = useMemo(() => storeContacts.filter((c) => {
     const status = enrichmentStatus?.[c.link];
     if (failedEnrichmentLinks.has(c.link)) return true;
     if (!status) return true;
     const normalizedStatus = status.toLowerCase();
     const blockedStatuses = new Set(["enriched", "not_found", "archived", "retired"]);
     return !blockedStatuses.has(normalizedStatus);
-  }), [filteredContacts, enrichmentStatus, failedEnrichmentLinks]);
+  }), [storeContacts, enrichmentStatus, failedEnrichmentLinks]);
 
-  const contactsNeedingPrescreen = useMemo(() => notEnrichedContacts.filter((c) => {
+  const candidateQueueContacts = useMemo(() => allNotEnrichedContacts.filter((c) => {
+    const candidateStatus = c.candidateStatus?.toLowerCase().trim();
+    if (!candidateStatus) return true;
+    return candidateStatus !== "rejected";
+  }), [allNotEnrichedContacts]);
+
+  const enrichQueueContacts = useMemo(() => candidateQueueContacts.filter((c) => {
+    const candidateStatus = c.candidateStatus?.toLowerCase().trim();
+    // Candidate queue rows must be explicitly approved before they appear in Enrich Leads.
+    if (candidateStatus) {
+      return candidateStatus === "approved";
+    }
+    // Legacy/non-candidate rows remain eligible without a decision.
+    return true;
+  }), [candidateQueueContacts]);
+
+  const notEnrichedContacts = useMemo(() => {
+    const filteredSet = new Set(filteredContacts.map((c) => c.link));
+    return enrichQueueContacts.filter((c) => filteredSet.has(c.link));
+  }, [enrichQueueContacts, filteredContacts]);
+
+  const contactsNeedingPrescreen = useMemo(() => candidateQueueContacts.filter((c) => {
     const status = enrichmentStatus?.[c.link];
     return !status || status !== "prescreened";
-  }), [notEnrichedContacts, enrichmentStatus]);
+  }), [candidateQueueContacts, enrichmentStatus]);
 
   const handlePrescreenAll = async () => {
     const contactsToPrescreen = contactsNeedingPrescreen;
@@ -93,12 +114,14 @@ export function useApolloLeadsWorkflow({
         aggregate.notFound += response.notFound || 0;
         aggregate.skipped += response.skipped || 0;
         setPrescreenProgress({ current: Math.min(i + batch.length, contactsToPrescreen.length), total: contactsToPrescreen.length });
+        queryClient.invalidateQueries({ queryKey: ["/api/apollo/prescreen-results", currentProjectId] });
       }
 
       setPrescreenStats(aggregate);
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/check-enrichment"] });
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/companies/not-found", currentProjectId] });
       queryClient.invalidateQueries({ queryKey: ["/api/apollo/leads-without-emails", currentProjectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apollo/prescreen-results", currentProjectId] });
 
       const skippedText = aggregate.skipped > 0 ? `, ${aggregate.skipped} already processed` : "";
       toast({

@@ -13,8 +13,11 @@ export interface ScopedApolloCompany {
   websiteUrl: string | null;
   employeeCount: number | null;
   industry: string | null;
+  keywords: string[] | null;
+  shortDescription: string | null;
   city: string | null;
   state: string | null;
+  country: string | null;
   logoUrl: string | null;
   enrichedAt: string | null;
   creditsUsed: number | null;

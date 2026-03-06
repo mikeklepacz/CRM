@@ -10,6 +10,9 @@ export function useOrgAdminTenantMutations(props: any) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === "/api/tenant/projects"
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/org-admin/settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org-admin/users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org-admin/stats"] });
@@ -34,6 +37,9 @@ export function useOrgAdminTenantMutations(props: any) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === "/api/tenant/projects"
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/org-admin/settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org-admin/users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org-admin/stats"] });

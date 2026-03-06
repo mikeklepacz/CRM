@@ -10,11 +10,19 @@ export async function getUserPreferencesStorage(
   userId: string,
   tenantId: string
 ): Promise<UserPreferences | undefined> {
-  const [preferences] = await db
+  const [tenantScopedPreferences] = await db
     .select()
     .from(userPreferences)
     .where(and(eq(userPreferences.userId, userId), eq(userPreferences.tenantId, tenantId)));
-  return preferences;
+  if (tenantScopedPreferences) {
+    return tenantScopedPreferences;
+  }
+
+  const [userScopedPreferences] = await db
+    .select()
+    .from(userPreferences)
+    .where(eq(userPreferences.userId, userId));
+  return userScopedPreferences;
 }
 
 export async function saveUserPreferencesStorage(
@@ -40,10 +48,11 @@ export async function saveUserPreferencesStorage(
     const updated = await db
       .update(userPreferences)
       .set({
+        tenantId,
         ...formattedPreferences,
         updatedAt: new Date(),
       })
-      .where(and(eq(userPreferences.userId, userId), eq(userPreferences.tenantId, tenantId)))
+      .where(eq(userPreferences.userId, userId))
       .returning();
     return updated[0];
   } else {

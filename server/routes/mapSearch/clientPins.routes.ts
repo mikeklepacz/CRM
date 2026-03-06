@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { buildClientPins } from "../../services/mapSearch/clientPinsService";
+import { resolveStoreDatabaseSheet } from "../../services/sheets/storeDatabaseResolver";
 
 type Deps = {
   isAuthenticatedCustom: any;
@@ -10,15 +11,24 @@ type Deps = {
 export function registerMapSearchClientPinsRoutes(app: Express, deps: Deps): void {
   app.post("/api/maps/client-pins", deps.isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const { storeSheetId, trackerSheetId, joinColumn, state, city, projectId: _projectId } = req.body;
-      if (!storeSheetId || !trackerSheetId || !joinColumn || !state) {
-        return res.status(400).json({ message: "storeSheetId, trackerSheetId, joinColumn, and state are required" });
+      const { storeSheetId, trackerSheetId, joinColumn, state, city, projectId } = req.body;
+
+      const resolvedStoreSheet = await resolveStoreDatabaseSheet({
+        tenantId: req.user?.tenantId,
+        projectId,
+        sheetId: storeSheetId,
+        preferProjectMatch: true,
+      });
+
+      const effectiveStoreSheetId = resolvedStoreSheet?.id || storeSheetId;
+      if (!effectiveStoreSheetId || !trackerSheetId || !joinColumn || !state) {
+        return res.status(400).json({ message: "storeSheetId or projectId, trackerSheetId, joinColumn, and state are required" });
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims?.sub;
       const pins = await buildClientPins(
         {
-          storeSheetId,
+          storeSheetId: effectiveStoreSheetId,
           trackerSheetId,
           joinColumn,
           state,

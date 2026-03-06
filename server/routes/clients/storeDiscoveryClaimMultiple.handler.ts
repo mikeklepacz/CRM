@@ -1,6 +1,7 @@
 import { normalizeLink } from "../../../shared/linkUtils";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
 
 export async function handleStoreDiscoveryClaimMultiple(req: any, res: any, deps: any): Promise<any> {
   try {
@@ -26,7 +27,10 @@ export async function handleStoreDiscoveryClaimMultiple(req: any, res: any, deps
     if (!storeSheet || !trackerSheet) {
       return res.status(404).json({ message: "One or both sheets not found" });
     }
-    const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+    const storeRows = await googleSheets.readSheetData(
+      storeSheet.spreadsheetId,
+      buildSheetRange(storeSheet.sheetName, "A:ZZ")
+    );
     if (storeRows.length === 0) {
       return res.status(404).json({ message: "Store Database is empty" });
     }
@@ -39,7 +43,10 @@ export async function handleStoreDiscoveryClaimMultiple(req: any, res: any, deps
     if (storeLinkIndex === -1) {
       return res.status(404).json({ message: "Link column not found in Store Database" });
     }
-    const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`);
+    const trackerRows = await googleSheets.readSheetData(
+      trackerSheet.spreadsheetId,
+      buildSheetRange(trackerSheet.sheetName, "A:ZZ")
+    );
     const trackerHeaders = trackerRows.length > 0 ? trackerRows[0] : [];
     const trackerLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === "link");
     const trackerAgentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === "agent" || h.toLowerCase() === "agent name");
@@ -65,12 +72,20 @@ export async function handleStoreDiscoveryClaimMultiple(req: any, res: any, deps
       if (trackerRowIndex !== -1) {
         if (trackerAgentIndex !== -1) {
           const agentColumnLetter = String.fromCharCode(65 + trackerAgentIndex);
-          await googleSheets.writeSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!${agentColumnLetter}${trackerRowIndex}`, [[agentName]]);
+          await googleSheets.writeSheetData(
+            trackerSheet.spreadsheetId,
+            buildSheetRange(trackerSheet.sheetName, `${agentColumnLetter}${trackerRowIndex}`),
+            [[agentName]]
+          );
           await delay(writeDelayMs);
         }
         if (trackerDbaIndex !== -1) {
           const dbaColumnLetter = String.fromCharCode(65 + trackerDbaIndex);
-          await googleSheets.writeSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!${dbaColumnLetter}${trackerRowIndex}`, [[dbaName]]);
+          await googleSheets.writeSheetData(
+            trackerSheet.spreadsheetId,
+            buildSheetRange(trackerSheet.sheetName, `${dbaColumnLetter}${trackerRowIndex}`),
+            [[dbaName]]
+          );
           await delay(writeDelayMs);
         }
         updatedTrackerCount++;
@@ -87,7 +102,11 @@ export async function handleStoreDiscoveryClaimMultiple(req: any, res: any, deps
         if (statusIndex !== -1) {
           newTrackerRow[statusIndex] = "Claimed";
         }
-        await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+        await googleSheets.appendSheetData(
+          trackerSheet.spreadsheetId,
+          buildSheetRange(trackerSheet.sheetName, "A:ZZ"),
+          [newTrackerRow]
+        );
         await delay(writeDelayMs);
         createdTrackerCount++;
       }

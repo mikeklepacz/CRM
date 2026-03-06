@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { resolveStoreDatabaseSheet } from "../../services/sheets/storeDatabaseResolver";
+import { buildSheetRange } from "../../services/sheets/a1Range";
 
 export function buildSequencesSyntheticTestHandler() {
   return async (req: any, res: any) => {
@@ -37,14 +39,22 @@ export function buildSequencesSyntheticTestHandler() {
 
       console.log("[SyntheticTest] Fetching random real store from Store Database...");
 
-      const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", (req.user as any).tenantId);
+      const storeSheet = await resolveStoreDatabaseSheet({
+        tenantId: (req.user as any).tenantId,
+        projectId: sequence.projectId || undefined,
+        preferProjectMatch: true,
+        requireProjectMatch: !!sequence.projectId,
+      });
       if (!storeSheet) {
+        if (sequence.projectId) {
+          return res.status(500).json({ message: "Store Database tab for this project is not configured" });
+        }
         return res.status(500).json({ message: "Store Database not configured" });
       }
 
       const storeData = await googleSheets.readSheetData(
         storeSheet.spreadsheetId,
-        `${storeSheet.sheetName}!A:ZZ`
+        buildSheetRange(storeSheet.sheetName, "A:ZZ")
       );
 
       if (!storeData || storeData.length < 2) {

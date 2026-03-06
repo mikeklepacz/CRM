@@ -4,6 +4,8 @@ import { normalizeLink } from "../../../shared/linkUtils";
 import { db } from "../../db";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../sheets/a1Range";
+import { listStoreDatabaseSheets } from "../sheets/storeDatabaseResolver";
 
 interface FollowUpBuckets {
   claimedUntouched: any[];
@@ -56,7 +58,7 @@ export async function getFollowUpCenterDataForUser(requestUser: any): Promise<Fo
     return emptyBuckets();
   }
 
-  const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+  const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
   const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
   if (trackerRows.length <= 1) {
@@ -151,44 +153,56 @@ export async function getFollowUpCenterDataForUser(requestUser: any): Promise<Fo
 
   console.log("[FOLLOW-UP] 🏪 Processed", storesByLink.size, "unique stores from tracker");
 
-  const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", requestUser.tenantId);
-  if (storeSheet) {
-    const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-    const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+  const storeSheets = await listStoreDatabaseSheets(requestUser.tenantId);
+  if (storeSheets.length > 0) {
+    const storeDataMap = new Map<string, any>();
 
-    if (storeRows.length > 1) {
+    for (const storeSheet of storeSheets) {
+      const storeRows = await googleSheets.readSheetData(
+        storeSheet.spreadsheetId,
+        buildSheetRange(storeSheet.sheetName, "A:ZZ")
+      );
+
+      if (storeRows.length <= 1) {
+        continue;
+      }
+
       const storeHeaders = storeRows[0];
       const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === "link");
+      if (storeLinkIndex === -1) {
+        continue;
+      }
 
-      const storeDataMap = new Map<string, any>();
       for (let i = 1; i < storeRows.length; i++) {
         const row = storeRows[i];
         const storeLink = row[storeLinkIndex]?.toString().trim();
 
         if (storeLink) {
           const normalized = normalizeLink(storeLink);
-          const storeData: any = {};
+          if (storeDataMap.has(normalized)) {
+            continue;
+          }
 
+          const storeData: any = {};
           storeHeaders.forEach((header: string, idx: number) => {
             if (row[idx] !== undefined && row[idx] !== null && row[idx] !== "") {
               storeData[header] = row[idx];
             }
           });
-
           storeDataMap.set(normalized, storeData);
         }
       }
-
-      for (const [link, store] of storesByLink.entries()) {
-        const normalizedLink = normalizeLink(link);
-        const storeData = storeDataMap.get(normalizedLink);
-        if (storeData) {
-          Object.assign(store, storeData);
-        }
-      }
-
-      console.log("[FOLLOW-UP] ✨ Enriched stores with Store Database data");
     }
+
+    for (const [link, store] of storesByLink.entries()) {
+      const normalizedLink = normalizeLink(link);
+      const storeData = storeDataMap.get(normalizedLink);
+      if (storeData) {
+        Object.assign(store, storeData);
+      }
+    }
+
+    console.log("[FOLLOW-UP] ✨ Enriched stores with Store Database data");
   }
 
   const stores = Array.from(storesByLink.values());

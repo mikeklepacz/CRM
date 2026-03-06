@@ -2,9 +2,11 @@ import { and, eq } from "drizzle-orm";
 import { apolloCompanies, qualificationLeads, tenantProjects } from "@shared/schema";
 import { db } from "../../db";
 import * as googleSheets from "../../googleSheets";
-import { storage } from "../../storage";
 import { resolveTenantProjectId } from "../../services/projectScopeValidation";
 import { getAllowedEhubCategoryNames } from "../../services/ehubProjectScope";
+import { syncApolloCandidatesFromLeadRows } from "../../services/apolloCandidateService";
+import { resolveStoreDatabaseSheet } from "../../services/sheets/storeDatabaseResolver";
+import { buildSheetRange } from "../../services/sheets/a1Range";
 import { loadCandidateQueueLeadDiscovery } from "./apolloLeadDiscoveryCandidates";
 
 function extractDomain(url: string | null | undefined): string | null {
@@ -71,7 +73,12 @@ export function buildApolloLeadDiscoveryHandler(deps: {
         .where(and(eq(apolloCompanies.tenantId, tenantId), eq(apolloCompanies.enrichmentStatus, "enriched")));
       const enrichedLinkSet = new Set(alreadyEnrichedLinks.map((r) => r.link));
 
-      const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", tenantId);
+      const storeSheet = await resolveStoreDatabaseSheet({
+        tenantId,
+        projectId,
+        preferProjectMatch: true,
+        requireProjectMatch: true,
+      });
 
       let leadsWithoutEmails: Array<{
         name: string;
@@ -82,7 +89,10 @@ export function buildApolloLeadDiscoveryHandler(deps: {
       }> = [];
 
       if (storeSheet) {
-        const storeData = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+        const storeData = await googleSheets.readSheetData(
+          storeSheet.spreadsheetId,
+          buildSheetRange(storeSheet.sheetName, "A:ZZ")
+        );
 
         if (storeData && storeData.length > 0) {
           const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
@@ -252,6 +262,13 @@ export function buildApolloLeadDiscoveryHandler(deps: {
           }
         }
         stats.deduplicatedRows = deduplicatedLeads.length;
+        if (deduplicatedLeads.length > 0) {
+          try {
+            await syncApolloCandidatesFromLeadRows(tenantId, projectId, deduplicatedLeads);
+          } catch (syncError) {
+            console.error("[Apollo] Failed to sync qualification leads into apollo_candidates:", syncError);
+          }
+        }
         return res.json({ contacts: deduplicatedLeads, stats });
       }
     } catch (error: any) {

@@ -1,9 +1,10 @@
 import { and, eq } from "drizzle-orm";
-import { apolloCandidateSources, apolloCandidates } from "@shared/schema";
+import { apolloCandidateSources, apolloCandidates, apolloCompanies } from "@shared/schema";
 import { db } from "../db";
 import * as googleSheets from "../googleSheets";
-import { storage } from "../storage";
 import { getAllowedEhubCategoryNames } from "./ehubProjectScope";
+import { resolveStoreDatabaseSheet } from "./sheets/storeDatabaseResolver";
+import { buildSheetRange } from "./sheets/a1Range";
 
 type CandidateSourceInput = {
   sourceLink: string;
@@ -18,6 +19,15 @@ type CandidateAccumulator = {
   domain: string | null;
   representativeLink: string;
   sources: CandidateSourceInput[];
+};
+
+type LeadDiscoveryInput = {
+  name: string;
+  website?: string;
+  state?: string;
+  link: string;
+  category?: string;
+  allLinks?: string[];
 };
 
 function extractDomain(url: string | null | undefined): string | null {
@@ -75,9 +85,14 @@ export async function countApolloCandidates(tenantId: string, projectId: string)
 }
 
 export async function rebuildApolloCandidatesFromStoreSheet(tenantId: string, projectId: string) {
-  const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", tenantId);
+  const storeSheet = await resolveStoreDatabaseSheet({
+    tenantId,
+    projectId,
+    preferProjectMatch: true,
+    requireProjectMatch: true,
+  });
   if (!storeSheet) {
-    throw new Error("Store Database sheet not configured for tenant");
+    throw new Error("Store Database sheet for this project not found. Create or connect a matching tab first.");
   }
 
   const allowedCategoryNames = await getAllowedEhubCategoryNames(tenantId, projectId);
@@ -85,7 +100,10 @@ export async function rebuildApolloCandidatesFromStoreSheet(tenantId: string, pr
     throw new Error("No active categories configured for project");
   }
 
-  const storeData = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+  const storeData = await googleSheets.readSheetData(
+    storeSheet.spreadsheetId,
+    buildSheetRange(storeSheet.sheetName, "A:ZZ")
+  );
   if (!storeData || storeData.length === 0) {
     return {
       totalRows: 0,
@@ -219,4 +237,196 @@ export async function rebuildApolloCandidatesFromStoreSheet(tenantId: string, pr
 
   stats.candidates = candidateRows.length;
   return stats;
+}
+
+export async function syncApolloCandidatesFromLeadRows(
+  tenantId: string,
+  projectId: string,
+  leads: LeadDiscoveryInput[],
+): Promise<{ candidatesSynced: number; sourceLinksSynced: number }> {
+  const candidateMap = new Map<string, CandidateAccumulator>();
+
+  for (const lead of leads) {
+    const rawName = (lead.name || "").toString();
+    const rawWebsite = (lead.website || "").toString();
+    const domain = extractDomain(rawWebsite);
+    const normalizedName = canonicalizeName(rawName);
+    const canonicalKey = domain || (normalizedName ? `name:${normalizedName}` : null);
+    if (!canonicalKey) continue;
+
+    const cleanCompanyName = cleanCompanyBaseName(rawName) || rawName || domain || "Unknown";
+    const sourceLinks = Array.from(new Set((lead.allLinks && lead.allLinks.length > 0 ? lead.allLinks : [lead.link]).filter(Boolean)));
+    if (sourceLinks.length === 0) continue;
+
+    const existing = candidateMap.get(canonicalKey);
+    const sources = sourceLinks.map((sourceLink) => ({
+      sourceLink,
+      rawName,
+      rawWebsite,
+      state: lead.state || "",
+      category: lead.category || "",
+    }));
+
+    if (existing) {
+      existing.sources.push(...sources);
+      existing.sources = Array.from(
+        new Map(existing.sources.map((source) => [source.sourceLink, source])).values()
+      );
+    } else {
+      candidateMap.set(canonicalKey, {
+        cleanCompanyName,
+        domain,
+        representativeLink: lead.link,
+        sources,
+      });
+    }
+  }
+
+  let candidatesSynced = 0;
+  let sourceLinksSynced = 0;
+
+  for (const [canonicalKey, value] of candidateMap.entries()) {
+    const [candidate] = await db
+      .insert(apolloCandidates)
+      .values({
+        tenantId,
+        projectId,
+        canonicalKey,
+        cleanCompanyName: value.cleanCompanyName,
+        domain: value.domain,
+        representativeLink: value.representativeLink,
+        sourceCount: value.sources.length,
+        status: "pending",
+      })
+      .onConflictDoUpdate({
+        target: [apolloCandidates.tenantId, apolloCandidates.projectId, apolloCandidates.canonicalKey],
+        set: {
+          cleanCompanyName: value.cleanCompanyName,
+          domain: value.domain,
+          representativeLink: value.representativeLink,
+          sourceCount: value.sources.length,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({ id: apolloCandidates.id });
+
+    if (!candidate?.id) continue;
+    candidatesSynced++;
+
+    if (value.sources.length > 0) {
+      await db
+        .insert(apolloCandidateSources)
+        .values(
+          value.sources.map((source) => ({
+            tenantId,
+            projectId,
+            candidateId: candidate.id,
+            sourceLink: source.sourceLink,
+            rawName: source.rawName || null,
+            rawWebsite: source.rawWebsite || null,
+            state: source.state || null,
+            category: source.category || null,
+          })),
+        )
+        .onConflictDoNothing();
+      sourceLinksSynced += value.sources.length;
+    }
+  }
+
+  return { candidatesSynced, sourceLinksSynced };
+}
+
+export async function listApolloPrescreenResults(tenantId: string, projectId: string) {
+  return db
+    .select({
+      candidateId: apolloCandidates.id,
+      sourceCount: apolloCandidates.sourceCount,
+      candidateStatus: apolloCandidates.status,
+      cleanCompanyName: apolloCandidates.cleanCompanyName,
+      representativeLink: apolloCandidates.representativeLink,
+      candidateDomain: apolloCandidates.domain,
+      apolloStatus: apolloCompanies.enrichmentStatus,
+      apolloName: apolloCompanies.name,
+      apolloDomain: apolloCompanies.domain,
+      websiteUrl: apolloCompanies.websiteUrl,
+      linkedinUrl: apolloCompanies.linkedinUrl,
+      shortDescription: apolloCompanies.shortDescription,
+      keywords: apolloCompanies.keywords,
+      employeeCount: apolloCompanies.employeeCount,
+      prescreenContactCount: apolloCompanies.prescreenContactCount,
+      prescreenPeoplePreview: apolloCompanies.prescreenPeoplePreview,
+      industry: apolloCompanies.industry,
+      city: apolloCompanies.city,
+      state: apolloCompanies.state,
+      country: apolloCompanies.country,
+      updatedAt: apolloCandidates.updatedAt,
+    })
+    .from(apolloCandidates)
+    .leftJoin(
+      apolloCompanies,
+      and(
+        eq(apolloCompanies.tenantId, apolloCandidates.tenantId),
+        eq(apolloCompanies.projectId, apolloCandidates.projectId),
+        eq(apolloCompanies.googleSheetLink, apolloCandidates.representativeLink),
+      )
+    )
+    .where(and(eq(apolloCandidates.tenantId, tenantId), eq(apolloCandidates.projectId, projectId)));
+}
+
+export async function setApolloCandidateDecision(
+  tenantId: string,
+  projectId: string,
+  candidateId: string,
+  decision: "pending" | "approved" | "rejected"
+) {
+  const [updated] = await db
+    .update(apolloCandidates)
+    .set({
+      status: decision,
+      updatedAt: new Date(),
+      lastCheckedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(apolloCandidates.tenantId, tenantId),
+        eq(apolloCandidates.projectId, projectId),
+        eq(apolloCandidates.id, candidateId)
+      )
+    )
+    .returning({
+      id: apolloCandidates.id,
+      status: apolloCandidates.status,
+      updatedAt: apolloCandidates.updatedAt,
+    });
+
+  return updated || null;
+}
+
+export async function setApolloCandidateDecisionByLink(
+  tenantId: string,
+  projectId: string,
+  representativeLink: string,
+  decision: "pending" | "approved" | "rejected"
+) {
+  const [updated] = await db
+    .update(apolloCandidates)
+    .set({
+      status: decision,
+      updatedAt: new Date(),
+      lastCheckedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(apolloCandidates.tenantId, tenantId),
+        eq(apolloCandidates.projectId, projectId),
+        eq(apolloCandidates.representativeLink, representativeLink)
+      )
+    )
+    .returning({
+      id: apolloCandidates.id,
+      status: apolloCandidates.status,
+      updatedAt: apolloCandidates.updatedAt,
+    });
+
+  return updated || null;
 }

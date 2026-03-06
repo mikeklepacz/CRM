@@ -1,6 +1,8 @@
 import * as googleMaps from "../../googleMaps";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../sheets/a1Range";
+import { resolveStoreDatabaseSheet } from "../sheets/storeDatabaseResolver";
 
 function parseLocation(location: string): { city: string; state: string; country: string } {
   const parts = location.split(",").map((item) => item.trim());
@@ -51,6 +53,7 @@ function normalizeUrl(url: string): string {
 
 export async function runMapSearch(params: {
   tenantId?: string;
+  projectId?: string;
   query: string;
   location: string;
   excludedKeywords?: unknown;
@@ -58,13 +61,23 @@ export async function runMapSearch(params: {
   category?: string;
   pageToken?: string;
 }): Promise<any> {
-  const { tenantId, query, location, excludedKeywords, excludedTypes, category, pageToken } = params;
+  const { tenantId, projectId, query, location, excludedKeywords, excludedTypes, category, pageToken } = params;
   const { city, state, country } = parseLocation(location);
   const excludedKeywordsArray = parseExcludedKeywords(excludedKeywords);
   const excludedTypesArray = parseExcludedTypes(excludedTypes);
 
   if (!pageToken && tenantId) {
-    await storage.recordSearch(tenantId, query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
+    await storage.recordSearch(
+      tenantId,
+      query,
+      city,
+      state,
+      country,
+      excludedKeywordsArray,
+      excludedTypesArray,
+      category,
+      projectId,
+    );
   }
 
   const searchResponse = await googleMaps.searchPlaces(query, location, excludedTypesArray, pageToken);
@@ -95,19 +108,30 @@ export async function runMapSearch(params: {
 
 export async function runMapGridSearch(params: {
   tenantId?: string;
+  projectId?: string;
   query: string;
   location: string;
   excludedKeywords?: unknown;
   excludedTypes?: unknown;
   category?: string;
 }): Promise<any> {
-  const { tenantId, query, location, excludedKeywords, excludedTypes, category } = params;
+  const { tenantId, projectId, query, location, excludedKeywords, excludedTypes, category } = params;
   const { city, state, country } = parseLocation(location);
   const excludedKeywordsArray = parseExcludedKeywords(excludedKeywords);
   const excludedTypesArray = parseExcludedTypes(excludedTypes);
 
   if (tenantId) {
-    await storage.recordSearch(tenantId, query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
+    await storage.recordSearch(
+      tenantId,
+      query,
+      city,
+      state,
+      country,
+      excludedKeywordsArray,
+      excludedTypesArray,
+      category,
+      projectId,
+    );
   }
 
   const gridResponse = await googleMaps.gridSearch(query, location, excludedTypesArray);
@@ -137,7 +161,11 @@ export async function runMapGridSearch(params: {
   };
 }
 
-export async function findDuplicateWebsites(tenantId: string, websites: string[]): Promise<string[]> {
+export async function findDuplicateWebsites(
+  tenantId: string,
+  websites: string[],
+  projectId?: string
+): Promise<string[]> {
   const normalizedInputUrls = new Map<string, string>();
   for (const url of websites) {
     const normalized = normalizeUrl(url);
@@ -147,11 +175,15 @@ export async function findDuplicateWebsites(tenantId: string, websites: string[]
   }
 
   const duplicates: string[] = [];
-  const sheets = await storage.getAllActiveGoogleSheets(tenantId);
-  const storeSheet = sheets.find((sheet) => sheet.sheetPurpose === "Store Database");
+  const storeSheet = await resolveStoreDatabaseSheet({
+    tenantId,
+    projectId,
+    preferProjectMatch: true,
+    requireProjectMatch: !!projectId,
+  });
 
   if (storeSheet) {
-    const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+    const storeRange = buildSheetRange(storeSheet.sheetName, "A:ZZ");
     const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
     if (storeRows && storeRows.length > 1) {
       const headers = storeRows[0].map((header: string) => (header || "").toLowerCase().trim());

@@ -5,6 +5,8 @@ import { storage } from '../../storage';
 import { apolloCompanies, apolloContacts } from '../../../shared/schema';
 import { getAllowedEhubCategoryNames } from '../ehubProjectScope';
 import { isTrackerContacted } from './classification';
+import { resolveStoreDatabaseSheet } from '../sheets/storeDatabaseResolver';
+import { buildSheetRange } from '../sheets/a1Range';
 
 export async function fetchSourceContacts(tenantId: string, projectId?: string): Promise<{
   contacts: Array<{
@@ -36,9 +38,17 @@ export async function fetchSourceContacts(tenantId: string, projectId?: string):
 
   const linkToCategoryMap = new Map<string, string>();
 
-  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database', tenantId);
+  const storeSheet = await resolveStoreDatabaseSheet({
+    tenantId,
+    projectId,
+    preferProjectMatch: true,
+    requireProjectMatch: !!projectId,
+  });
   if (storeSheet) {
-    const storeData = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+    const storeData = await googleSheets.readSheetData(
+      storeSheet.spreadsheetId,
+      buildSheetRange(storeSheet.sheetName, "A:ZZ")
+    );
     if (storeData && storeData.length > 0) {
       const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
       const rows = storeData.slice(1);
@@ -148,7 +158,7 @@ export async function fetchSourceContacts(tenantId: string, projectId?: string):
   if (commissionSheet) {
     const commissionData = await googleSheets.readSheetData(
       commissionSheet.spreadsheetId,
-      `${commissionSheet.sheetName}!A:ZZ`
+      buildSheetRange(commissionSheet.sheetName, "A:ZZ")
     );
 
     if (commissionData && commissionData.length > 0) {

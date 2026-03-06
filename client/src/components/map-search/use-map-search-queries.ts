@@ -45,8 +45,11 @@ export function useMapSearchQueries(props: UseMapSearchQueriesProps) {
     queryKey: ["/api/user/preferences"],
   });
 
+  const searchHistoryUrl = props.currentProjectId
+    ? `/api/maps/search-history?projectId=${props.currentProjectId}`
+    : "/api/maps/search-history";
   const { data: searchHistoryData } = useQuery<{ history: SearchHistory[] }>({
-    queryKey: ["/api/maps/search-history"],
+    queryKey: [searchHistoryUrl],
   });
 
   const { data: lastCategoryData } = useQuery<{ category: string }>({

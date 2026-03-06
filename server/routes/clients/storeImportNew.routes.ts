@@ -2,6 +2,7 @@ import type { Express } from "express";
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
 import type { StoreManualMatchingDeps } from "./storeManualMatching.types";
+import { buildSheetRange } from "../../services/sheets/a1Range";
 
 export function registerStoreImportNewRoute(app: Express, deps: StoreManualMatchingDeps): void {
   app.post("/api/stores/import-new", deps.isAuthenticatedCustom, async (req: any, res) => {
@@ -19,7 +20,7 @@ export function registerStoreImportNewRoute(app: Express, deps: StoreManualMatch
         return res.status(404).json({ message: "Sheet not found" });
       }
 
-      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, `${sheet.sheetName}!A:ZZ`);
+      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, buildSheetRange(sheet.sheetName, "A:ZZ"));
 
       if (rows.length === 0) {
         return res.status(400).json({ message: "Sheet is empty - cannot determine columns" });
@@ -47,7 +48,7 @@ export function registerStoreImportNewRoute(app: Express, deps: StoreManualMatch
       if (zipIndex >= 0 && store.zip) newRow[zipIndex] = store.zip;
       if (linkIndex >= 0) newRow[linkIndex] = newLink;
 
-      await googleSheets.appendSheetData(sheet.spreadsheetId, `${sheet.sheetName}!A:ZZ`, [newRow]);
+      await googleSheets.appendSheetData(sheet.spreadsheetId, buildSheetRange(sheet.sheetName, "A:ZZ"), [newRow]);
 
       res.json({ success: true, link: newLink, message: "Store imported successfully" });
     } catch (error: any) {

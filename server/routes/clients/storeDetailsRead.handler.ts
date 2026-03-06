@@ -1,5 +1,7 @@
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
+import { findStoreSheetRowByLink } from "../../services/sheets/storeDatabaseResolver";
 
 export async function handleStoreDetailsRead(req: any, res: any, next: any): Promise<any> {
   try {
@@ -9,17 +11,24 @@ export async function handleStoreDetailsRead(req: any, res: any, next: any): Pro
 
     const { storeId } = req.params;
     const decodedId = decodeURIComponent(storeId);
+    const projectId = typeof req.query?.projectId === "string" ? req.query.projectId : undefined;
 
     const sheets = await storage.getAllActiveGoogleSheets(req.user.tenantId);
-    const storeSheet = sheets.find((s) => s.sheetPurpose === "Store Database");
     const trackerSheet = sheets.find((s) => s.sheetPurpose === "commissions");
 
+    const storeMatch = await findStoreSheetRowByLink({
+      tenantId: req.user.tenantId,
+      link: decodedId,
+      projectId,
+      preferProjectMatch: true,
+    });
+
+    const storeSheet = storeMatch?.sheet || null;
     if (!storeSheet) {
       return res.status(404).json({ message: "Store sheet not found" });
     }
 
-    const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-    const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+    const storeRows = storeMatch?.rows || [];
 
     if (storeRows.length === 0) {
       return res.status(404).json({ message: "Store sheet is empty" });
@@ -34,13 +43,13 @@ export async function handleStoreDetailsRead(req: any, res: any, next: any): Pro
       return obj;
     });
 
-    const store = storeData.find((row: any) => row.link === decodedId);
+    const store = storeData.find((row: any) => row._storeRowIndex === storeMatch?.rowIndex);
     if (!store) {
       return res.status(404).json({ message: "Store not found" });
     }
 
     if (trackerSheet) {
-      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       if (trackerRows.length > 0) {

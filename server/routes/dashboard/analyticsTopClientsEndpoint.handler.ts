@@ -1,5 +1,7 @@
 import * as googleSheets from "../../googleSheets";
 import { storage } from "../../storage";
+import { buildSheetRange } from "../../services/sheets/a1Range";
+import { listStoreDatabaseSheets } from "../../services/sheets/storeDatabaseResolver";
 
 export function buildAnalyticsTopClientsEndpointHandler() {
   return async (req: any, res: any) => {
@@ -40,7 +42,7 @@ export function buildAnalyticsTopClientsEndpointHandler() {
           return res.json({ topClients: [] });
       }
       // Read Commission Tracker data
-      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
       if (trackerRows.length <= 1) {
           return res.json({ topClients: [] });
@@ -119,30 +121,33 @@ export function buildAnalyticsTopClientsEndpointHandler() {
               .replace(/\/$/, ''); // Remove trailing slash
       };
       // Get Store Database sheet to look up company names by link
-      const allSheets = await storage.getAllActiveGoogleSheets(req.user.tenantId);
-      const storeSheet = allSheets.find((s) => s.sheetPurpose === 'Store Database');
+      const storeSheets = await listStoreDatabaseSheets(req.user.tenantId);
       const linkToNameMap: {
           [normalizedLink: string]: string;
       } = {};
-      if (storeSheet) {
+      if (storeSheets.length > 0) {
           try {
-              const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-              const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-              if (storeRows.length > 1) {
-                  const storeHeaders = storeRows[0];
-                  const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-                  const nameIndex = 0; // Column A = Name
-                  const dbaIndex = 13; // Column N = DBA
-                  // Build lookup map: normalized link -> company name
-                  for (let i = 1; i < storeRows.length; i++) {
-                      const row = storeRows[i];
-                      const storeLink = row[storeLinkIndex] || '';
-                      const dba = row[dbaIndex] || '';
-                      const name = row[nameIndex] || '';
-                      if (storeLink) {
-                          const normalized = normalizeLink(storeLink);
-                          // Prefer DBA over Name
-                          linkToNameMap[normalized] = dba || name || storeLink;
+              for (const storeSheet of storeSheets) {
+                  const storeRange = buildSheetRange(storeSheet.sheetName, "A:ZZ");
+                  const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+                  if (storeRows.length > 1) {
+                      const storeHeaders = storeRows[0];
+                      const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+                      const nameIndex = 0; // Column A = Name
+                      const dbaIndex = 13; // Column N = DBA
+                      // Build lookup map: normalized link -> company name
+                      for (let i = 1; i < storeRows.length; i++) {
+                          const row = storeRows[i];
+                          const storeLink = row[storeLinkIndex] || '';
+                          const dba = row[dbaIndex] || '';
+                          const name = row[nameIndex] || '';
+                          if (storeLink) {
+                              const normalized = normalizeLink(storeLink);
+                              // Prefer first found value; fallback order DBA > Name > Link
+                              if (!linkToNameMap[normalized]) {
+                                  linkToNameMap[normalized] = dba || name || storeLink;
+                              }
+                          }
                       }
                   }
               }

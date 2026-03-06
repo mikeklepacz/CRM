@@ -45,10 +45,13 @@ export interface LastSearchParams {
   excludedKeywords: string[];
   excludedTypes: string[];
   category?: string;
+  projectId?: string;
 }
 
 export interface GoogleSheet {
   id: string;
   sheetPurpose: string;
   spreadsheetId: string;
+  sheetName?: string;
+  spreadsheetName?: string;
 }

@@ -1,3 +1,6 @@
+import { buildSheetRange } from "../sheets/a1Range";
+import { listStoreDatabaseSheetsByPriority } from "../sheets/storeDatabaseResolver";
+
 type Deps = {
   computeHash: (input: any) => string;
   eventGateway: { emit: (event: string, payload: any, options?: any) => void };
@@ -137,20 +140,31 @@ export function createGetMyClientsHandler(deps: Deps) {
           : [];
 
       const tenantId = (req.user as any).tenantId;
+      const requestedProjectId = typeof req.query?.projectId === "string" ? req.query.projectId : undefined;
       const trackerSheet = await storage.getGoogleSheetByPurpose("commissions", tenantId);
       if (!trackerSheet) return res.json([]);
 
-      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRange = buildSheetRange(trackerSheet.sheetName, "A:ZZ");
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
-      const storeSheet = await storage.getGoogleSheetByPurpose("Store Database", tenantId);
-      let storeRows: any[][] = [];
-      if (storeSheet) {
-        storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:S`);
+      const prioritizedStoreSheets = await listStoreDatabaseSheetsByPriority({
+        tenantId,
+        projectId: requestedProjectId,
+        preferProjectMatch: true,
+      });
+      const storeSheetsToLoad = requestedProjectId ? prioritizedStoreSheets.slice(0, 1) : prioritizedStoreSheets;
+      const storeSheetData: Array<{ sheetId: string; sheetName: string; rows: any[][] }> = [];
+      for (const sheet of storeSheetsToLoad) {
+        const rows = await googleSheets.readSheetData(sheet.spreadsheetId, buildSheetRange(sheet.sheetName, "A:S"));
+        storeSheetData.push({
+          sheetId: sheet.id,
+          sheetName: sheet.sheetName,
+          rows,
+        });
       }
 
-      const cacheKey = `my-clients:${userId}:${allowedAgentNames.join(",")}`;
-      const dataHash = computeHash({ trackerRows, storeRows, allowedAgentNames });
+      const cacheKey = `my-clients:${userId}:${allowedAgentNames.join(",")}:${requestedProjectId || "all"}`;
+      const dataHash = computeHash({ trackerRows, storeSheetData, allowedAgentNames, requestedProjectId });
       const cached = getCached<any[]>(cacheKey, dataHash);
       if (cached) return res.json(cached);
       if (trackerRows.length <= 1) return res.json([]);
@@ -197,10 +211,22 @@ export function createGetMyClientsHandler(deps: Deps) {
 
         for (const row of expiredRows) {
           try {
-            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!${agentNameCol}${row.rowIndex}`, [[""]]);
-            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!${statusCol}${row.rowIndex}`, [[""]]);
+            await googleSheets.writeSheetData(
+              trackerSheet.spreadsheetId,
+              buildSheetRange(trackerSheet.sheetName, `${agentNameCol}${row.rowIndex}`),
+              [[""]]
+            );
+            await googleSheets.writeSheetData(
+              trackerSheet.spreadsheetId,
+              buildSheetRange(trackerSheet.sheetName, `${statusCol}${row.rowIndex}`),
+              [[""]]
+            );
             if (timeCol) {
-              await googleSheets.writeSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!${timeCol}${row.rowIndex}`, [[""]]);
+              await googleSheets.writeSheetData(
+                trackerSheet.spreadsheetId,
+                buildSheetRange(trackerSheet.sheetName, `${timeCol}${row.rowIndex}`),
+                [[""]]
+              );
             }
             console.log(`[ClaimExpiration] Expired claim cleared at row ${row.rowIndex} (${row.status}, ${row.daysSince} days old)`);
           } catch (err: any) {
@@ -245,24 +271,42 @@ export function createGetMyClientsHandler(deps: Deps) {
         lastSyncedAt: new Date(),
       }));
 
-      if (storeRows.length > 1) {
-        const storeHeaders = storeRows[0];
-        const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === "link");
-        const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === "category");
-        const pocNameIndex = storeHeaders.findIndex(
-          (h: string) => h.toLowerCase() === "point of contact" || h.toLowerCase() === "poc"
-        );
-
+      if (storeSheetData.some((entry) => entry.rows.length > 1)) {
         const storeMap = new Map<string, { name: string; category: string; contact: string }>();
-        for (let i = 1; i < storeRows.length; i++) {
-          const row = storeRows[i];
-          const storeLink = row[storeLinkIndex]?.toString().trim();
-          if (!storeLink) continue;
-          const dba = row[13]?.toString().trim() || "";
-          const name = row[0]?.toString().trim() || "";
-          const storeCategory = row[storeCategoryIndex]?.toString().trim() || "";
-          const pocName = row[pocNameIndex]?.toString().trim() || "";
-          storeMap.set(normalizeLink(storeLink), { name: name || dba || "Unknown", category: storeCategory, contact: pocName });
+
+        for (const storeEntry of storeSheetData) {
+          const storeRows = storeEntry.rows;
+          if (!storeRows || storeRows.length <= 1) {
+            continue;
+          }
+
+          const storeHeaders = storeRows[0];
+          const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === "link");
+          const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === "category");
+          const pocNameIndex = storeHeaders.findIndex(
+            (h: string) => h.toLowerCase() === "point of contact" || h.toLowerCase() === "poc"
+          );
+          if (storeLinkIndex === -1) {
+            continue;
+          }
+
+          for (let i = 1; i < storeRows.length; i++) {
+            const row = storeRows[i];
+            const storeLink = row[storeLinkIndex]?.toString().trim();
+            if (!storeLink) continue;
+            const dba = row[13]?.toString().trim() || "";
+            const name = row[0]?.toString().trim() || "";
+            const storeCategory = storeCategoryIndex !== -1 ? row[storeCategoryIndex]?.toString().trim() || "" : "";
+            const pocName = pocNameIndex !== -1 ? row[pocNameIndex]?.toString().trim() || "" : "";
+            const normalizedStoreLink = normalizeLink(storeLink);
+            if (!storeMap.has(normalizedStoreLink)) {
+              storeMap.set(normalizedStoreLink, {
+                name: name || dba || "Unknown",
+                category: storeCategory,
+                contact: pocName,
+              });
+            }
+          }
         }
 
         enrichedClients = enrichedClients.map((client) => {

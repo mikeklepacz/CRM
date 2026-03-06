@@ -2,6 +2,7 @@ import * as googleSheets from "../../../googleSheets";
 import { storage } from "../../../storage";
 import { buildDbStores, detectBrandNameByConsensus, matchParsedStores, type HeaderIndexes } from "./matcher";
 import { parseWithOpenAI, parseWithRegex } from "./parseStrategies";
+import { buildSheetRange } from "../../sheets/a1Range";
 
 export class ParseMatchError extends Error {
   status: number;
@@ -33,7 +34,7 @@ export async function parseAndMatchStores(
     throw new ParseMatchError(404, "Sheet not found");
   }
 
-  const rows = await googleSheets.readSheetData(sheet.spreadsheetId, `${sheet.sheetName}!A:ZZ`);
+  const rows = await googleSheets.readSheetData(sheet.spreadsheetId, buildSheetRange(sheet.sheetName, "A:ZZ"));
 
   if (rows.length === 0) {
     return {
